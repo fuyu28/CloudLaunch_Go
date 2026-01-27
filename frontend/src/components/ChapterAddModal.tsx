@@ -8,7 +8,7 @@
 import { useState, useCallback, useMemo } from "react"
 import { FaPlus, FaTimes } from "react-icons/fa"
 
-import { chapterCreateSchema } from "../../../schemas/chapter"
+import { chapterCreateSchema } from "@renderer/schemas/chapter"
 import { useZodValidation } from "../hooks/useZodValidation"
 import { handleApiError, handleUnexpectedError } from "../utils/errorHandler"
 

@@ -7,18 +7,18 @@ import GameGrid from "@renderer/components/GameGrid"
 import GameFormModal from "@renderer/components/GameModal"
 import GameSearchFilter from "@renderer/components/GameSearchFilter"
 
-import { CONFIG, MESSAGES } from "../../../constants"
-import { useDebounce } from "../hooks/useDebounce"
-import { useGameActions } from "../hooks/useGameActions"
-import { useLoadingState } from "../hooks/useLoadingState"
+import { CONFIG, MESSAGES } from "@renderer/constants"
+import { useDebounce } from "@renderer/hooks/useDebounce"
+import { useGameActions } from "@renderer/hooks/useGameActions"
+import { useLoadingState } from "@renderer/hooks/useLoadingState"
 import {
   searchWordAtom,
   filterAtom,
   sortAtom,
   sortDirectionAtom,
   visibleGamesAtom
-} from "../state/home"
-import { autoTrackingAtom } from "../state/settings"
+} from "@renderer/state/home"
+import { autoTrackingAtom } from "@renderer/state/settings"
 import type { GameType } from "src/types/game"
 
 export default function Home(): React.ReactElement {

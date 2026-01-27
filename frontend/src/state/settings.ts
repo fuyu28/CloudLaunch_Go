@@ -19,7 +19,7 @@ import toast from "react-hot-toast"
 
 import { logger } from "@renderer/utils/logger"
 
-import type { ThemeName } from "../constants/themes"
+import type { ThemeName } from "@renderer/constants/themes"
 import type { SortOption, FilterOption } from "src/types/menu"
 
 /**

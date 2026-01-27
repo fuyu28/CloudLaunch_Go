@@ -6,7 +6,7 @@ import type { ApiResult } from "src/types/result"
 import type { InputGameData, GameType, PlaySessionType, PlayStatus } from "src/types/game"
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu"
 import type { Chapter, ChapterStats } from "src/types/chapter"
-import type { MemoType, CreateMemoData, UpdateMemoData } from "src/types/memo"
+import type { MemoType, CreateMemoData, UpdateMemoData, MemoSyncResult, CloudMemoInfo } from "src/types/memo"
 import type { Creds } from "src/types/creds"
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "./hooks/useCloudData"
 
@@ -18,33 +18,57 @@ import {
   CreateUpload,
   CheckDirectoryExists,
   CheckFileExists,
+  DeleteCloudData,
   DeleteChapter,
   DeleteCredential,
+  DeleteFile,
   DeleteGame,
   DeleteMemo,
   DeleteSession,
   GetMemoByID,
+  GetMemoRootDir,
+  GetMemoFilePath,
+  GetGameMemoDir,
+  GetCloudMemos,
+  DownloadMemoFromCloud,
+  UploadMemoToCloud,
+  SyncMemosFromCloud,
+  GetCloudFileDetails,
+  GetCloudFileDetailsByGame,
+  GetDirectoryTree,
   GetGameByID,
+  GetMonitoringStatus,
+  GetChapterStats,
+  LaunchGame,
   ListChaptersByGame,
+  ListCloudData,
   ListAllMemos,
   ListGames,
   ListMemosByGame,
   ListSessionsByGame,
   ListUploadsByGame,
+  LoadImageFromLocal,
   LoadCloudMetadata,
   LoadCredential,
+  DownloadSaveData,
   OpenFolder,
   OpenLogsDirectory,
   SaveCloudMetadata,
   SaveCredential,
   SelectFile,
   SelectFolder,
+  SetCurrentChapter,
+  UpdateAutoTracking,
   UpdateChapter,
+  UpdateChapterOrders,
   UpdateGame,
   UpdateMemo,
-  UploadFolder
+  UpdateSessionChapter,
+  UpdateSessionName,
+  UploadFolder,
+  ValidateCredential
 } from "../wailsjs/go/app/App"
-import { WindowClose, WindowMinimise, WindowToggleMaximise } from "../wailsjs/runtime/runtime"
+import { WindowMinimise, WindowToggleMaximise, Quit } from "../wailsjs/runtime/runtime"
 
 export type WindowApi = {
   window: {
@@ -99,7 +123,11 @@ export type WindowApi = {
     deleteMemo: (memoId: string) => Promise<ApiResult<void>>
     getMemoRootDir: () => Promise<ApiResult<string>>
     getMemoFilePath: (memoId: string) => Promise<ApiResult<string>>
-    syncMemosFromCloud: (gameId: string) => Promise<ApiResult<void>>
+    getGameMemoDir: (gameId: string) => Promise<ApiResult<string>>
+    uploadMemoToCloud: (memoId: string) => Promise<ApiResult<void>>
+    downloadMemoFromCloud: (gameTitle: string, memoFileName: string) => Promise<ApiResult<string>>
+    getCloudMemos: () => Promise<ApiResult<CloudMemoInfo[]>>
+    syncMemosFromCloud: (gameId?: string) => Promise<ApiResult<MemoSyncResult>>
   }
   credential: {
     upsertCredential: (creds: Creds) => Promise<ApiResult<void>>
@@ -111,7 +139,7 @@ export type WindowApi = {
     getDirectoryTree: () => Promise<ApiResult<CloudDirectoryNode[]>>
     deleteCloudData: (path: string) => Promise<ApiResult<void>>
     deleteFile: (path: string) => Promise<ApiResult<void>>
-    getCloudFileDetails: (path: string) => Promise<ApiResult<CloudFileDetail>>
+    getCloudFileDetails: (path: string) => Promise<ApiResult<CloudFileDetail[]>>
   }
   saveData: {
     upload: {
@@ -119,7 +147,7 @@ export type WindowApi = {
     }
     download: {
       downloadSaveData: (localPath: string, remotePath: string) => Promise<ApiResult<void>>
-      getCloudFileDetails: (gameId: string) => Promise<ApiResult<CloudFileDetail>>
+      getCloudFileDetails: (gameId: string) => Promise<ApiResult<{ exists: boolean; totalSize: number; files: CloudFileDetail[] }>>
     }
   }
   loadImage: {
@@ -139,12 +167,6 @@ export type WindowApi = {
 }
 
 export const createWailsBridge = (): WindowApi => {
-  const notImplemented = async <T,>(message: string): Promise<ApiResult<T>> => ({
-    success: false,
-    message
-  })
-  const okResult = <T,>(data: T): ApiResult<T> => ({ success: true, data })
-
   return {
     window: {
       minimize: async () => {
@@ -154,14 +176,17 @@ export const createWailsBridge = (): WindowApi => {
         await WindowToggleMaximise()
       },
       close: async () => {
-        await WindowClose()
+        await Quit()
       },
       openFolder: async (path) => {
         await OpenFolder(path)
       }
     },
     settings: {
-      updateAutoTracking: async () => notImplemented<void>("設定APIは未実装です")
+      updateAutoTracking: async (enabled) => {
+        const result = await UpdateAutoTracking(enabled)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     file: {
       selectFile: async (filters) => {
@@ -278,8 +303,14 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true, data: (result.data ?? []) as PlaySessionType[] }
           : { success: false, message: result.error?.message ?? "エラー" }
       },
-      updateSessionChapter: async () => notImplemented<void>("セッション更新は未実装です"),
-      updateSessionName: async () => notImplemented<void>("セッション更新は未実装です"),
+      updateSessionChapter: async (sessionId, chapterId) => {
+        const result = await UpdateSessionChapter(sessionId, chapterId)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      updateSessionName: async (sessionId, sessionName) => {
+        const result = await UpdateSessionName(sessionId, sessionName)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
       deletePlaySession: async (sessionId) => {
         const result = await DeleteSession(sessionId)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
@@ -308,9 +339,20 @@ export const createWailsBridge = (): WindowApi => {
         const result = await DeleteChapter(chapterId)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       },
-      updateChapterOrders: async () => notImplemented<void>("章の並び替えは未実装です"),
-      getChapterStats: async () => notImplemented<ChapterStats[]>("章統計は未実装です"),
-      setCurrentChapter: async () => notImplemented<void>("現在章設定は未実装です")
+      updateChapterOrders: async (gameId, chapterOrders) => {
+        const result = await UpdateChapterOrders(gameId, chapterOrders)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      getChapterStats: async (gameId) => {
+        const result = await GetChapterStats(gameId)
+        return result.success
+          ? { success: true, data: (result.data ?? []) as ChapterStats[] }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      setCurrentChapter: async (gameId, chapterId) => {
+        const result = await SetCurrentChapter(gameId, chapterId)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     memo: {
       getAllMemos: async () => {
@@ -343,9 +385,46 @@ export const createWailsBridge = (): WindowApi => {
         const result = await DeleteMemo(memoId)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       },
-      getMemoRootDir: async () => notImplemented<string>("メモ保存先は未実装です"),
-      getMemoFilePath: async () => notImplemented<string>("メモファイルパスは未実装です"),
-      syncMemosFromCloud: async () => notImplemented<void>("メモ同期は未実装です")
+      getMemoRootDir: async () => {
+        const result = await GetMemoRootDir()
+        return result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      getMemoFilePath: async (memoId) => {
+        const result = await GetMemoFilePath(memoId)
+        return result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      getGameMemoDir: async (gameId) => {
+        const result = await GetGameMemoDir(gameId)
+        return result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      uploadMemoToCloud: async (memoId) => {
+        const result = await UploadMemoToCloud(memoId)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      downloadMemoFromCloud: async (gameTitle, memoFileName) => {
+        const result = await DownloadMemoFromCloud(gameTitle, memoFileName)
+        return result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      getCloudMemos: async () => {
+        const result = await GetCloudMemos()
+        return result.success
+          ? { success: true, data: (result.data ?? []) as CloudMemoInfo[] }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      syncMemosFromCloud: async (gameId) => {
+        const result = await SyncMemosFromCloud(gameId ?? "")
+        return result.success
+          ? { success: true, data: result.data as MemoSyncResult }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     credential: {
       upsertCredential: async (creds) => {
@@ -371,14 +450,44 @@ export const createWailsBridge = (): WindowApi => {
           }
         }
       },
-      validateCredential: async () => notImplemented<void>("認証情報検証は未実装です")
+      validateCredential: async (creds) => {
+        const result = await ValidateCredential({
+          bucketName: creds.bucketName,
+          region: creds.region,
+          endpoint: creds.endpoint,
+          accessKeyId: creds.accessKeyId,
+          secretAccessKey: creds.secretAccessKey
+        })
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     cloudData: {
-      listCloudData: async () => okResult<CloudDataItem[]>([]),
-      getDirectoryTree: async () => okResult<CloudDirectoryNode[]>([]),
-      deleteCloudData: async () => notImplemented<void>("クラウド削除は未実装です"),
-      deleteFile: async () => notImplemented<void>("クラウド削除は未実装です"),
-      getCloudFileDetails: async () => notImplemented<CloudFileDetail>("クラウド詳細は未実装です")
+      listCloudData: async () => {
+        const result = await ListCloudData()
+        return result.success
+          ? { success: true, data: (result.data ?? []) as CloudDataItem[] }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      getDirectoryTree: async () => {
+        const result = await GetDirectoryTree()
+        return result.success
+          ? { success: true, data: (result.data ?? []) as CloudDirectoryNode[] }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      deleteCloudData: async (path) => {
+        const result = await DeleteCloudData(path)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      deleteFile: async (path) => {
+        const result = await DeleteFile(path)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      getCloudFileDetails: async (path) => {
+        const result = await GetCloudFileDetails(path)
+        return result.success
+          ? { success: true, data: (result.data ?? []) as CloudFileDetail[] }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     saveData: {
       upload: {
@@ -388,19 +497,43 @@ export const createWailsBridge = (): WindowApi => {
         }
       },
       download: {
-        downloadSaveData: async () => notImplemented<void>("ダウンロードは未実装です"),
-        getCloudFileDetails: async () => notImplemented<CloudFileDetail>("クラウド詳細は未実装です")
+        downloadSaveData: async (localPath, remotePath) => {
+          const result = await DownloadSaveData(localPath, remotePath)
+          return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+        },
+        getCloudFileDetails: async (gameId) => {
+          const result = await GetCloudFileDetailsByGame(gameId)
+          return result.success
+            ? {
+                success: true,
+                data: result.data as { exists: boolean; totalSize: number; files: CloudFileDetail[] }
+              }
+            : { success: false, message: result.error?.message ?? "エラー" }
+        }
       }
     },
     loadImage: {
-      loadImageFromLocal: async () => notImplemented<string>("画像読み込みは未実装です"),
+      loadImageFromLocal: async (path) => {
+        const result = await LoadImageFromLocal(path)
+        return result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
       loadImageFromWeb: async (src) => ({ success: true, data: src })
     },
     processMonitor: {
-      getMonitoringStatus: async () => ({ success: true, data: { isMonitoring: false } })
+      getMonitoringStatus: async () => {
+        const result = await GetMonitoringStatus()
+        return result.success
+          ? { success: true, data: (result.data ?? { isMonitoring: false }) as { isMonitoring: boolean } }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     game: {
-      launchGame: async () => notImplemented<void>("ゲーム起動は未実装です")
+      launchGame: async (exePath) => {
+        const result = await LaunchGame(exePath)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      }
     },
     errorReport: {
       reportError: (payload) => {

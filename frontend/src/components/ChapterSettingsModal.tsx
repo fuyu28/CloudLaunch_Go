@@ -11,7 +11,7 @@ import { FaEdit, FaTrash, FaChevronUp, FaChevronDown, FaTimes, FaSave } from "re
 import { logger } from "@renderer/utils/logger"
 
 import ConfirmModal from "./ConfirmModal"
-import { chapterUpdateSchema } from "../../../schemas/chapter"
+import { chapterUpdateSchema } from "@renderer/schemas/chapter"
 import type { Chapter } from "src/types/chapter"
 import { useZodValidation } from "../hooks/useZodValidation"
 

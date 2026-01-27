@@ -12,7 +12,7 @@
 import { useCallback } from "react"
 
 import { useLoadingState } from "./useLoadingState"
-import { MESSAGES } from "../../../constants"
+import { MESSAGES } from "@renderer/constants"
 import type { InputGameData, GameType } from "src/types/game"
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu"
 import type { ApiResult } from "src/types/result"

@@ -9,8 +9,6 @@
  * - プラットフォーム固有のパス処理
  */
 
-import path from "path"
-
 import { sanitizeFilename } from "./stringUtils"
 
 /**
@@ -73,17 +71,9 @@ export function validatePath(
   }
 
   // パスの正規化（形式判定後）
-  let normalizedPath = path.normalize(filePath)
+  const normalizedPath = normalizePath(filePath, isUnixPath)
 
-  // Unix形式のパスはWindows上でも元の形式を保持
-  if (isUnixPath) {
-    normalizedPath = filePath
-  }
-
-  return {
-    isValid: true,
-    normalizedPath
-  }
+  return { isValid: true, normalizedPath }
 }
 
 /**
@@ -92,7 +82,9 @@ export function validatePath(
  * @returns 拡張子（ドット含む、例: ".txt"）
  */
 export function getFileExtension(filePath: string): string {
-  return path.extname(filePath)
+  const fileName = filePath.replace(/\\/g, "/").split("/").pop() ?? ""
+  const index = fileName.lastIndexOf(".")
+  return index >= 0 ? fileName.slice(index) : ""
 }
 
 /**
@@ -101,8 +93,8 @@ export function getFileExtension(filePath: string): string {
  * @returns ファイル名（拡張子なし）
  */
 export function getFileNameWithoutExtension(filePath: string): string {
-  const fileName = path.basename(filePath)
-  const extension = path.extname(fileName)
+  const fileName = filePath.replace(/\\/g, "/").split("/").pop() ?? ""
+  const extension = getFileExtension(fileName)
   return extension.length > 0 ? fileName.slice(0, -extension.length) : fileName
 }
 
@@ -112,7 +104,16 @@ export function getFileNameWithoutExtension(filePath: string): string {
  * @returns 親ディレクトリのパス
  */
 export function getParentDirectory(filePath: string): string {
-  return path.dirname(filePath)
+  const normalized = normalizePath(filePath, false)
+  if (normalized === "" || normalized === "/" || normalized.endsWith(":/")) {
+    return normalized
+  }
+  const trimmed = normalized.replace(/\/+$/, "")
+  const lastSlash = trimmed.lastIndexOf("/")
+  if (lastSlash <= 0) {
+    return trimmed
+  }
+  return trimmed.slice(0, lastSlash)
 }
 
 /**
@@ -124,7 +125,12 @@ export function joinPaths(...pathSegments: string[]): string {
   if (pathSegments.length === 0) {
     return ""
   }
-  return path.join(...pathSegments).replace(/\\/g, "/")
+  const filtered = pathSegments.filter(Boolean)
+  if (filtered.length === 0) {
+    return ""
+  }
+  const joined = filtered.join("/")
+  return joined.replace(/\\/g, "/").replace(/\/{2,}/g, "/")
 }
 
 /**
@@ -161,7 +167,7 @@ export function localPathToS3Key(localPath: string): string {
  * @returns 相対パスの場合 true
  */
 export function isRelativePath(filePath: string): boolean {
-  return !path.isAbsolute(filePath)
+  return !/^[a-zA-Z]:[\\/]/.test(filePath) && !filePath.startsWith("/") && !filePath.startsWith("\\\\")
 }
 
 /**
@@ -173,4 +179,13 @@ export function isRelativePath(filePath: string): boolean {
 export function hasValidExtension(filePath: string, extensions: readonly string[]): boolean {
   const fileExtension = getFileExtension(filePath).toLowerCase().slice(1) // ドットを除去
   return extensions.map((ext) => ext.toLowerCase()).includes(fileExtension)
+}
+
+function normalizePath(input: string, preserveUnix: boolean): string {
+  let normalized = input.replace(/\\/g, "/")
+  normalized = normalized.replace(/\/{2,}/g, "/")
+  if (preserveUnix && input.startsWith("/")) {
+    return normalized
+  }
+  return normalized
 }

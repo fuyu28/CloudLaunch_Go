@@ -19,14 +19,14 @@
 import { useMemo, useState, useCallback, useEffect } from "react"
 import { ZodError } from "zod"
 
-import { gameFormSchema } from "../../../schemas/game"
+import { gameFormSchema } from "@renderer/schemas/game"
 import type { InputGameData } from "src/types/game"
 import {
   validateExecutablePath,
   validateImagePath,
   validateSaveFolderPath
-} from "../utils/fileValidation"
-import { logger } from "../utils/logger"
+} from "@renderer/utils/fileValidation"
+import { logger } from "@renderer/utils/logger"
 
 /**
  * バリデーションエラーの型定義

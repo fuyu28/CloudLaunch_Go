@@ -22,7 +22,7 @@ import toast from "react-hot-toast"
 
 import { logger } from "@renderer/utils/logger"
 
-import { DAISYUI_THEMES } from "../constants/themes"
+import { DAISYUI_THEMES } from "@renderer/constants/themes"
 import {
   themeAtom,
   changeThemeAtom,

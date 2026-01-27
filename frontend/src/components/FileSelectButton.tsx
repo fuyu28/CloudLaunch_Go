@@ -22,7 +22,7 @@
  * ```
  */
 
-import { MESSAGES } from "../../../constants"
+import { MESSAGES } from "@renderer/constants"
 
 /**
  * ファイル選択ボタンコンポーネントのprops

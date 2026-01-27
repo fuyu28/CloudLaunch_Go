@@ -30,7 +30,7 @@ import { ZodError } from "zod"
 
 import { logger } from "@renderer/utils/logger"
 
-import { credsSchema } from "../../../schemas/credentials"
+import { credsSchema } from "@renderer/schemas/credentials"
 import type { Creds } from "src/types/creds"
 import type { ApiResult } from "src/types/result"
 

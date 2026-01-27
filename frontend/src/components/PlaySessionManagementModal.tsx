@@ -26,7 +26,7 @@ import { useToastHandler } from "@renderer/hooks/useToastHandler"
 import { logger } from "@renderer/utils/logger"
 
 import ConfirmModal from "./ConfirmModal"
-import { playSessionEditSchema } from "../../../schemas/playSession"
+import { playSessionEditSchema } from "@renderer/schemas/playSession"
 import type { Chapter } from "src/types/chapter"
 import type { PlaySessionType } from "src/types/game"
 import { useZodValidation } from "../hooks/useZodValidation"
