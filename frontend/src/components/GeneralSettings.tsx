@@ -121,7 +121,7 @@ export default function GeneralSettings(): React.JSX.Element {
   }
 
   return (
-    <div className="card bg-base-100 shadow-md rounded-lg p-6">
+    <div className="w-full">
       <h2 className="text-xl font-semibold mb-6">一般設定</h2>
 
       <div className="grid gap-6 lg:grid-cols-2">

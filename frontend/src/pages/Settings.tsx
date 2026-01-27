@@ -53,7 +53,7 @@ export default function Settings(): React.JSX.Element {
       </div>
 
       {/* タブコンテンツ */}
-      <div className="bg-base-100 p-6 rounded-lg shadow">
+      <div className="bg-base-100 p-6 rounded-lg border border-base-200">
         {activeTab === "general" && <GeneralSettings />}
         {activeTab === "r2s3" && <R2S3Settings />}
       </div>
