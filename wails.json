@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "CloudLaunch",
+  "outputfilename": "CloudLaunch",
+  "frontend:install": "bun install",
+  "frontend:build": "bun run build",
+  "frontend:dev:watcher": "bun run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "fuyu",
+    "email": "88916226+fuyu28@users.noreply.github.com"
+  }
+}
