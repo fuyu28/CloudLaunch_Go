@@ -89,6 +89,13 @@ func (app *App) Startup(ctx context.Context) {
 	app.ctx = ctx
 }
 
+func (app *App) context() context.Context {
+	if app.ctx != nil {
+		return app.ctx
+	}
+	return context.Background()
+}
+
 // Shutdown はアプリケーションの終了処理を行う。
 func (app *App) Shutdown(ctx context.Context) error {
 	app.Logger.Info("CloudLaunch backend shutting down")

@@ -41,7 +41,8 @@ type MemoSyncResult struct {
 }
 
 // GetCloudMemos はクラウドメモ一覧を取得する。
-func (app *App) GetCloudMemos(ctx context.Context) result.ApiResult[[]CloudMemoInfo] {
+func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[[]CloudMemoInfo]("クラウドメモ取得に失敗しました", error.Error())
@@ -76,7 +77,8 @@ func (app *App) GetCloudMemos(ctx context.Context) result.ApiResult[[]CloudMemoI
 }
 
 // DownloadMemoFromCloud はクラウドからメモ内容を取得する。
-func (app *App) DownloadMemoFromCloud(ctx context.Context, gameTitle string, memoFileName string) result.ApiResult[string] {
+func (app *App) DownloadMemoFromCloud(gameTitle string, memoFileName string) result.ApiResult[string] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[string]("メモのダウンロードに失敗しました", error.Error())
@@ -93,7 +95,8 @@ func (app *App) DownloadMemoFromCloud(ctx context.Context, gameTitle string, mem
 }
 
 // UploadMemoToCloud はメモをクラウドへ保存する。
-func (app *App) UploadMemoToCloud(ctx context.Context, memoID string) result.ApiResult[bool] {
+func (app *App) UploadMemoToCloud(memoID string) result.ApiResult[bool] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[bool]("メモのアップロードに失敗しました", error.Error())
@@ -122,7 +125,8 @@ func (app *App) UploadMemoToCloud(ctx context.Context, memoID string) result.Api
 }
 
 // SyncMemosFromCloud はメモをクラウドと同期する。
-func (app *App) SyncMemosFromCloud(ctx context.Context, gameID string) result.ApiResult[MemoSyncResult] {
+func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResult] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[MemoSyncResult]("メモ同期に失敗しました", error.Error())
@@ -133,7 +137,7 @@ func (app *App) SyncMemosFromCloud(ctx context.Context, gameID string) result.Ap
 		Details: []string{},
 	}
 
-	cloudMemosResult := app.GetCloudMemos(ctx)
+	cloudMemosResult := app.GetCloudMemos()
 	if !cloudMemosResult.Success {
 		if cloudMemosResult.Error == nil {
 			return result.ErrorResult[MemoSyncResult]("メモ同期に失敗しました", "クラウドメモ取得に失敗しました")

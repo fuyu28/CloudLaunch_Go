@@ -19,124 +19,125 @@ import (
 )
 
 // ListGames はゲーム一覧を取得する。
-func (app *App) ListGames(ctx context.Context, searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]models.Game] {
+func (app *App) ListGames(searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]models.Game] {
+	ctx := app.context()
 	status := normalizePlayStatus(filter)
 	return app.GameService.ListGames(ctx, searchText, status, sortBy, sortDirection)
 }
 
 // GetGameByID はゲームを取得する。
-func (app *App) GetGameByID(ctx context.Context, gameID string) result.ApiResult[*models.Game] {
-	return app.GameService.GetGameByID(ctx, gameID)
+func (app *App) GetGameByID(gameID string) result.ApiResult[*models.Game] {
+	return app.GameService.GetGameByID(app.context(), gameID)
 }
 
 // CreateGame はゲームを作成する。
-func (app *App) CreateGame(ctx context.Context, input services.GameInput) result.ApiResult[*models.Game] {
-	return app.GameService.CreateGame(ctx, input)
+func (app *App) CreateGame(input services.GameInput) result.ApiResult[*models.Game] {
+	return app.GameService.CreateGame(app.context(), input)
 }
 
 // UpdateGame はゲームを更新する。
-func (app *App) UpdateGame(ctx context.Context, gameID string, input services.GameUpdateInput) result.ApiResult[*models.Game] {
-	return app.GameService.UpdateGame(ctx, gameID, input)
+func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result.ApiResult[*models.Game] {
+	return app.GameService.UpdateGame(app.context(), gameID, input)
 }
 
 // UpdatePlayTime はプレイ時間を更新する。
-func (app *App) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
-	return app.GameService.UpdatePlayTime(ctx, gameID, totalPlayTime, lastPlayed)
+func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
+	return app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
 }
 
 // DeleteGame はゲームを削除する。
-func (app *App) DeleteGame(ctx context.Context, gameID string) result.ApiResult[bool] {
-	return app.GameService.DeleteGame(ctx, gameID)
+func (app *App) DeleteGame(gameID string) result.ApiResult[bool] {
+	return app.GameService.DeleteGame(app.context(), gameID)
 }
 
 // ListChaptersByGame は章一覧を取得する。
-func (app *App) ListChaptersByGame(ctx context.Context, gameID string) result.ApiResult[[]models.Chapter] {
-	return app.ChapterService.ListChaptersByGame(ctx, gameID)
+func (app *App) ListChaptersByGame(gameID string) result.ApiResult[[]models.Chapter] {
+	return app.ChapterService.ListChaptersByGame(app.context(), gameID)
 }
 
 // CreateChapter は章を作成する。
-func (app *App) CreateChapter(ctx context.Context, input services.ChapterInput) result.ApiResult[*models.Chapter] {
-	return app.ChapterService.CreateChapter(ctx, input)
+func (app *App) CreateChapter(input services.ChapterInput) result.ApiResult[*models.Chapter] {
+	return app.ChapterService.CreateChapter(app.context(), input)
 }
 
 // UpdateChapter は章を更新する。
-func (app *App) UpdateChapter(ctx context.Context, chapterID string, input services.ChapterUpdateInput) result.ApiResult[*models.Chapter] {
-	return app.ChapterService.UpdateChapter(ctx, chapterID, input)
+func (app *App) UpdateChapter(chapterID string, input services.ChapterUpdateInput) result.ApiResult[*models.Chapter] {
+	return app.ChapterService.UpdateChapter(app.context(), chapterID, input)
 }
 
 // UpdateChapterOrders は章の並び順を更新する。
-func (app *App) UpdateChapterOrders(ctx context.Context, gameID string, orders []services.ChapterOrderUpdate) result.ApiResult[bool] {
-	return app.ChapterService.UpdateChapterOrders(ctx, gameID, orders)
+func (app *App) UpdateChapterOrders(gameID string, orders []services.ChapterOrderUpdate) result.ApiResult[bool] {
+	return app.ChapterService.UpdateChapterOrders(app.context(), gameID, orders)
 }
 
 // GetChapterStats は章の統計を取得する。
-func (app *App) GetChapterStats(ctx context.Context, gameID string) result.ApiResult[[]models.ChapterStat] {
-	return app.ChapterService.GetChapterStats(ctx, gameID)
+func (app *App) GetChapterStats(gameID string) result.ApiResult[[]models.ChapterStat] {
+	return app.ChapterService.GetChapterStats(app.context(), gameID)
 }
 
 // SetCurrentChapter はゲームの現在章を設定する。
-func (app *App) SetCurrentChapter(ctx context.Context, gameID string, chapterID string) result.ApiResult[bool] {
-	return app.ChapterService.SetCurrentChapter(ctx, gameID, chapterID)
+func (app *App) SetCurrentChapter(gameID string, chapterID string) result.ApiResult[bool] {
+	return app.ChapterService.SetCurrentChapter(app.context(), gameID, chapterID)
 }
 
 // DeleteChapter は章を削除する。
-func (app *App) DeleteChapter(ctx context.Context, chapterID string) result.ApiResult[bool] {
-	return app.ChapterService.DeleteChapter(ctx, chapterID)
+func (app *App) DeleteChapter(chapterID string) result.ApiResult[bool] {
+	return app.ChapterService.DeleteChapter(app.context(), chapterID)
 }
 
 // CreateSession はセッションを作成する。
-func (app *App) CreateSession(ctx context.Context, input services.SessionInput) result.ApiResult[*models.PlaySession] {
-	return app.SessionService.CreateSession(ctx, input)
+func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*models.PlaySession] {
+	return app.SessionService.CreateSession(app.context(), input)
 }
 
 // ListSessionsByGame はセッション一覧を取得する。
-func (app *App) ListSessionsByGame(ctx context.Context, gameID string) result.ApiResult[[]models.PlaySession] {
-	return app.SessionService.ListSessionsByGame(ctx, gameID)
+func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]models.PlaySession] {
+	return app.SessionService.ListSessionsByGame(app.context(), gameID)
 }
 
 // DeleteSession はセッションを削除する。
-func (app *App) DeleteSession(ctx context.Context, sessionID string) result.ApiResult[bool] {
-	return app.SessionService.DeleteSession(ctx, sessionID)
+func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
+	return app.SessionService.DeleteSession(app.context(), sessionID)
 }
 
 // UpdateSessionChapter はセッション章を更新する。
-func (app *App) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[bool] {
-	return app.SessionService.UpdateSessionChapter(ctx, sessionID, chapterID)
+func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result.ApiResult[bool] {
+	return app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
 }
 
 // UpdateSessionName はセッション名を更新する。
-func (app *App) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[bool] {
-	return app.SessionService.UpdateSessionName(ctx, sessionID, sessionName)
+func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
+	return app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
 }
 
 // CreateMemo はメモを作成する。
-func (app *App) CreateMemo(ctx context.Context, input services.MemoInput) result.ApiResult[*models.Memo] {
-	return app.MemoService.CreateMemo(ctx, input)
+func (app *App) CreateMemo(input services.MemoInput) result.ApiResult[*models.Memo] {
+	return app.MemoService.CreateMemo(app.context(), input)
 }
 
 // UpdateMemo はメモを更新する。
-func (app *App) UpdateMemo(ctx context.Context, memoID string, input services.MemoUpdateInput) result.ApiResult[*models.Memo] {
-	return app.MemoService.UpdateMemo(ctx, memoID, input)
+func (app *App) UpdateMemo(memoID string, input services.MemoUpdateInput) result.ApiResult[*models.Memo] {
+	return app.MemoService.UpdateMemo(app.context(), memoID, input)
 }
 
 // GetMemoByID はメモを取得する。
-func (app *App) GetMemoByID(ctx context.Context, memoID string) result.ApiResult[*models.Memo] {
-	return app.MemoService.GetMemoByID(ctx, memoID)
+func (app *App) GetMemoByID(memoID string) result.ApiResult[*models.Memo] {
+	return app.MemoService.GetMemoByID(app.context(), memoID)
 }
 
 // ListAllMemos は全メモを取得する。
-func (app *App) ListAllMemos(ctx context.Context) result.ApiResult[[]models.Memo] {
-	return app.MemoService.ListAllMemos(ctx)
+func (app *App) ListAllMemos() result.ApiResult[[]models.Memo] {
+	return app.MemoService.ListAllMemos(app.context())
 }
 
 // ListMemosByGame はメモ一覧を取得する。
-func (app *App) ListMemosByGame(ctx context.Context, gameID string) result.ApiResult[[]models.Memo] {
-	return app.MemoService.ListMemosByGame(ctx, gameID)
+func (app *App) ListMemosByGame(gameID string) result.ApiResult[[]models.Memo] {
+	return app.MemoService.ListMemosByGame(app.context(), gameID)
 }
 
 // DeleteMemo はメモを削除する。
-func (app *App) DeleteMemo(ctx context.Context, memoID string) result.ApiResult[bool] {
-	return app.MemoService.DeleteMemo(ctx, memoID)
+func (app *App) DeleteMemo(memoID string) result.ApiResult[bool] {
+	return app.MemoService.DeleteMemo(app.context(), memoID)
 }
 
 // FileFilterInput はファイル選択フィルタを表す。
@@ -146,14 +147,14 @@ type FileFilterInput struct {
 }
 
 // UpdateAutoTracking は自動計測設定を更新する。
-func (app *App) UpdateAutoTracking(ctx context.Context, enabled bool) result.ApiResult[bool] {
+func (app *App) UpdateAutoTracking(enabled bool) result.ApiResult[bool] {
 	app.autoTracking = enabled
 	app.isMonitoring = enabled
 	return result.OkResult(true)
 }
 
 // GetMonitoringStatus は監視状態を取得する。
-func (app *App) GetMonitoringStatus(ctx context.Context) result.ApiResult[map[string]bool] {
+func (app *App) GetMonitoringStatus() result.ApiResult[map[string]bool] {
 	status := map[string]bool{
 		"isMonitoring": app.isMonitoring,
 		"autoTracking": app.autoTracking,
@@ -162,8 +163,8 @@ func (app *App) GetMonitoringStatus(ctx context.Context) result.ApiResult[map[st
 }
 
 // SelectFile はファイル選択ダイアログを開く。
-func (app *App) SelectFile(ctx context.Context, filters []FileFilterInput) result.ApiResult[string] {
-	dialogContext := app.runtimeContext(ctx)
+func (app *App) SelectFile(filters []FileFilterInput) result.ApiResult[string] {
+	dialogContext := app.runtimeContext()
 	fileFilters := buildFileFilters(filters)
 	path, error := runtime.OpenFileDialog(dialogContext, runtime.OpenDialogOptions{
 		Filters: fileFilters,
@@ -179,8 +180,8 @@ func (app *App) SelectFile(ctx context.Context, filters []FileFilterInput) resul
 }
 
 // SelectFolder はフォルダ選択ダイアログを開く。
-func (app *App) SelectFolder(ctx context.Context) result.ApiResult[string] {
-	dialogContext := app.runtimeContext(ctx)
+func (app *App) SelectFolder() result.ApiResult[string] {
+	dialogContext := app.runtimeContext()
 	path, error := runtime.OpenDirectoryDialog(dialogContext, runtime.OpenDialogOptions{})
 	if error != nil {
 		app.Logger.Error("フォルダ選択に失敗", "error", error)
@@ -193,7 +194,7 @@ func (app *App) SelectFolder(ctx context.Context) result.ApiResult[string] {
 }
 
 // CheckFileExists はファイル存在を確認する。
-func (app *App) CheckFileExists(ctx context.Context, filePath string) result.ApiResult[bool] {
+func (app *App) CheckFileExists(filePath string) result.ApiResult[bool] {
 	_, error := os.Stat(filePath)
 	if error != nil {
 		if os.IsNotExist(error) {
@@ -206,7 +207,7 @@ func (app *App) CheckFileExists(ctx context.Context, filePath string) result.Api
 }
 
 // CheckDirectoryExists はディレクトリ存在を確認する。
-func (app *App) CheckDirectoryExists(ctx context.Context, dirPath string) result.ApiResult[bool] {
+func (app *App) CheckDirectoryExists(dirPath string) result.ApiResult[bool] {
 	info, error := os.Stat(dirPath)
 	if error != nil {
 		if os.IsNotExist(error) {
@@ -219,66 +220,66 @@ func (app *App) CheckDirectoryExists(ctx context.Context, dirPath string) result
 }
 
 // OpenFolder は指定パスをOSで開く。
-func (app *App) OpenFolder(ctx context.Context, path string) result.ApiResult[bool] {
+func (app *App) OpenFolder(path string) result.ApiResult[bool] {
 	if strings.TrimSpace(path) == "" {
 		return result.ErrorResult[bool]("パスが不正です", "pathが空です")
 	}
-	runtime.BrowserOpenURL(app.runtimeContext(ctx), fileURLFromPath(path))
+	runtime.BrowserOpenURL(app.runtimeContext(), fileURLFromPath(path))
 	return result.OkResult(true)
 }
 
 // OpenLogsDirectory はログ保存ディレクトリを開く。
-func (app *App) OpenLogsDirectory(ctx context.Context) result.ApiResult[string] {
+func (app *App) OpenLogsDirectory() result.ApiResult[string] {
 	path := app.Config.AppDataDir
 	if path == "" {
 		return result.ErrorResult[string]("ログディレクトリが不明です", "AppDataDirが空です")
 	}
-	runtime.BrowserOpenURL(app.runtimeContext(ctx), fileURLFromPath(path))
+	runtime.BrowserOpenURL(app.runtimeContext(), fileURLFromPath(path))
 	return result.OkResult(path)
 }
 
 // CreateUpload はアップロード履歴を作成する。
-func (app *App) CreateUpload(ctx context.Context, input services.UploadInput) result.ApiResult[*models.Upload] {
-	return app.UploadService.CreateUpload(ctx, input)
+func (app *App) CreateUpload(input services.UploadInput) result.ApiResult[*models.Upload] {
+	return app.UploadService.CreateUpload(app.context(), input)
 }
 
 // ListUploadsByGame はアップロード履歴を取得する。
-func (app *App) ListUploadsByGame(ctx context.Context, gameID string) result.ApiResult[[]models.Upload] {
-	return app.UploadService.ListUploadsByGame(ctx, gameID)
+func (app *App) ListUploadsByGame(gameID string) result.ApiResult[[]models.Upload] {
+	return app.UploadService.ListUploadsByGame(app.context(), gameID)
 }
 
 // SaveCredential は認証情報を保存する。
-func (app *App) SaveCredential(ctx context.Context, key string, input services.CredentialInput) result.ApiResult[bool] {
-	return app.CredentialService.SaveCredential(ctx, key, input)
+func (app *App) SaveCredential(key string, input services.CredentialInput) result.ApiResult[bool] {
+	return app.CredentialService.SaveCredential(app.context(), key, input)
 }
 
 // LoadCredential は認証情報を取得する。
-func (app *App) LoadCredential(ctx context.Context, key string) result.ApiResult[*services.CredentialOutput] {
-	return toCredentialOutput(app.CredentialService.LoadCredential(ctx, key))
+func (app *App) LoadCredential(key string) result.ApiResult[*services.CredentialOutput] {
+	return toCredentialOutput(app.CredentialService.LoadCredential(app.context(), key))
 }
 
 // DeleteCredential は認証情報を削除する。
-func (app *App) DeleteCredential(ctx context.Context, key string) result.ApiResult[bool] {
-	return app.CredentialService.DeleteCredential(ctx, key)
+func (app *App) DeleteCredential(key string) result.ApiResult[bool] {
+	return app.CredentialService.DeleteCredential(app.context(), key)
 }
 
 // UploadFolder はフォルダをクラウドへアップロードする。
-func (app *App) UploadFolder(ctx context.Context, credentialKey string, folderPath string, prefix string) result.ApiResult[storage.UploadSummary] {
-	return app.CloudService.UploadFolder(ctx, credentialKey, folderPath, prefix)
+func (app *App) UploadFolder(credentialKey string, folderPath string, prefix string) result.ApiResult[storage.UploadSummary] {
+	return app.CloudService.UploadFolder(app.context(), credentialKey, folderPath, prefix)
 }
 
 // SaveCloudMetadata はメタ情報をクラウドに保存する。
-func (app *App) SaveCloudMetadata(ctx context.Context, credentialKey string, metadata storage.CloudMetadata) result.ApiResult[bool] {
-	return app.CloudService.SaveCloudMetadata(ctx, credentialKey, metadata)
+func (app *App) SaveCloudMetadata(credentialKey string, metadata storage.CloudMetadata) result.ApiResult[bool] {
+	return app.CloudService.SaveCloudMetadata(app.context(), credentialKey, metadata)
 }
 
 // LoadCloudMetadata はメタ情報をクラウドから取得する。
-func (app *App) LoadCloudMetadata(ctx context.Context, credentialKey string) result.ApiResult[*storage.CloudMetadata] {
-	return app.CloudService.LoadCloudMetadata(ctx, credentialKey)
+func (app *App) LoadCloudMetadata(credentialKey string) result.ApiResult[*storage.CloudMetadata] {
+	return app.CloudService.LoadCloudMetadata(app.context(), credentialKey)
 }
 
 // LaunchGame は指定された実行ファイルを起動する。
-func (app *App) LaunchGame(ctx context.Context, exePath string) result.ApiResult[bool] {
+func (app *App) LaunchGame(exePath string) result.ApiResult[bool] {
 	if strings.TrimSpace(exePath) == "" {
 		return result.ErrorResult[bool]("実行ファイルが不正です", "exePathが空です")
 	}
@@ -290,11 +291,8 @@ func (app *App) LaunchGame(ctx context.Context, exePath string) result.ApiResult
 	return result.OkResult(true)
 }
 
-func (app *App) runtimeContext(ctx context.Context) context.Context {
-	if app.ctx != nil {
-		return app.ctx
-	}
-	return ctx
+func (app *App) runtimeContext() context.Context {
+	return app.context()
 }
 
 func buildFileFilters(filters []FileFilterInput) []runtime.FileFilter {

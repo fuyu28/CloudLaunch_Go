@@ -2,15 +2,12 @@
 package app
 
 import (
-	"context"
-
 	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/result"
 )
 
 // GetMemoRootDir はメモのルートディレクトリを返す。
-func (app *App) GetMemoRootDir(ctx context.Context) result.ApiResult[string] {
-	_ = ctx
+func (app *App) GetMemoRootDir() result.ApiResult[string] {
 	if app.MemoFiles != nil {
 		return result.OkResult(app.MemoFiles.RootDir())
 	}
@@ -19,8 +16,8 @@ func (app *App) GetMemoRootDir(ctx context.Context) result.ApiResult[string] {
 }
 
 // GetMemoFilePath はメモIDからファイルパスを推定する。
-func (app *App) GetMemoFilePath(ctx context.Context, memoID string) result.ApiResult[string] {
-	memoData, error := app.Database.GetMemoByID(ctx, memoID)
+func (app *App) GetMemoFilePath(memoID string) result.ApiResult[string] {
+	memoData, error := app.Database.GetMemoByID(app.context(), memoID)
 	if error != nil {
 		return result.ErrorResult[string]("メモ取得に失敗しました", error.Error())
 	}
@@ -35,8 +32,7 @@ func (app *App) GetMemoFilePath(ctx context.Context, memoID string) result.ApiRe
 }
 
 // GetGameMemoDir はゲームのメモディレクトリを返す。
-func (app *App) GetGameMemoDir(ctx context.Context, gameID string) result.ApiResult[string] {
-	_ = ctx
+func (app *App) GetGameMemoDir(gameID string) result.ApiResult[string] {
 	if app.MemoFiles != nil {
 		return result.OkResult(app.MemoFiles.GameDir(gameID))
 	}

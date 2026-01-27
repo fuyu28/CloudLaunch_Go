@@ -3,7 +3,7 @@
  */
 
 import type { ApiResult } from "src/types/result"
-import type { InputGameData, GameType, PlaySessionType, PlayStatus } from "src/types/game"
+import type { InputGameData, GameType, PlaySessionType, PlayStatus, MonitoringGameStatus } from "src/types/game"
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu"
 import type { Chapter, ChapterStats } from "src/types/chapter"
 import type { MemoType, CreateMemoData, UpdateMemoData, MemoSyncResult, CloudMemoInfo } from "src/types/memo"
@@ -155,7 +155,7 @@ export type WindowApi = {
     loadImageFromWeb: (src: string) => Promise<ApiResult<string>>
   }
   processMonitor: {
-    getMonitoringStatus: () => Promise<ApiResult<{ isMonitoring: boolean }>>
+    getMonitoringStatus: () => Promise<MonitoringGameStatus[]>
   }
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>
@@ -524,9 +524,13 @@ export const createWailsBridge = (): WindowApi => {
     processMonitor: {
       getMonitoringStatus: async () => {
         const result = await GetMonitoringStatus()
-        return result.success
-          ? { success: true, data: (result.data ?? { isMonitoring: false }) as { isMonitoring: boolean } }
-          : { success: false, message: result.error?.message ?? "エラー" }
+        if (!result.success) {
+          return []
+        }
+        if (Array.isArray(result.data)) {
+          return result.data as MonitoringGameStatus[]
+        }
+        return []
       }
     },
     game: {

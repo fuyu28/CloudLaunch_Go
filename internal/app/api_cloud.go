@@ -55,7 +55,8 @@ type CloudFileDetailsResult struct {
 }
 
 // ListCloudData はクラウドデータ一覧を取得する。
-func (app *App) ListCloudData(ctx context.Context) result.ApiResult[[]CloudDataItem] {
+func (app *App) ListCloudData() result.ApiResult[[]CloudDataItem] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[[]CloudDataItem]("クラウドデータ取得に失敗しました", error.Error())
@@ -96,7 +97,8 @@ func (app *App) ListCloudData(ctx context.Context) result.ApiResult[[]CloudDataI
 }
 
 // GetDirectoryTree はクラウドのディレクトリツリーを取得する。
-func (app *App) GetDirectoryTree(ctx context.Context) result.ApiResult[[]CloudDirectoryNode] {
+func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[[]CloudDirectoryNode]("ディレクトリツリー取得に失敗しました", error.Error())
@@ -156,7 +158,8 @@ func (app *App) GetDirectoryTree(ctx context.Context) result.ApiResult[[]CloudDi
 }
 
 // DeleteCloudData は指定パス配下を削除する。
-func (app *App) DeleteCloudData(ctx context.Context, path string) result.ApiResult[bool] {
+func (app *App) DeleteCloudData(path string) result.ApiResult[bool] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[bool]("削除に失敗しました", error.Error())
@@ -173,7 +176,8 @@ func (app *App) DeleteCloudData(ctx context.Context, path string) result.ApiResu
 }
 
 // DeleteFile は単一ファイルを削除する。
-func (app *App) DeleteFile(ctx context.Context, key string) result.ApiResult[bool] {
+func (app *App) DeleteFile(key string) result.ApiResult[bool] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[bool]("削除に失敗しました", error.Error())
@@ -185,7 +189,8 @@ func (app *App) DeleteFile(ctx context.Context, key string) result.ApiResult[boo
 }
 
 // GetCloudFileDetails はプレフィックス配下の詳細を取得する。
-func (app *App) GetCloudFileDetails(ctx context.Context, prefix string) result.ApiResult[[]CloudFileDetail] {
+func (app *App) GetCloudFileDetails(prefix string) result.ApiResult[[]CloudFileDetail] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[[]CloudFileDetail]("詳細取得に失敗しました", error.Error())
@@ -210,7 +215,8 @@ func (app *App) GetCloudFileDetails(ctx context.Context, prefix string) result.A
 }
 
 // GetCloudFileDetailsByGame はゲームIDから詳細を取得する。
-func (app *App) GetCloudFileDetailsByGame(ctx context.Context, gameID string) result.ApiResult[CloudFileDetailsResult] {
+func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudFileDetailsResult] {
+	ctx := app.context()
 	game, error := app.Database.GetGameByID(ctx, gameID)
 	if error != nil {
 		return result.ErrorResult[CloudFileDetailsResult]("ゲーム取得に失敗しました", error.Error())
@@ -243,7 +249,8 @@ func (app *App) GetCloudFileDetailsByGame(ctx context.Context, gameID string) re
 }
 
 // DownloadSaveData はクラウドからダウンロードする。
-func (app *App) DownloadSaveData(ctx context.Context, localPath string, remotePath string) result.ApiResult[bool] {
+func (app *App) DownloadSaveData(localPath string, remotePath string) result.ApiResult[bool] {
+	ctx := app.context()
 	client, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[bool]("ダウンロードに失敗しました", error.Error())
@@ -255,7 +262,7 @@ func (app *App) DownloadSaveData(ctx context.Context, localPath string, remotePa
 }
 
 // LoadImageFromLocal はローカル画像をBase64で返す。
-func (app *App) LoadImageFromLocal(ctx context.Context, filePath string) result.ApiResult[string] {
+func (app *App) LoadImageFromLocal(filePath string) result.ApiResult[string] {
 	content, error := os.ReadFile(filePath)
 	if error != nil {
 		return result.ErrorResult[string]("画像読み込みに失敗しました", error.Error())
@@ -266,7 +273,8 @@ func (app *App) LoadImageFromLocal(ctx context.Context, filePath string) result.
 }
 
 // ValidateCredential は認証情報の検証を行う。
-func (app *App) ValidateCredential(ctx context.Context, input CredentialValidationInput) result.ApiResult[bool] {
+func (app *App) ValidateCredential(input CredentialValidationInput) result.ApiResult[bool] {
+	ctx := app.context()
 	cfg := storage.S3Config{
 		Endpoint:       input.Endpoint,
 		Region:         input.Region,
