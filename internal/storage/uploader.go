@@ -90,6 +90,21 @@ func UploadJSON(ctx context.Context, client *s3.Client, bucket string, key strin
 	return error
 }
 
+// UploadBytes は任意のバイト列をアップロードする。
+func UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error {
+	reader := bytes.NewReader(payload)
+	input := &s3.PutObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+		Body:   reader,
+	}
+	if strings.TrimSpace(contentType) != "" {
+		input.ContentType = stringPtr(contentType)
+	}
+	_, error := client.PutObject(ctx, input)
+	return error
+}
+
 // joinKey はプレフィックスとファイル名をS3キーとして結合する。
 func joinKey(prefix string, name string) string {
 	trimmed := strings.Trim(prefix, "/")

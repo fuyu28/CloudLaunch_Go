@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -63,6 +64,21 @@ func (app *App) UpdateChapter(ctx context.Context, chapterID string, input servi
 	return app.ChapterService.UpdateChapter(ctx, chapterID, input)
 }
 
+// UpdateChapterOrders は章の並び順を更新する。
+func (app *App) UpdateChapterOrders(ctx context.Context, gameID string, orders []services.ChapterOrderUpdate) result.ApiResult[bool] {
+	return app.ChapterService.UpdateChapterOrders(ctx, gameID, orders)
+}
+
+// GetChapterStats は章の統計を取得する。
+func (app *App) GetChapterStats(ctx context.Context, gameID string) result.ApiResult[[]models.ChapterStat] {
+	return app.ChapterService.GetChapterStats(ctx, gameID)
+}
+
+// SetCurrentChapter はゲームの現在章を設定する。
+func (app *App) SetCurrentChapter(ctx context.Context, gameID string, chapterID string) result.ApiResult[bool] {
+	return app.ChapterService.SetCurrentChapter(ctx, gameID, chapterID)
+}
+
 // DeleteChapter は章を削除する。
 func (app *App) DeleteChapter(ctx context.Context, chapterID string) result.ApiResult[bool] {
 	return app.ChapterService.DeleteChapter(ctx, chapterID)
@@ -81,6 +97,16 @@ func (app *App) ListSessionsByGame(ctx context.Context, gameID string) result.Ap
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(ctx context.Context, sessionID string) result.ApiResult[bool] {
 	return app.SessionService.DeleteSession(ctx, sessionID)
+}
+
+// UpdateSessionChapter はセッション章を更新する。
+func (app *App) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[bool] {
+	return app.SessionService.UpdateSessionChapter(ctx, sessionID, chapterID)
+}
+
+// UpdateSessionName はセッション名を更新する。
+func (app *App) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[bool] {
+	return app.SessionService.UpdateSessionName(ctx, sessionID, sessionName)
 }
 
 // CreateMemo はメモを作成する。
@@ -117,6 +143,22 @@ func (app *App) DeleteMemo(ctx context.Context, memoID string) result.ApiResult[
 type FileFilterInput struct {
 	Name       string   `json:"name"`
 	Extensions []string `json:"extensions"`
+}
+
+// UpdateAutoTracking は自動計測設定を更新する。
+func (app *App) UpdateAutoTracking(ctx context.Context, enabled bool) result.ApiResult[bool] {
+	app.autoTracking = enabled
+	app.isMonitoring = enabled
+	return result.OkResult(true)
+}
+
+// GetMonitoringStatus は監視状態を取得する。
+func (app *App) GetMonitoringStatus(ctx context.Context) result.ApiResult[map[string]bool] {
+	status := map[string]bool{
+		"isMonitoring": app.isMonitoring,
+		"autoTracking": app.autoTracking,
+	}
+	return result.OkResult(status)
 }
 
 // SelectFile はファイル選択ダイアログを開く。
@@ -233,6 +275,19 @@ func (app *App) SaveCloudMetadata(ctx context.Context, credentialKey string, met
 // LoadCloudMetadata はメタ情報をクラウドから取得する。
 func (app *App) LoadCloudMetadata(ctx context.Context, credentialKey string) result.ApiResult[*storage.CloudMetadata] {
 	return app.CloudService.LoadCloudMetadata(ctx, credentialKey)
+}
+
+// LaunchGame は指定された実行ファイルを起動する。
+func (app *App) LaunchGame(ctx context.Context, exePath string) result.ApiResult[bool] {
+	if strings.TrimSpace(exePath) == "" {
+		return result.ErrorResult[bool]("実行ファイルが不正です", "exePathが空です")
+	}
+	command := exec.Command(exePath)
+	if error := command.Start(); error != nil {
+		app.Logger.Error("ゲーム起動に失敗", "error", error)
+		return result.ErrorResult[bool]("ゲーム起動に失敗しました", error.Error())
+	}
+	return result.OkResult(true)
 }
 
 func (app *App) runtimeContext(ctx context.Context) context.Context {

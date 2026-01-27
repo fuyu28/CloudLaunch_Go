@@ -8,19 +8,21 @@ import (
 	"strings"
 
 	"CloudLaunch_Go/internal/db"
+	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 )
 
 // MemoService はメモ関連の操作を提供する。
 type MemoService struct {
-	repository *db.Repository
-	logger     *slog.Logger
+	repository  *db.Repository
+	fileManager *memo.FileManager
+	logger      *slog.Logger
 }
 
 // NewMemoService は MemoService を生成する。
-func NewMemoService(repository *db.Repository, logger *slog.Logger) *MemoService {
-	return &MemoService{repository: repository, logger: logger}
+func NewMemoService(repository *db.Repository, fileManager *memo.FileManager, logger *slog.Logger) *MemoService {
+	return &MemoService{repository: repository, fileManager: fileManager, logger: logger}
 }
 
 // CreateMemo はメモを作成する。
@@ -40,6 +42,14 @@ func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) res
 		service.logger.Error("メモ作成に失敗", "error", error)
 		return result.ErrorResult[*models.Memo]("メモ作成に失敗しました", error.Error())
 	}
+
+	if service.fileManager != nil {
+		if _, fileError := service.fileManager.CreateMemoFile(created.GameID, created.ID, created.Title, created.Content); fileError != nil {
+			_ = service.repository.DeleteMemo(ctx, created.ID)
+			service.logger.Error("メモファイル作成に失敗", "error", fileError)
+			return result.ErrorResult[*models.Memo]("メモファイル作成に失敗しました", fileError.Error())
+		}
+	}
 	return result.OkResult(created)
 }
 
@@ -58,6 +68,8 @@ func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input
 		return result.ErrorResult[*models.Memo]("メモが見つかりません", "指定されたIDが存在しません")
 	}
 
+	oldTitle := memo.Title
+	oldContent := memo.Content
 	memo.Title = strings.TrimSpace(input.Title)
 	memo.Content = input.Content
 
@@ -65,6 +77,16 @@ func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input
 	if error != nil {
 		service.logger.Error("メモ更新に失敗", "error", error)
 		return result.ErrorResult[*models.Memo]("メモ更新に失敗しました", error.Error())
+	}
+
+	if service.fileManager != nil {
+		if _, fileError := service.fileManager.UpdateMemoFile(updated.GameID, updated.ID, oldTitle, updated.Title, updated.Content); fileError != nil {
+			memo.Title = oldTitle
+			memo.Content = oldContent
+			_, _ = service.repository.UpdateMemo(ctx, *memo)
+			service.logger.Error("メモファイル更新に失敗", "error", fileError)
+			return result.ErrorResult[*models.Memo]("メモファイル更新に失敗しました", fileError.Error())
+		}
 	}
 	return result.OkResult(updated)
 }
@@ -109,9 +131,24 @@ func (service *MemoService) DeleteMemo(ctx context.Context, memoID string) resul
 		return result.ErrorResult[bool]("メモIDが不正です", "memoIDが空です")
 	}
 
+	memo, error := service.repository.GetMemoByID(ctx, strings.TrimSpace(memoID))
+	if error != nil {
+		service.logger.Error("メモ取得に失敗", "error", error)
+		return result.ErrorResult[bool]("メモ取得に失敗しました", error.Error())
+	}
+	if memo == nil {
+		return result.ErrorResult[bool]("メモが見つかりません", "指定されたIDが存在しません")
+	}
+
 	if error := service.repository.DeleteMemo(ctx, strings.TrimSpace(memoID)); error != nil {
 		service.logger.Error("メモ削除に失敗", "error", error)
 		return result.ErrorResult[bool]("メモ削除に失敗しました", error.Error())
+	}
+	if service.fileManager != nil {
+		if fileError := service.fileManager.DeleteMemoFile(memo.GameID, memo.ID, memo.Title); fileError != nil {
+			service.logger.Error("メモファイル削除に失敗", "error", fileError)
+			return result.ErrorResult[bool]("メモファイル削除に失敗しました", fileError.Error())
+		}
 	}
 	return result.OkResult(true)
 }

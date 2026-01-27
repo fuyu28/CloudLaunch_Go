@@ -92,6 +92,63 @@ func (service *ChapterService) DeleteChapter(ctx context.Context, chapterID stri
 	return result.OkResult(true)
 }
 
+// UpdateChapterOrders は章の並び順を更新する。
+func (service *ChapterService) UpdateChapterOrders(ctx context.Context, gameID string, orders []ChapterOrderUpdate) result.ApiResult[bool] {
+	if strings.TrimSpace(gameID) == "" {
+		return result.ErrorResult[bool]("ゲームIDが不正です", "gameIDが空です")
+	}
+	for _, order := range orders {
+		if strings.TrimSpace(order.ID) == "" {
+			return result.ErrorResult[bool]("章IDが不正です", "chapterIDが空です")
+		}
+		if order.Order < 0 {
+			return result.ErrorResult[bool]("章順序が不正です", "orderが不正です")
+		}
+		if error := service.repository.UpdateChapterOrder(ctx, order.ID, order.Order); error != nil {
+			service.logger.Error("章順序更新に失敗", "error", error)
+			return result.ErrorResult[bool]("章順序更新に失敗しました", error.Error())
+		}
+	}
+	return result.OkResult(true)
+}
+
+// GetChapterStats は章の統計を取得する。
+func (service *ChapterService) GetChapterStats(ctx context.Context, gameID string) result.ApiResult[[]models.ChapterStat] {
+	if strings.TrimSpace(gameID) == "" {
+		return result.ErrorResult[[]models.ChapterStat]("ゲームIDが不正です", "gameIDが空です")
+	}
+	stats, error := service.repository.GetChapterStats(ctx, strings.TrimSpace(gameID))
+	if error != nil {
+		service.logger.Error("章統計取得に失敗", "error", error)
+		return result.ErrorResult[[]models.ChapterStat]("章統計取得に失敗しました", error.Error())
+	}
+	return result.OkResult(stats)
+}
+
+// SetCurrentChapter はゲームの現在章を設定する。
+func (service *ChapterService) SetCurrentChapter(ctx context.Context, gameID string, chapterID string) result.ApiResult[bool] {
+	if strings.TrimSpace(gameID) == "" {
+		return result.ErrorResult[bool]("ゲームIDが不正です", "gameIDが空です")
+	}
+	if strings.TrimSpace(chapterID) == "" {
+		return result.ErrorResult[bool]("章IDが不正です", "chapterIDが空です")
+	}
+	game, error := service.repository.GetGameByID(ctx, strings.TrimSpace(gameID))
+	if error != nil {
+		service.logger.Error("ゲーム取得に失敗", "error", error)
+		return result.ErrorResult[bool]("ゲーム取得に失敗しました", error.Error())
+	}
+	if game == nil {
+		return result.ErrorResult[bool]("ゲームが見つかりません", "指定されたIDが存在しません")
+	}
+	game.CurrentChapter = &chapterID
+	if _, error := service.repository.UpdateGame(ctx, *game); error != nil {
+		service.logger.Error("現在章更新に失敗", "error", error)
+		return result.ErrorResult[bool]("現在章更新に失敗しました", error.Error())
+	}
+	return result.OkResult(true)
+}
+
 // ChapterInput は章作成入力を表す。
 type ChapterInput struct {
 	Name   string
@@ -102,6 +159,12 @@ type ChapterInput struct {
 // ChapterUpdateInput は章更新入力を表す。
 type ChapterUpdateInput struct {
 	Name  string
+	Order int64
+}
+
+// ChapterOrderUpdate は章順序更新の入力を表す。
+type ChapterOrderUpdate struct {
+	ID    string
 	Order int64
 }
 

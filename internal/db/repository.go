@@ -180,6 +180,14 @@ func (repository *Repository) UpdateChapter(ctx context.Context, chapter models.
 	return repository.GetChapterByID(ctx, chapter.ID)
 }
 
+// UpdateChapterOrder は章の順序を更新する。
+func (repository *Repository) UpdateChapterOrder(ctx context.Context, chapterID string, order int64) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		UPDATE "Chapter" SET "order" = ? WHERE id = ?
+	`, order, chapterID)
+	return error
+}
+
 // GetChapterByID は章IDで章を取得する。
 func (repository *Repository) GetChapterByID(ctx context.Context, chapterID string) (*models.Chapter, error) {
 	row := repository.connection.QueryRowContext(ctx, `
@@ -244,6 +252,22 @@ func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID
 // DeletePlaySession はセッションを削除する。
 func (repository *Repository) DeletePlaySession(ctx context.Context, sessionID string) error {
 	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE id = ?`, sessionID)
+	return error
+}
+
+// UpdatePlaySessionChapter はセッションの章を更新する。
+func (repository *Repository) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		UPDATE "PlaySession" SET chapterId = ? WHERE id = ?
+	`, chapterID, sessionID)
+	return error
+}
+
+// UpdatePlaySessionName はセッション名を更新する。
+func (repository *Repository) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		UPDATE "PlaySession" SET sessionName = ? WHERE id = ?
+	`, sessionName, sessionID)
 	return error
 }
 
@@ -327,6 +351,23 @@ func (repository *Repository) GetMemoByID(ctx context.Context, memoID string) (*
 	return memo, nil
 }
 
+// FindMemoByTitle はゲームIDとタイトルでメモを取得する。
+func (repository *Repository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+	row := repository.connection.QueryRowContext(ctx, `
+		SELECT id, title, content, gameId, createdAt, updatedAt
+		FROM "Memo" WHERE gameId = ? AND title = ? LIMIT 1
+	`, gameID, title)
+
+	memo, error := scanMemo(row)
+	if error == sql.ErrNoRows {
+		return nil, nil
+	}
+	if error != nil {
+		return nil, error
+	}
+	return memo, nil
+}
+
 // ListMemosByGame はゲームIDでメモ一覧を取得する。
 func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
 	rows, error := repository.connection.QueryContext(ctx, `
@@ -351,6 +392,54 @@ func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string
 	}
 
 	return memos, nil
+}
+
+// GetChapterStats は章ごとの統計を取得する。
+func (repository *Repository) GetChapterStats(ctx context.Context, gameID string) ([]models.ChapterStat, error) {
+	rows, error := repository.connection.QueryContext(ctx, `
+		SELECT c.id, c.name, c."order",
+		       COALESCE(SUM(ps.duration), 0) as total_time,
+		       COUNT(ps.id) as session_count
+		FROM "Chapter" c
+		LEFT JOIN "PlaySession" ps ON ps.chapterId = c.id
+		WHERE c.gameId = ?
+		GROUP BY c.id, c.name, c."order"
+		ORDER BY c."order" ASC
+	`, gameID)
+	if error != nil {
+		return nil, error
+	}
+	defer rows.Close()
+
+	stats := make([]models.ChapterStat, 0)
+	for rows.Next() {
+		var (
+			chapterID    string
+			chapterName  string
+			orderValue   int64
+			totalTime    int64
+			sessionCount int64
+		)
+		if error := rows.Scan(&chapterID, &chapterName, &orderValue, &totalTime, &sessionCount); error != nil {
+			return nil, error
+		}
+		average := float64(0)
+		if sessionCount > 0 {
+			average = float64(totalTime) / float64(sessionCount)
+		}
+		stats = append(stats, models.ChapterStat{
+			ChapterID:    chapterID,
+			ChapterName:  chapterName,
+			TotalTime:    totalTime,
+			SessionCount: sessionCount,
+			AverageTime:  average,
+			Order:        orderValue,
+		})
+	}
+	if error := rows.Err(); error != nil {
+		return nil, error
+	}
+	return stats, nil
 }
 
 // ListAllMemos は全メモを取得する。

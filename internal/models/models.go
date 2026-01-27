@@ -66,3 +66,13 @@ type Memo struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// ChapterStat は章統計の出力を表す。
+type ChapterStat struct {
+	ChapterID    string  `json:"chapterId"`
+	ChapterName  string  `json:"chapterName"`
+	TotalTime    int64   `json:"totalTime"`
+	SessionCount int64   `json:"sessionCount"`
+	AverageTime  float64 `json:"averageTime"`
+	Order        int64   `json:"order"`
+}

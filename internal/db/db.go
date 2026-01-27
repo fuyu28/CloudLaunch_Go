@@ -1,4 +1,4 @@
-// @fileoverview SQLite 接続と PRAGMA 初期化を提供する。
+// Package db provides SQLite connection helpers and migrations.
 package db
 
 import (

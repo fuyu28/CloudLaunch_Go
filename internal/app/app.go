@@ -11,6 +11,7 @@ import (
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/logging"
+	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/services"
 )
 
@@ -24,10 +25,13 @@ type App struct {
 	SessionService    *services.SessionService
 	ChapterService    *services.ChapterService
 	MemoService       *services.MemoService
+	MemoFiles         *memo.FileManager
 	UploadService     *services.UploadService
 	CredentialService *services.CredentialService
 	CloudService      *services.CloudService
 	dbConnection      *sql.DB
+	autoTracking      bool
+	isMonitoring      bool
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -53,6 +57,11 @@ func NewApp(ctx context.Context) (*App, error) {
 
 	repository := db.NewRepository(connection)
 	credentialStore := newCredentialStore(cfg)
+	memoFiles := memo.NewFileManager(cfg.AppDataDir)
+	if error := memoFiles.EnsureBaseDir(); error != nil {
+		_ = connection.Close()
+		return nil, error
+	}
 
 	app := &App{
 		Config:            cfg,
@@ -61,11 +70,14 @@ func NewApp(ctx context.Context) (*App, error) {
 		GameService:       services.NewGameService(repository, logger),
 		SessionService:    services.NewSessionService(repository, logger),
 		ChapterService:    services.NewChapterService(repository, logger),
-		MemoService:       services.NewMemoService(repository, logger),
+		MemoService:       services.NewMemoService(repository, memoFiles, logger),
+		MemoFiles:         memoFiles,
 		UploadService:     services.NewUploadService(repository, logger),
 		CredentialService: services.NewCredentialService(credentialStore, logger),
 		CloudService:      services.NewCloudService(cfg, credentialStore, logger),
 		dbConnection:      connection,
+		autoTracking:      true,
+		isMonitoring:      false,
 	}
 
 	logger.Info("CloudLaunch backend initialized")

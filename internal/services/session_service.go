@@ -70,6 +70,33 @@ func (service *SessionService) DeleteSession(ctx context.Context, sessionID stri
 	return result.OkResult(true)
 }
 
+// UpdateSessionChapter はセッションの章を更新する。
+func (service *SessionService) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[bool] {
+	if strings.TrimSpace(sessionID) == "" {
+		return result.ErrorResult[bool]("セッションIDが不正です", "sessionIDが空です")
+	}
+	if error := service.repository.UpdatePlaySessionChapter(ctx, strings.TrimSpace(sessionID), chapterID); error != nil {
+		service.logger.Error("セッション章更新に失敗", "error", error)
+		return result.ErrorResult[bool]("セッション章更新に失敗しました", error.Error())
+	}
+	return result.OkResult(true)
+}
+
+// UpdateSessionName はセッション名を更新する。
+func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[bool] {
+	if strings.TrimSpace(sessionID) == "" {
+		return result.ErrorResult[bool]("セッションIDが不正です", "sessionIDが空です")
+	}
+	if strings.TrimSpace(sessionName) == "" {
+		return result.ErrorResult[bool]("セッション名が不正です", "sessionNameが空です")
+	}
+	if error := service.repository.UpdatePlaySessionName(ctx, strings.TrimSpace(sessionID), strings.TrimSpace(sessionName)); error != nil {
+		service.logger.Error("セッション名更新に失敗", "error", error)
+		return result.ErrorResult[bool]("セッション名更新に失敗しました", error.Error())
+	}
+	return result.OkResult(true)
+}
+
 // SessionInput はセッション作成入力を表す。
 type SessionInput struct {
 	GameID      string

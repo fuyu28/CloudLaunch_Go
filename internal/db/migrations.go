@@ -103,13 +103,49 @@ func applyMigration(connection *sql.DB, fileName string, sqlText string) error {
 
 // splitSQLStatements はSQLテキストを簡易的に分割する。
 func splitSQLStatements(sqlText string) []string {
-	parts := strings.Split(sqlText, ";")
-	statements := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if strings.TrimSpace(part) == "" {
+	statements := []string{}
+	buffer := strings.Builder{}
+	inTrigger := false
+
+	for _, r := range sqlText {
+		buffer.WriteRune(r)
+		if r != ';' {
 			continue
 		}
-		statements = append(statements, part+";")
+
+		current := strings.TrimSpace(buffer.String())
+		if current == "" {
+			buffer.Reset()
+			continue
+		}
+
+		if !inTrigger {
+			if strings.Contains(strings.ToUpper(current), "CREATE TRIGGER") {
+				inTrigger = true
+			}
+		}
+
+		if !inTrigger {
+			statements = append(statements, current)
+			buffer.Reset()
+			continue
+		}
+
+		// Trigger内はEND;で終了させる
+		if strings.HasSuffix(strings.TrimSpace(strings.ToUpper(current)), "END;") {
+			statements = append(statements, current)
+			buffer.Reset()
+			inTrigger = false
+			continue
+		}
+
+		// 末尾が;でもtrigger内なので継続
 	}
+
+	rest := strings.TrimSpace(buffer.String())
+	if rest != "" {
+		statements = append(statements, rest)
+	}
+
 	return statements
 }
