@@ -76,3 +76,12 @@ type ChapterStat struct {
 	AverageTime  float64 `json:"averageTime"`
 	Order        int64   `json:"order"`
 }
+
+// MonitoringGameStatus はゲーム監視の状態を表す。
+type MonitoringGameStatus struct {
+	GameID    string `json:"gameId"`
+	GameTitle string `json:"gameTitle"`
+	ExeName   string `json:"exeName"`
+	IsPlaying bool   `json:"isPlaying"`
+	PlayTime  int64  `json:"playTime"`
+}

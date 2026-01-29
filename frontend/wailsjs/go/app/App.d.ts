@@ -59,7 +59,7 @@ export function GetMemoFilePath(arg1:string):Promise<result.ApiResult_string_>;
 
 export function GetMemoRootDir():Promise<result.ApiResult_string_>;
 
-export function GetMonitoringStatus():Promise<result.ApiResult_map_string_bool_>;
+export function GetMonitoringStatus():Promise<result.ApiResult___CloudLaunch_Go_internal_models_MonitoringGameStatus_>;
 
 export function LaunchGame(arg1:string):Promise<result.ApiResult_bool_>;
 
@@ -122,7 +122,5 @@ export function UploadFolder(arg1:string,arg2:string,arg3:string):Promise<result
 export function UploadMemoToCloud(arg1:string):Promise<result.ApiResult_bool_>;
 
 export function ValidateCredential(arg1:app.CredentialValidationInput):Promise<result.ApiResult_bool_>;
-
-export function ValidateSavedCredential(arg1:string):Promise<result.ApiResult_bool_>;
 
 export function ValidateSavedCredential(arg1:string):Promise<result.ApiResult_bool_>;

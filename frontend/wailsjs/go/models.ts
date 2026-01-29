@@ -413,6 +413,26 @@ export namespace models {
 		    return a;
 		}
 	}
+	export class MonitoringGameStatus {
+	    gameId: string;
+	    gameTitle: string;
+	    exeName: string;
+	    isPlaying: boolean;
+	    playTime: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MonitoringGameStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameId = source["gameId"];
+	        this.gameTitle = source["gameTitle"];
+	        this.exeName = source["exeName"];
+	        this.isPlaying = source["isPlaying"];
+	        this.playTime = source["playTime"];
+	    }
+	}
 	export class PlaySession {
 	    id: string;
 	    gameId: string;
@@ -1144,6 +1164,40 @@ export namespace result {
 		    return a;
 		}
 	}
+	export class ApiResult___CloudLaunch_Go_internal_models_MonitoringGameStatus_ {
+	    success: boolean;
+	    data?: models.MonitoringGameStatus[];
+	    error?: ApiError;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApiResult___CloudLaunch_Go_internal_models_MonitoringGameStatus_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], models.MonitoringGameStatus);
+	        this.error = this.convertValues(source["error"], ApiError);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ApiResult___CloudLaunch_Go_internal_models_PlaySession_ {
 	    success: boolean;
 	    data?: models.PlaySession[];
@@ -1219,40 +1273,6 @@ export namespace result {
 	
 	    static createFrom(source: any = {}) {
 	        return new ApiResult_bool_(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.success = source["success"];
-	        this.data = source["data"];
-	        this.error = this.convertValues(source["error"], ApiError);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class ApiResult_map_string_bool_ {
-	    success: boolean;
-	    data?: Record<string, boolean>;
-	    error?: ApiError;
-	
-	    static createFrom(source: any = {}) {
-	        return new ApiResult_map_string_bool_(source);
 	    }
 	
 	    constructor(source: any = {}) {

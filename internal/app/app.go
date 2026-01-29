@@ -29,6 +29,7 @@ type App struct {
 	UploadService     *services.UploadService
 	CredentialService *services.CredentialService
 	CloudService      *services.CloudService
+	ProcessMonitor    *services.ProcessMonitorService
 	dbConnection      *sql.DB
 	autoTracking      bool
 	isMonitoring      bool
@@ -75,6 +76,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		UploadService:     services.NewUploadService(repository, logger),
 		CredentialService: services.NewCredentialService(credentialStore, logger),
 		CloudService:      services.NewCloudService(cfg, credentialStore, logger),
+		ProcessMonitor:    services.NewProcessMonitorService(repository, logger),
 		dbConnection:      connection,
 		autoTracking:      true,
 		isMonitoring:      false,
@@ -87,6 +89,10 @@ func NewApp(ctx context.Context) (*App, error) {
 // Startup はWailsの起動時に呼ばれる。
 func (app *App) Startup(ctx context.Context) {
 	app.ctx = ctx
+	if app.ProcessMonitor != nil {
+		app.ProcessMonitor.StartMonitoring()
+		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
+	}
 }
 
 func (app *App) context() context.Context {
@@ -99,6 +105,9 @@ func (app *App) context() context.Context {
 // Shutdown はアプリケーションの終了処理を行う。
 func (app *App) Shutdown(ctx context.Context) error {
 	app.Logger.Info("CloudLaunch backend shutting down")
+	if app.ProcessMonitor != nil {
+		app.ProcessMonitor.StopMonitoring()
+	}
 	if app.dbConnection != nil {
 		return app.dbConnection.Close()
 	}

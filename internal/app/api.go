@@ -149,16 +149,19 @@ type FileFilterInput struct {
 // UpdateAutoTracking は自動計測設定を更新する。
 func (app *App) UpdateAutoTracking(enabled bool) result.ApiResult[bool] {
 	app.autoTracking = enabled
-	app.isMonitoring = enabled
+	if app.ProcessMonitor != nil {
+		app.ProcessMonitor.UpdateAutoTracking(enabled)
+		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
+	}
 	return result.OkResult(true)
 }
 
 // GetMonitoringStatus は監視状態を取得する。
-func (app *App) GetMonitoringStatus() result.ApiResult[map[string]bool] {
-	status := map[string]bool{
-		"isMonitoring": app.isMonitoring,
-		"autoTracking": app.autoTracking,
+func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
+	if app.ProcessMonitor == nil {
+		return result.OkResult([]models.MonitoringGameStatus{})
 	}
+	status := app.ProcessMonitor.GetMonitoringStatus()
 	return result.OkResult(status)
 }
 
