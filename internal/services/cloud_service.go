@@ -87,6 +87,14 @@ func (service *CloudService) LoadCloudMetadata(
 	return result.OkResult(metadata)
 }
 
+// SetUploadConcurrency はアップロードの同時実行数を更新する。
+func (service *CloudService) SetUploadConcurrency(value int) {
+	if value <= 0 {
+		return
+	}
+	service.config.S3UploadConcurrency = value
+}
+
 // validateCloudInput はクラウドアップロード入力の基本チェックを行う。
 func validateCloudInput(credentialKey string, folderPath string) error {
 	if _, detail, ok := requireNonEmpty(credentialKey, "credentialKey"); !ok {

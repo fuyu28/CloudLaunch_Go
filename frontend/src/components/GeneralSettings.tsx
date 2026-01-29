@@ -18,6 +18,7 @@
  */
 
 import { useAtom } from "jotai"
+import { useEffect } from "react"
 import toast from "react-hot-toast"
 
 import { logger } from "@renderer/utils/logger"
@@ -31,6 +32,7 @@ import {
   defaultFilterStateAtom,
   offlineModeAtom,
   autoTrackingAtom,
+  uploadConcurrencyAtom,
   sortOptionLabels,
   filterStateLabels
 } from "../state/settings"
@@ -52,6 +54,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [defaultFilterState, setDefaultFilterState] = useAtom(defaultFilterStateAtom)
   const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom)
   const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom)
+  const [uploadConcurrency, setUploadConcurrency] = useAtom(uploadConcurrencyAtom)
 
   // ソート変更ハンドラー
   const handleSortChange = (newSortOption: SortOption): void => {
@@ -101,6 +104,34 @@ export default function GeneralSettings(): React.JSX.Element {
     }
   }
 
+  const applyUploadConcurrency = async (value: number, showToast: boolean): Promise<void> => {
+    try {
+      const result = await window.api.settings.updateUploadConcurrency(value)
+      if (!result.success) {
+        if (showToast) {
+          toast.error("同時アップロード数の更新に失敗しました")
+        }
+      } else if (showToast) {
+        toast.success(`同時アップロード数を ${value} に設定しました`)
+      }
+    } catch (error) {
+      logger.error("同時アップロード数設定の更新エラー:", {
+        component: "GeneralSettings",
+        function: "unknown",
+        data: error
+      })
+      if (showToast) {
+        toast.error("同時アップロード数の更新に失敗しました")
+      }
+    }
+  }
+
+  const handleUploadConcurrencyChange = async (value: number): Promise<void> => {
+    const nextValue = Math.min(32, Math.max(1, value))
+    setUploadConcurrency(nextValue)
+    await applyUploadConcurrency(nextValue, true)
+  }
+
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
@@ -119,6 +150,10 @@ export default function GeneralSettings(): React.JSX.Element {
       toast.error("ログフォルダを開くことができませんでした")
     }
   }
+
+  useEffect(() => {
+    void applyUploadConcurrency(uploadConcurrency, false)
+  }, [])
 
   return (
     <div className="w-full">
@@ -209,6 +244,29 @@ export default function GeneralSettings(): React.JSX.Element {
                     </p>
                   </div>
                 </label>
+              </div>
+
+              {/* 同時アップロード数 */}
+              <div className="form-control mt-4">
+                <label className="label p-0 mb-2">
+                  <span className="label-text font-medium">同時アップロード数</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={32}
+                    step={1}
+                    className="input input-bordered input-sm w-24"
+                    value={uploadConcurrency}
+                    onChange={(e) => setUploadConcurrency(Number(e.target.value))}
+                    onBlur={(e) => handleUploadConcurrencyChange(Number(e.target.value))}
+                  />
+                  <span className="text-xs text-base-content/50">1〜32</span>
+                </div>
+                <p className="text-xs text-base-content/50 mt-2">
+                  セーブや画像の同時アップロード数を調整します
+                </p>
               </div>
             </div>
           </div>

@@ -57,6 +57,12 @@ export const offlineModeAtom = atomWithStorage<boolean>("offlineMode", false)
 export const autoTrackingAtom = atomWithStorage<boolean>("autoTracking", true)
 
 /**
+ * 同時アップロード数設定atom
+ * LocalStorageに自動保存される
+ */
+export const uploadConcurrencyAtom = atomWithStorage<number>("uploadConcurrency", 6)
+
+/**
  * テーマ変更中の状態atom
  * 一時的な状態なのでLocalStorageには保存しない
  */

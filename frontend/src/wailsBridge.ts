@@ -60,6 +60,7 @@ import {
   SelectFolder,
   SetCurrentChapter,
   UpdateAutoTracking,
+  UpdateUploadConcurrency,
   UpdateChapter,
   UpdateChapterOrders,
   UpdateGame,
@@ -81,6 +82,7 @@ export type WindowApi = {
   }
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>
+    updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>
   }
   file: {
     selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<ApiResult<string>>
@@ -189,6 +191,10 @@ export const createWailsBridge = (): WindowApi => {
     settings: {
       updateAutoTracking: async (enabled) => {
         const result = await UpdateAutoTracking(enabled)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      updateUploadConcurrency: async (value) => {
+        const result = await UpdateUploadConcurrency(value)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       }
     },

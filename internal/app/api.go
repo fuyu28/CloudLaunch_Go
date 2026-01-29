@@ -156,6 +156,18 @@ func (app *App) UpdateAutoTracking(enabled bool) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateUploadConcurrency はアップロード同時実行数を更新する。
+func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
+	if value <= 0 {
+		return result.ErrorResult[bool]("同時実行数が不正です", "valueが不正です")
+	}
+	app.Config.S3UploadConcurrency = value
+	if app.CloudService != nil {
+		app.CloudService.SetUploadConcurrency(value)
+	}
+	return result.OkResult(true)
+}
+
 // GetMonitoringStatus は監視状態を取得する。
 func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {

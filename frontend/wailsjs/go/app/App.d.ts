@@ -105,6 +105,8 @@ export function SyncMemosFromCloud(arg1:string):Promise<result.ApiResult_CloudLa
 
 export function UpdateAutoTracking(arg1:boolean):Promise<result.ApiResult_bool_>;
 
+export function UpdateUploadConcurrency(arg1:number):Promise<result.ApiResult_bool_>;
+
 export function UpdateChapter(arg1:string,arg2:services.ChapterUpdateInput):Promise<result.ApiResult_CloudLaunch_Go_internal_models_Chapter_>;
 
 export function UpdateChapterOrders(arg1:string,arg2:Array<services.ChapterOrderUpdate>):Promise<result.ApiResult_bool_>;

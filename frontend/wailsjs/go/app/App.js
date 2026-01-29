@@ -198,6 +198,10 @@ export function UpdateAutoTracking(arg1) {
   return window['go']['app']['App']['UpdateAutoTracking'](arg1);
 }
 
+export function UpdateUploadConcurrency(arg1) {
+  return window['go']['app']['App']['UpdateUploadConcurrency'](arg1);
+}
+
 export function UpdateChapter(arg1, arg2) {
   return window['go']['app']['App']['UpdateChapter'](arg1, arg2);
 }
