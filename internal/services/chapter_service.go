@@ -96,7 +96,7 @@ func (service *ChapterService) DeleteChapter(ctx context.Context, chapterID stri
 
 // UpdateChapterOrders は章の並び順を更新する。
 func (service *ChapterService) UpdateChapterOrders(ctx context.Context, gameID string, orders []ChapterOrderUpdate) result.ApiResult[bool] {
-	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
+	_, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
