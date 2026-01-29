@@ -586,7 +586,7 @@ func splitProcessLine(line string) []string {
 }
 
 func decodeWindowsOutput(output []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(output), japanese.Windows31J.NewDecoder())
+	reader := transform.NewReader(bytes.NewReader(output), japanese.ShiftJIS.NewDecoder())
 	return io.ReadAll(reader)
 }
 
