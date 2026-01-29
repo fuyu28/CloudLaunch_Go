@@ -368,12 +368,12 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 		return
 	}
 
-	processNames := make(map[string]struct{}, len(processes))
-	for _, proc := range processes {
-		if proc.Name == "" {
+	processNames := make(map[string]struct{}, len(normalized))
+	for _, proc := range normalized {
+		if proc.normalized == "" {
 			continue
 		}
-		processNames[normalizeProcessToken(proc.Name)] = struct{}{}
+		processNames[proc.normalized] = struct{}{}
 	}
 
 	for _, game := range games {
