@@ -248,7 +248,10 @@ func (app *App) OpenFolder(path string) result.ApiResult[bool] {
 	if strings.TrimSpace(path) == "" {
 		return result.ErrorResult[bool]("パスが不正です", "pathが空です")
 	}
-	runtime.BrowserOpenURL(app.runtimeContext(), fileURLFromPath(path))
+	if error := openPath(path); error != nil {
+		app.Logger.Error("フォルダを開くのに失敗", "error", error)
+		return result.ErrorResult[bool]("フォルダを開くのに失敗しました", error.Error())
+	}
 	return result.OkResult(true)
 }
 
@@ -258,7 +261,10 @@ func (app *App) OpenLogsDirectory() result.ApiResult[string] {
 	if path == "" {
 		return result.ErrorResult[string]("ログディレクトリが不明です", "AppDataDirが空です")
 	}
-	runtime.BrowserOpenURL(app.runtimeContext(), fileURLFromPath(path))
+	if error := openPath(path); error != nil {
+		app.Logger.Error("ログディレクトリを開くのに失敗", "error", error)
+		return result.ErrorResult[string]("ログディレクトリを開くのに失敗しました", error.Error())
+	}
 	return result.OkResult(path)
 }
 
@@ -355,6 +361,11 @@ func fileURLFromPath(path string) string {
 		return "file://" + cleaned
 	}
 	return "file:///" + cleaned
+}
+
+func openPath(path string) error {
+	command := exec.Command("explorer.exe", path)
+	return command.Start()
 }
 
 // normalizePlayStatus はUIのフィルタ文字列をモデル値へ変換する。
