@@ -41,12 +41,7 @@ export function useValidateCreds(): () => Promise<boolean> {
    */
   const validate = useCallback(async () => {
     try {
-      const result = await window.api.credential.getCredential()
-      if (!result.success || !result.data) {
-        setIsValidCreds(false)
-        return false
-      }
-      const { success, err } = await window.api.credential.validateCredential(result.data)
+      const { success, err } = await window.api.credential.validateSavedCredential()
       setIsValidCreds(success)
       if (!success) {
         logger.error("Credential validation failed:", {

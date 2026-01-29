@@ -45,19 +45,14 @@ func (service *CloudService) UploadFolder(
 		return result.ErrorResult[storage.UploadSummary]("認証情報が見つかりません", "credentialが空です")
 	}
 
-	client, error := storage.NewClient(ctx, storage.S3Config{
-		Endpoint:       service.config.S3Endpoint,
-		Region:         service.config.S3Region,
-		Bucket:         service.config.S3Bucket,
-		ForcePathStyle: service.config.S3ForcePathStyle,
-		UseTLS:         service.config.S3UseTLS,
-	}, *credential)
+	cfg := resolveS3Config(service.config, credential)
+	client, error := storage.NewClient(ctx, cfg, *credential)
 	if error != nil {
 		service.logger.Error("S3クライアント作成に失敗", "error", error)
 		return result.ErrorResult[storage.UploadSummary]("S3クライアント作成に失敗しました", error.Error())
 	}
 
-	summary, error := storage.UploadFolder(ctx, client, service.config.S3Bucket, folderPath, prefix)
+	summary, error := storage.UploadFolder(ctx, client, cfg.Bucket, folderPath, prefix)
 	if error != nil {
 		service.logger.Error("フォルダアップロードに失敗", "error", error)
 		return result.ErrorResult[storage.UploadSummary]("フォルダアップロードに失敗しました", error.Error())
@@ -80,19 +75,14 @@ func (service *CloudService) SaveCloudMetadata(
 		return result.ErrorResult[bool]("認証情報が見つかりません", "credentialが空です")
 	}
 
-	client, error := storage.NewClient(ctx, storage.S3Config{
-		Endpoint:       service.config.S3Endpoint,
-		Region:         service.config.S3Region,
-		Bucket:         service.config.S3Bucket,
-		ForcePathStyle: service.config.S3ForcePathStyle,
-		UseTLS:         service.config.S3UseTLS,
-	}, *credential)
+	cfg := resolveS3Config(service.config, credential)
+	client, error := storage.NewClient(ctx, cfg, *credential)
 	if error != nil {
 		service.logger.Error("S3クライアント作成に失敗", "error", error)
 		return result.ErrorResult[bool]("S3クライアント作成に失敗しました", error.Error())
 	}
 
-	if error := storage.SaveMetadata(ctx, client, service.config.S3Bucket, service.config.CloudMetadataKey, metadata); error != nil {
+	if error := storage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, metadata); error != nil {
 		service.logger.Error("メタ情報保存に失敗", "error", error)
 		return result.ErrorResult[bool]("メタ情報保存に失敗しました", error.Error())
 	}
@@ -113,19 +103,14 @@ func (service *CloudService) LoadCloudMetadata(
 		return result.ErrorResult[*storage.CloudMetadata]("認証情報が見つかりません", "credentialが空です")
 	}
 
-	client, error := storage.NewClient(ctx, storage.S3Config{
-		Endpoint:       service.config.S3Endpoint,
-		Region:         service.config.S3Region,
-		Bucket:         service.config.S3Bucket,
-		ForcePathStyle: service.config.S3ForcePathStyle,
-		UseTLS:         service.config.S3UseTLS,
-	}, *credential)
+	cfg := resolveS3Config(service.config, credential)
+	client, error := storage.NewClient(ctx, cfg, *credential)
 	if error != nil {
 		service.logger.Error("S3クライアント作成に失敗", "error", error)
 		return result.ErrorResult[*storage.CloudMetadata]("S3クライアント作成に失敗しました", error.Error())
 	}
 
-	metadata, error := storage.LoadMetadata(ctx, client, service.config.S3Bucket, service.config.CloudMetadataKey)
+	metadata, error := storage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
 	if error != nil {
 		service.logger.Error("メタ情報取得に失敗", "error", error)
 		return result.ErrorResult[*storage.CloudMetadata]("メタ情報取得に失敗しました", error.Error())
@@ -142,4 +127,24 @@ func validateCloudInput(credentialKey string, folderPath string) error {
 		return errors.New("folderPathが空です")
 	}
 	return nil
+}
+
+func resolveS3Config(base config.Config, credential *credentials.Credential) storage.S3Config {
+	return storage.S3Config{
+		Endpoint:       firstNonEmpty(credential.Endpoint, base.S3Endpoint),
+		Region:         firstNonEmpty(credential.Region, base.S3Region),
+		Bucket:         firstNonEmpty(credential.BucketName, base.S3Bucket),
+		ForcePathStyle: base.S3ForcePathStyle,
+		UseTLS:         base.S3UseTLS,
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

@@ -1366,6 +1366,9 @@ export namespace services {
 	export class CredentialInput {
 	    AccessKeyID: string;
 	    SecretAccessKey: string;
+	    BucketName: string;
+	    Region: string;
+	    Endpoint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new CredentialInput(source);
@@ -1375,10 +1378,16 @@ export namespace services {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.AccessKeyID = source["AccessKeyID"];
 	        this.SecretAccessKey = source["SecretAccessKey"];
+	        this.BucketName = source["BucketName"];
+	        this.Region = source["Region"];
+	        this.Endpoint = source["Endpoint"];
 	    }
 	}
 	export class CredentialOutput {
 	    AccessKeyID: string;
+	    BucketName: string;
+	    Region: string;
+	    Endpoint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new CredentialOutput(source);
@@ -1387,6 +1396,9 @@ export namespace services {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.AccessKeyID = source["AccessKeyID"];
+	        this.BucketName = source["BucketName"];
+	        this.Region = source["Region"];
+	        this.Endpoint = source["Endpoint"];
 	    }
 	}
 	export class GameInput {

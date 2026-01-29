@@ -43,11 +43,11 @@ type MemoSyncResult struct {
 // GetCloudMemos はクラウドメモ一覧を取得する。
 func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
 	ctx := app.context()
-	client, error := app.getDefaultS3Client(ctx)
+	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[[]CloudMemoInfo]("クラウドメモ取得に失敗しました", error.Error())
 	}
-	objects, error := storage.ListObjects(ctx, client, app.Config.S3Bucket, "games/")
+	objects, error := storage.ListObjects(ctx, client, bucket, "games/")
 	if error != nil {
 		return result.ErrorResult[[]CloudMemoInfo]("クラウドメモ取得に失敗しました", error.Error())
 	}
@@ -79,7 +79,7 @@ func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
 // DownloadMemoFromCloud はクラウドからメモ内容を取得する。
 func (app *App) DownloadMemoFromCloud(gameTitle string, memoFileName string) result.ApiResult[string] {
 	ctx := app.context()
-	client, error := app.getDefaultS3Client(ctx)
+	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[string]("メモのダウンロードに失敗しました", error.Error())
 	}
@@ -87,7 +87,7 @@ func (app *App) DownloadMemoFromCloud(gameTitle string, memoFileName string) res
 		return result.ErrorResult[string]("メモのダウンロードに失敗しました", "入力が不正です")
 	}
 	key := fmt.Sprintf("games/%s/memo/%s", memo.SanitizeForCloudPath(gameTitle), memoFileName)
-	payload, error := storage.DownloadObject(ctx, client, app.Config.S3Bucket, key)
+	payload, error := storage.DownloadObject(ctx, client, bucket, key)
 	if error != nil {
 		return result.ErrorResult[string]("メモのダウンロードに失敗しました", error.Error())
 	}
@@ -97,7 +97,7 @@ func (app *App) DownloadMemoFromCloud(gameTitle string, memoFileName string) res
 // UploadMemoToCloud はメモをクラウドへ保存する。
 func (app *App) UploadMemoToCloud(memoID string) result.ApiResult[bool] {
 	ctx := app.context()
-	client, error := app.getDefaultS3Client(ctx)
+	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[bool]("メモのアップロードに失敗しました", error.Error())
 	}
@@ -118,7 +118,7 @@ func (app *App) UploadMemoToCloud(memoID string) result.ApiResult[bool] {
 
 	key := memo.BuildMemoPath(game.Title, memoData.Title, memoData.ID)
 	payload := memo.GenerateCloudMemoFileContent(memoData.Title, memoData.Content, game.Title)
-	if error := storage.UploadBytes(ctx, client, app.Config.S3Bucket, key, []byte(payload), "text/markdown"); error != nil {
+	if error := storage.UploadBytes(ctx, client, bucket, key, []byte(payload), "text/markdown"); error != nil {
 		return result.ErrorResult[bool]("メモのアップロードに失敗しました", error.Error())
 	}
 	return result.OkResult(true)
@@ -127,7 +127,7 @@ func (app *App) UploadMemoToCloud(memoID string) result.ApiResult[bool] {
 // SyncMemosFromCloud はメモをクラウドと同期する。
 func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResult] {
 	ctx := app.context()
-	client, error := app.getDefaultS3Client(ctx)
+	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return result.ErrorResult[MemoSyncResult]("メモ同期に失敗しました", error.Error())
 	}
@@ -201,7 +201,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 		key := fmt.Sprintf("%s:%s", sanitizedGameTitle, localMemo.ID)
 		cloudMemo, exists := cloudMap[key]
 		if !exists {
-			if error := uploadMemoContent(ctx, client, app.Config.S3Bucket, game, localMemo); error != nil {
+			if error := uploadMemoContent(ctx, client, bucket, game, localMemo); error != nil {
 				resultData.Details = append(resultData.Details, fmt.Sprintf("アップロード失敗: %s", localMemo.Title))
 				continue
 			}
@@ -213,7 +213,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 		localUpdated := localMemo.UpdatedAt
 		cloudUpdated := cloudMemo.LastModified
 		if localUpdated.After(cloudUpdated) {
-			if error := uploadMemoContent(ctx, client, app.Config.S3Bucket, game, localMemo); error != nil {
+			if error := uploadMemoContent(ctx, client, bucket, game, localMemo); error != nil {
 				resultData.Details = append(resultData.Details, fmt.Sprintf("クラウド更新失敗: %s", localMemo.Title))
 				continue
 			}
@@ -225,7 +225,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 			continue
 		}
 
-		payload, error := storage.DownloadObject(ctx, client, app.Config.S3Bucket, cloudMemo.Key)
+		payload, error := storage.DownloadObject(ctx, client, bucket, cloudMemo.Key)
 		if error != nil {
 			resultData.Skipped++
 			resultData.Details = append(resultData.Details, fmt.Sprintf("クラウド取得失敗: %s", localMemo.Title))
@@ -238,7 +238,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 			processed[key] = true
 			continue
 		}
-		if error := uploadMemoContent(ctx, client, app.Config.S3Bucket, game, localMemo); error != nil {
+		if error := uploadMemoContent(ctx, client, bucket, game, localMemo); error != nil {
 			resultData.Details = append(resultData.Details, fmt.Sprintf("クラウド更新失敗: %s", localMemo.Title))
 			continue
 		}
@@ -265,7 +265,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 			resultData.Details = append(resultData.Details, fmt.Sprintf("ゲームが見つからないためスキップ: %s", cloudMemo.MemoTitle))
 			continue
 		}
-		payload, error := storage.DownloadObject(ctx, client, app.Config.S3Bucket, cloudMemo.Key)
+		payload, error := storage.DownloadObject(ctx, client, bucket, cloudMemo.Key)
 		if error != nil {
 			resultData.Skipped++
 			resultData.Details = append(resultData.Details, fmt.Sprintf("ダウンロード失敗: %s", cloudMemo.MemoTitle))
@@ -328,7 +328,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 			continue
 		}
 
-		if error := uploadMemoContent(ctx, client, app.Config.S3Bucket, game, *existingMemo); error != nil {
+		if error := uploadMemoContent(ctx, client, bucket, game, *existingMemo); error != nil {
 			resultData.Details = append(resultData.Details, fmt.Sprintf("クラウド更新失敗: %s", existingMemo.Title))
 			continue
 		}

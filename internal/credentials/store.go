@@ -7,6 +7,9 @@ import "context"
 type Credential struct {
 	AccessKeyID     string
 	SecretAccessKey string
+	BucketName      string
+	Region          string
+	Endpoint        string
 }
 
 // Store は認証情報の保存・取得・削除を提供する。

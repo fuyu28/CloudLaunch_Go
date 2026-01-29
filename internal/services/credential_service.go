@@ -31,6 +31,9 @@ func (service *CredentialService) SaveCredential(ctx context.Context, key string
 	credential := credentials.Credential{
 		AccessKeyID:     strings.TrimSpace(input.AccessKeyID),
 		SecretAccessKey: strings.TrimSpace(input.SecretAccessKey),
+		BucketName:      strings.TrimSpace(input.BucketName),
+		Region:          strings.TrimSpace(input.Region),
+		Endpoint:        strings.TrimSpace(input.Endpoint),
 	}
 
 	if error := service.store.Save(ctx, strings.TrimSpace(key), credential); error != nil {
@@ -66,15 +69,30 @@ func (service *CredentialService) DeleteCredential(ctx context.Context, key stri
 type CredentialInput struct {
 	AccessKeyID     string
 	SecretAccessKey string
+	BucketName      string
+	Region          string
+	Endpoint        string
 }
 
 // CredentialOutput はUIに返す認証情報の最小情報を表す。
 type CredentialOutput struct {
 	AccessKeyID string
+	BucketName  string
+	Region      string
+	Endpoint    string
 }
 
 // validateCredentialInput は認証情報入力の基本チェックを行う。
 func validateCredentialInput(input CredentialInput) error {
+	if strings.TrimSpace(input.BucketName) == "" {
+		return errors.New("bucketNameが空です")
+	}
+	if strings.TrimSpace(input.Region) == "" {
+		return errors.New("regionが空です")
+	}
+	if strings.TrimSpace(input.Endpoint) == "" {
+		return errors.New("endpointが空です")
+	}
 	if strings.TrimSpace(input.AccessKeyID) == "" {
 		return errors.New("accessKeyIDが空です")
 	}

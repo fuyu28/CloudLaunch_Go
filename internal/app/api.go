@@ -360,5 +360,8 @@ func toCredentialOutput(resultData result.ApiResult[*credentials.Credential]) re
 	}
 	return result.OkResult(&services.CredentialOutput{
 		AccessKeyID: resultData.Data.AccessKeyID,
+		BucketName:  resultData.Data.BucketName,
+		Region:      resultData.Data.Region,
+		Endpoint:    resultData.Data.Endpoint,
 	})
 }

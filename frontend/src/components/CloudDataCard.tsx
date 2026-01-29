@@ -16,7 +16,7 @@ import { getOfflineDisabledClasses } from "@renderer/utils/offlineUtils"
 
 type CloudDataInfo = {
   exists: boolean
-  uploadedAt?: Date
+  uploadedAt?: Date | string
   size?: number
   comment?: string
 }
@@ -27,7 +27,7 @@ type CloudFileDetails = {
   files: Array<{
     name: string
     size: number
-    lastModified: Date
+    lastModified: Date | string
     key: string
   }>
 }

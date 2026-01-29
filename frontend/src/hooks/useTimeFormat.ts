@@ -30,11 +30,11 @@ export type TimeFormatHook = {
   /** 最適な時間フォーマット（短時間は分表示、長時間は時間表示） */
   formatSmart: (seconds: number) => string
   /** 日付フォーマット（例: "2025年7月7日(月)"） */
-  formatDate: (date: Date) => string
+  formatDate: (date: Date | string | number | null | undefined) => string
   /** 日付+時間フォーマット（例: "2025年7月7日(月) 11:11"） */
-  formatDateWithTime: (date: Date) => string
+  formatDateWithTime: (date: Date | string | number | null | undefined) => string
   /** 日付+時間+秒フォーマット（例: "2025年7月7日(月) 11:11:30"） */
-  formatDateWithTimeSeconds: (date: Date) => string
+  formatDateWithTimeSeconds: (date: Date | string | number | null | undefined) => string
 }
 
 /**
@@ -45,6 +45,13 @@ export type TimeFormatHook = {
  * @returns 時間フォーマット関数群
  */
 export function useTimeFormat(): TimeFormatHook {
+  const normalizeDate = (value: Date | string | number | null | undefined): Date | null => {
+    if (!value) return null
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
   const formatDuration = useMemo(() => {
     return (seconds: number): string => {
       if (seconds <= 0) return "0秒"
@@ -110,25 +117,33 @@ export function useTimeFormat(): TimeFormatHook {
   }, [])
 
   const formatDate = useMemo(() => {
-    return (date: Date): string => {
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1
-      const day = date.getDate()
-      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()]
+    return (date: Date | string | number | null | undefined): string => {
+      const normalized = normalizeDate(date)
+      if (!normalized) {
+        return "不明"
+      }
+      const year = normalized.getFullYear()
+      const month = normalized.getMonth() + 1
+      const day = normalized.getDate()
+      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][normalized.getDay()]
 
       return `${year}年${month}月${day}日(${dayOfWeek})`
     }
   }, [])
 
   const formatDateWithTime = useMemo(() => {
-    return (date: Date): string => {
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1
-      const day = date.getDate()
-      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()]
-      const hours = date.getHours()
+    return (date: Date | string | number | null | undefined): string => {
+      const normalized = normalizeDate(date)
+      if (!normalized) {
+        return "不明"
+      }
+      const year = normalized.getFullYear()
+      const month = normalized.getMonth() + 1
+      const day = normalized.getDate()
+      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][normalized.getDay()]
+      const hours = normalized.getHours()
       const hoursPadded = String(hours).padStart(2, "0")
-      const minutes = date.getMinutes()
+      const minutes = normalized.getMinutes()
       const minutesPadded = String(minutes).padStart(2, "0")
 
       return `${year}年${month}月${day}日(${dayOfWeek}) ${hoursPadded}:${minutesPadded}`
@@ -136,16 +151,20 @@ export function useTimeFormat(): TimeFormatHook {
   }, [])
 
   const formatDateWithTimeSeconds = useMemo(() => {
-    return (date: Date): string => {
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1
-      const day = date.getDate()
-      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()]
-      const hours = date.getHours()
+    return (date: Date | string | number | null | undefined): string => {
+      const normalized = normalizeDate(date)
+      if (!normalized) {
+        return "不明"
+      }
+      const year = normalized.getFullYear()
+      const month = normalized.getMonth() + 1
+      const day = normalized.getDate()
+      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][normalized.getDay()]
+      const hours = normalized.getHours()
       const hoursPadded = String(hours).padStart(2, "0")
-      const minutes = date.getMinutes()
+      const minutes = normalized.getMinutes()
       const minutesPadded = String(minutes).padStart(2, "0")
-      const seconds = date.getSeconds()
+      const seconds = normalized.getSeconds()
       const secondsPadded = String(seconds).padStart(2, "0")
 
       return `${year}年${month}月${day}日(${dayOfWeek}) ${hoursPadded}:${minutesPadded}:${secondsPadded}`

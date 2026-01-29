@@ -122,3 +122,7 @@ export function UploadFolder(arg1:string,arg2:string,arg3:string):Promise<result
 export function UploadMemoToCloud(arg1:string):Promise<result.ApiResult_bool_>;
 
 export function ValidateCredential(arg1:app.CredentialValidationInput):Promise<result.ApiResult_bool_>;
+
+export function ValidateSavedCredential(arg1:string):Promise<result.ApiResult_bool_>;
+
+export function ValidateSavedCredential(arg1:string):Promise<result.ApiResult_bool_>;

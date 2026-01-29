@@ -66,7 +66,8 @@ import {
   UpdateSessionChapter,
   UpdateSessionName,
   UploadFolder,
-  ValidateCredential
+  ValidateCredential,
+  ValidateSavedCredential
 } from "../wailsjs/go/app/App"
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../wailsjs/runtime/runtime"
 
@@ -133,6 +134,7 @@ export type WindowApi = {
     upsertCredential: (creds: Creds) => Promise<ApiResult<void>>
     getCredential: () => Promise<ApiResult<Creds>>
     validateCredential: (creds: Creds) => Promise<ApiResult<void>>
+    validateSavedCredential: () => Promise<ApiResult<void>>
   }
   cloudData: {
     listCloudData: () => Promise<ApiResult<CloudDataItem[]>>
@@ -429,6 +431,9 @@ export const createWailsBridge = (): WindowApi => {
     credential: {
       upsertCredential: async (creds) => {
         const result = await SaveCredential("default", {
+          BucketName: creds.bucketName,
+          Region: creds.region,
+          Endpoint: creds.endpoint,
           AccessKeyID: creds.accessKeyId,
           SecretAccessKey: creds.secretAccessKey
         })
@@ -442,11 +447,11 @@ export const createWailsBridge = (): WindowApi => {
         return {
           success: true,
           data: {
-            accessKeyId: result.data.accessKeyID,
+            accessKeyId: result.data.AccessKeyID,
             secretAccessKey: "",
-            bucketName: "",
-            region: "",
-            endpoint: ""
+            bucketName: result.data.BucketName ?? "",
+            region: result.data.Region ?? "",
+            endpoint: result.data.Endpoint ?? ""
           }
         }
       },
@@ -458,6 +463,10 @@ export const createWailsBridge = (): WindowApi => {
           accessKeyId: creds.accessKeyId,
           secretAccessKey: creds.secretAccessKey
         })
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      validateSavedCredential: async () => {
+        const result = await ValidateSavedCredential("default")
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       }
     },

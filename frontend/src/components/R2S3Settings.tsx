@@ -18,6 +18,7 @@
 import { FaCheck, FaSyncAlt, FaTimes } from "react-icons/fa"
 
 import SettingsFormField from "./SettingsFormField"
+import { useConnectionStatus } from "../hooks/useConnectionStatus"
 import { useOfflineMode } from "../hooks/useOfflineMode"
 import { useSettingsFormZod } from "../hooks/useSettingsFormZod"
 import { getOfflineDisabledClasses } from "../utils/offlineUtils"
@@ -41,6 +42,7 @@ export default function R2S3Settings(): React.JSX.Element {
     isTesting,
     isConnectionSuccessful
   } = useSettingsFormZod()
+  const { status: connectionStatus, message: connectionMessage, check: checkConnection } = useConnectionStatus()
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode()
 
   // 手動接続テスト実行
@@ -60,7 +62,28 @@ export default function R2S3Settings(): React.JSX.Element {
     handleSave()
   }
 
+  const handleStatusCheck = (): void => {
+    if (!checkNetworkFeature("接続状態の確認")) {
+      return
+    }
+    checkConnection()
+  }
+
   const disabledClasses = getOfflineDisabledClasses(isOfflineMode)
+  const statusText = isOfflineMode
+    ? "オフライン中"
+    : connectionStatus === "loading"
+      ? "確認中..."
+      : connectionStatus === "success"
+        ? "接続中"
+        : "未接続"
+  const statusColor = isOfflineMode
+    ? "text-warning"
+    : connectionStatus === "success"
+      ? "text-success"
+      : connectionStatus === "error"
+        ? "text-error"
+        : "text-base-content/70"
 
   return (
     <div className={disabledClasses}>
@@ -93,6 +116,25 @@ export default function R2S3Settings(): React.JSX.Element {
           )}
         </div>
       </h2>
+
+      <div className="flex items-center justify-between rounded-lg border border-base-300 bg-base-200/40 px-4 py-3">
+        <div className="text-sm">
+          <span className="text-base-content/70">現在の接続状態:</span>
+          <span className={`ml-2 font-medium ${statusColor}`}>{statusText}</span>
+          {!isOfflineMode && connectionStatus === "error" && connectionMessage && (
+            <span className="ml-2 text-xs text-base-content/60">{connectionMessage}</span>
+          )}
+        </div>
+        {!isOfflineMode && (
+          <button
+            className="btn btn-xs btn-outline"
+            onClick={handleStatusCheck}
+            disabled={connectionStatus === "loading" || isTesting || isSaving}
+          >
+            再確認
+          </button>
+        )}
+      </div>
 
       <div className="flex flex-col space-y-4 mt-4">
         {/* フォームフィールド群 */}

@@ -233,3 +233,7 @@ export function UploadMemoToCloud(arg1) {
 export function ValidateCredential(arg1) {
   return window['go']['app']['App']['ValidateCredential'](arg1);
 }
+
+export function ValidateSavedCredential(arg1) {
+  return window['go']['app']['App']['ValidateSavedCredential'](arg1);
+}
