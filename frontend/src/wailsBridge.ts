@@ -5,13 +5,11 @@
 import type { ApiResult } from "src/types/result"
 import type { InputGameData, GameType, PlaySessionType, PlayStatus, MonitoringGameStatus } from "src/types/game"
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu"
-import type { Chapter, ChapterStats } from "src/types/chapter"
 import type { MemoType, CreateMemoData, UpdateMemoData, MemoSyncResult, CloudMemoInfo } from "src/types/memo"
 import type { Creds } from "src/types/creds"
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "./hooks/useCloudData"
 
 import {
-  CreateChapter,
   CreateGame,
   CreateMemo,
   CreateSession,
@@ -19,7 +17,6 @@ import {
   CheckDirectoryExists,
   CheckFileExists,
   DeleteCloudData,
-  DeleteChapter,
   DeleteCredential,
   DeleteFile,
   DeleteGame,
@@ -39,9 +36,7 @@ import {
   GetGameByID,
   GetMonitoringStatus,
   GetProcessSnapshot,
-  GetChapterStats,
   LaunchGame,
-  ListChaptersByGame,
   ListCloudData,
   ListAllMemos,
   ListGames,
@@ -58,14 +53,10 @@ import {
   SaveCredential,
   SelectFile,
   SelectFolder,
-  SetCurrentChapter,
   UpdateAutoTracking,
   UpdateUploadConcurrency,
-  UpdateChapter,
-  UpdateChapterOrders,
   UpdateGame,
   UpdateMemo,
-  UpdateSessionChapter,
   UpdateSessionName,
   UploadFolder,
   ValidateCredential,
@@ -105,18 +96,8 @@ export type WindowApi = {
     updatePlayStatus: (gameId: string, playStatus: PlayStatus, clearedAt?: Date) => Promise<ApiResult<GameType>>
     createSession: (duration: number, gameId: string, sessionName?: string) => Promise<ApiResult<void>>
     getPlaySessions: (gameId: string) => Promise<ApiResult<PlaySessionType[]>>
-    updateSessionChapter: (sessionId: string, chapterId: string | null) => Promise<ApiResult<void>>
     updateSessionName: (sessionId: string, sessionName: string) => Promise<ApiResult<void>>
     deletePlaySession: (sessionId: string) => Promise<ApiResult<void>>
-  }
-  chapter: {
-    getChapters: (gameId: string) => Promise<ApiResult<Chapter[]>>
-    createChapter: (input: { name: string; gameId: string }) => Promise<ApiResult<Chapter>>
-    updateChapter: (chapterId: string, input: { name: string; order: number }) => Promise<ApiResult<Chapter>>
-    deleteChapter: (chapterId: string) => Promise<ApiResult<void>>
-    updateChapterOrders: (gameId: string, chapterOrders: { id: string; order: number }[]) => Promise<ApiResult<void>>
-    getChapterStats: (gameId: string) => Promise<ApiResult<ChapterStats[]>>
-    setCurrentChapter: (gameId: string, chapterId: string) => Promise<ApiResult<void>>
   }
   memo: {
     getAllMemos: () => Promise<ApiResult<MemoType[]>>
@@ -313,54 +294,12 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true, data: (result.data ?? []) as PlaySessionType[] }
           : { success: false, message: result.error?.message ?? "エラー" }
       },
-      updateSessionChapter: async (sessionId, chapterId) => {
-        const result = await UpdateSessionChapter(sessionId, chapterId)
-        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
-      },
       updateSessionName: async (sessionId, sessionName) => {
         const result = await UpdateSessionName(sessionId, sessionName)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       },
       deletePlaySession: async (sessionId) => {
         const result = await DeleteSession(sessionId)
-        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
-      }
-    },
-    chapter: {
-      getChapters: async (gameId) => {
-        const result = await ListChaptersByGame(gameId)
-        return result.success
-          ? { success: true, data: (result.data ?? []) as Chapter[] }
-          : { success: false, message: result.error?.message ?? "エラー" }
-      },
-      createChapter: async (input) => {
-        const result = await CreateChapter({ Name: input.name, Order: 0, GameID: input.gameId })
-        return result.success
-          ? { success: true, data: result.data as Chapter }
-          : { success: false, message: result.error?.message ?? "エラー" }
-      },
-      updateChapter: async (chapterId, input) => {
-        const result = await UpdateChapter(chapterId, { Name: input.name, Order: input.order })
-        return result.success
-          ? { success: true, data: result.data as Chapter }
-          : { success: false, message: result.error?.message ?? "エラー" }
-      },
-      deleteChapter: async (chapterId) => {
-        const result = await DeleteChapter(chapterId)
-        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
-      },
-      updateChapterOrders: async (gameId, chapterOrders) => {
-        const result = await UpdateChapterOrders(gameId, chapterOrders)
-        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
-      },
-      getChapterStats: async (gameId) => {
-        const result = await GetChapterStats(gameId)
-        return result.success
-          ? { success: true, data: (result.data ?? []) as ChapterStats[] }
-          : { success: false, message: result.error?.message ?? "エラー" }
-      },
-      setCurrentChapter: async (gameId, chapterId) => {
-        const result = await SetCurrentChapter(gameId, chapterId)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       }
     },

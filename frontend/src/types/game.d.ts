@@ -46,11 +46,4 @@ export type PlaySessionType = {
   playedAt: Date
   duration: number
   gameId: string
-  chapterId: string | null // null - 明確な「未所属」状態
-  chapter?: {
-    // undefined - オプショナル情報
-    name: string
-    id: string
-    order: number
-  }
 }

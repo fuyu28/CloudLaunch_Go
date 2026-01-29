@@ -1,18 +1,15 @@
 /**
  * @fileoverview プレイ統計コンポーネント
  *
- * このコンポーネントは、プレイセッション管理と章別プレイ統計を統合したセクションを提供します。
+ * このコンポーネントは、プレイセッション管理を統合したセクションを提供します。
  * 主な機能：
  * - プレイセッション履歴表示
- * - 章別プレイ統計グラフ
  * - プレイセッション追加・管理
- * - 章データ管理
  */
 
 import { memo } from "react"
 import { FaPlus, FaCog } from "react-icons/fa"
 
-import ChapterBarChart from "./ChapterBarChart"
 import PlaySessionCardSimple from "./PlaySessionCardSimple"
 import type { GameType } from "src/types/game"
 
@@ -75,12 +72,7 @@ const PlayStatistics = memo(function PlayStatistics({
             hiddenButtons={true}
           />
 
-          {/* 章別プレイ統計グラフ */}
-          <ChapterBarChart
-            key={`chapter-chart-${refreshKey}`}
-            gameId={game.id}
-            gameTitle={game.title}
-          />
+          {/* 章別プレイ統計グラフは無効化 */}
         </div>
       </div>
     </div>

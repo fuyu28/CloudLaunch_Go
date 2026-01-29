@@ -5,9 +5,6 @@ import { useCallback, useEffect, useState } from "react"
 import { FaArrowLeftLong } from "react-icons/fa6"
 import { useParams, useNavigate, Navigate } from "react-router-dom"
 
-import ChapterAddModal from "@renderer/components/ChapterAddModal"
-import ChapterDisplayCard from "@renderer/components/ChapterDisplayCard"
-import ChapterSettingsModal from "@renderer/components/ChapterSettingsModal"
 import CloudDataCard from "@renderer/components/CloudDataCard"
 import ConfirmModal from "@renderer/components/ConfirmModal"
 import GameInfo from "@renderer/components/GameInfo"
@@ -39,8 +36,6 @@ export default function GameDetail(): React.JSX.Element {
   const [isLoadingGame, setIsLoadingGame] = useState(true)
   const [isPlaySessionModalOpen, setIsPlaySessionModalOpen] = useState(false)
   const [isProcessModalOpen, setIsProcessModalOpen] = useState(false)
-  const [isChapterSettingsModalOpen, setIsChapterSettingsModalOpen] = useState(false)
-  const [isChapterAddModalOpen, setIsChapterAddModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const { showToast } = useToastHandler()
@@ -154,22 +149,6 @@ export default function GameDetail(): React.JSX.Element {
     setIsPlaySessionModalOpen(false)
   }
 
-  // 章管理モーダル関連のコールバック
-  const handleOpenChapterSettings = (): void => {
-    setIsChapterSettingsModalOpen(true)
-  }
-
-  const handleCloseChapterSettings = (): void => {
-    setIsChapterSettingsModalOpen(false)
-  }
-
-  const handleOpenChapterAdd = (): void => {
-    setIsChapterAddModalOpen(true)
-  }
-
-  const handleCloseChapterAdd = (): void => {
-    setIsChapterAddModalOpen(false)
-  }
 
   // 全データを再取得する関数
   const refreshGameData = useCallback(async () => {
@@ -197,11 +176,6 @@ export default function GameDetail(): React.JSX.Element {
       })
     }
   }, [game?.id, setVisibleGames])
-
-  const handleChaptersUpdated = useCallback(async () => {
-    await refreshGameData()
-    showToast("章データが更新されました", "success")
-  }, [refreshGameData, showToast])
 
   const handleAddPlaySession = useCallback(
     async (duration: number, sessionName?: string): Promise<void> => {
@@ -315,18 +289,7 @@ export default function GameDetail(): React.JSX.Element {
       </div>
 
       {/* 下段：その他の管理機能 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* 章表示・管理カード */}
-        <ChapterDisplayCard
-          key={`chapter-display-${refreshKey}`}
-          gameId={game.id}
-          gameTitle={game.title}
-          currentChapterId={game.currentChapter || undefined}
-          onChapterSettings={handleOpenChapterSettings}
-          onAddChapter={handleOpenChapterAdd}
-          onChapterChange={refreshGameData}
-        />
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* クラウドデータ管理カード */}
         <CloudDataCard
           gameId={game.id}
@@ -372,22 +335,6 @@ export default function GameDetail(): React.JSX.Element {
         onClose={handleClosePlaySessionModal}
         onSubmit={handleAddPlaySession}
         gameTitle={game.title}
-      />
-
-      {/* 章設定 */}
-      <ChapterSettingsModal
-        isOpen={isChapterSettingsModalOpen}
-        gameId={game.id}
-        onClose={handleCloseChapterSettings}
-        onChaptersUpdated={handleChaptersUpdated}
-      />
-
-      {/* 章追加 */}
-      <ChapterAddModal
-        isOpen={isChapterAddModalOpen}
-        gameId={game.id}
-        onClose={handleCloseChapterAdd}
-        onChapterAdded={handleChaptersUpdated}
       />
 
       {/* プロセス管理 */}

@@ -6,7 +6,7 @@
  * 主な機能：
  * - セッション一覧の表示（名前、実行時間）
  * - セッションの削除
- * - セッションの編集（名前、章の紐づけ）
+ * - セッションの編集（名前）
  * - モーダルの開閉制御
  *
  * @param isOpen - モーダルの開閉状態
@@ -27,7 +27,6 @@ import { logger } from "@renderer/utils/logger"
 
 import ConfirmModal from "./ConfirmModal"
 import { playSessionEditSchema } from "@renderer/schemas/playSession"
-import type { Chapter } from "src/types/chapter"
 import type { PlaySessionType } from "src/types/game"
 import { useZodValidation } from "../hooks/useZodValidation"
 
@@ -36,13 +35,12 @@ import { useZodValidation } from "../hooks/useZodValidation"
  */
 type EditFormData = Record<string, unknown> & {
   sessionName: string
-  chapterId: string | null
 }
 
 /**
  * 編集フォームのフィールド名の型
  */
-type EditFormFields = keyof Pick<EditFormData, "sessionName" | "chapterId">
+type EditFormFields = keyof Pick<EditFormData, "sessionName">
 
 /**
  * セッション管理モーダルのProps
@@ -71,15 +69,13 @@ export default function PlaySessionManagementModal({
   onProcessUpdated
 }: PlaySessionManagementModalProps): React.JSX.Element {
   const [processes, setProcesses] = useState<PlaySessionType[]>([])
-  const [chapters, setChapters] = useState<Chapter[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedProcessId, setSelectedProcessId] = useState<string | undefined>(undefined)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingProcess, setEditingProcess] = useState<PlaySessionType | undefined>(undefined)
   const [editFormData, setEditFormData] = useState<EditFormData>({
-    sessionName: "",
-    chapterId: null
+    sessionName: ""
   })
 
   // フォームデータをuseMemoでラップ
@@ -117,39 +113,13 @@ export default function PlaySessionManagementModal({
   }, [gameId, showToast])
 
   /**
-   * 章情報を取得
-   */
-  const fetchChapters = useCallback(async () => {
-    if (!gameId) return
-
-    try {
-      const result = await window.api.chapter.getChapters(gameId)
-      if (result.success && result.data) {
-        setChapters(result.data)
-      } else {
-        logger.error("章情報の取得に失敗", {
-          component: "PlaySessionManagementModal",
-          function: "unknown"
-        })
-      }
-    } catch (error) {
-      logger.error("章情報取得エラー:", {
-        component: "PlaySessionManagementModal",
-        function: "unknown",
-        data: error
-      })
-    }
-  }, [gameId])
-
-  /**
    * 編集モーダルを開く
    */
   const openEditModal = useCallback(
     (process: PlaySessionType) => {
       setEditingProcess(process)
       setEditFormData({
-        sessionName: process.sessionName ?? "未設定",
-        chapterId: process.chapterId
+        sessionName: process.sessionName ?? "未設定"
       })
       validation.resetTouched() // タッチ状態をリセット
       setIsEditModalOpen(true)
@@ -164,8 +134,7 @@ export default function PlaySessionManagementModal({
     setIsEditModalOpen(false)
     setEditingProcess(undefined)
     setEditFormData({
-      sessionName: "",
-      chapterId: null
+      sessionName: ""
     })
     validation.resetTouched() // タッチ状態をリセット
   }, [validation])
@@ -205,16 +174,6 @@ export default function PlaySessionManagementModal({
           showToast("セッション名の更新に失敗しました", "error")
           return
         }
-      }
-
-      // 章を更新
-      const chapterResult = await window.api.database.updateSessionChapter(
-        editingProcess.id,
-        memoizedEditFormData.chapterId
-      )
-      if (!chapterResult.success) {
-        showToast("章の更新に失敗しました", "error")
-        return
       }
 
       showToast("セッションを更新しました", "success")
@@ -289,9 +248,8 @@ export default function PlaySessionManagementModal({
   useEffect(() => {
     if (isOpen) {
       fetchProcesses()
-      fetchChapters()
     }
-  }, [isOpen, fetchProcesses, fetchChapters])
+  }, [isOpen, fetchProcesses])
 
   /**
    * 選択されたセッションの情報を取得
@@ -327,7 +285,6 @@ export default function PlaySessionManagementModal({
                       <thead>
                         <tr>
                           <th>セッション名</th>
-                          <th>章</th>
                           <th>実行時間</th>
                           <th>プレイ日時</th>
                           <th>操作</th>
@@ -339,7 +296,6 @@ export default function PlaySessionManagementModal({
                             <td>
                               <div className="font-medium">{process.sessionName ?? "未設定"}</div>
                             </td>
-                            <td>{process.chapter?.name ?? "未設定"}</td>
                             <td>{formatSmart(process.duration)}</td>
                             <td>{formatDateWithTime(process.playedAt)}</td>
                             <td>
@@ -413,29 +369,6 @@ export default function PlaySessionManagementModal({
               )}
             </div>
 
-            {/* 章選択 */}
-            <div>
-              <label className="label">
-                <span className="label-text">紐づける章</span>
-              </label>
-              <select
-                className={`select select-bordered w-full ${
-                  validation.hasError("chapterId") ? "select-error" : ""
-                }`}
-                value={editFormData.chapterId || ""}
-                onChange={(e) => handleFormChange("chapterId", e.target.value || null)}
-              >
-                <option value="">章を選択しない</option>
-                {chapters.map((chapter) => (
-                  <option key={chapter.id} value={chapter.id}>
-                    {chapter.name}
-                  </option>
-                ))}
-              </select>
-              {validation.getError("chapterId") && (
-                <div className="text-error text-sm mt-1">{validation.getError("chapterId")}</div>
-              )}
-            </div>
           </div>
 
           <div className="modal-action">
