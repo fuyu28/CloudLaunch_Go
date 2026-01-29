@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -18,6 +19,8 @@ type UploadSummary struct {
 	TotalBytes int64
 	Keys       []string
 }
+
+const uploadConcurrency = 6
 
 // UploadFile は単一ファイルをアップロードする。
 func UploadFile(ctx context.Context, client *s3.Client, bucket string, key string, filePath string) (size int64, err error) {
@@ -50,9 +53,13 @@ func UploadFile(ctx context.Context, client *s3.Client, bucket string, key strin
 
 // UploadFolder はフォルダ配下のファイルをすべてアップロードする。
 func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderPath string, prefix string) (UploadSummary, error) {
-	summary := UploadSummary{Keys: make([]string, 0)}
+	type uploadTask struct {
+		path string
+		key  string
+	}
 
-	error := filepath.WalkDir(folderPath, func(path string, entry os.DirEntry, walkError error) error {
+	tasks := make([]uploadTask, 0)
+	walkErr := filepath.WalkDir(folderPath, func(path string, entry os.DirEntry, walkError error) error {
 		if walkError != nil {
 			return walkError
 		}
@@ -60,25 +67,65 @@ func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderP
 			return nil
 		}
 
-		relativePath, error := filepath.Rel(folderPath, path)
-		if error != nil {
-			return error
+		relativePath, err := filepath.Rel(folderPath, path)
+		if err != nil {
+			return err
 		}
 		key := joinKey(prefix, filepath.ToSlash(relativePath))
-		size, error := UploadFile(ctx, client, bucket, key, path)
-		if error != nil {
-			return error
-		}
-
-		summary.FileCount++
-		summary.TotalBytes += size
-		summary.Keys = append(summary.Keys, key)
+		tasks = append(tasks, uploadTask{path: path, key: key})
 		return nil
 	})
-	if error != nil {
-		return UploadSummary{}, error
+	if walkErr != nil {
+		return UploadSummary{}, walkErr
 	}
 
+	if len(tasks) == 0 {
+		return UploadSummary{Keys: make([]string, 0)}, nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sem := make(chan struct{}, uploadConcurrency)
+	var wg sync.WaitGroup
+	var errOnce sync.Once
+	var firstErr error
+	var summaryMu sync.Mutex
+	summary := UploadSummary{Keys: make([]string, 0, len(tasks))}
+
+	for _, task := range tasks {
+		wg.Add(1)
+		task := task
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+
+			size, err := UploadFile(ctx, client, bucket, task.key, task.path)
+			if err != nil {
+				errOnce.Do(func() {
+					firstErr = err
+					cancel()
+				})
+				return
+			}
+
+			summaryMu.Lock()
+			summary.FileCount++
+			summary.TotalBytes += size
+			summary.Keys = append(summary.Keys, task.key)
+			summaryMu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return UploadSummary{}, firstErr
+	}
 	return summary, nil
 }
 
