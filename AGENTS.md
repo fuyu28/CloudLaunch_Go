@@ -27,6 +27,7 @@
 - Go tests follow `*_test.go` naming and live alongside packages (example: `internal/result/result_test.go`).
 - Frontend tests use Vitest (`bun run test`); name files `*.test.ts(x)` or `*.spec.ts(x)` and place them near the components they cover.
 - Cover new behavior with tests when it affects data handling, storage, or UI flows.
+- タスク終了時は `golangci-lint run` と `golangci-lint fmt` を実行すること。
 
 ## Commit & Pull Request Guidelines
 - Recent commits mostly follow Conventional Commit style with scopes (e.g., `feat(storage): ...`, `fix(db): ...`), though short imperative summaries are also used.
