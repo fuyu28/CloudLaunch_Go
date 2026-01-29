@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"io"
 	"log/slog"
 	"os/exec"
@@ -442,17 +443,13 @@ func (service *ProcessMonitorService) isGameProcessRunning(
 }
 
 func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error) {
-	switch runtime.GOOS {
-	case "windows":
-		return service.getWindowsProcesses()
-	case "darwin":
-		return service.getUnixProcesses("ps", "-eo", "pid,comm,args")
-	default:
-		return service.getUnixProcesses("ps", "-eo", "pid,comm,cmd", "--no-headers")
+	if runtime.GOOS != "windows" {
+		return nil, errors.New("process monitoring is supported on Windows only")
 	}
+	return service.getProcessesPowerShell()
 }
 
-func (service *ProcessMonitorService) getWindowsProcesses() ([]ProcessInfo, error) {
+func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	command := exec.CommandContext(
@@ -497,50 +494,14 @@ func (service *ProcessMonitorService) getWindowsProcesses() ([]ProcessInfo, erro
 	return processes, nil
 }
 
-func (service *ProcessMonitorService) getUnixProcesses(command string, args ...string) ([]ProcessInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, command, args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	processes := make([]ProcessInfo, 0, len(lines))
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := splitProcessLine(line)
-		if parts == nil {
-			continue
-		}
-		pid, err := strconv.Atoi(parts[0])
-		if err != nil || pid <= 0 {
-			continue
-		}
-		name := filepath.Base(parts[1])
-		cmdline := parts[2]
-		if cmdline == "" {
-			cmdline = parts[1]
-		}
-		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: cmdline})
-	}
-	return processes, nil
-}
-
 func (service *ProcessMonitorService) getProcessesFallback() ([]ProcessInfo, error) {
-	switch runtime.GOOS {
-	case "windows":
-		return service.getWindowsProcessesWmic()
-	default:
-		return []ProcessInfo{}, nil
+	if runtime.GOOS != "windows" {
+		return nil, errors.New("process monitoring is supported on Windows only")
 	}
+	return service.getProcessesWmic()
 }
 
-func (service *ProcessMonitorService) getWindowsProcessesWmic() ([]ProcessInfo, error) {
+func (service *ProcessMonitorService) getProcessesWmic() ([]ProcessInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	command := exec.CommandContext(
@@ -587,21 +548,7 @@ func (service *ProcessMonitorService) getWindowsProcessesWmic() ([]ProcessInfo, 
 	return processes, nil
 }
 
-func splitProcessLine(line string) []string {
-	parts := strings.Fields(line)
-	if len(parts) < 2 {
-		return nil
-	}
-	pid := parts[0]
-	comm := parts[1]
-	args := ""
-	if len(parts) > 2 {
-		args = strings.Join(parts[2:], " ")
-	}
-	return []string{pid, comm, args}
-}
-
-func decodeWindowsOutput(output []byte) ([]byte, error) {
+func decodeProcessOutput(output []byte) ([]byte, error) {
 	reader := transform.NewReader(bytes.NewReader(output), japanese.ShiftJIS.NewDecoder())
 	return io.ReadAll(reader)
 }
@@ -631,7 +578,7 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 		return records, nil
 	}
 
-	if decoded, err := decodeWindowsOutput(output); err == nil {
+	if decoded, err := decodeProcessOutput(output); err == nil {
 		if records, err := parse(decoded); err == nil {
 			return records, nil
 		}
