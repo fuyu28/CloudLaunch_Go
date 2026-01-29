@@ -186,8 +186,12 @@ func (service *ProcessMonitorService) removeMonitoredGame(gameID string) {
 func (service *ProcessMonitorService) checkProcesses() {
 	processes, err := service.getProcessesNative()
 	if err != nil {
-		service.logger.Error("プロセス取得に失敗", "error", err)
-		return
+		service.logger.Warn("ネイティブコマンドが失敗しました。フォールバックを使用します", "error", err)
+		processes, err = service.getProcessesFallback()
+		if err != nil {
+			service.logger.Error("フォールバックも失敗しました", "error", err)
+			processes = []ProcessInfo{}
+		}
 	}
 
 	service.autoAddGamesFromDatabase(processes)
@@ -417,7 +421,10 @@ func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error
 }
 
 func (service *ProcessMonitorService) getWindowsProcesses() ([]ProcessInfo, error) {
-	command := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(
+		ctx,
 		"powershell",
 		"-Command",
 		`Get-Process | Select-Object ProcessName, Id, Path | ConvertTo-Csv -NoTypeInformation`,
@@ -433,6 +440,8 @@ func (service *ProcessMonitorService) getWindowsProcesses() ([]ProcessInfo, erro
 	}
 
 	reader := csv.NewReader(bytes.NewReader(decoded))
+	reader.LazyQuotes = true
+	reader.TrimLeadingSpace = true
 	records, err := reader.ReadAll()
 	if err != nil {
 		return nil, err
@@ -465,7 +474,9 @@ func (service *ProcessMonitorService) getWindowsProcesses() ([]ProcessInfo, erro
 }
 
 func (service *ProcessMonitorService) getUnixProcesses(command string, args ...string) ([]ProcessInfo, error) {
-	cmd := exec.Command(command, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, command, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -478,33 +489,110 @@ func (service *ProcessMonitorService) getUnixProcesses(command string, args ...s
 		if line == "" {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+		parts := splitProcessLine(line)
+		if parts == nil {
 			continue
 		}
-		pid, err := strconv.Atoi(fields[0])
+		pid, err := strconv.Atoi(parts[0])
 		if err != nil || pid <= 0 {
 			continue
 		}
-		name := filepath.Base(fields[1])
-		cmdline := fields[1]
-		if len(fields) > 2 {
-			cmdline = strings.Join(fields[2:], " ")
+		name := filepath.Base(parts[1])
+		cmdline := parts[2]
+		if cmdline == "" {
+			cmdline = parts[1]
 		}
 		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: cmdline})
 	}
 	return processes, nil
 }
 
+func (service *ProcessMonitorService) getProcessesFallback() ([]ProcessInfo, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return service.getWindowsProcessesWmic()
+	default:
+		return []ProcessInfo{}, nil
+	}
+}
+
+func (service *ProcessMonitorService) getWindowsProcessesWmic() ([]ProcessInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(
+		ctx,
+		"wmic",
+		"process",
+		"get",
+		"Name,ProcessId,ExecutablePath",
+		"/FORMAT:CSV",
+	)
+	output, err := command.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	decoded, decodeErr := decodeWindowsOutput(output)
+	if decodeErr != nil {
+		decoded = output
+	}
+
+	reader := csv.NewReader(bytes.NewReader(decoded))
+	reader.LazyQuotes = true
+	reader.TrimLeadingSpace = true
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	processes := make([]ProcessInfo, 0, len(records))
+	for _, record := range records {
+		if len(record) < 4 {
+			continue
+		}
+		name := strings.TrimSpace(record[1])
+		pidStr := strings.TrimSpace(record[2])
+		fullPath := strings.TrimSpace(record[3])
+		if name == "" || pidStr == "" {
+			continue
+		}
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil || pid <= 0 {
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(name), ".exe") {
+			name += ".exe"
+		}
+		if fullPath == "" {
+			fullPath = name
+		}
+		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
+	}
+	return processes, nil
+}
+
+func splitProcessLine(line string) []string {
+	parts := strings.Fields(line)
+	if len(parts) < 2 {
+		return nil
+	}
+	pid := parts[0]
+	comm := parts[1]
+	args := ""
+	if len(parts) > 2 {
+		args = strings.Join(parts[2:], " ")
+	}
+	return []string{pid, comm, args}
+}
+
 func decodeWindowsOutput(output []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(output), japanese.ShiftJIS.NewDecoder())
+	reader := transform.NewReader(bytes.NewReader(output), japanese.Windows31J.NewDecoder())
 	return io.ReadAll(reader)
 }
 
 func normalizeProcessToken(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if value == "" {
 		return ""
 	}
-	return norm.NFC.String(strings.ToLower(trimmed))
+	return norm.NFC.String(strings.ToLower(value))
 }
