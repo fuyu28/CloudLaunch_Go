@@ -43,7 +43,7 @@ func (service *CloudService) UploadFolder(
 		return result.ErrorResult[storage.UploadSummary](message, detail)
 	}
 
-	summary, error := storage.UploadFolder(ctx, client, cfg.Bucket, folderPath, prefix)
+	summary, error := storage.UploadFolder(ctx, client, cfg.Bucket, folderPath, prefix, service.config.S3UploadConcurrency)
 	if error != nil {
 		service.logger.Error("フォルダアップロードに失敗", "error", error)
 		return result.ErrorResult[storage.UploadSummary]("フォルダアップロードに失敗しました", error.Error())

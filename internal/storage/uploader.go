@@ -20,7 +20,7 @@ type UploadSummary struct {
 	Keys       []string
 }
 
-const uploadConcurrency = 6
+const defaultUploadConcurrency = 6
 
 // UploadFile は単一ファイルをアップロードする。
 func UploadFile(ctx context.Context, client *s3.Client, bucket string, key string, filePath string) (size int64, err error) {
@@ -52,7 +52,7 @@ func UploadFile(ctx context.Context, client *s3.Client, bucket string, key strin
 }
 
 // UploadFolder はフォルダ配下のファイルをすべてアップロードする。
-func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderPath string, prefix string) (UploadSummary, error) {
+func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderPath string, prefix string, concurrency int) (UploadSummary, error) {
 	type uploadTask struct {
 		path string
 		key  string
@@ -86,7 +86,10 @@ func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderP
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	sem := make(chan struct{}, uploadConcurrency)
+	if concurrency <= 0 {
+		concurrency = defaultUploadConcurrency
+	}
+	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var errOnce sync.Once
 	var firstErr error

@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +18,7 @@ type Config struct {
 	S3Bucket            string
 	S3ForcePathStyle    bool
 	S3UseTLS            bool
+	S3UploadConcurrency int
 	CloudMetadataKey    string
 	CloudImagesPrefix   string
 	CredentialNamespace string
@@ -36,6 +38,7 @@ func LoadFromEnv() Config {
 		S3Bucket:            getEnv("CLOUDLAUNCH_S3_BUCKET", ""),
 		S3ForcePathStyle:    getEnvBool("CLOUDLAUNCH_S3_FORCE_PATH_STYLE", false),
 		S3UseTLS:            getEnvBool("CLOUDLAUNCH_S3_USE_TLS", true),
+		S3UploadConcurrency: getEnvInt("CLOUDLAUNCH_S3_UPLOAD_CONCURRENCY", 6),
 		CloudMetadataKey:    getEnv("CLOUDLAUNCH_CLOUD_METADATA_KEY", "games.json"),
 		CloudImagesPrefix:   getEnv("CLOUDLAUNCH_CLOUD_IMAGES_PREFIX", "images/"),
 		CredentialNamespace: getEnv("CLOUDLAUNCH_CREDENTIAL_NAMESPACE", "CloudLaunch"),
@@ -66,4 +69,16 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes")
+}
+
+func getEnvInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
