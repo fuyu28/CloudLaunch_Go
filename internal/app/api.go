@@ -296,6 +296,7 @@ func (app *App) LaunchGame(exePath string) result.ApiResult[bool] {
 		return result.ErrorResult[bool]("実行ファイルが不正です", "exePathが空です")
 	}
 	command := exec.Command(exePath)
+	command.Dir = filepath.Dir(exePath)
 	if error := command.Start(); error != nil {
 		app.Logger.Error("ゲーム起動に失敗", "error", error)
 		return result.ErrorResult[bool]("ゲーム起動に失敗しました", error.Error())
