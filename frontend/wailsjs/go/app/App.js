@@ -194,8 +194,20 @@ export function SyncMemosFromCloud(arg1) {
   return window['go']['app']['App']['SyncMemosFromCloud'](arg1);
 }
 
+export function SyncAllGames() {
+  return window['go']['app']['App']['SyncAllGames']();
+}
+
+export function SyncGame(arg1) {
+  return window['go']['app']['App']['SyncGame'](arg1);
+}
+
 export function UpdateAutoTracking(arg1) {
   return window['go']['app']['App']['UpdateAutoTracking'](arg1);
+}
+
+export function UpdateOfflineMode(arg1) {
+  return window['go']['app']['App']['UpdateOfflineMode'](arg1);
 }
 
 export function UpdateUploadConcurrency(arg1) {

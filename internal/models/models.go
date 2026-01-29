@@ -21,6 +21,7 @@ type Game struct {
 	ExePath        string     `json:"exePath"`
 	SaveFolderPath *string    `json:"saveFolderPath,omitempty"`
 	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 	PlayStatus     PlayStatus `json:"playStatus"`
 	TotalPlayTime  int64      `json:"totalPlayTime"`
 	LastPlayed     *time.Time `json:"lastPlayed,omitempty"`
@@ -37,6 +38,7 @@ type PlaySession struct {
 	SessionName *string   `json:"sessionName,omitempty"`
 	ChapterID   *string   `json:"chapterId,omitempty"`
 	UploadID    *string   `json:"uploadId,omitempty"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // Chapter は章情報を表す。

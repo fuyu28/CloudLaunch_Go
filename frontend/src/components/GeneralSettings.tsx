@@ -18,7 +18,7 @@
  */
 
 import { useAtom } from "jotai"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import toast from "react-hot-toast"
 
 import { logger } from "@renderer/utils/logger"
@@ -55,6 +55,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom)
   const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom)
   const [uploadConcurrency, setUploadConcurrency] = useAtom(uploadConcurrencyAtom)
+  const [isSyncingAll, setIsSyncingAll] = useState(false)
 
   // ソート変更ハンドラー
   const handleSortChange = (newSortOption: SortOption): void => {
@@ -69,12 +70,26 @@ export default function GeneralSettings(): React.JSX.Element {
   }
 
   // オフラインモード変更ハンドラー
-  const handleOfflineModeChange = (enabled: boolean): void => {
+  const handleOfflineModeChange = async (enabled: boolean): Promise<void> => {
     setOfflineMode(enabled)
-    if (enabled) {
-      toast.success("オフラインモードを有効にしました")
-    } else {
-      toast.success("オフラインモードを無効にしました")
+    try {
+      const result = await window.api.settings.updateOfflineMode(enabled)
+      if (!result.success) {
+        toast.error("オフラインモードの更新に失敗しました")
+        return
+      }
+      if (enabled) {
+        toast.success("オフラインモードを有効にしました")
+      } else {
+        toast.success("オフラインモードを無効にしました")
+      }
+    } catch (error) {
+      logger.error("オフラインモード更新エラー:", {
+        component: "GeneralSettings",
+        function: "handleOfflineModeChange",
+        data: error
+      })
+      toast.error("オフラインモードの更新に失敗しました")
     }
   }
 
@@ -151,8 +166,40 @@ export default function GeneralSettings(): React.JSX.Element {
     }
   }
 
+  const handleSyncAllGames = async (): Promise<void> => {
+    if (offlineMode) {
+      toast.error("オフラインモードでは同期できません")
+      return
+    }
+    setIsSyncingAll(true)
+    try {
+      const result = await window.api.cloudSync.syncAllGames()
+      if (!result.success || !result.data) {
+        toast.error(result.message || "クラウド同期に失敗しました")
+        return
+      }
+      const summary = result.data
+      toast.success(
+        `同期完了: アップロード${summary.uploadedGames}件 / ダウンロード${summary.downloadedGames}件`
+      )
+    } catch (error) {
+      logger.error("全ゲーム同期エラー:", {
+        component: "GeneralSettings",
+        function: "handleSyncAllGames",
+        data: error
+      })
+      toast.error("クラウド同期に失敗しました")
+    } finally {
+      setIsSyncingAll(false)
+    }
+  }
+
   useEffect(() => {
     void applyUploadConcurrency(uploadConcurrency, false)
+  }, [])
+
+  useEffect(() => {
+    void window.api.settings.updateOfflineMode(offlineMode)
   }, [])
 
   return (
@@ -294,6 +341,26 @@ export default function GeneralSettings(): React.JSX.Element {
                 アプリケーションのログファイルが保存されているフォルダを開きます
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* クラウド同期 */}
+        <div className="bg-base-200 p-4 rounded-lg lg:col-span-2">
+          <div className="mb-3">
+            <h4 className="font-medium">クラウド同期</h4>
+            <p className="text-sm text-base-content/70">ゲーム情報とセッションを同期します</p>
+          </div>
+          <div className="form-control">
+            <button
+              className="btn btn-outline btn-sm w-fit"
+              onClick={handleSyncAllGames}
+              disabled={isSyncingAll || offlineMode}
+            >
+              {isSyncingAll ? "同期中..." : "全ゲームを同期"}
+            </button>
+            <p className="text-xs text-base-content/50 mt-2">
+              変更があったゲームのみクラウドと同期します
+            </p>
           </div>
         </div>
 

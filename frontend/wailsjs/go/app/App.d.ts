@@ -103,7 +103,13 @@ export function Shutdown(arg1:context.Context):Promise<void>;
 
 export function SyncMemosFromCloud(arg1:string):Promise<result.ApiResult_CloudLaunch_Go_internal_app_MemoSyncResult_>;
 
+export function SyncAllGames():Promise<result.ApiResult__CloudLaunch_Go_internal_services_CloudSyncSummary_>;
+
+export function SyncGame(arg1:string):Promise<result.ApiResult__CloudLaunch_Go_internal_services_CloudSyncSummary_>;
+
 export function UpdateAutoTracking(arg1:boolean):Promise<result.ApiResult_bool_>;
+
+export function UpdateOfflineMode(arg1:boolean):Promise<result.ApiResult_bool_>;
 
 export function UpdateUploadConcurrency(arg1:number):Promise<result.ApiResult_bool_>;
 

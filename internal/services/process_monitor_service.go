@@ -52,6 +52,7 @@ type normalizedProcess struct {
 type ProcessMonitorService struct {
 	repository         *db.Repository
 	logger             *slog.Logger
+	cloudSync          *CloudSyncService
 	monitoredGames     map[string]*MonitoringGame
 	autoTracking       bool
 	monitoringInterval *time.Ticker
@@ -63,10 +64,11 @@ type ProcessMonitorService struct {
 }
 
 // NewProcessMonitorService は ProcessMonitorService を生成する。
-func NewProcessMonitorService(repository *db.Repository, logger *slog.Logger) *ProcessMonitorService {
+func NewProcessMonitorService(repository *db.Repository, logger *slog.Logger, cloudSync *CloudSyncService) *ProcessMonitorService {
 	return &ProcessMonitorService{
 		repository:         repository,
 		logger:             logger,
+		cloudSync:          cloudSync,
 		monitoredGames:     make(map[string]*MonitoringGame),
 		autoTracking:       true,
 		interval:           2 * time.Second,
@@ -325,6 +327,14 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	}
 
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
+	if service.cloudSync != nil {
+		go func(gameID string) {
+			result := service.cloudSync.SyncGame(context.Background(), "default", gameID)
+			if !result.Success {
+				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", result.Error)
+			}
+		}(game.GameID)
+	}
 }
 
 func (service *ProcessMonitorService) saveAllActiveSessions() {
@@ -377,7 +387,7 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 	}
 
 	for _, game := range games {
-		if game.ExePath == "" {
+		if game.ExePath == "" || game.ExePath == UnconfiguredExePath {
 			continue
 		}
 		exeName := filepath.Base(game.ExePath)

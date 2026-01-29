@@ -32,12 +32,20 @@ func (app *App) GetGameByID(gameID string) result.ApiResult[*models.Game] {
 
 // CreateGame はゲームを作成する。
 func (app *App) CreateGame(input services.GameInput) result.ApiResult[*models.Game] {
-	return app.GameService.CreateGame(app.context(), input)
+	created := app.GameService.CreateGame(app.context(), input)
+	if created.Success && created.Data != nil {
+		app.syncGameAsync(created.Data.ID)
+	}
+	return created
 }
 
 // UpdateGame はゲームを更新する。
 func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result.ApiResult[*models.Game] {
-	return app.GameService.UpdateGame(app.context(), gameID, input)
+	updated := app.GameService.UpdateGame(app.context(), gameID, input)
+	if updated.Success && updated.Data != nil {
+		app.syncGameAsync(updated.Data.ID)
+	}
+	return updated
 }
 
 // UpdatePlayTime はプレイ時間を更新する。
@@ -87,7 +95,11 @@ func (app *App) DeleteChapter(chapterID string) result.ApiResult[bool] {
 
 // CreateSession はセッションを作成する。
 func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*models.PlaySession] {
-	return app.SessionService.CreateSession(app.context(), input)
+	created := app.SessionService.CreateSession(app.context(), input)
+	if created.Success && created.Data != nil {
+		app.syncGameAsync(created.Data.GameID)
+	}
+	return created
 }
 
 // ListSessionsByGame はセッション一覧を取得する。
@@ -97,17 +109,47 @@ func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]models.Play
 
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
-	return app.SessionService.DeleteSession(app.context(), sessionID)
+	var gameID string
+	if app.Database != nil {
+		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
+			gameID = session.GameID
+		}
+	}
+	deleted := app.SessionService.DeleteSession(app.context(), sessionID)
+	if deleted.Success && gameID != "" {
+		app.syncGameAsync(gameID)
+	}
+	return deleted
 }
 
 // UpdateSessionChapter はセッション章を更新する。
 func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result.ApiResult[bool] {
-	return app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
+	var gameID string
+	if app.Database != nil {
+		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
+			gameID = session.GameID
+		}
+	}
+	updated := app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
+	if updated.Success && gameID != "" {
+		app.syncGameAsync(gameID)
+	}
+	return updated
 }
 
 // UpdateSessionName はセッション名を更新する。
 func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	return app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
+	var gameID string
+	if app.Database != nil {
+		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
+			gameID = session.GameID
+		}
+	}
+	updated := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
+	if updated.Success && gameID != "" {
+		app.syncGameAsync(gameID)
+	}
+	return updated
 }
 
 // CreateMemo はメモを作成する。
@@ -310,7 +352,7 @@ func (app *App) LoadCloudMetadata(credentialKey string) result.ApiResult[*storag
 
 // LaunchGame は指定された実行ファイルを起動する。
 func (app *App) LaunchGame(exePath string) result.ApiResult[bool] {
-	if strings.TrimSpace(exePath) == "" {
+	if strings.TrimSpace(exePath) == "" || exePath == services.UnconfiguredExePath {
 		return result.ErrorResult[bool]("実行ファイルが不正です", "exePathが空です")
 	}
 	command := exec.Command(exePath)

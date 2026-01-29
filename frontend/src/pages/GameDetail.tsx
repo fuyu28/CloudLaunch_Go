@@ -38,6 +38,7 @@ export default function GameDetail(): React.JSX.Element {
   const [isProcessModalOpen, setIsProcessModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isSyncingGame, setIsSyncingGame] = useState(false)
   const { showToast } = useToastHandler()
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode()
 
@@ -197,6 +198,56 @@ export default function GameDetail(): React.JSX.Element {
     [game, showToast, refreshGameData]
   )
 
+  const handleSyncGame = useCallback(
+    async (showResult = true): Promise<boolean> => {
+      if (!game) return false
+      if (isOfflineMode) {
+        if (showResult) {
+          showToast("オフラインモードでは同期できません", "error")
+        }
+        return false
+      }
+      setIsSyncingGame(true)
+      try {
+        const result = await window.api.cloudSync.syncGame(game.id)
+        if (!result.success || !result.data) {
+          if (showResult) {
+            showToast(result.message || "クラウド同期に失敗しました", "error")
+          }
+          return false
+        }
+        if (showResult) {
+          showToast(
+            `同期完了: アップロード${result.data.uploadedGames}件 / ダウンロード${result.data.downloadedGames}件`,
+            "success"
+          )
+        }
+        return true
+      } catch (error) {
+        logger.error("ゲーム同期エラー:", {
+          component: "GameDetail",
+          function: "handleSyncGame",
+          data: error
+        })
+        if (showResult) {
+          showToast("クラウド同期に失敗しました", "error")
+        }
+        return false
+      } finally {
+        setIsSyncingGame(false)
+      }
+    },
+    [game, isOfflineMode, showToast]
+  )
+
+  const handleLaunchGameWithSync = useCallback(async (): Promise<void> => {
+    if (!game) return
+    if (!isOfflineMode && isValidCreds) {
+      await handleSyncGame(false)
+    }
+    await handleLaunchGame()
+  }, [game, isOfflineMode, isValidCreds, handleSyncGame, handleLaunchGame])
+
   // プレイステータス変更のハンドラー
   const handleStatusChange = useCallback(
     async (newStatus: "unplayed" | "playing" | "played"): Promise<void> => {
@@ -272,7 +323,7 @@ export default function GameDetail(): React.JSX.Element {
           onStatusChange={(status) =>
             handleStatusChange(status as "unplayed" | "playing" | "played")
           }
-          onLaunchGame={handleLaunchGame}
+          onLaunchGame={handleLaunchGameWithSync}
           onEditGame={openEdit}
           onDeleteGame={openDelete}
         />
@@ -301,6 +352,29 @@ export default function GameDetail(): React.JSX.Element {
           onUpload={handleUploadSaveData}
           onDownload={handleDownloadSaveData}
         />
+
+        {/* ゲーム情報同期カード */}
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body">
+            <h3 className="font-semibold text-lg">ゲーム情報の同期</h3>
+            <p className="text-sm text-base-content/60 mb-4">
+              タイトル・プレイ情報・セッションをクラウドと同期します
+            </p>
+            <button
+              className="btn btn-outline btn-sm w-fit"
+              onClick={() => handleSyncGame(true)}
+              disabled={isSyncingGame || isOfflineMode}
+            >
+              {isSyncingGame ? "同期中..." : "このゲームを同期"}
+            </button>
+            {!isOfflineMode && !isValidCreds && (
+              <p className="text-xs text-error mt-3">クラウド認証情報が未設定です</p>
+            )}
+            {isOfflineMode && (
+              <p className="text-xs text-warning mt-3">オフラインモードのため同期できません</p>
+            )}
+          </div>
+        </div>
 
         {/* メモ管理カード */}
         <MemoCard gameId={game.id} />

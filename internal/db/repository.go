@@ -24,7 +24,7 @@ func NewRepository(connection *sql.DB) *Repository {
 // GetGameByID はID指定でゲームを取得する。
 func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt,
+		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game" WHERE id = ?
 	`, gameID)
@@ -49,7 +49,7 @@ func (repository *Repository) ListGames(
 ) (games []models.Game, err error) {
 	queryBuilder := strings.Builder{}
 	queryBuilder.WriteString(`
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt,
+		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game"
 	`)
@@ -126,6 +126,39 @@ func (repository *Repository) UpdateGame(ctx context.Context, game models.Game) 
 	}
 
 	return repository.GetGameByID(ctx, game.ID)
+}
+
+// UpsertGameSync はID指定でゲームを追加/更新する。
+func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Game) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		INSERT INTO "Game" (
+			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+			playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			publisher = excluded.publisher,
+			imagePath = excluded.imagePath,
+			exePath = excluded.exePath,
+			saveFolderPath = excluded.saveFolderPath,
+			createdAt = excluded.createdAt,
+			updatedAt = excluded.updatedAt,
+			playStatus = excluded.playStatus,
+			totalPlayTime = excluded.totalPlayTime,
+			lastPlayed = excluded.lastPlayed,
+			clearedAt = excluded.clearedAt,
+			currentChapter = excluded.currentChapter
+	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.CreatedAt, game.UpdatedAt, game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter)
+	return error
+}
+
+// TouchGameUpdatedAt はゲームのupdatedAtを現在時刻に更新する。
+func (repository *Repository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		UPDATE "Game" SET updatedAt = CURRENT_TIMESTAMP WHERE id = ?
+	`, gameID)
+	return error
 }
 
 // DeleteGame はゲームを削除する。
@@ -231,10 +264,26 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session mod
 	return repository.findLatestPlaySession(ctx, session.GameID)
 }
 
+// GetPlaySessionByID はID指定でセッションを取得する。
+func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
+	row := repository.connection.QueryRowContext(ctx, `
+		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt
+		FROM "PlaySession" WHERE id = ?
+	`, sessionID)
+	session, error := scanPlaySession(row)
+	if error == sql.ErrNoRows {
+		return nil, nil
+	}
+	if error != nil {
+		return nil, error
+	}
+	return session, nil
+}
+
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
 func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []models.PlaySession, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId
+		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
 	`, gameID)
 	if err != nil {
@@ -264,6 +313,30 @@ func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID
 // DeletePlaySession はセッションを削除する。
 func (repository *Repository) DeletePlaySession(ctx context.Context, sessionID string) error {
 	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE id = ?`, sessionID)
+	return error
+}
+
+// DeletePlaySessionsByGame はゲームID配下のセッションを削除する。
+func (repository *Repository) DeletePlaySessionsByGame(ctx context.Context, gameID string) error {
+	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE gameId = ?`, gameID)
+	return error
+}
+
+// UpsertPlaySessionSync はID指定でセッションを追加/更新する。
+func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			gameId = excluded.gameId,
+			playedAt = excluded.playedAt,
+			duration = excluded.duration,
+			sessionName = excluded.sessionName,
+			chapterId = excluded.chapterId,
+			uploadId = excluded.uploadId,
+			updatedAt = excluded.updatedAt
+	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.SessionName,
+		session.ChapterID, session.UploadID, session.UpdatedAt)
 	return error
 }
 
@@ -541,6 +614,7 @@ func scanGame(row scanner) (*models.Game, error) {
 		&game.ExePath,
 		&saveFolderPath,
 		&game.CreatedAt,
+		&game.UpdatedAt,
 		&game.PlayStatus,
 		&game.TotalPlayTime,
 		&lastPlayed,
@@ -587,6 +661,7 @@ func scanPlaySession(row scanner) (*models.PlaySession, error) {
 		&sessionName,
 		&chapterID,
 		&uploadID,
+		&session.UpdatedAt,
 	)
 	if error != nil {
 		return nil, error
@@ -642,7 +717,7 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 // findLatestGame は直近作成のゲームを取得する。
 func (repository *Repository) findLatestGame(ctx context.Context, title string, exePath string) (*models.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt,
+		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
 	`, title, exePath)
@@ -661,7 +736,7 @@ func (repository *Repository) findLatestChapter(ctx context.Context, gameID stri
 // findLatestPlaySession は直近のプレイセッションを取得する。
 func (repository *Repository) findLatestPlaySession(ctx context.Context, gameID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId
+		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1
 	`, gameID)
 	return scanPlaySession(row)

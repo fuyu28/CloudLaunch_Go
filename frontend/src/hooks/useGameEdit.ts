@@ -31,6 +31,7 @@
 import { useState, useCallback, useMemo } from "react"
 
 import { handleApiError, showSuccessToast } from "@renderer/utils/errorHandler"
+import { UNCONFIGURED_EXE_PATH } from "@renderer/constants/game"
 
 import type { GameType, InputGameData } from "src/types/game"
 import type { ApiResult } from "src/types/result"
@@ -95,7 +96,7 @@ export function useGameEdit(
       title,
       publisher,
       imagePath,
-      exePath,
+      exePath: exePath === UNCONFIGURED_EXE_PATH ? "" : exePath,
       saveFolderPath,
       playStatus
     }
@@ -193,6 +194,11 @@ export function useGameEdit(
    */
   const handleLaunchGame = useCallback(async (): Promise<void> => {
     if (!game) return
+
+    if (!game.exePath || game.exePath === UNCONFIGURED_EXE_PATH) {
+      handleApiError({ success: false, message: "実行ファイルのパスが未設定です" })
+      return
+    }
 
     setIsLaunching(true)
 

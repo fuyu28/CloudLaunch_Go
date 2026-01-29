@@ -44,6 +44,9 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 		service.logger.Error("セッション作成に失敗", "error", error)
 		return result.ErrorResult[*models.PlaySession]("セッション作成に失敗しました", error.Error())
 	}
+	if created != nil {
+		_ = service.repository.TouchGameUpdatedAt(ctx, created.GameID)
+	}
 	return result.OkResult(created)
 }
 
@@ -64,9 +67,17 @@ func (service *SessionService) DeleteSession(ctx context.Context, sessionID stri
 		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
 
+	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
+	if error != nil {
+		service.logger.Error("セッション取得に失敗", "error", error)
+		return result.ErrorResult[bool]("セッション取得に失敗しました", error.Error())
+	}
 	if error := service.repository.DeletePlaySession(ctx, trimmedID); error != nil {
 		service.logger.Error("セッション削除に失敗", "error", error)
 		return result.ErrorResult[bool]("セッション削除に失敗しました", error.Error())
+	}
+	if session != nil {
+		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
 	}
 	return result.OkResult(true)
 }
@@ -77,9 +88,17 @@ func (service *SessionService) UpdateSessionChapter(ctx context.Context, session
 	if !ok {
 		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
+	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
+	if error != nil {
+		service.logger.Error("セッション取得に失敗", "error", error)
+		return result.ErrorResult[bool]("セッション取得に失敗しました", error.Error())
+	}
 	if error := service.repository.UpdatePlaySessionChapter(ctx, trimmedID, chapterID); error != nil {
 		service.logger.Error("セッション章更新に失敗", "error", error)
 		return result.ErrorResult[bool]("セッション章更新に失敗しました", error.Error())
+	}
+	if session != nil {
+		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
 	}
 	return result.OkResult(true)
 }
@@ -94,9 +113,17 @@ func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID 
 	if !ok {
 		return result.ErrorResult[bool]("セッション名が不正です", detail)
 	}
+	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
+	if error != nil {
+		service.logger.Error("セッション取得に失敗", "error", error)
+		return result.ErrorResult[bool]("セッション取得に失敗しました", error.Error())
+	}
 	if error := service.repository.UpdatePlaySessionName(ctx, trimmedID, trimmedName); error != nil {
 		service.logger.Error("セッション名更新に失敗", "error", error)
 		return result.ErrorResult[bool]("セッション名更新に失敗しました", error.Error())
+	}
+	if session != nil {
+		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
 	}
 	return result.OkResult(true)
 }

@@ -29,6 +29,7 @@ type App struct {
 	UploadService     *services.UploadService
 	CredentialService *services.CredentialService
 	CloudService      *services.CloudService
+	CloudSyncService  *services.CloudSyncService
 	ProcessMonitor    *services.ProcessMonitorService
 	dbConnection      *sql.DB
 	autoTracking      bool
@@ -64,6 +65,10 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, error
 	}
 
+	cloudService := services.NewCloudService(cfg, credentialStore, logger)
+	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
+	processMonitor := services.NewProcessMonitorService(repository, logger, cloudSync)
+
 	app := &App{
 		Config:            cfg,
 		Logger:            logger,
@@ -75,8 +80,9 @@ func NewApp(ctx context.Context) (*App, error) {
 		MemoFiles:         memoFiles,
 		UploadService:     services.NewUploadService(repository, logger),
 		CredentialService: services.NewCredentialService(credentialStore, logger),
-		CloudService:      services.NewCloudService(cfg, credentialStore, logger),
-		ProcessMonitor:    services.NewProcessMonitorService(repository, logger),
+		CloudService:      cloudService,
+		CloudSyncService:  cloudSync,
+		ProcessMonitor:    processMonitor,
 		dbConnection:      connection,
 		autoTracking:      true,
 		isMonitoring:      false,

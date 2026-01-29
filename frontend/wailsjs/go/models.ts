@@ -809,6 +809,40 @@ export namespace result {
 		    return a;
 		}
 	}
+	export class ApiResult__CloudLaunch_Go_internal_services_CloudSyncSummary_ {
+	    success: boolean;
+	    data?: services.CloudSyncSummary;
+	    error?: ApiError;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApiResult__CloudLaunch_Go_internal_services_CloudSyncSummary_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], services.CloudSyncSummary);
+	        this.error = this.convertValues(source["error"], ApiError);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ApiResult__CloudLaunch_Go_internal_storage_CloudMetadata_ {
 	    success: boolean;
 	    data?: storage.CloudMetadata;
@@ -1508,6 +1542,30 @@ export namespace services {
 	        this.Endpoint = source["Endpoint"];
 	    }
 	}
+	export class CloudSyncSummary {
+	    uploadedGames: number;
+	    downloadedGames: number;
+	    uploadedSessions: number;
+	    downloadedSessions: number;
+	    uploadedImages: number;
+	    downloadedImages: number;
+	    skippedGames: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CloudSyncSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uploadedGames = source["uploadedGames"];
+	        this.downloadedGames = source["downloadedGames"];
+	        this.uploadedSessions = source["uploadedSessions"];
+	        this.downloadedSessions = source["downloadedSessions"];
+	        this.uploadedImages = source["uploadedImages"];
+	        this.downloadedImages = source["downloadedImages"];
+	        this.skippedGames = source["skippedGames"];
+	    }
+	}
 	export class GameInput {
 	    Title: string;
 	    Publisher: string;
@@ -1667,10 +1725,15 @@ export namespace storage {
 	    id: string;
 	    title: string;
 	    publisher: string;
-	    imageKey: string;
-	    totalPlayTime: number;
+	    imageKey?: string;
 	    playStatus: string;
-	    tags: string[];
+	    totalPlayTime: number;
+	    lastPlayed?: time.Time;
+	    clearedAt?: time.Time;
+	    currentChapter?: string;
+	    createdAt: time.Time;
+	    updatedAt: time.Time;
+	    sessions: CloudSessionRecord[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CloudGameMetadata(source);
@@ -1682,12 +1745,75 @@ export namespace storage {
 	        this.title = source["title"];
 	        this.publisher = source["publisher"];
 	        this.imageKey = source["imageKey"];
-	        this.totalPlayTime = source["totalPlayTime"];
 	        this.playStatus = source["playStatus"];
-	        this.tags = source["tags"];
+	        this.totalPlayTime = source["totalPlayTime"];
+	        this.lastPlayed = this.convertValues(source["lastPlayed"], time.Time);
+	        this.clearedAt = this.convertValues(source["clearedAt"], time.Time);
+	        this.currentChapter = source["currentChapter"];
+	        this.createdAt = this.convertValues(source["createdAt"], time.Time);
+	        this.updatedAt = this.convertValues(source["updatedAt"], time.Time);
+	        this.sessions = this.convertValues(source["sessions"], CloudSessionRecord);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CloudSessionRecord {
+	    id: string;
+	    playedAt: time.Time;
+	    duration: number;
+	    sessionName?: string;
+	    updatedAt: time.Time;
+	
+	    static createFrom(source: any = {}) {
+	        return new CloudSessionRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.playedAt = this.convertValues(source["playedAt"], time.Time);
+	        this.duration = source["duration"];
+	        this.sessionName = source["sessionName"];
+	        this.updatedAt = this.convertValues(source["updatedAt"], time.Time);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class CloudMetadata {
+	    version: number;
+	    updatedAt: time.Time;
 	    games: CloudGameMetadata[];
 	
 	    static createFrom(source: any = {}) {
@@ -1696,6 +1822,8 @@ export namespace storage {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.updatedAt = this.convertValues(source["updatedAt"], time.Time);
 	        this.games = this.convertValues(source["games"], CloudGameMetadata);
 	    }
 	
@@ -1752,4 +1880,3 @@ export namespace time {
 	}
 
 }
-

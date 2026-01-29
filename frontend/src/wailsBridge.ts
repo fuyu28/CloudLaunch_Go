@@ -30,6 +30,8 @@ import {
   DownloadMemoFromCloud,
   UploadMemoToCloud,
   SyncMemosFromCloud,
+  SyncAllGames,
+  SyncGame,
   GetCloudFileDetails,
   GetCloudFileDetailsByGame,
   GetDirectoryTree,
@@ -54,6 +56,7 @@ import {
   SelectFile,
   SelectFolder,
   UpdateAutoTracking,
+  UpdateOfflineMode,
   UpdateUploadConcurrency,
   UpdateGame,
   UpdateMemo,
@@ -73,6 +76,7 @@ export type WindowApi = {
   }
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>
+    updateOfflineMode: (enabled: boolean) => Promise<ApiResult<void>>
     updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>
   }
   file: {
@@ -144,6 +148,10 @@ export type WindowApi = {
     getMonitoringStatus: () => Promise<MonitoringGameStatus[]>
     getProcessSnapshot: () => Promise<{ source: string; items: Array<{ name: string; pid: number; cmd: string; normalizedName: string; normalizedCmd: string }> }>
   }
+  cloudSync: {
+    syncAllGames: () => Promise<ApiResult<{ uploadedGames: number; downloadedGames: number; uploadedSessions: number; downloadedSessions: number; uploadedImages: number; downloadedImages: number; skippedGames: number }>>
+    syncGame: (gameId: string) => Promise<ApiResult<{ uploadedGames: number; downloadedGames: number; uploadedSessions: number; downloadedSessions: number; uploadedImages: number; downloadedImages: number; skippedGames: number }>>
+  }
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>
   }
@@ -172,6 +180,10 @@ export const createWailsBridge = (): WindowApi => {
     settings: {
       updateAutoTracking: async (enabled) => {
         const result = await UpdateAutoTracking(enabled)
+        return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      updateOfflineMode: async (enabled) => {
+        const result = await UpdateOfflineMode(enabled)
         return result.success ? { success: true } : { success: false, message: result.error?.message ?? "エラー" }
       },
       updateUploadConcurrency: async (value) => {
@@ -503,6 +515,20 @@ export const createWailsBridge = (): WindowApi => {
             normalizedCmd: string
           }>
         }
+      }
+    },
+    cloudSync: {
+      syncAllGames: async () => {
+        const result = await SyncAllGames()
+        return result.success
+          ? { success: true, data: result.data as { uploadedGames: number; downloadedGames: number; uploadedSessions: number; downloadedSessions: number; uploadedImages: number; downloadedImages: number; skippedGames: number } }
+          : { success: false, message: result.error?.message ?? "エラー" }
+      },
+      syncGame: async (gameId) => {
+        const result = await SyncGame(gameId)
+        return result.success
+          ? { success: true, data: result.data as { uploadedGames: number; downloadedGames: number; uploadedSessions: number; downloadedSessions: number; uploadedImages: number; downloadedImages: number; skippedGames: number } }
+          : { success: false, message: result.error?.message ?? "エラー" }
       }
     },
     game: {
