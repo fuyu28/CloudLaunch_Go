@@ -62,11 +62,11 @@ type UploadInput struct {
 
 // validateUploadInput はアップロード入力の基本チェックを行う。
 func validateUploadInput(input UploadInput) error {
-	if strings.TrimSpace(input.GameID) == "" {
-		return errors.New("gameIDが空です")
+	if _, detail, ok := requireNonEmpty(input.GameID, "gameID"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.Comment) == "" {
-		return errors.New("commentが空です")
+	if _, detail, ok := requireNonEmpty(input.Comment, "comment"); !ok {
+		return errors.New(detail)
 	}
 	return nil
 }

@@ -59,11 +59,12 @@ func (service *SessionService) ListSessionsByGame(ctx context.Context, gameID st
 
 // DeleteSession はセッションを削除する。
 func (service *SessionService) DeleteSession(ctx context.Context, sessionID string) result.ApiResult[bool] {
-	if strings.TrimSpace(sessionID) == "" {
-		return result.ErrorResult[bool]("セッションIDが不正です", "sessionIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
+	if !ok {
+		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
 
-	if error := service.repository.DeletePlaySession(ctx, strings.TrimSpace(sessionID)); error != nil {
+	if error := service.repository.DeletePlaySession(ctx, trimmedID); error != nil {
 		service.logger.Error("セッション削除に失敗", "error", error)
 		return result.ErrorResult[bool]("セッション削除に失敗しました", error.Error())
 	}
@@ -72,10 +73,11 @@ func (service *SessionService) DeleteSession(ctx context.Context, sessionID stri
 
 // UpdateSessionChapter はセッションの章を更新する。
 func (service *SessionService) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[bool] {
-	if strings.TrimSpace(sessionID) == "" {
-		return result.ErrorResult[bool]("セッションIDが不正です", "sessionIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
+	if !ok {
+		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
-	if error := service.repository.UpdatePlaySessionChapter(ctx, strings.TrimSpace(sessionID), chapterID); error != nil {
+	if error := service.repository.UpdatePlaySessionChapter(ctx, trimmedID, chapterID); error != nil {
 		service.logger.Error("セッション章更新に失敗", "error", error)
 		return result.ErrorResult[bool]("セッション章更新に失敗しました", error.Error())
 	}
@@ -84,13 +86,15 @@ func (service *SessionService) UpdateSessionChapter(ctx context.Context, session
 
 // UpdateSessionName はセッション名を更新する。
 func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[bool] {
-	if strings.TrimSpace(sessionID) == "" {
-		return result.ErrorResult[bool]("セッションIDが不正です", "sessionIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
+	if !ok {
+		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
-	if strings.TrimSpace(sessionName) == "" {
-		return result.ErrorResult[bool]("セッション名が不正です", "sessionNameが空です")
+	trimmedName, detail, ok := requireNonEmpty(sessionName, "sessionName")
+	if !ok {
+		return result.ErrorResult[bool]("セッション名が不正です", detail)
 	}
-	if error := service.repository.UpdatePlaySessionName(ctx, strings.TrimSpace(sessionID), strings.TrimSpace(sessionName)); error != nil {
+	if error := service.repository.UpdatePlaySessionName(ctx, trimmedID, trimmedName); error != nil {
 		service.logger.Error("セッション名更新に失敗", "error", error)
 		return result.ErrorResult[bool]("セッション名更新に失敗しました", error.Error())
 	}
@@ -109,8 +113,8 @@ type SessionInput struct {
 
 // validateSessionInput はセッション入力を検証する。
 func validateSessionInput(input SessionInput) error {
-	if strings.TrimSpace(input.GameID) == "" {
-		return errors.New("gameIDが空です")
+	if _, detail, ok := requireNonEmpty(input.GameID, "gameID"); !ok {
+		return errors.New(detail)
 	}
 	if input.PlayedAt.IsZero() {
 		return errors.New("playedAtが空です")

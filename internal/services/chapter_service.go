@@ -55,11 +55,12 @@ func (service *ChapterService) CreateChapter(ctx context.Context, input ChapterI
 
 // UpdateChapter は章を更新する。
 func (service *ChapterService) UpdateChapter(ctx context.Context, chapterID string, input ChapterUpdateInput) result.ApiResult[*models.Chapter] {
-	if strings.TrimSpace(chapterID) == "" {
-		return result.ErrorResult[*models.Chapter]("章IDが不正です", "chapterIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(chapterID, "chapterID")
+	if !ok {
+		return result.ErrorResult[*models.Chapter]("章IDが不正です", detail)
 	}
 
-	chapter, error := service.repository.GetChapterByID(ctx, strings.TrimSpace(chapterID))
+	chapter, error := service.repository.GetChapterByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("章取得に失敗", "error", error)
 		return result.ErrorResult[*models.Chapter]("章取得に失敗しました", error.Error())
@@ -81,11 +82,12 @@ func (service *ChapterService) UpdateChapter(ctx context.Context, chapterID stri
 
 // DeleteChapter は章を削除する。
 func (service *ChapterService) DeleteChapter(ctx context.Context, chapterID string) result.ApiResult[bool] {
-	if strings.TrimSpace(chapterID) == "" {
-		return result.ErrorResult[bool]("章IDが不正です", "chapterIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(chapterID, "chapterID")
+	if !ok {
+		return result.ErrorResult[bool]("章IDが不正です", detail)
 	}
 
-	if error := service.repository.DeleteChapter(ctx, strings.TrimSpace(chapterID)); error != nil {
+	if error := service.repository.DeleteChapter(ctx, trimmedID); error != nil {
 		service.logger.Error("章削除に失敗", "error", error)
 		return result.ErrorResult[bool]("章削除に失敗しました", error.Error())
 	}
@@ -94,12 +96,13 @@ func (service *ChapterService) DeleteChapter(ctx context.Context, chapterID stri
 
 // UpdateChapterOrders は章の並び順を更新する。
 func (service *ChapterService) UpdateChapterOrders(ctx context.Context, gameID string, orders []ChapterOrderUpdate) result.ApiResult[bool] {
-	if strings.TrimSpace(gameID) == "" {
-		return result.ErrorResult[bool]("ゲームIDが不正です", "gameIDが空です")
+	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
 	for _, order := range orders {
-		if strings.TrimSpace(order.ID) == "" {
-			return result.ErrorResult[bool]("章IDが不正です", "chapterIDが空です")
+		if _, detail, ok := requireNonEmpty(order.ID, "chapterID"); !ok {
+			return result.ErrorResult[bool]("章IDが不正です", detail)
 		}
 		if order.Order < 0 {
 			return result.ErrorResult[bool]("章順序が不正です", "orderが不正です")
@@ -114,10 +117,11 @@ func (service *ChapterService) UpdateChapterOrders(ctx context.Context, gameID s
 
 // GetChapterStats は章の統計を取得する。
 func (service *ChapterService) GetChapterStats(ctx context.Context, gameID string) result.ApiResult[[]models.ChapterStat] {
-	if strings.TrimSpace(gameID) == "" {
-		return result.ErrorResult[[]models.ChapterStat]("ゲームIDが不正です", "gameIDが空です")
+	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[[]models.ChapterStat]("ゲームIDが不正です", detail)
 	}
-	stats, error := service.repository.GetChapterStats(ctx, strings.TrimSpace(gameID))
+	stats, error := service.repository.GetChapterStats(ctx, trimmedGameID)
 	if error != nil {
 		service.logger.Error("章統計取得に失敗", "error", error)
 		return result.ErrorResult[[]models.ChapterStat]("章統計取得に失敗しました", error.Error())
@@ -127,13 +131,15 @@ func (service *ChapterService) GetChapterStats(ctx context.Context, gameID strin
 
 // SetCurrentChapter はゲームの現在章を設定する。
 func (service *ChapterService) SetCurrentChapter(ctx context.Context, gameID string, chapterID string) result.ApiResult[bool] {
-	if strings.TrimSpace(gameID) == "" {
-		return result.ErrorResult[bool]("ゲームIDが不正です", "gameIDが空です")
+	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
-	if strings.TrimSpace(chapterID) == "" {
-		return result.ErrorResult[bool]("章IDが不正です", "chapterIDが空です")
+	trimmedChapterID, detail, ok := requireNonEmpty(chapterID, "chapterID")
+	if !ok {
+		return result.ErrorResult[bool]("章IDが不正です", detail)
 	}
-	game, error := service.repository.GetGameByID(ctx, strings.TrimSpace(gameID))
+	game, error := service.repository.GetGameByID(ctx, trimmedGameID)
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
 		return result.ErrorResult[bool]("ゲーム取得に失敗しました", error.Error())
@@ -141,7 +147,7 @@ func (service *ChapterService) SetCurrentChapter(ctx context.Context, gameID str
 	if game == nil {
 		return result.ErrorResult[bool]("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
-	game.CurrentChapter = &chapterID
+	game.CurrentChapter = &trimmedChapterID
 	if _, error := service.repository.UpdateGame(ctx, *game); error != nil {
 		service.logger.Error("現在章更新に失敗", "error", error)
 		return result.ErrorResult[bool]("現在章更新に失敗しました", error.Error())
@@ -170,11 +176,11 @@ type ChapterOrderUpdate struct {
 
 // validateChapterInput は章入力の基本チェックを行う。
 func validateChapterInput(input ChapterInput) error {
-	if strings.TrimSpace(input.Name) == "" {
-		return errors.New("nameが空です")
+	if _, detail, ok := requireNonEmpty(input.Name, "name"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.GameID) == "" {
-		return errors.New("gameIDが空です")
+	if _, detail, ok := requireNonEmpty(input.GameID, "gameID"); !ok {
+		return errors.New(detail)
 	}
 	if input.Order < 0 {
 		return errors.New("orderが不正です")

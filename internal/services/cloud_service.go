@@ -89,11 +89,11 @@ func (service *CloudService) LoadCloudMetadata(
 
 // validateCloudInput はクラウドアップロード入力の基本チェックを行う。
 func validateCloudInput(credentialKey string, folderPath string) error {
-	if strings.TrimSpace(credentialKey) == "" {
-		return errors.New("credentialKeyが空です")
+	if _, detail, ok := requireNonEmpty(credentialKey, "credentialKey"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(folderPath) == "" {
-		return errors.New("folderPathが空です")
+	if _, detail, ok := requireNonEmpty(folderPath, "folderPath"); !ok {
+		return errors.New(detail)
 	}
 	return nil
 }

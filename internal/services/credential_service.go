@@ -55,10 +55,11 @@ func (service *CredentialService) LoadCredential(ctx context.Context, key string
 
 // DeleteCredential は認証情報を削除する。
 func (service *CredentialService) DeleteCredential(ctx context.Context, key string) result.ApiResult[bool] {
-	if strings.TrimSpace(key) == "" {
-		return result.ErrorResult[bool]("キーが不正です", "keyが空です")
+	trimmedKey, detail, ok := requireNonEmpty(key, "key")
+	if !ok {
+		return result.ErrorResult[bool]("キーが不正です", detail)
 	}
-	if error := service.store.Delete(ctx, strings.TrimSpace(key)); error != nil {
+	if error := service.store.Delete(ctx, trimmedKey); error != nil {
 		service.logger.Error("認証情報削除に失敗", "error", error)
 		return result.ErrorResult[bool]("認証情報削除に失敗しました", error.Error())
 	}
@@ -84,20 +85,20 @@ type CredentialOutput struct {
 
 // validateCredentialInput は認証情報入力の基本チェックを行う。
 func validateCredentialInput(input CredentialInput) error {
-	if strings.TrimSpace(input.BucketName) == "" {
-		return errors.New("bucketNameが空です")
+	if _, detail, ok := requireNonEmpty(input.BucketName, "bucketName"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.Region) == "" {
-		return errors.New("regionが空です")
+	if _, detail, ok := requireNonEmpty(input.Region, "region"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.Endpoint) == "" {
-		return errors.New("endpointが空です")
+	if _, detail, ok := requireNonEmpty(input.Endpoint, "endpoint"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.AccessKeyID) == "" {
-		return errors.New("accessKeyIDが空です")
+	if _, detail, ok := requireNonEmpty(input.AccessKeyID, "accessKeyID"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.SecretAccessKey) == "" {
-		return errors.New("secretAccessKeyが空です")
+	if _, detail, ok := requireNonEmpty(input.SecretAccessKey, "secretAccessKey"); !ok {
+		return errors.New(detail)
 	}
 	return nil
 }

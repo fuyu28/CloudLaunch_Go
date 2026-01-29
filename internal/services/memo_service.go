@@ -55,11 +55,12 @@ func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) res
 
 // UpdateMemo はメモを更新する。
 func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input MemoUpdateInput) result.ApiResult[*models.Memo] {
-	if strings.TrimSpace(memoID) == "" {
-		return result.ErrorResult[*models.Memo]("メモIDが不正です", "memoIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
+	if !ok {
+		return result.ErrorResult[*models.Memo]("メモIDが不正です", detail)
 	}
 
-	memo, error := service.repository.GetMemoByID(ctx, strings.TrimSpace(memoID))
+	memo, error := service.repository.GetMemoByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("メモ取得に失敗", "error", error)
 		return result.ErrorResult[*models.Memo]("メモ取得に失敗しました", error.Error())
@@ -93,11 +94,12 @@ func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input
 
 // GetMemoByID はメモIDでメモを取得する。
 func (service *MemoService) GetMemoByID(ctx context.Context, memoID string) result.ApiResult[*models.Memo] {
-	if strings.TrimSpace(memoID) == "" {
-		return result.ErrorResult[*models.Memo]("メモIDが不正です", "memoIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
+	if !ok {
+		return result.ErrorResult[*models.Memo]("メモIDが不正です", detail)
 	}
 
-	memo, error := service.repository.GetMemoByID(ctx, strings.TrimSpace(memoID))
+	memo, error := service.repository.GetMemoByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("メモ取得に失敗", "error", error)
 		return result.ErrorResult[*models.Memo]("メモ取得に失敗しました", error.Error())
@@ -127,11 +129,12 @@ func (service *MemoService) ListAllMemos(ctx context.Context) result.ApiResult[[
 
 // DeleteMemo はメモを削除する。
 func (service *MemoService) DeleteMemo(ctx context.Context, memoID string) result.ApiResult[bool] {
-	if strings.TrimSpace(memoID) == "" {
-		return result.ErrorResult[bool]("メモIDが不正です", "memoIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
+	if !ok {
+		return result.ErrorResult[bool]("メモIDが不正です", detail)
 	}
 
-	memo, error := service.repository.GetMemoByID(ctx, strings.TrimSpace(memoID))
+	memo, error := service.repository.GetMemoByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("メモ取得に失敗", "error", error)
 		return result.ErrorResult[bool]("メモ取得に失敗しました", error.Error())
@@ -140,7 +143,7 @@ func (service *MemoService) DeleteMemo(ctx context.Context, memoID string) resul
 		return result.ErrorResult[bool]("メモが見つかりません", "指定されたIDが存在しません")
 	}
 
-	if error := service.repository.DeleteMemo(ctx, strings.TrimSpace(memoID)); error != nil {
+	if error := service.repository.DeleteMemo(ctx, trimmedID); error != nil {
 		service.logger.Error("メモ削除に失敗", "error", error)
 		return result.ErrorResult[bool]("メモ削除に失敗しました", error.Error())
 	}
@@ -168,14 +171,14 @@ type MemoUpdateInput struct {
 
 // validateMemoInput はメモ入力の基本チェックを行う。
 func validateMemoInput(input MemoInput) error {
-	if strings.TrimSpace(input.Title) == "" {
-		return errors.New("titleが空です")
+	if _, detail, ok := requireNonEmpty(input.Title, "title"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.Content) == "" {
-		return errors.New("contentが空です")
+	if _, detail, ok := requireNonEmpty(input.Content, "content"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.GameID) == "" {
-		return errors.New("gameIDが空です")
+	if _, detail, ok := requireNonEmpty(input.GameID, "gameID"); !ok {
+		return errors.New(detail)
 	}
 	return nil
 }

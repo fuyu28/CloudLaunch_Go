@@ -86,11 +86,12 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) res
 
 // UpdateGame はゲーム情報を更新する。
 func (service *GameService) UpdateGame(ctx context.Context, gameID string, input GameUpdateInput) result.ApiResult[*models.Game] {
-	if strings.TrimSpace(gameID) == "" {
-		return result.ErrorResult[*models.Game]("ゲームIDが不正です", "gameIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[*models.Game]("ゲームIDが不正です", detail)
 	}
 
-	current, error := service.repository.GetGameByID(ctx, strings.TrimSpace(gameID))
+	current, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
 		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
@@ -120,7 +121,12 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 
 // UpdatePlayTime はプレイ時間と最終プレイ日時を更新する。
 func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
-	current, error := service.repository.GetGameByID(ctx, strings.TrimSpace(gameID))
+	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[*models.Game]("ゲームIDが不正です", detail)
+	}
+
+	current, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
 		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
@@ -142,11 +148,12 @@ func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, t
 
 // DeleteGame はゲームを削除する。
 func (service *GameService) DeleteGame(ctx context.Context, gameID string) result.ApiResult[bool] {
-	if strings.TrimSpace(gameID) == "" {
-		return result.ErrorResult[bool]("ゲームIDが不正です", "gameIDが空です")
+	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
 
-	if error := service.repository.DeleteGame(ctx, strings.TrimSpace(gameID)); error != nil {
+	if error := service.repository.DeleteGame(ctx, trimmedID); error != nil {
 		service.logger.Error("ゲーム削除に失敗", "error", error)
 		return result.ErrorResult[bool]("ゲーム削除に失敗しました", error.Error())
 	}
@@ -176,14 +183,14 @@ type GameUpdateInput struct {
 
 // validateGameInput はゲーム作成入力の簡易検証を行う。
 func validateGameInput(input GameInput) error {
-	if strings.TrimSpace(input.Title) == "" {
-		return errors.New("titleが空です")
+	if _, detail, ok := requireNonEmpty(input.Title, "title"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.Publisher) == "" {
-		return errors.New("publisherが空です")
+	if _, detail, ok := requireNonEmpty(input.Publisher, "publisher"); !ok {
+		return errors.New(detail)
 	}
-	if strings.TrimSpace(input.ExePath) == "" {
-		return errors.New("exePathが空です")
+	if _, detail, ok := requireNonEmpty(input.ExePath, "exePath"); !ok {
+		return errors.New(detail)
 	}
 	return nil
 }
