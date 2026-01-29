@@ -8,10 +8,7 @@ import (
 
 // GetMemoRootDir はメモのルートディレクトリを返す。
 func (app *App) GetMemoRootDir() result.ApiResult[string] {
-	if app.MemoFiles != nil {
-		return result.OkResult(app.MemoFiles.RootDir())
-	}
-	manager := memo.NewFileManager(app.Config.AppDataDir)
+	manager := app.memoManager()
 	return result.OkResult(manager.RootDir())
 }
 
@@ -24,18 +21,19 @@ func (app *App) GetMemoFilePath(memoID string) result.ApiResult[string] {
 	if memoData == nil {
 		return result.ErrorResult[string]("メモが見つかりません", "指定されたIDが存在しません")
 	}
-	if app.MemoFiles != nil {
-		return result.OkResult(app.MemoFiles.MemoFilePath(memoData.GameID, memoData.ID, memoData.Title))
-	}
-	manager := memo.NewFileManager(app.Config.AppDataDir)
+	manager := app.memoManager()
 	return result.OkResult(manager.MemoFilePath(memoData.GameID, memoData.ID, memoData.Title))
 }
 
 // GetGameMemoDir はゲームのメモディレクトリを返す。
 func (app *App) GetGameMemoDir(gameID string) result.ApiResult[string] {
-	if app.MemoFiles != nil {
-		return result.OkResult(app.MemoFiles.GameDir(gameID))
-	}
-	manager := memo.NewFileManager(app.Config.AppDataDir)
+	manager := app.memoManager()
 	return result.OkResult(manager.GameDir(gameID))
+}
+
+func (app *App) memoManager() *memo.FileManager {
+	if app.MemoFiles != nil {
+		return app.MemoFiles
+	}
+	return memo.NewFileManager(app.Config.AppDataDir)
 }
