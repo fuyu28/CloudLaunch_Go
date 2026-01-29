@@ -436,7 +436,11 @@ func loadImagePayload(path string) ([]byte, string, string, error) {
 		if err != nil {
 			return nil, "", "", err
 		}
-		defer response.Body.Close()
+		defer func() {
+			if closeErr := response.Body.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
+		}()
 		payload, err := io.ReadAll(response.Body)
 		if err != nil {
 			return nil, "", "", err
@@ -500,10 +504,7 @@ func isNotFoundError(err error) bool {
 		}
 	}
 	var noSuchKey *types.NoSuchKey
-	if errors.As(err, &noSuchKey) {
-		return true
-	}
-	return false
+	return errors.As(err, &noSuchKey)
 }
 
 func mapToSortedGames(source map[string]storage.CloudGameMetadata) []storage.CloudGameMetadata {
