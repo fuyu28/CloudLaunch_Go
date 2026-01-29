@@ -26,26 +26,30 @@ type CloudMetadata struct {
 }
 
 // LoadMetadata はクラウド上のメタ情報を取得する。
-func LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*CloudMetadata, error) {
-	response, error := client.GetObject(ctx, &s3.GetObjectInput{
+func LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (metadata *CloudMetadata, err error) {
+	response, err := client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
 	})
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	payload, error := io.ReadAll(response.Body)
-	if error != nil {
-		return nil, error
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	var metadata CloudMetadata
-	if error := json.Unmarshal(payload, &metadata); error != nil {
-		return nil, error
+	var parsed CloudMetadata
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		return nil, err
 	}
-	return &metadata, nil
+	return &parsed, nil
 }
 
 // SaveMetadata はメタ情報をクラウドに保存する。

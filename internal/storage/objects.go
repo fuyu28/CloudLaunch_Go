@@ -119,10 +119,13 @@ func DownloadPrefix(ctx context.Context, client *s3.Client, bucket string, prefi
 		if error != nil {
 			return error
 		}
-		content, error := io.ReadAll(response.Body)
-		_ = response.Body.Close()
-		if error != nil {
-			return error
+		content, readErr := io.ReadAll(response.Body)
+		closeErr := response.Body.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if closeErr != nil {
+			return closeErr
 		}
 		if error := os.WriteFile(targetPath, content, 0o600); error != nil {
 			return error
@@ -132,14 +135,18 @@ func DownloadPrefix(ctx context.Context, client *s3.Client, bucket string, prefi
 }
 
 // DownloadObject は単一オブジェクトをダウンロードする。
-func DownloadObject(ctx context.Context, client *s3.Client, bucket string, key string) ([]byte, error) {
-	response, error := client.GetObject(ctx, &s3.GetObjectInput{
+func DownloadObject(ctx context.Context, client *s3.Client, bucket string, key string) (data []byte, err error) {
+	response, err := client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
 	})
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 	return io.ReadAll(response.Body)
 }

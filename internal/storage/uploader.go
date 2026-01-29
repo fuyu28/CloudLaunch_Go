@@ -20,25 +20,29 @@ type UploadSummary struct {
 }
 
 // UploadFile は単一ファイルをアップロードする。
-func UploadFile(ctx context.Context, client *s3.Client, bucket string, key string, filePath string) (int64, error) {
-	file, error := os.Open(filePath)
-	if error != nil {
-		return 0, error
+func UploadFile(ctx context.Context, client *s3.Client, bucket string, key string, filePath string) (size int64, err error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, err
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	info, error := file.Stat()
-	if error != nil {
-		return 0, error
+	info, err := file.Stat()
+	if err != nil {
+		return 0, err
 	}
 
-	_, error = client.PutObject(ctx, &s3.PutObjectInput{
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
 		Body:   file,
 	})
-	if error != nil {
-		return 0, error
+	if err != nil {
+		return 0, err
 	}
 
 	return info.Size(), nil
