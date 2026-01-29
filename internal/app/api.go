@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -353,14 +352,6 @@ func buildFileFilters(filters []FileFilterInput) []runtime.FileFilter {
 		})
 	}
 	return fileFilters
-}
-
-func fileURLFromPath(path string) string {
-	cleaned := filepath.ToSlash(path)
-	if strings.HasPrefix(cleaned, "/") {
-		return "file://" + cleaned
-	}
-	return "file:///" + cleaned
 }
 
 func openPath(path string) error {
