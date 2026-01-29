@@ -11,6 +11,8 @@ import (
 	"CloudLaunch_Go/internal/credentials"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/storage"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // CloudService はクラウドストレージ操作を提供する。
@@ -36,20 +38,9 @@ func (service *CloudService) UploadFolder(
 		return result.ErrorResult[storage.UploadSummary]("アップロード入力が不正です", error.Error())
 	}
 
-	credential, error := service.store.Load(ctx, strings.TrimSpace(credentialKey))
-	if error != nil {
-		service.logger.Error("認証情報取得に失敗", "error", error)
-		return result.ErrorResult[storage.UploadSummary]("認証情報取得に失敗しました", error.Error())
-	}
-	if credential == nil {
-		return result.ErrorResult[storage.UploadSummary]("認証情報が見つかりません", "credentialが空です")
-	}
-
-	cfg := resolveS3Config(service.config, credential)
-	client, error := storage.NewClient(ctx, cfg, *credential)
-	if error != nil {
-		service.logger.Error("S3クライアント作成に失敗", "error", error)
-		return result.ErrorResult[storage.UploadSummary]("S3クライアント作成に失敗しました", error.Error())
+	client, cfg, message, detail, ok := service.newClient(ctx, credentialKey)
+	if !ok {
+		return result.ErrorResult[storage.UploadSummary](message, detail)
 	}
 
 	summary, error := storage.UploadFolder(ctx, client, cfg.Bucket, folderPath, prefix)
@@ -66,20 +57,9 @@ func (service *CloudService) SaveCloudMetadata(
 	credentialKey string,
 	metadata storage.CloudMetadata,
 ) result.ApiResult[bool] {
-	credential, error := service.store.Load(ctx, strings.TrimSpace(credentialKey))
-	if error != nil {
-		service.logger.Error("認証情報取得に失敗", "error", error)
-		return result.ErrorResult[bool]("認証情報取得に失敗しました", error.Error())
-	}
-	if credential == nil {
-		return result.ErrorResult[bool]("認証情報が見つかりません", "credentialが空です")
-	}
-
-	cfg := resolveS3Config(service.config, credential)
-	client, error := storage.NewClient(ctx, cfg, *credential)
-	if error != nil {
-		service.logger.Error("S3クライアント作成に失敗", "error", error)
-		return result.ErrorResult[bool]("S3クライアント作成に失敗しました", error.Error())
+	client, cfg, message, detail, ok := service.newClient(ctx, credentialKey)
+	if !ok {
+		return result.ErrorResult[bool](message, detail)
 	}
 
 	if error := storage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, metadata); error != nil {
@@ -94,20 +74,9 @@ func (service *CloudService) LoadCloudMetadata(
 	ctx context.Context,
 	credentialKey string,
 ) result.ApiResult[*storage.CloudMetadata] {
-	credential, error := service.store.Load(ctx, strings.TrimSpace(credentialKey))
-	if error != nil {
-		service.logger.Error("認証情報取得に失敗", "error", error)
-		return result.ErrorResult[*storage.CloudMetadata]("認証情報取得に失敗しました", error.Error())
-	}
-	if credential == nil {
-		return result.ErrorResult[*storage.CloudMetadata]("認証情報が見つかりません", "credentialが空です")
-	}
-
-	cfg := resolveS3Config(service.config, credential)
-	client, error := storage.NewClient(ctx, cfg, *credential)
-	if error != nil {
-		service.logger.Error("S3クライアント作成に失敗", "error", error)
-		return result.ErrorResult[*storage.CloudMetadata]("S3クライアント作成に失敗しました", error.Error())
+	client, cfg, message, detail, ok := service.newClient(ctx, credentialKey)
+	if !ok {
+		return result.ErrorResult[*storage.CloudMetadata](message, detail)
 	}
 
 	metadata, error := storage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
@@ -137,6 +106,28 @@ func resolveS3Config(base config.Config, credential *credentials.Credential) sto
 		ForcePathStyle: base.S3ForcePathStyle,
 		UseTLS:         base.S3UseTLS,
 	}
+}
+
+func (service *CloudService) newClient(
+	ctx context.Context,
+	credentialKey string,
+) (*s3.Client, storage.S3Config, string, string, bool) {
+	credential, error := service.store.Load(ctx, strings.TrimSpace(credentialKey))
+	if error != nil {
+		service.logger.Error("認証情報取得に失敗", "error", error)
+		return nil, storage.S3Config{}, "認証情報取得に失敗しました", error.Error(), false
+	}
+	if credential == nil {
+		return nil, storage.S3Config{}, "認証情報が見つかりません", "credentialが空です", false
+	}
+
+	cfg := resolveS3Config(service.config, credential)
+	client, error := storage.NewClient(ctx, cfg, *credential)
+	if error != nil {
+		service.logger.Error("S3クライアント作成に失敗", "error", error)
+		return nil, cfg, "S3クライアント作成に失敗しました", error.Error(), false
+	}
+	return client, cfg, "", "", true
 }
 
 func firstNonEmpty(values ...string) string {
