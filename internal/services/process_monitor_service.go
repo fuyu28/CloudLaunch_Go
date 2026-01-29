@@ -5,12 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
-	"errors"
 	"io"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +40,12 @@ type ProcessInfo struct {
 	Name string
 	Pid  int
 	Cmd  string
+}
+
+type normalizedProcess struct {
+	info          ProcessInfo
+	normalized    string
+	normalizedCmd string
 }
 
 // ProcessMonitorService はゲームプロセス監視を提供する。
@@ -158,17 +162,7 @@ func (service *ProcessMonitorService) GetMonitoringStatus() []models.MonitoringG
 
 // GetProcessSnapshot は現在のプロセス一覧と正規化後の値を取得する。
 func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapshot {
-	processes, err := service.getProcessesNative()
-	source := "native"
-	if err != nil {
-		service.logger.Warn("ネイティブコマンドが失敗しました。フォールバックを使用します", "error", err)
-		processes, err = service.getProcessesFallback()
-		source = "fallback"
-		if err != nil {
-			service.logger.Error("フォールバックも失敗しました", "error", err)
-			processes = []ProcessInfo{}
-		}
-	}
+	processes, source := service.getProcesses()
 
 	items := make([]models.ProcessSnapshotItem, 0, len(processes))
 	for _, proc := range processes {
@@ -209,7 +203,7 @@ func (service *ProcessMonitorService) removeMonitoredGame(gameID string) {
 		duration := int64(now.Sub(*game.PlayStartTime).Seconds())
 		if duration > 0 {
 			game.AccumulatedTime += duration
-			service.saveSession(*game, duration, now)
+			service.saveSession(*game, now)
 		}
 	}
 	delete(service.monitoredGames, gameID)
@@ -217,32 +211,31 @@ func (service *ProcessMonitorService) removeMonitoredGame(gameID string) {
 }
 
 func (service *ProcessMonitorService) checkProcesses() {
-	processes, err := service.getProcessesNative()
-	if err != nil {
-		service.logger.Warn("ネイティブコマンドが失敗しました。フォールバックを使用します", "error", err)
-		processes, err = service.getProcessesFallback()
-		if err != nil {
-			service.logger.Error("フォールバックも失敗しました", "error", err)
-			processes = []ProcessInfo{}
-		}
-	}
+	processes, _ := service.getProcesses()
 
-	service.autoAddGamesFromDatabase(processes)
-
-	processMap := make(map[string][]ProcessInfo)
+	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
 	for _, proc := range processes {
 		if proc.Name == "" {
 			continue
 		}
-		name := normalizeProcessToken(proc.Name)
-		processMap[name] = append(processMap[name], proc)
+		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
+			info:          proc,
+			normalized:    normalizeProcessToken(proc.Name),
+			normalizedCmd: normalizeProcessToken(proc.Cmd),
+		})
+	}
+
+	service.autoAddGamesFromDatabase(processes, normalizedProcesses)
+
+	processMap := make(map[string][]normalizedProcess)
+	for _, proc := range normalizedProcesses {
+		processMap[proc.normalized] = append(processMap[proc.normalized], proc)
 	}
 
 	now := time.Now()
 	type pendingSession struct {
-		Game     MonitoringGame
-		Duration int64
-		EndedAt  time.Time
+		Game    MonitoringGame
+		EndedAt time.Time
 	}
 	sessionsToSave := make([]pendingSession, 0)
 	gameIDsToCleanup := make([]string, 0)
@@ -274,9 +267,8 @@ func (service *ProcessMonitorService) checkProcesses() {
 					if duration > 0 {
 						game.AccumulatedTime += duration
 						sessionsToSave = append(sessionsToSave, pendingSession{
-							Game:     *game,
-							Duration: duration,
-							EndedAt:  now,
+							Game:    *game,
+							EndedAt: now,
 						})
 					}
 					game.PlayStartTime = nil
@@ -296,7 +288,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 	service.mu.Unlock()
 
 	for _, session := range sessionsToSave {
-		service.saveSession(session.Game, session.Duration, session.EndedAt)
+		service.saveSession(session.Game, session.EndedAt)
 	}
 	for _, gameID := range gameIDsToCleanup {
 		service.mu.Lock()
@@ -305,10 +297,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 	}
 }
 
-func (service *ProcessMonitorService) saveSession(game MonitoringGame, duration int64, endedAt time.Time) {
-	if duration <= 0 {
-		return
-	}
+func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
 	sessionName := "自動記録 - " + game.ExeName
 	ctx := context.Background()
 	_, err := service.repository.CreatePlaySession(ctx, models.PlaySession{
@@ -341,9 +330,8 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, duration 
 func (service *ProcessMonitorService) saveAllActiveSessions() {
 	service.mu.Lock()
 	type pendingSession struct {
-		Game     MonitoringGame
-		Duration int64
-		EndedAt  time.Time
+		Game    MonitoringGame
+		EndedAt time.Time
 	}
 	sessions := make([]pendingSession, 0, len(service.monitoredGames))
 	now := time.Now()
@@ -353,9 +341,8 @@ func (service *ProcessMonitorService) saveAllActiveSessions() {
 			if duration > 0 {
 				game.AccumulatedTime += duration
 				sessions = append(sessions, pendingSession{
-					Game:     *game,
-					Duration: duration,
-					EndedAt:  now,
+					Game:    *game,
+					EndedAt: now,
 				})
 			}
 		}
@@ -363,11 +350,11 @@ func (service *ProcessMonitorService) saveAllActiveSessions() {
 	service.mu.Unlock()
 
 	for _, session := range sessions {
-		service.saveSession(session.Game, session.Duration, session.EndedAt)
+		service.saveSession(session.Game, session.EndedAt)
 	}
 }
 
-func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []ProcessInfo) {
+func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []ProcessInfo, normalized []normalizedProcess) {
 	service.mu.Lock()
 	autoTracking := service.autoTracking
 	service.mu.Unlock()
@@ -398,7 +385,7 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 		if _, ok := processNames[normalizedExe]; !ok {
 			continue
 		}
-		if !service.isGameProcessRunning(exeName, game.ExePath, processes) {
+		if !service.isGameProcessRunning(exeName, game.ExePath, normalized) {
 			continue
 		}
 
@@ -413,22 +400,21 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 func (service *ProcessMonitorService) isGameProcessRunning(
 	gameExeName string,
 	gameExePath string,
-	processes []ProcessInfo,
+	processes []normalizedProcess,
 ) bool {
 	normalizedExeName := normalizeProcessToken(gameExeName)
 	normalizedExePath := normalizeProcessToken(gameExePath)
 	normalizedExeDir := normalizeProcessToken(filepath.Dir(gameExePath))
 
 	for _, proc := range processes {
-		if proc.Name == "" || proc.Cmd == "" {
+		if proc.info.Name == "" || proc.info.Cmd == "" {
 			continue
 		}
-		procName := normalizeProcessToken(proc.Name)
-		if procName != normalizedExeName {
+		if proc.normalized != normalizedExeName {
 			continue
 		}
 
-		procCmd := normalizeProcessToken(proc.Cmd)
+		procCmd := proc.normalizedCmd
 		if procCmd == normalizedExePath {
 			return true
 		}
@@ -443,9 +429,6 @@ func (service *ProcessMonitorService) isGameProcessRunning(
 }
 
 func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error) {
-	if runtime.GOOS != "windows" {
-		return nil, errors.New("process monitoring is supported on Windows only")
-	}
 	return service.getProcessesPowerShell()
 }
 
@@ -495,9 +478,6 @@ func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, e
 }
 
 func (service *ProcessMonitorService) getProcessesFallback() ([]ProcessInfo, error) {
-	if runtime.GOOS != "windows" {
-		return nil, errors.New("process monitoring is supported on Windows only")
-	}
 	return service.getProcessesWmic()
 }
 
@@ -584,11 +564,22 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 		}
 	}
 
-	if decoded, err := decodeUTF16LE(output); err == nil {
-		return parse(decoded)
+	return parse(output)
+}
+
+func (service *ProcessMonitorService) getProcesses() ([]ProcessInfo, string) {
+	processes, err := service.getProcessesNative()
+	if err == nil {
+		return processes, "native"
 	}
 
-	return parse(output)
+	service.logger.Warn("ネイティブコマンドが失敗しました。フォールバックを使用します", "error", err)
+	processes, err = service.getProcessesFallback()
+	if err != nil {
+		service.logger.Error("フォールバックも失敗しました", "error", err)
+		return []ProcessInfo{}, "fallback"
+	}
+	return processes, "fallback"
 }
 
 func normalizeProcessToken(value string) string {
