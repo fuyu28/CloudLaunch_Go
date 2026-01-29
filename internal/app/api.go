@@ -165,6 +165,15 @@ func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameSt
 	return result.OkResult(status)
 }
 
+// GetProcessSnapshot はプロセス一覧のデバッグ情報を取得する。
+func (app *App) GetProcessSnapshot() result.ApiResult[models.ProcessSnapshot] {
+	if app.ProcessMonitor == nil {
+		return result.OkResult(models.ProcessSnapshot{Source: "none", Items: []models.ProcessSnapshotItem{}})
+	}
+	snapshot := app.ProcessMonitor.GetProcessSnapshot()
+	return result.OkResult(snapshot)
+}
+
 // SelectFile はファイル選択ダイアログを開く。
 func (app *App) SelectFile(filters []FileFilterInput) result.ApiResult[string] {
 	dialogContext := app.runtimeContext()

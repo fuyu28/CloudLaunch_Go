@@ -61,6 +61,8 @@ export function GetMemoRootDir():Promise<result.ApiResult_string_>;
 
 export function GetMonitoringStatus():Promise<result.ApiResult___CloudLaunch_Go_internal_models_MonitoringGameStatus_>;
 
+export function GetProcessSnapshot():Promise<result.ApiResult_CloudLaunch_Go_internal_models_ProcessSnapshot_>;
+
 export function LaunchGame(arg1:string):Promise<result.ApiResult_bool_>;
 
 export function ListAllMemos():Promise<result.ApiResult___CloudLaunch_Go_internal_models_Memo_>;

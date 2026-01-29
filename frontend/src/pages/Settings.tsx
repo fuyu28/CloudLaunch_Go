@@ -16,6 +16,7 @@
  */
 
 import { useState } from "react"
+import { Link } from "react-router-dom"
 
 import GeneralSettings from "@renderer/components/GeneralSettings"
 import R2S3Settings from "@renderer/components/R2S3Settings"
@@ -56,6 +57,18 @@ export default function Settings(): React.JSX.Element {
       <div className="bg-base-100 p-6 rounded-lg border border-base-200">
         {activeTab === "general" && <GeneralSettings />}
         {activeTab === "r2s3" && <R2S3Settings />}
+      </div>
+
+      <div className="mt-6">
+        <div className="bg-base-100 p-4 rounded-lg border border-base-200 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold">デバッグ</div>
+            <div className="text-xs text-base-content/70">プロセス監視の取得結果を確認します。</div>
+          </div>
+          <Link to="/debug/process" className="btn btn-outline btn-sm">
+            開く
+          </Link>
+        </div>
       </div>
     </div>
   )

@@ -110,6 +110,10 @@ export function GetMonitoringStatus() {
   return window['go']['app']['App']['GetMonitoringStatus']();
 }
 
+export function GetProcessSnapshot() {
+  return window['go']['app']['App']['GetProcessSnapshot']();
+}
+
 export function LaunchGame(arg1) {
   return window['go']['app']['App']['LaunchGame'](arg1);
 }

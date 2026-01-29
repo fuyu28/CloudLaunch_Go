@@ -11,6 +11,7 @@ import MemoEditor from "./pages/MemoEditor"
 import MemoList from "./pages/MemoList"
 import MemoView from "./pages/MemoView"
 import Settings from "./pages/Settings"
+import DebugProcess from "./pages/DebugProcess"
 
 export default function App(): React.JSX.Element {
   return (
@@ -28,6 +29,7 @@ export default function App(): React.JSX.Element {
           <Route path="/memo/new/:gameId" element={<MemoEditor />} />
           <Route path="/memo/edit/:memoId" element={<MemoEditor />} />
           <Route path="/memo/view/:memoId" element={<MemoView />} />
+          <Route path="/debug/process" element={<DebugProcess />} />
         </Route>
       </Routes>
     </ErrorBoundary>

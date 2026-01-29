@@ -85,3 +85,18 @@ type MonitoringGameStatus struct {
 	IsPlaying bool   `json:"isPlaying"`
 	PlayTime  int64  `json:"playTime"`
 }
+
+// ProcessSnapshotItem はプロセス監視デバッグ用の情報を表す。
+type ProcessSnapshotItem struct {
+	Name           string `json:"name"`
+	Pid            int    `json:"pid"`
+	Cmd            string `json:"cmd"`
+	NormalizedName string `json:"normalizedName"`
+	NormalizedCmd  string `json:"normalizedCmd"`
+}
+
+// ProcessSnapshot はプロセス取得結果を表す。
+type ProcessSnapshot struct {
+	Source string                `json:"source"`
+	Items  []ProcessSnapshotItem `json:"items"`
+}

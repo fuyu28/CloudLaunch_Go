@@ -154,6 +154,37 @@ func (service *ProcessMonitorService) GetMonitoringStatus() []models.MonitoringG
 	return status
 }
 
+// GetProcessSnapshot は現在のプロセス一覧と正規化後の値を取得する。
+func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapshot {
+	processes, err := service.getProcessesNative()
+	source := "native"
+	if err != nil {
+		service.logger.Warn("ネイティブコマンドが失敗しました。フォールバックを使用します", "error", err)
+		processes, err = service.getProcessesFallback()
+		source = "fallback"
+		if err != nil {
+			service.logger.Error("フォールバックも失敗しました", "error", err)
+			processes = []ProcessInfo{}
+		}
+	}
+
+	items := make([]models.ProcessSnapshotItem, 0, len(processes))
+	for _, proc := range processes {
+		items = append(items, models.ProcessSnapshotItem{
+			Name:           proc.Name,
+			Pid:            proc.Pid,
+			Cmd:            proc.Cmd,
+			NormalizedName: normalizeProcessToken(proc.Name),
+			NormalizedCmd:  normalizeProcessToken(proc.Cmd),
+		})
+	}
+
+	return models.ProcessSnapshot{
+		Source: source,
+		Items:  items,
+	}
+}
+
 func (service *ProcessMonitorService) addMonitoredGame(gameID string, title string, exePath string) {
 	exeName := filepath.Base(exePath)
 	service.monitoredGames[gameID] = &MonitoringGame{

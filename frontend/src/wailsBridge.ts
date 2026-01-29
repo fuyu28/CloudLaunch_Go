@@ -38,6 +38,7 @@ import {
   GetDirectoryTree,
   GetGameByID,
   GetMonitoringStatus,
+  GetProcessSnapshot,
   GetChapterStats,
   LaunchGame,
   ListChaptersByGame,
@@ -158,6 +159,7 @@ export type WindowApi = {
   }
   processMonitor: {
     getMonitoringStatus: () => Promise<MonitoringGameStatus[]>
+    getProcessSnapshot: () => Promise<{ source: string; items: Array<{ name: string; pid: number; cmd: string; normalizedName: string; normalizedCmd: string }> }>
   }
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>
@@ -540,6 +542,22 @@ export const createWailsBridge = (): WindowApi => {
           return result.data as MonitoringGameStatus[]
         }
         return []
+      },
+      getProcessSnapshot: async () => {
+        const result = await GetProcessSnapshot()
+        if (!result.success || !result.data) {
+          return { source: "error", items: [] }
+        }
+        return result.data as {
+          source: string
+          items: Array<{
+            name: string
+            pid: number
+            cmd: string
+            normalizedName: string
+            normalizedCmd: string
+          }>
+        }
       }
     },
     game: {
