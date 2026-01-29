@@ -19,6 +19,7 @@ import (
 	"CloudLaunch_Go/internal/models"
 
 	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 )
@@ -458,22 +459,14 @@ func (service *ProcessMonitorService) getWindowsProcesses() ([]ProcessInfo, erro
 		ctx,
 		"powershell",
 		"-Command",
-		`Get-Process | Select-Object ProcessName, Id, Path | ConvertTo-Csv -NoTypeInformation`,
+		`$OutputEncoding=[System.Text.Encoding]::UTF8; Get-Process | Select-Object ProcessName, Id, Path | ConvertTo-Csv -NoTypeInformation`,
 	)
 	output, err := command.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	decoded, decodeErr := decodeWindowsOutput(output)
-	if decodeErr != nil {
-		decoded = output
-	}
-
-	reader := csv.NewReader(bytes.NewReader(decoded))
-	reader.LazyQuotes = true
-	reader.TrimLeadingSpace = true
-	records, err := reader.ReadAll()
+	records, err := parseCSVBytes(output)
 	if err != nil {
 		return nil, err
 	}
@@ -563,15 +556,7 @@ func (service *ProcessMonitorService) getWindowsProcessesWmic() ([]ProcessInfo, 
 		return nil, err
 	}
 
-	decoded, decodeErr := decodeWindowsOutput(output)
-	if decodeErr != nil {
-		decoded = output
-	}
-
-	reader := csv.NewReader(bytes.NewReader(decoded))
-	reader.LazyQuotes = true
-	reader.TrimLeadingSpace = true
-	records, err := reader.ReadAll()
+	records, err := parseCSVBytes(output)
 	if err != nil {
 		return nil, err
 	}
@@ -619,6 +604,44 @@ func splitProcessLine(line string) []string {
 func decodeWindowsOutput(output []byte) ([]byte, error) {
 	reader := transform.NewReader(bytes.NewReader(output), japanese.ShiftJIS.NewDecoder())
 	return io.ReadAll(reader)
+}
+
+func decodeUTF16LE(output []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(output), unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder())
+	return io.ReadAll(reader)
+}
+
+func parseCSVBytes(output []byte) ([][]string, error) {
+	parse := func(data []byte) ([][]string, error) {
+		reader := csv.NewReader(bytes.NewReader(data))
+		reader.LazyQuotes = true
+		reader.TrimLeadingSpace = true
+		return reader.ReadAll()
+	}
+
+	if bytes.Contains(output, []byte{0x00}) {
+		if decoded, err := decodeUTF16LE(output); err == nil {
+			if records, err := parse(decoded); err == nil {
+				return records, nil
+			}
+		}
+	}
+
+	if records, err := parse(output); err == nil {
+		return records, nil
+	}
+
+	if decoded, err := decodeWindowsOutput(output); err == nil {
+		if records, err := parse(decoded); err == nil {
+			return records, nil
+		}
+	}
+
+	if decoded, err := decodeUTF16LE(output); err == nil {
+		return parse(decoded)
+	}
+
+	return parse(output)
 }
 
 func normalizeProcessToken(value string) string {
