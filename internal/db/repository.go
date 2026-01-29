@@ -46,7 +46,7 @@ func (repository *Repository) ListGames(
 	filter models.PlayStatus,
 	sortBy string,
 	sortDirection string,
-) ([]models.Game, error) {
+) (games []models.Game, err error) {
 	queryBuilder := strings.Builder{}
 	queryBuilder.WriteString(`
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt,
@@ -74,22 +74,26 @@ func (repository *Repository) ListGames(
 	direction := normalizeSortDirection(sortDirection)
 	queryBuilder.WriteString(fmt.Sprintf(" ORDER BY %s %s", orderBy, direction))
 
-	rows, error := repository.connection.QueryContext(ctx, queryBuilder.String(), args...)
-	if error != nil {
-		return nil, error
+	rows, err := repository.connection.QueryContext(ctx, queryBuilder.String(), args...)
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	games := make([]models.Game, 0)
+	games = make([]models.Game, 0)
 	for rows.Next() {
-		game, error := scanGame(rows)
-		if error != nil {
-			return nil, error
+		game, err := scanGame(rows)
+		if err != nil {
+			return nil, err
 		}
 		games = append(games, *game)
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return games, nil
@@ -144,26 +148,30 @@ func (repository *Repository) CreateChapter(ctx context.Context, chapter models.
 }
 
 // ListChaptersByGame はゲームIDで章一覧を取得する。
-func (repository *Repository) ListChaptersByGame(ctx context.Context, gameID string) ([]models.Chapter, error) {
-	rows, error := repository.connection.QueryContext(ctx, `
+func (repository *Repository) ListChaptersByGame(ctx context.Context, gameID string) (chapters []models.Chapter, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, name, "order", gameId, createdAt
 		FROM "Chapter" WHERE gameId = ? ORDER BY "order" ASC
 	`, gameID)
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	chapters := make([]models.Chapter, 0)
+	chapters = make([]models.Chapter, 0)
 	for rows.Next() {
-		chapter, error := scanChapter(rows)
-		if error != nil {
-			return nil, error
+		chapter, err := scanChapter(rows)
+		if err != nil {
+			return nil, err
 		}
 		chapters = append(chapters, *chapter)
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return chapters, nil
@@ -224,26 +232,30 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session mod
 }
 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
-func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
-	rows, error := repository.connection.QueryContext(ctx, `
+func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []models.PlaySession, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
 	`, gameID)
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	sessions := make([]models.PlaySession, 0)
+	sessions = make([]models.PlaySession, 0)
 	for rows.Next() {
-		session, error := scanPlaySession(rows)
-		if error != nil {
-			return nil, error
+		session, err := scanPlaySession(rows)
+		if err != nil {
+			return nil, err
 		}
 		sessions = append(sessions, *session)
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return sessions, nil
@@ -285,26 +297,30 @@ func (repository *Repository) CreateUpload(ctx context.Context, upload models.Up
 }
 
 // ListUploadsByGame はゲームIDでアップロード一覧を取得する。
-func (repository *Repository) ListUploadsByGame(ctx context.Context, gameID string) ([]models.Upload, error) {
-	rows, error := repository.connection.QueryContext(ctx, `
+func (repository *Repository) ListUploadsByGame(ctx context.Context, gameID string) (uploads []models.Upload, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, clientId, comment, createdAt, gameId
 		FROM "Upload" WHERE gameId = ? ORDER BY createdAt DESC
 	`, gameID)
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	uploads := make([]models.Upload, 0)
+	uploads = make([]models.Upload, 0)
 	for rows.Next() {
-		upload, error := scanUpload(rows)
-		if error != nil {
-			return nil, error
+		upload, err := scanUpload(rows)
+		if err != nil {
+			return nil, err
 		}
 		uploads = append(uploads, *upload)
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return uploads, nil
@@ -369,34 +385,38 @@ func (repository *Repository) FindMemoByTitle(ctx context.Context, gameID string
 }
 
 // ListMemosByGame はゲームIDでメモ一覧を取得する。
-func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
-	rows, error := repository.connection.QueryContext(ctx, `
+func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string) (memos []models.Memo, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, title, content, gameId, createdAt, updatedAt
 		FROM "Memo" WHERE gameId = ? ORDER BY updatedAt DESC
 	`, gameID)
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	memos := make([]models.Memo, 0)
+	memos = make([]models.Memo, 0)
 	for rows.Next() {
-		memo, error := scanMemo(rows)
-		if error != nil {
-			return nil, error
+		memo, err := scanMemo(rows)
+		if err != nil {
+			return nil, err
 		}
 		memos = append(memos, *memo)
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return memos, nil
 }
 
 // GetChapterStats は章ごとの統計を取得する。
-func (repository *Repository) GetChapterStats(ctx context.Context, gameID string) ([]models.ChapterStat, error) {
-	rows, error := repository.connection.QueryContext(ctx, `
+func (repository *Repository) GetChapterStats(ctx context.Context, gameID string) (stats []models.ChapterStat, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT c.id, c.name, c."order",
 		       COALESCE(SUM(ps.duration), 0) as total_time,
 		       COUNT(ps.id) as session_count
@@ -406,12 +426,16 @@ func (repository *Repository) GetChapterStats(ctx context.Context, gameID string
 		GROUP BY c.id, c.name, c."order"
 		ORDER BY c."order" ASC
 	`, gameID)
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	stats := make([]models.ChapterStat, 0)
+	stats = make([]models.ChapterStat, 0)
 	for rows.Next() {
 		var (
 			chapterID    string
@@ -420,8 +444,8 @@ func (repository *Repository) GetChapterStats(ctx context.Context, gameID string
 			totalTime    int64
 			sessionCount int64
 		)
-		if error := rows.Scan(&chapterID, &chapterName, &orderValue, &totalTime, &sessionCount); error != nil {
-			return nil, error
+		if err := rows.Scan(&chapterID, &chapterName, &orderValue, &totalTime, &sessionCount); err != nil {
+			return nil, err
 		}
 		average := float64(0)
 		if sessionCount > 0 {
@@ -436,33 +460,37 @@ func (repository *Repository) GetChapterStats(ctx context.Context, gameID string
 			Order:        orderValue,
 		})
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return stats, nil
 }
 
 // ListAllMemos は全メモを取得する。
-func (repository *Repository) ListAllMemos(ctx context.Context) ([]models.Memo, error) {
-	rows, error := repository.connection.QueryContext(ctx, `
+func (repository *Repository) ListAllMemos(ctx context.Context) (memos []models.Memo, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, title, content, gameId, createdAt, updatedAt
 		FROM "Memo" ORDER BY updatedAt DESC
 	`)
-	if error != nil {
-		return nil, error
+	if err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
-	memos := make([]models.Memo, 0)
+	memos = make([]models.Memo, 0)
 	for rows.Next() {
-		memo, error := scanMemo(rows)
-		if error != nil {
-			return nil, error
+		memo, err := scanMemo(rows)
+		if err != nil {
+			return nil, err
 		}
 		memos = append(memos, *memo)
 	}
-	if error := rows.Err(); error != nil {
-		return nil, error
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return memos, nil
