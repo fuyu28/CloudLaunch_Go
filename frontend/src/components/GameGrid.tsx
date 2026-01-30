@@ -9,17 +9,17 @@
  * - メモ化による再レンダリング防止
  */
 
-import { memo } from "react"
+import { memo } from "react";
 
-import GameCard from "./GameCard"
-import type { GameType } from "src/types/game"
+import GameCard from "./GameCard";
+import type { GameType } from "src/types/game";
 
 type GameGridProps = {
   /** ゲーム一覧 */
-  games: GameType[]
+  games: GameType[];
   /** ゲーム起動ハンドラ */
-  onLaunchGame: (exePath: string) => void
-}
+  onLaunchGame: (exePath: string) => void;
+};
 
 /**
  * ゲーム一覧グリッドコンポーネント
@@ -36,7 +36,7 @@ const GameGrid = memo(function GameGrid({ games, onLaunchGame }: GameGridProps):
           <p className="text-sm">検索条件を変更するか、新しいゲームを追加してください</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -60,7 +60,7 @@ const GameGrid = memo(function GameGrid({ games, onLaunchGame }: GameGridProps):
         </div>
       </div>
     </div>
-  )
-})
+  );
+});
 
-export default GameGrid
+export default GameGrid;

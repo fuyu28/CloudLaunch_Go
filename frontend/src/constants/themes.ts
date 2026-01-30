@@ -42,10 +42,10 @@ export const DAISYUI_THEMES = [
   "sunset",
   "caramellatte",
   "abyss",
-  "silk"
-] as const
+  "silk",
+] as const;
 
 /**
  * テーマ名の型定義
  */
-export type ThemeName = (typeof DAISYUI_THEMES)[number]
+export type ThemeName = (typeof DAISYUI_THEMES)[number];

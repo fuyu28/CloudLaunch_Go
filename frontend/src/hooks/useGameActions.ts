@@ -9,13 +9,13 @@
  * - ローディング状態の管理
  */
 
-import { useCallback } from "react"
+import { useCallback } from "react";
 
-import { useLoadingState } from "./useLoadingState"
-import { MESSAGES } from "@renderer/constants"
-import type { InputGameData, GameType } from "src/types/game"
-import type { SortOption, FilterOption, SortDirection } from "src/types/menu"
-import type { ApiResult } from "src/types/result"
+import { useLoadingState } from "./useLoadingState";
+import { MESSAGES } from "@renderer/constants";
+import type { InputGameData, GameType } from "src/types/game";
+import type { SortOption, FilterOption, SortDirection } from "src/types/menu";
+import type { ApiResult } from "src/types/result";
 
 /// <reference types="../../../preload/index.d.ts" />
 
@@ -24,18 +24,18 @@ import type { ApiResult } from "src/types/result"
  */
 export type UseGameActionsProps = {
   /** 現在の検索ワード */
-  searchWord: string
+  searchWord: string;
   /** 現在のフィルター */
-  filter: FilterOption
+  filter: FilterOption;
   /** 現在のソート */
-  sort: SortOption
+  sort: SortOption;
   /** 現在のソート方向 */
-  sortDirection: SortDirection
+  sortDirection: SortDirection;
   /** ゲーム一覧の更新コールバック */
-  onGamesUpdate: (games: GameType[]) => void
+  onGamesUpdate: (games: GameType[]) => void;
   /** モーダルクローズのコールバック */
-  onModalClose: () => void
-}
+  onModalClose: () => void;
+};
 
 /**
  * ゲーム操作フック
@@ -51,12 +51,12 @@ export function useGameActions({
   sort,
   sortDirection,
   onGamesUpdate,
-  onModalClose
+  onModalClose,
 }: UseGameActionsProps): {
-  createGameAndRefreshList: (values: InputGameData) => Promise<ApiResult<void>>
-  isLoading: boolean
+  createGameAndRefreshList: (values: InputGameData) => Promise<ApiResult<void>>;
+  isLoading: boolean;
 } {
-  const gameActionLoading = useLoadingState()
+  const gameActionLoading = useLoadingState();
 
   /**
    * ゲーム追加処理
@@ -67,34 +67,39 @@ export function useGameActions({
     async (values: InputGameData): Promise<ApiResult<void>> => {
       const result = await gameActionLoading.executeWithLoading(
         async () => {
-          const createResult = await window.api.database.createGame(values)
+          const createResult = await window.api.database.createGame(values);
           if (!createResult.success) {
-            throw new Error((createResult as { success: false; message: string }).message)
+            throw new Error((createResult as { success: false; message: string }).message);
           }
 
           // ゲーム一覧を再取得
-          const games = await window.api.database.listGames(searchWord, filter, sort, sortDirection)
-          onGamesUpdate(games as GameType[])
-          onModalClose()
+          const games = await window.api.database.listGames(
+            searchWord,
+            filter,
+            sort,
+            sortDirection,
+          );
+          onGamesUpdate(games as GameType[]);
+          onModalClose();
 
-          return createResult
+          return createResult;
         },
         {
           loadingMessage: MESSAGES.GAME.ADDING,
           successMessage: MESSAGES.GAME.ADDED,
-          showToast: true
-        }
-      )
+          showToast: true,
+        },
+      );
 
-      return result || { success: false, message: MESSAGES.GAME.ADD_FAILED }
+      return result || { success: false, message: MESSAGES.GAME.ADD_FAILED };
     },
-    [searchWord, filter, sort, sortDirection, onGamesUpdate, onModalClose, gameActionLoading]
-  )
+    [searchWord, filter, sort, sortDirection, onGamesUpdate, onModalClose, gameActionLoading],
+  );
 
   return {
     /** ゲーム追加とリスト更新 */
     createGameAndRefreshList,
     /** ローディング状態 */
-    isLoading: gameActionLoading.isLoading
-  }
+    isLoading: gameActionLoading.isLoading,
+  };
 }

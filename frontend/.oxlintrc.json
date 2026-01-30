@@ -36,8 +36,5 @@
     "builtin": true
   },
   "globals": {},
-  "ignorePatterns": [
-    "dist/**",
-    "wailsjs/**"
-  ]
+  "ignorePatterns": ["dist/**", "wailsjs/**"]
 }

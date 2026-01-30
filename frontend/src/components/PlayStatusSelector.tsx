@@ -19,24 +19,24 @@
  * ```
  */
 
-import { FaChevronDown, FaGamepad, FaPlay, FaCheck } from "react-icons/fa"
+import { FaChevronDown, FaGamepad, FaPlay, FaCheck } from "react-icons/fa";
 
 /**
  * プレイステータスの型定義
  */
-export type PlayStatus = "unplayed" | "playing" | "played"
+export type PlayStatus = "unplayed" | "playing" | "played";
 
 /**
  * プレイステータス選択コンポーネントのprops
  */
 export type PlayStatusSelectorProps = {
   /** 現在のプレイステータス */
-  currentStatus: PlayStatus
+  currentStatus: PlayStatus;
   /** ステータス変更時のコールバック */
-  onStatusChange: (status: PlayStatus) => void
+  onStatusChange: (status: PlayStatus) => void;
   /** 無効化フラグ */
-  disabled?: boolean
-}
+  disabled?: boolean;
+};
 
 /**
  * プレイステータス情報の設定
@@ -46,21 +46,21 @@ const STATUS_CONFIG = {
     label: "未プレイ",
     icon: FaGamepad,
     badgeClass: "badge-neutral",
-    description: "まだプレイしていない"
+    description: "まだプレイしていない",
   },
   playing: {
     label: "プレイ中",
     icon: FaPlay,
     badgeClass: "badge-primary",
-    description: "現在プレイしている"
+    description: "現在プレイしている",
   },
   played: {
     label: "クリア済み",
     icon: FaCheck,
     badgeClass: "badge-success",
-    description: "クリア済み"
-  }
-} as const
+    description: "クリア済み",
+  },
+} as const;
 
 /**
  * プレイステータス選択コンポーネント
@@ -73,21 +73,21 @@ const STATUS_CONFIG = {
 export function PlayStatusSelector({
   currentStatus,
   onStatusChange,
-  disabled = false
+  disabled = false,
 }: PlayStatusSelectorProps): React.JSX.Element {
-  const currentConfig = STATUS_CONFIG[currentStatus]
+  const currentConfig = STATUS_CONFIG[currentStatus];
 
   const handleStatusChange = (status: PlayStatus): void => {
-    if (disabled) return
+    if (disabled) return;
 
-    onStatusChange(status)
+    onStatusChange(status);
 
     // ドロップダウンを閉じるためにblurする
-    const activeElement = document.activeElement as HTMLElement
+    const activeElement = document.activeElement as HTMLElement;
     if (activeElement) {
-      activeElement.blur()
+      activeElement.blur();
     }
-  }
+  };
 
   return (
     <div className="relative">
@@ -113,8 +113,8 @@ export function PlayStatusSelector({
               className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow-lg border border-base-300"
             >
               {Object.entries(STATUS_CONFIG).map(([status, config]) => {
-                const StatusIcon = config.icon
-                const isSelected = status === currentStatus
+                const StatusIcon = config.icon;
+                const isSelected = status === currentStatus;
 
                 return (
                   <li key={status}>
@@ -130,14 +130,14 @@ export function PlayStatusSelector({
                       {isSelected && <FaCheck className="w-3 h-3 text-success" />}
                     </button>
                   </li>
-                )
+                );
               })}
             </ul>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default PlayStatusSelector
+export default PlayStatusSelector;

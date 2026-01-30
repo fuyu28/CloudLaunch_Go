@@ -11,20 +11,20 @@
  * - 一つ上の階層への戻り機能
  */
 
-import React from "react"
-import { FiHome, FiChevronRight, FiArrowLeft } from "react-icons/fi"
+import React from "react";
+import { FiHome, FiChevronRight, FiArrowLeft } from "react-icons/fi";
 
 /**
  * パンくずリストのプロパティ
  */
 type CloudBreadcrumbProps = {
   /** 現在のパス */
-  currentPath: string[]
+  currentPath: string[];
   /** パス移動コールバック */
-  onNavigateToPath: (path: string[]) => void
+  onNavigateToPath: (path: string[]) => void;
   /** 戻るコールバック */
-  onNavigateBack: () => void
-}
+  onNavigateBack: () => void;
+};
 
 /**
  * クラウドパンくずリストコンポーネント
@@ -35,11 +35,11 @@ type CloudBreadcrumbProps = {
 export function CloudBreadcrumb({
   currentPath,
   onNavigateToPath,
-  onNavigateBack
+  onNavigateBack,
 }: CloudBreadcrumbProps): React.JSX.Element | null {
   // ルートレベルの場合はパンくずリストを表示しない
   if (currentPath.length === 0) {
-    return null
+    return null;
   }
 
   return (
@@ -60,8 +60,8 @@ export function CloudBreadcrumb({
         <React.Fragment key={index}>
           <button
             onClick={() => {
-              const newPath = currentPath.slice(0, index + 1)
-              onNavigateToPath(newPath)
+              const newPath = currentPath.slice(0, index + 1);
+              onNavigateToPath(newPath);
             }}
             className="btn btn-sm btn-ghost text-sm"
           >
@@ -83,5 +83,5 @@ export function CloudBreadcrumb({
         </button>
       </div>
     </div>
-  )
+  );
 }

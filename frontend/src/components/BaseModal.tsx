@@ -24,43 +24,43 @@
  * ```
  */
 
-import React from "react"
-import { RxCross1 } from "react-icons/rx"
+import React from "react";
+import { RxCross1 } from "react-icons/rx";
 
 /**
  * モーダルサイズの型定義
  */
-export type ModalSize = "sm" | "md" | "lg" | "xl" | "full"
+export type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
 
 /**
  * ベースモーダルコンポーネントのprops
  */
 export type BaseModalProps = {
   /** モーダルが開いているかどうか */
-  isOpen: boolean
+  isOpen: boolean;
   /** モーダルを閉じる際のコールバック */
-  onClose: () => void
+  onClose: () => void;
   /** モーダルが完全に閉じた後のコールバック（アニメーション完了後に実行） */
-  onClosed?: () => void
+  onClosed?: () => void;
   /** モーダルのタイトル */
-  title?: string
+  title?: string;
   /** モーダルの内容 */
-  children: React.ReactNode
+  children: React.ReactNode;
   /** フッター部分の内容 */
-  footer?: React.ReactNode
+  footer?: React.ReactNode;
   /** モーダルのサイズ */
-  size?: ModalSize
+  size?: ModalSize;
   /** 閉じるボタンを表示するかどうか */
-  showCloseButton?: boolean
+  showCloseButton?: boolean;
   /** モーダルのID（一意である必要があります） */
-  id?: string
+  id?: string;
   /** カスタムCSSクラス */
-  className?: string
+  className?: string;
   /** クリックアウトサイドで閉じるかどうか */
-  closeOnClickOutside?: boolean
+  closeOnClickOutside?: boolean;
   /** ESCキーで閉じるかどうか */
-  closeOnEscape?: boolean
-}
+  closeOnEscape?: boolean;
+};
 
 /**
  * モーダルサイズに対応するCSSクラスのマッピング
@@ -70,8 +70,8 @@ const sizeClasses: Record<ModalSize, string> = {
   md: "max-w-md",
   lg: "max-w-lg",
   xl: "max-w-xl",
-  full: "max-w-full"
-}
+  full: "max-w-full",
+};
 
 /**
  * ベースモーダルコンポーネント
@@ -93,41 +93,41 @@ export function BaseModal({
   id = "base-modal",
   className = "",
   closeOnClickOutside = true,
-  closeOnEscape = true
+  closeOnEscape = true,
 }: BaseModalProps): React.JSX.Element {
   // ESCキーでの閉じる処理
   React.useEffect(() => {
-    if (!closeOnEscape || !isOpen) return
+    if (!closeOnEscape || !isOpen) return;
 
     const handleEscape = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        onClose()
+        onClose();
       }
-    }
+    };
 
-    document.addEventListener("keydown", handleEscape)
-    return () => document.removeEventListener("keydown", handleEscape)
-  }, [isOpen, onClose, closeOnEscape])
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose, closeOnEscape]);
 
   // モーダルが閉じられた後の処理
   React.useEffect(() => {
     if (!isOpen && onClosed) {
       // DaisyUIのアニメーション時間を考慮してコールバックを実行
       const timer = setTimeout(() => {
-        onClosed()
-      }, 300)
+        onClosed();
+      }, 300);
 
-      return () => clearTimeout(timer)
+      return () => clearTimeout(timer);
     }
-    return undefined
-  }, [isOpen, onClosed])
+    return undefined;
+  }, [isOpen, onClosed]);
 
   // モーダル外クリック時の処理
   const handleBackdropClick = (event: React.MouseEvent): void => {
     if (closeOnClickOutside && event.target === event.currentTarget) {
-      onClose()
+      onClose();
     }
-  }
+  };
 
   return (
     <>
@@ -174,7 +174,7 @@ export function BaseModal({
         </div>
       </div>
     </>
-  )
+  );
 }
 
-export default BaseModal
+export default BaseModal;

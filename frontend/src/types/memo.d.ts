@@ -10,107 +10,107 @@
  */
 export type MemoType = {
   /** メモID */
-  id: string
+  id: string;
   /** メモタイトル */
-  title: string
+  title: string;
   /** メモ内容（Markdown形式） */
-  content: string
+  content: string;
   /** 関連するゲームID */
-  gameId: string
+  gameId: string;
   /** 関連するゲームタイトル（結合クエリ用、オプション） */
-  gameTitle?: string
+  gameTitle?: string;
   /** 作成日時 */
-  createdAt: Date
+  createdAt: Date;
   /** 更新日時 */
-  updatedAt: Date
-}
+  updatedAt: Date;
+};
 
 /**
  * メモ作成時のデータ型
  */
 export type CreateMemoData = {
   /** メモタイトル */
-  title: string
+  title: string;
   /** メモ内容（Markdown形式） */
-  content: string
+  content: string;
   /** 関連するゲームID */
-  gameId: string
-}
+  gameId: string;
+};
 
 /**
  * メモ更新時のデータ型
  */
 export type UpdateMemoData = {
   /** 更新するメモタイトル */
-  title: string
+  title: string;
   /** 更新するメモ内容（Markdown形式） */
-  content: string
-}
+  content: string;
+};
 
 /**
  * メモファイル操作の結果型
  */
 export type MemoFileOperationResult = {
   /** 操作が成功したかどうか */
-  success: boolean
+  success: boolean;
   /** 操作対象のファイルパス */
-  filePath?: string
+  filePath?: string;
   /** エラーメッセージ（失敗時） */
-  error?: string
-}
+  error?: string;
+};
 
 /**
  * メモディレクトリ情報型
  */
 export type MemoDirectoryInfo = {
   /** ベースディレクトリパス */
-  baseDir: string
+  baseDir: string;
   /** ゲーム別ディレクトリパス */
-  gameDir: string
+  gameDir: string;
   /** メモファイル数 */
-  fileCount: number
-}
+  fileCount: number;
+};
 
 /**
  * クラウドメモ情報型
  */
 export type CloudMemoInfo = {
   /** S3キー */
-  key: string
+  key: string;
   /** ファイル名 */
-  fileName: string
+  fileName: string;
   /** ゲームタイトル */
-  gameTitle: string
+  gameTitle: string;
   /** メモタイトル（ファイル名から抽出） */
-  memoTitle: string
+  memoTitle: string;
   /** メモID（ファイル名から抽出） */
-  memoId: string
+  memoId: string;
   /** 最終更新日時 */
-  lastModified: Date
+  lastModified: Date;
   /** ファイルサイズ */
-  size: number
-}
+  size: number;
+};
 
 /**
  * メモ同期結果型
  */
 export type MemoSyncResult = {
   /** 同期が成功したかどうか */
-  success: boolean
+  success: boolean;
   /** アップロードされたメモ数 */
-  uploaded: number
+  uploaded: number;
   /** ローカルで上書きされたメモ数（クラウド→ローカル） */
-  localOverwritten: number
+  localOverwritten: number;
   /** クラウドで上書きされたメモ数（ローカル→クラウド） */
-  cloudOverwritten: number
+  cloudOverwritten: number;
   /** 作成されたメモ数（ダウンロード） */
-  created: number
+  created: number;
   /** 更新されたメモ数（ダウンロード） */
-  updated: number
+  updated: number;
   /** スキップされたメモ数 */
-  skipped: number
+  skipped: number;
   /** エラーメッセージ（失敗時） */
-  error?: string
+  error?: string;
   /** 詳細メッセージ */
-  details: string[]
-}
+  details: string[];
+};

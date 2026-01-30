@@ -11,46 +11,46 @@
  * - 柔軟なボタンスタイル（primary/error対応）
  */
 
-import { FiAlertTriangle } from "react-icons/fi"
+import { FiAlertTriangle } from "react-icons/fi";
 
-import { BaseModal } from "./BaseModal"
+import { BaseModal } from "./BaseModal";
 
 /**
  * 注意事項アイテムの型定義
  */
 export type WarningItem = {
-  text: string
-  highlight?: boolean
-}
+  text: string;
+  highlight?: boolean;
+};
 
 /**
  * 詳細確認情報の型定義
  */
 export type ConfirmDetails = {
   /** メインアイコン */
-  icon?: React.ReactNode
+  icon?: React.ReactNode;
   /** サブテキスト（パス、サイズなど） */
-  subText?: string
+  subText?: string;
   /** 注意事項リスト */
-  warnings?: WarningItem[]
+  warnings?: WarningItem[];
   /** カスタム詳細コンテンツ */
-  customContent?: React.ReactNode
-}
+  customContent?: React.ReactNode;
+};
 
 type ConfirmModalProps = {
-  id: string
-  isOpen: boolean
-  title?: string
-  message: string
+  id: string;
+  isOpen: boolean;
+  title?: string;
+  message: string;
   /** 詳細確認情報（アイコン、注意事項など） */
-  details?: ConfirmDetails
-  cancelText?: string
-  confirmText?: string
+  details?: ConfirmDetails;
+  cancelText?: string;
+  confirmText?: string;
   /** 確認ボタンのスタイル */
-  confirmVariant?: "primary" | "error"
-  onConfirm: () => void
-  onCancel: () => void
-}
+  confirmVariant?: "primary" | "error";
+  onConfirm: () => void;
+  onCancel: () => void;
+};
 
 export default function ConfirmModal({
   id,
@@ -62,7 +62,7 @@ export default function ConfirmModal({
   confirmText = "はい",
   confirmVariant = "primary",
   onConfirm,
-  onCancel
+  onCancel,
 }: ConfirmModalProps): React.JSX.Element {
   const footer = (
     <div className="justify-end space-x-2">
@@ -76,7 +76,7 @@ export default function ConfirmModal({
         {confirmText}
       </button>
     </div>
-  )
+  );
 
   return (
     <BaseModal
@@ -125,5 +125,5 @@ export default function ConfirmModal({
         </div>
       )}
     </BaseModal>
-  )
+  );
 }

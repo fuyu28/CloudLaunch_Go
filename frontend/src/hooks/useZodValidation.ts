@@ -30,44 +30,44 @@
  * ```
  */
 
-import { useState, useCallback, useMemo } from "react"
-import { ZodError } from "zod"
+import { useState, useCallback, useMemo } from "react";
+import { ZodError } from "zod";
 
-import type { ZodSchema } from "zod"
+import type { ZodSchema } from "zod";
 
 /**
  * バリデーション状態の型定義
  */
 export type ValidationState<T> = {
   /** エラーメッセージのマップ */
-  errors: Record<keyof T, string | undefined>
+  errors: Record<keyof T, string | undefined>;
   /** タッチされたフィールドのセット */
-  touchedFields: Set<keyof T>
+  touchedFields: Set<keyof T>;
   /** バリデーションが有効かどうか */
-  isValid: boolean
-}
+  isValid: boolean;
+};
 
 /**
  * Zodバリデーションフックの戻り値の型定義
  */
 export type ZodValidationResult<T> = {
   /** 特定フィールドのエラーを取得 */
-  getError: (field: keyof T) => string | undefined
+  getError: (field: keyof T) => string | undefined;
   /** 特定フィールドにエラーがあるかチェック */
-  hasError: (field: keyof T) => boolean
+  hasError: (field: keyof T) => boolean;
   /** 特定フィールドをタッチ済みにマーク */
-  touch: (field: keyof T) => void
+  touch: (field: keyof T) => void;
   /** すべてのフィールドをタッチ済みにマーク */
-  touchAll: () => void
+  touchAll: () => void;
   /** タッチ状態をリセット */
-  resetTouched: () => void
+  resetTouched: () => void;
   /** 全体のバリデーション実行 */
-  validate: () => { isValid: boolean; errors: Record<keyof T, string> }
+  validate: () => { isValid: boolean; errors: Record<keyof T, string> };
   /** 送信可能かどうか */
-  canSubmit: boolean
+  canSubmit: boolean;
   /** バリデーション状態 */
-  state: ValidationState<T>
-}
+  state: ValidationState<T>;
+};
 
 /**
  * 汎用Zodバリデーションフック
@@ -85,99 +85,99 @@ export function useZodValidation<T extends Record<string, unknown>>(
   data: T,
   options: {
     /** リアルタイムバリデーションを有効にするか（デフォルト: true） */
-    realtime?: boolean
+    realtime?: boolean;
     /** タッチされていないフィールドのエラーも表示するか（デフォルト: false） */
-    showUntouchedErrors?: boolean
-  } = {}
+    showUntouchedErrors?: boolean;
+  } = {},
 ): ZodValidationResult<T> {
-  const { showUntouchedErrors = false } = options
+  const { showUntouchedErrors = false } = options;
 
   // タッチされたフィールドの状態
-  const [touchedFields, setTouchedFields] = useState<Set<keyof T>>(new Set())
+  const [touchedFields, setTouchedFields] = useState<Set<keyof T>>(new Set());
 
   // 現在のバリデーション結果
   const validationResult = useMemo(() => {
     try {
-      schema.parse(data)
-      return { isValid: true, errors: {} as Record<keyof T, string> }
+      schema.parse(data);
+      return { isValid: true, errors: {} as Record<keyof T, string> };
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors: Record<keyof T, string> = {} as Record<keyof T, string>
+        const errors: Record<keyof T, string> = {} as Record<keyof T, string>;
         error.issues.forEach((issue) => {
-          const fieldName = issue.path[0] as keyof T
+          const fieldName = issue.path[0] as keyof T;
           if (fieldName) {
-            errors[fieldName] = issue.message
+            errors[fieldName] = issue.message;
           }
-        })
-        return { isValid: false, errors }
+        });
+        return { isValid: false, errors };
       }
-      return { isValid: false, errors: {} as Record<keyof T, string> }
+      return { isValid: false, errors: {} as Record<keyof T, string> };
     }
-  }, [schema, data])
+  }, [schema, data]);
 
   // バリデーション状態
   const state: ValidationState<T> = useMemo(() => {
     const displayErrors: Record<keyof T, string | undefined> = {} as Record<
       keyof T,
       string | undefined
-    >
+    >;
 
     // エラー表示ロジック
     Object.keys(validationResult.errors).forEach((field) => {
-      const fieldKey = field as keyof T
-      const shouldShow = showUntouchedErrors || touchedFields.has(fieldKey)
-      displayErrors[fieldKey] = shouldShow ? validationResult.errors[fieldKey] : undefined
-    })
+      const fieldKey = field as keyof T;
+      const shouldShow = showUntouchedErrors || touchedFields.has(fieldKey);
+      displayErrors[fieldKey] = shouldShow ? validationResult.errors[fieldKey] : undefined;
+    });
 
     return {
       errors: displayErrors,
       touchedFields,
-      isValid: validationResult.isValid
-    }
-  }, [validationResult, touchedFields, showUntouchedErrors])
+      isValid: validationResult.isValid,
+    };
+  }, [validationResult, touchedFields, showUntouchedErrors]);
 
   // 特定フィールドのエラーを取得
   const getError = useCallback(
     (field: keyof T): string | undefined => {
-      return state.errors[field]
+      return state.errors[field];
     },
-    [state.errors]
-  )
+    [state.errors],
+  );
 
   // 特定フィールドにエラーがあるかチェック
   const hasError = useCallback(
     (field: keyof T): boolean => {
-      return !!state.errors[field]
+      return !!state.errors[field];
     },
-    [state.errors]
-  )
+    [state.errors],
+  );
 
   // 特定フィールドをタッチ済みにマーク
   const touch = useCallback((field: keyof T) => {
-    setTouchedFields((prev) => new Set([...prev, field]))
-  }, [])
+    setTouchedFields((prev) => new Set([...prev, field]));
+  }, []);
 
   // すべてのフィールドをタッチ済みにマーク
   const touchAll = useCallback(() => {
-    const allFields = Object.keys(data) as (keyof T)[]
-    setTouchedFields(new Set(allFields))
-  }, [data])
+    const allFields = Object.keys(data) as (keyof T)[];
+    setTouchedFields(new Set(allFields));
+  }, [data]);
 
   // タッチ状態をリセット
   const resetTouched = useCallback(() => {
-    setTouchedFields(new Set())
-  }, [])
+    setTouchedFields(new Set());
+  }, []);
 
   // 全体のバリデーション実行
   const validate = useCallback(() => {
-    touchAll()
-    return validationResult
-  }, [touchAll, validationResult])
+    touchAll();
+    return validationResult;
+  }, [touchAll, validationResult]);
 
   // 送信可能かどうか
   const canSubmit = useMemo(() => {
-    return validationResult.isValid
-  }, [validationResult.isValid])
+    return validationResult.isValid;
+  }, [validationResult.isValid]);
 
   return {
     getError,
@@ -187,8 +187,8 @@ export function useZodValidation<T extends Record<string, unknown>>(
     resetTouched,
     validate,
     canSubmit,
-    state
-  }
+    state,
+  };
 }
 
-export default useZodValidation
+export default useZodValidation;

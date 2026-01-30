@@ -5,14 +5,14 @@
  * ゲーム選択機能付きで、任意のゲームに対してメモを作成できます。
  */
 
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-import MemoForm from "@renderer/components/MemoForm"
+import MemoForm from "@renderer/components/MemoForm";
 
 export default function MemoCreate(): React.JSX.Element {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const preSelectedGameId = searchParams.get("gameId")
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preSelectedGameId = searchParams.get("gameId");
 
   return (
     <MemoForm
@@ -22,8 +22,8 @@ export default function MemoCreate(): React.JSX.Element {
       pageTitle="新しいメモを作成"
       backTo="/"
       onSaveSuccess={(gameId) => {
-        navigate(`/memo/list/${gameId}`)
+        navigate(`/memo/list/${gameId}`);
       }}
     />
-  )
+  );
 }

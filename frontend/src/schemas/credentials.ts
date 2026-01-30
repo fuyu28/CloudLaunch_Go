@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod";
 
 /**
  * R2/S3認証情報のバリデーションスキーマ
@@ -21,21 +21,21 @@ export const credsSchema = z.object({
   secretAccessKey: z
     .string()
     .min(1, "シークレットアクセスキーは必須です")
-    .min(20, "シークレットアクセスキーは20文字以上で入力してください")
-})
+    .min(20, "シークレットアクセスキーは20文字以上で入力してください"),
+});
 
 /**
  * 認証情報の型定義（zodスキーマから自動生成）
  */
-export type Credentials = z.infer<typeof credsSchema>
+export type Credentials = z.infer<typeof credsSchema>;
 
 /**
  * 認証情報の部分更新用スキーマ
  * 設定フォームでの部分更新に使用
  */
-export const partialCredsSchema = credsSchema.partial()
+export const partialCredsSchema = credsSchema.partial();
 
 /**
  * 部分認証情報の型定義
  */
-export type PartialCredentials = z.infer<typeof partialCredsSchema>
+export type PartialCredentials = z.infer<typeof partialCredsSchema>;

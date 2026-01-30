@@ -1,17 +1,17 @@
 // テスト環境でloggerが利用できない場合のフォールバック
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let logger: any
+let logger: any;
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  logger = require("@renderer/utils/logger").logger
+  logger = require("@renderer/utils/logger").logger;
 } catch {
   // テスト環境でloggerが使用できない場合のモック
   logger = {
     error: () => {},
     warn: () => {},
     info: () => {},
-    debug: () => {}
-  }
+    debug: () => {},
+  };
 }
 
 /**
@@ -39,30 +39,30 @@ try {
 export function isUrl(path: string): boolean {
   // まず基本的なURL形式をチェック
   if (!path.includes("://")) {
-    return false
+    return false;
   }
 
   // HTTP/HTTPSプロトコルをチェック
   if (path.toLowerCase().startsWith("http://") || path.toLowerCase().startsWith("https://")) {
     try {
-      new URL(path)
-      return true
+      new URL(path);
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
   // Windows形式のファイルパス（D:\...）はURLではない
   if (/^[A-Za-z]:[\\/]/.test(path)) {
-    return false
+    return false;
   }
 
   // その他のプロトコル（ftp、fileなど）もチェック
   try {
-    const url = new URL(path)
-    return url.protocol !== "file:" // file:プロトコルはローカルファイルとして扱う
+    const url = new URL(path);
+    return url.protocol !== "file:"; // file:プロトコルはローカルファイルとして扱う
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -73,25 +73,25 @@ export function isUrl(path: string): boolean {
  */
 export async function checkFileExists(filePath: string): Promise<boolean> {
   if (!filePath || filePath.trim() === "") {
-    return false
+    return false;
   }
 
   // URLの場合は存在チェックをスキップ
   if (isUrl(filePath)) {
-    return true
+    return true;
   }
 
   try {
     // ElectronのAPIを使ってファイル存在チェック
-    const exists = await window.api.file.checkFileExists(filePath)
-    return exists
+    const exists = await window.api.file.checkFileExists(filePath);
+    return exists;
   } catch (error) {
     logger.error("ファイル存在チェックエラー:", {
       component: "fileValidation",
       function: "unknown",
-      data: error
-    })
-    return false
+      data: error,
+    });
+    return false;
   }
 }
 
@@ -102,20 +102,20 @@ export async function checkFileExists(filePath: string): Promise<boolean> {
  */
 export async function checkDirectoryExists(dirPath: string): Promise<boolean> {
   if (!dirPath || dirPath.trim() === "") {
-    return false
+    return false;
   }
 
   try {
     // ElectronのAPIを使ってディレクトリ存在チェック
-    const exists = await window.api.file.checkDirectoryExists(dirPath)
-    return exists
+    const exists = await window.api.file.checkDirectoryExists(dirPath);
+    return exists;
   } catch (error) {
     logger.warn("ディレクトリ存在チェックエラー:", {
       component: "fileValidation",
       function: "unknown",
-      data: error
-    })
-    return false
+      data: error,
+    });
+    return false;
   }
 }
 
@@ -126,19 +126,19 @@ export async function checkDirectoryExists(dirPath: string): Promise<boolean> {
  */
 export async function validateImagePath(imagePath: string): Promise<boolean> {
   if (!imagePath || imagePath.trim() === "") {
-    return true // 画像パスは任意項目
+    return true; // 画像パスは任意項目
   }
 
   // URLの場合は拡張子チェックのみ
   if (isUrl(imagePath)) {
-    const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"]
-    const url = new URL(imagePath)
-    const pathname = url.pathname.toLowerCase()
-    return imageExtensions.some((ext) => pathname.endsWith(ext))
+    const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
+    const url = new URL(imagePath);
+    const pathname = url.pathname.toLowerCase();
+    return imageExtensions.some((ext) => pathname.endsWith(ext));
   }
 
   // ローカルファイルの場合は存在チェック
-  return await checkFileExists(imagePath)
+  return await checkFileExists(imagePath);
 }
 
 /**
@@ -148,24 +148,24 @@ export async function validateImagePath(imagePath: string): Promise<boolean> {
  */
 export async function validateExecutablePath(exePath: string): Promise<boolean> {
   if (!exePath || exePath.trim() === "") {
-    return false // 実行ファイルパスは必須
+    return false; // 実行ファイルパスは必須
   }
 
   // URLは実行ファイルとして無効
   if (isUrl(exePath)) {
-    return false
+    return false;
   }
 
   // 拡張子チェック
-  const executableExtensions = [".exe", ".app"]
-  const hasValidExtension = executableExtensions.some((ext) => exePath.toLowerCase().endsWith(ext))
+  const executableExtensions = [".exe", ".app"];
+  const hasValidExtension = executableExtensions.some((ext) => exePath.toLowerCase().endsWith(ext));
 
   if (!hasValidExtension) {
-    return false
+    return false;
   }
 
   // ファイル存在チェック
-  return await checkFileExists(exePath)
+  return await checkFileExists(exePath);
 }
 
 /**
@@ -175,14 +175,14 @@ export async function validateExecutablePath(exePath: string): Promise<boolean> 
  */
 export async function validateSaveFolderPath(saveFolderPath: string): Promise<boolean> {
   if (!saveFolderPath || saveFolderPath.trim() === "") {
-    return true // セーブフォルダパスは任意項目
+    return true; // セーブフォルダパスは任意項目
   }
 
   // URLはフォルダパスとして無効
   if (isUrl(saveFolderPath)) {
-    return false
+    return false;
   }
 
   // ディレクトリ存在チェック
-  return await checkDirectoryExists(saveFolderPath)
+  return await checkDirectoryExists(saveFolderPath);
 }

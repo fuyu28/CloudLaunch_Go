@@ -15,11 +15,11 @@
  * ```
  */
 
-import { isValidCredsAtom } from "@renderer/state/credentials"
-import { useSetAtom } from "jotai"
-import { useCallback } from "react"
+import { isValidCredsAtom } from "@renderer/state/credentials";
+import { useSetAtom } from "jotai";
+import { useCallback } from "react";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
 /**
  * 認証情報検証フック
@@ -29,7 +29,7 @@ import { logger } from "@renderer/utils/logger"
  * @returns 認証情報検証関数
  */
 export function useValidateCreds(): () => Promise<boolean> {
-  const setIsValidCreds = useSetAtom(isValidCredsAtom)
+  const setIsValidCreds = useSetAtom(isValidCredsAtom);
 
   /**
    * 認証情報を検証する
@@ -41,21 +41,21 @@ export function useValidateCreds(): () => Promise<boolean> {
    */
   const validate = useCallback(async () => {
     try {
-      const { success, err } = await window.api.credential.validateSavedCredential()
-      setIsValidCreds(success)
+      const { success, err } = await window.api.credential.validateSavedCredential();
+      setIsValidCreds(success);
       if (!success) {
         logger.error("Credential validation failed:", {
           component: "useValidCreds",
           function: "unknown",
-          data: err?.message ?? "不明なエラー"
-        })
+          data: err?.message ?? "不明なエラー",
+        });
       }
-      return success
+      return success;
     } catch {
-      setIsValidCreds(false)
-      return false
+      setIsValidCreds(false);
+      return false;
     }
-  }, [setIsValidCreds])
+  }, [setIsValidCreds]);
 
-  return validate
+  return validate;
 }

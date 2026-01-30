@@ -5,24 +5,24 @@
  * MemoCardとMemoListで共通使用されます。
  */
 
-import { FaEdit, FaTrash, FaEllipsisV, FaSync } from "react-icons/fa"
+import { FaEdit, FaTrash, FaEllipsisV, FaSync } from "react-icons/fa";
 
 type MemoDropdownMenuProps = {
   /** メモID */
-  memoId: string
+  memoId: string;
   /** ドロップダウンが開いているかどうか */
-  isOpen: boolean
+  isOpen: boolean;
   /** ドロップダウンの開閉処理 */
-  onToggle: (memoId: string, event: React.MouseEvent) => void
+  onToggle: (memoId: string, event: React.MouseEvent) => void;
   /** 編集ボタンクリック処理 */
-  onEdit: (memoId: string, event: React.MouseEvent) => void
+  onEdit: (memoId: string, event: React.MouseEvent) => void;
   /** 削除ボタンクリック処理 */
-  onDelete: (memoId: string, event: React.MouseEvent) => void
+  onDelete: (memoId: string, event: React.MouseEvent) => void;
   /** 同期ボタンクリック処理（オプション、メモ一覧ページのみ） */
-  onSyncFromCloud?: (event: React.MouseEvent) => void
+  onSyncFromCloud?: (event: React.MouseEvent) => void;
   /** 絶対位置のスタイルクラス（オプション） */
-  className?: string
-}
+  className?: string;
+};
 
 /**
  * メモ三点リーダーメニューコンポーネント
@@ -37,7 +37,7 @@ export default function MemoDropdownMenu({
   onEdit,
   onDelete,
   onSyncFromCloud,
-  className = "absolute top-2 right-2"
+  className = "absolute top-2 right-2",
 }: MemoDropdownMenuProps): React.JSX.Element {
   return (
     <div
@@ -49,8 +49,8 @@ export default function MemoDropdownMenu({
         role="button"
         className="btn btn-xs btn-ghost p-1"
         onClick={(e) => {
-          e.stopPropagation()
-          onToggle(memoId, e)
+          e.stopPropagation();
+          onToggle(memoId, e);
         }}
       >
         <FaEllipsisV className="text-xs" />
@@ -88,5 +88,5 @@ export default function MemoDropdownMenu({
         </li>
       </ul>
     </div>
-  )
+  );
 }

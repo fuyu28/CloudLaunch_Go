@@ -34,10 +34,10 @@ export const PATTERNS = {
 
   // ファイル名サニタイズ
   /** ファイル名に使用できない文字 */
-  INVALID_FILENAME_CHARS: /[<>:"/\\|?*]/g
-} as const
+  INVALID_FILENAME_CHARS: /[<>:"/\\|?*]/g,
+} as const;
 
 /**
  * パターン定数の型定義
  */
-export type Patterns = typeof PATTERNS
+export type Patterns = typeof PATTERNS;

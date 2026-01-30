@@ -15,13 +15,13 @@
  * - SettingsFormField コンポーネント
  */
 
-import { FaCheck, FaSyncAlt, FaTimes } from "react-icons/fa"
+import { FaCheck, FaSyncAlt, FaTimes } from "react-icons/fa";
 
-import SettingsFormField from "./SettingsFormField"
-import { useConnectionStatus } from "../hooks/useConnectionStatus"
-import { useOfflineMode } from "../hooks/useOfflineMode"
-import { useSettingsFormZod } from "../hooks/useSettingsFormZod"
-import { getOfflineDisabledClasses } from "../utils/offlineUtils"
+import SettingsFormField from "./SettingsFormField";
+import { useConnectionStatus } from "../hooks/useConnectionStatus";
+import { useOfflineMode } from "../hooks/useOfflineMode";
+import { useSettingsFormZod } from "../hooks/useSettingsFormZod";
+import { getOfflineDisabledClasses } from "../utils/offlineUtils";
 
 /**
  * R2/S3設定コンポーネント
@@ -40,50 +40,54 @@ export default function R2S3Settings(): React.JSX.Element {
     fieldErrors,
     testConnection,
     isTesting,
-    isConnectionSuccessful
-  } = useSettingsFormZod()
-  const { status: connectionStatus, message: connectionMessage, check: checkConnection } = useConnectionStatus()
-  const { isOfflineMode, checkNetworkFeature } = useOfflineMode()
+    isConnectionSuccessful,
+  } = useSettingsFormZod();
+  const {
+    status: connectionStatus,
+    message: connectionMessage,
+    check: checkConnection,
+  } = useConnectionStatus();
+  const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
 
   // 手動接続テスト実行
   const handleConnectionTest = (): void => {
     if (!checkNetworkFeature("接続テスト")) {
-      return
+      return;
     }
-    testConnection()
-  }
+    testConnection();
+  };
 
   // 設定保存（自動で接続テストを含む）
   const handleSaveSettings = (): void => {
     if (!checkNetworkFeature("設定保存")) {
-      return
+      return;
     }
     // handleSave内で自動的に接続テストが実行される
-    handleSave()
-  }
+    handleSave();
+  };
 
   const handleStatusCheck = (): void => {
     if (!checkNetworkFeature("接続状態の確認")) {
-      return
+      return;
     }
-    checkConnection()
-  }
+    checkConnection();
+  };
 
-  const disabledClasses = getOfflineDisabledClasses(isOfflineMode)
+  const disabledClasses = getOfflineDisabledClasses(isOfflineMode);
   const statusText = isOfflineMode
     ? "オフライン中"
     : connectionStatus === "loading"
       ? "確認中..."
       : connectionStatus === "success"
         ? "接続中"
-        : "未接続"
+        : "未接続";
   const statusColor = isOfflineMode
     ? "text-warning"
     : connectionStatus === "success"
       ? "text-success"
       : connectionStatus === "error"
         ? "text-error"
-        : "text-base-content/70"
+        : "text-base-content/70";
 
   return (
     <div className={disabledClasses}>
@@ -218,5 +222,5 @@ export default function R2S3Settings(): React.JSX.Element {
         </div>
       )}
     </div>
-  )
+  );
 }

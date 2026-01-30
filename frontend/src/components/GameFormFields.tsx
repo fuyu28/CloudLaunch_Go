@@ -22,29 +22,29 @@
  * ```
  */
 
-import { FileSelectButton } from "./FileSelectButton"
-import type { InputGameData } from "src/types/game"
-import type { GameFormValidationResult } from "../hooks/useGameFormValidationZod"
+import { FileSelectButton } from "./FileSelectButton";
+import type { InputGameData } from "src/types/game";
+import type { GameFormValidationResult } from "../hooks/useGameFormValidationZod";
 
 /**
  * ゲームフォームフィールドコンポーネントのprops
  */
 export type GameFormFieldsProps = {
   /** ゲームデータ */
-  gameData: InputGameData
+  gameData: InputGameData;
   /** フィールド変更時のコールバック */
-  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   /** 画像ファイル選択のコールバック */
-  onBrowseImage: () => void
+  onBrowseImage: () => void;
   /** 実行ファイル選択のコールバック */
-  onBrowseExe: () => void
+  onBrowseExe: () => void;
   /** セーブフォルダ選択のコールバック */
-  onBrowseSaveFolder: () => void
+  onBrowseSaveFolder: () => void;
   /** フィールドを無効化する場合は true */
-  disabled?: boolean
+  disabled?: boolean;
   /** バリデーション結果 */
-  validation: GameFormValidationResult
-}
+  validation: GameFormValidationResult;
+};
 
 /**
  * ゲームフォームフィールドコンポーネント
@@ -61,7 +61,7 @@ export function GameFormFields({
   onBrowseExe,
   onBrowseSaveFolder,
   disabled = false,
-  validation
+  validation,
 }: GameFormFieldsProps): React.JSX.Element {
   return (
     <div className="space-y-4">
@@ -151,7 +151,7 @@ export function GameFormFields({
         errorMessage={validation.errors.saveFolderPath}
       />
     </div>
-  )
+  );
 }
 
-export default GameFormFields
+export default GameFormFields;

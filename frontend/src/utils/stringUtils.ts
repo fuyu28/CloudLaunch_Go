@@ -9,7 +9,7 @@
  * - エスケープ処理
  */
 
-import { PATTERNS } from "../constants"
+import { PATTERNS } from "../constants";
 
 /**
  * ファイル名として使用できない文字をアンダースコアに置換
@@ -17,7 +17,7 @@ import { PATTERNS } from "../constants"
  * @returns サニタイズされたファイル名
  */
 export function sanitizeFilename(filename: string): string {
-  return filename.replace(PATTERNS.INVALID_FILENAME_CHARS, "_")
+  return filename.replace(PATTERNS.INVALID_FILENAME_CHARS, "_");
 }
 
 /**
@@ -26,7 +26,7 @@ export function sanitizeFilename(filename: string): string {
  * @returns サニタイズされたタイトル
  */
 export function sanitizeGameTitle(gameTitle: string): string {
-  return sanitizeFilename(gameTitle)
+  return sanitizeFilename(gameTitle);
 }
 
 /**
@@ -35,8 +35,8 @@ export function sanitizeGameTitle(gameTitle: string): string {
  * @returns リモートパス（games/{サニタイズされたタイトル}/save_data）
  */
 export function createRemotePath(gameTitle: string): string {
-  const sanitizedTitle = sanitizeGameTitle(gameTitle)
-  return `games/${sanitizedTitle}/save_data`
+  const sanitizedTitle = sanitizeGameTitle(gameTitle);
+  return `games/${sanitizedTitle}/save_data`;
 }
 
 /**
@@ -45,7 +45,7 @@ export function createRemotePath(gameTitle: string): string {
  * @returns 有効な文字列の場合 true
  */
 export function isNonEmptyString(value: string | undefined | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 /**
@@ -54,7 +54,7 @@ export function isNonEmptyString(value: string | undefined | undefined): value i
  * @returns 正規化された文字列
  */
 export function normalizeWhitespace(value: string): string {
-  return value.trim().replace(/\s+/g, " ")
+  return value.trim().replace(/\s+/g, " ");
 }
 
 /**
@@ -66,7 +66,7 @@ export function camelToKebab(camelCase: string): string {
   return camelCase
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2") // 小文字・数字の後の大文字の前にハイフンを追加
     .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2") // 連続する大文字の間にハイフンを追加
-    .toLowerCase()
+    .toLowerCase();
 }
 
 /**
@@ -78,13 +78,13 @@ export function camelToKebab(camelCase: string): string {
  */
 export function truncateString(text: string, maxLength: number, ellipsis = "..."): string {
   if (text.length <= maxLength) {
-    return text
+    return text;
   }
 
   // 最大長が省略記号の長さ以下の場合は省略記号のみ返す
   if (maxLength <= ellipsis.length) {
-    return ellipsis
+    return ellipsis;
   }
 
-  return text.slice(0, maxLength - ellipsis.length) + ellipsis
+  return text.slice(0, maxLength - ellipsis.length) + ellipsis;
 }

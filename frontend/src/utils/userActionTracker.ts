@@ -9,7 +9,7 @@
  * - 使用状況の分析
  */
 
-import { logger } from "./logger"
+import { logger } from "./logger";
 
 /**
  * ユーザーアクションの種類
@@ -33,31 +33,31 @@ export type UserActionType =
   | "memo_deleted"
   | "error_occurred"
   | "performance_issue"
-  | "feature_used"
+  | "feature_used";
 
 /**
  * ユーザーアクションデータ
  */
 export interface UserAction {
   /** アクションの種類 */
-  type: UserActionType
+  type: UserActionType;
   /** アクションの詳細説明 */
-  description: string
+  description: string;
   /** 発生時刻 */
-  timestamp: Date
+  timestamp: Date;
   /** セッションID */
-  sessionId: string
+  sessionId: string;
   /** アクション実行時間（ミリ秒、該当する場合） */
-  duration?: number
+  duration?: number;
   /** 関連するエンティティID */
-  entityId?: string
+  entityId?: string;
   /** 追加のメタデータ */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>;
   /** エラー情報（該当する場合） */
   error?: {
-    message: string
-    stack?: string
-  }
+    message: string;
+    stack?: string;
+  };
 }
 
 /**
@@ -65,17 +65,17 @@ export interface UserAction {
  */
 interface UserSession {
   /** セッションID */
-  id: string
+  id: string;
   /** セッション開始時刻 */
-  startTime: Date
+  startTime: Date;
   /** 最後のアクティビティ時刻 */
-  lastActivity: Date
+  lastActivity: Date;
   /** アクション数 */
-  actionCount: number
+  actionCount: number;
   /** ユーザーエージェント */
-  userAgent: string
+  userAgent: string;
   /** アプリケーションバージョン */
-  appVersion: string
+  appVersion: string;
 }
 
 /**
@@ -83,36 +83,36 @@ interface UserSession {
  */
 interface ActionStats {
   /** アクション種類別の実行回数 */
-  countByType: Record<UserActionType, number>
+  countByType: Record<UserActionType, number>;
   /** 合計アクション数 */
-  totalActions: number
+  totalActions: number;
   /** 今日のアクション数 */
-  todayActions: number
+  todayActions: number;
   /** 最も使用される機能 */
-  mostUsedFeatures: Array<{ type: UserActionType; count: number }>
+  mostUsedFeatures: Array<{ type: UserActionType; count: number }>;
   /** 平均セッション時間 */
-  averageSessionDuration: number
+  averageSessionDuration: number;
 }
 
 /**
  * ユーザーアクション追跡クラス
  */
 class UserActionTracker {
-  private currentSession: UserSession | null = null
-  private actions: UserAction[] = []
-  private readonly maxActionsInMemory = 1000
-  private readonly sessionTimeoutMs = 30 * 60 * 1000 // 30分
+  private currentSession: UserSession | null = null;
+  private actions: UserAction[] = [];
+  private readonly maxActionsInMemory = 1000;
+  private readonly sessionTimeoutMs = 30 * 60 * 1000; // 30分
 
   constructor() {
-    this.initializeSession()
-    this.setupEventListeners()
+    this.initializeSession();
+    this.setupEventListeners();
   }
 
   /**
    * セッションを初期化
    */
   private initializeSession(): void {
-    const sessionId = this.generateSessionId()
+    const sessionId = this.generateSessionId();
 
     this.currentSession = {
       id: sessionId,
@@ -120,8 +120,8 @@ class UserActionTracker {
       lastActivity: new Date(),
       actionCount: 0,
       userAgent: navigator.userAgent,
-      appVersion: this.getAppVersion()
-    }
+      appVersion: this.getAppVersion(),
+    };
 
     logger.info("ユーザーセッションを開始", {
       component: "UserActionTracker",
@@ -129,9 +129,9 @@ class UserActionTracker {
       data: {
         sessionId: this.currentSession.id,
         userAgent: this.currentSession.userAgent,
-        appVersion: this.currentSession.appVersion
-      }
-    })
+        appVersion: this.currentSession.appVersion,
+      },
+    });
   }
 
   /**
@@ -140,20 +140,20 @@ class UserActionTracker {
   private setupEventListeners(): void {
     // ページの終了時にセッションを終了
     window.addEventListener("beforeunload", () => {
-      this.endSession()
-    })
+      this.endSession();
+    });
 
     // アクティビティがない場合のセッションタイムアウト
     setInterval(() => {
-      this.checkSessionTimeout()
-    }, 60000) // 1分ごとにチェック
+      this.checkSessionTimeout();
+    }, 60000); // 1分ごとにチェック
   }
 
   /**
    * セッションIDを生成
    */
   private generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -161,21 +161,21 @@ class UserActionTracker {
    */
   private getAppVersion(): string {
     // package.jsonから取得するか、環境変数から取得
-    return process.env.npm_package_version || "unknown"
+    return process.env.npm_package_version || "unknown";
   }
 
   /**
    * セッションタイムアウトをチェック
    */
   private checkSessionTimeout(): void {
-    if (!this.currentSession) return
+    if (!this.currentSession) return;
 
-    const now = new Date()
-    const timeSinceLastActivity = now.getTime() - this.currentSession.lastActivity.getTime()
+    const now = new Date();
+    const timeSinceLastActivity = now.getTime() - this.currentSession.lastActivity.getTime();
 
     if (timeSinceLastActivity > this.sessionTimeoutMs) {
-      this.endSession()
-      this.initializeSession()
+      this.endSession();
+      this.initializeSession();
     }
   }
 
@@ -186,14 +186,14 @@ class UserActionTracker {
     type: UserActionType,
     description: string,
     options: {
-      entityId?: string
-      metadata?: Record<string, unknown>
-      error?: { message: string; stack?: string }
-      duration?: number
-    } = {}
+      entityId?: string;
+      metadata?: Record<string, unknown>;
+      error?: { message: string; stack?: string };
+      duration?: number;
+    } = {},
   ): void {
     if (!this.currentSession) {
-      this.initializeSession()
+      this.initializeSession();
     }
 
     const action: UserAction = {
@@ -204,20 +204,20 @@ class UserActionTracker {
       duration: options.duration,
       entityId: options.entityId,
       metadata: options.metadata,
-      error: options.error
-    }
+      error: options.error,
+    };
 
     // アクションを配列に追加
-    this.actions.push(action)
+    this.actions.push(action);
 
     // メモリ使用量を制限
     if (this.actions.length > this.maxActionsInMemory) {
-      this.actions = this.actions.slice(-this.maxActionsInMemory)
+      this.actions = this.actions.slice(-this.maxActionsInMemory);
     }
 
     // セッション情報を更新
-    this.currentSession!.lastActivity = new Date()
-    this.currentSession!.actionCount++
+    this.currentSession!.lastActivity = new Date();
+    this.currentSession!.actionCount++;
 
     // ログに記録
     logger.logUserAction(description, {
@@ -225,12 +225,12 @@ class UserActionTracker {
       sessionId: this.currentSession!.id,
       entityId: options.entityId,
       duration: options.duration,
-      ...options.metadata
-    })
+      ...options.metadata,
+    });
 
     // 重要なアクションの場合はパフォーマンス測定も行う
     if (this.shouldMeasurePerformance(type)) {
-      this.measureActionPerformance(action)
+      this.measureActionPerformance(action);
     }
   }
 
@@ -242,10 +242,10 @@ class UserActionTracker {
       "game_launched",
       "save_uploaded",
       "save_downloaded",
-      "page_visited"
-    ]
+      "page_visited",
+    ];
 
-    return performanceCriticalActions.includes(type)
+    return performanceCriticalActions.includes(type);
   }
 
   /**
@@ -259,9 +259,9 @@ class UserActionTracker {
         data: {
           actionType: action.type,
           duration: `${action.duration}ms`,
-          description: action.description
-        }
-      })
+          description: action.description,
+        },
+      });
     }
   }
 
@@ -269,17 +269,17 @@ class UserActionTracker {
    * 特定のアクション種類の統計を取得
    */
   getActionStats(): ActionStats {
-    const countByType = {} as Record<UserActionType, number>
-    let todayActions = 0
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const countByType = {} as Record<UserActionType, number>;
+    let todayActions = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     // アクション種類別の集計
     for (const action of this.actions) {
-      countByType[action.type] = (countByType[action.type] || 0) + 1
+      countByType[action.type] = (countByType[action.type] || 0) + 1;
 
       if (action.timestamp >= today) {
-        todayActions++
+        todayActions++;
       }
     }
 
@@ -287,37 +287,37 @@ class UserActionTracker {
     const mostUsedFeatures = Object.entries(countByType)
       .map(([type, count]) => ({ type: type as UserActionType, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 5)
+      .slice(0, 5);
 
     // 平均セッション時間を計算（簡易版）
-    const averageSessionDuration = this.calculateAverageSessionDuration()
+    const averageSessionDuration = this.calculateAverageSessionDuration();
 
     return {
       countByType,
       totalActions: this.actions.length,
       todayActions,
       mostUsedFeatures,
-      averageSessionDuration
-    }
+      averageSessionDuration,
+    };
   }
 
   /**
    * 平均セッション時間を計算
    */
   private calculateAverageSessionDuration(): number {
-    if (!this.currentSession) return 0
+    if (!this.currentSession) return 0;
 
-    const sessionDuration = new Date().getTime() - this.currentSession.startTime.getTime()
-    return sessionDuration / 1000 / 60 // 分単位
+    const sessionDuration = new Date().getTime() - this.currentSession.startTime.getTime();
+    return sessionDuration / 1000 / 60; // 分単位
   }
 
   /**
    * セッションを終了
    */
   private endSession(): void {
-    if (!this.currentSession) return
+    if (!this.currentSession) return;
 
-    const sessionDuration = new Date().getTime() - this.currentSession.startTime.getTime()
+    const sessionDuration = new Date().getTime() - this.currentSession.startTime.getTime();
 
     logger.info("ユーザーセッションを終了", {
       component: "UserActionTracker",
@@ -325,33 +325,33 @@ class UserActionTracker {
       data: {
         sessionId: this.currentSession.id,
         duration: `${Math.round(sessionDuration / 1000 / 60)}分`,
-        actionCount: this.currentSession.actionCount
-      }
-    })
+        actionCount: this.currentSession.actionCount,
+      },
+    });
 
-    this.currentSession = null
+    this.currentSession = null;
   }
 
   /**
    * 現在のセッション情報を取得
    */
   getCurrentSession(): UserSession | null {
-    return this.currentSession
+    return this.currentSession;
   }
 
   /**
    * 最近のアクションを取得
    */
   getRecentActions(limit: number = 50): UserAction[] {
-    return this.actions.slice(-limit).reverse()
+    return this.actions.slice(-limit).reverse();
   }
 
   /**
    * 統計レポートを生成
    */
   generateReport(): string {
-    const stats = this.getActionStats()
-    const session = this.getCurrentSession()
+    const stats = this.getActionStats();
+    const session = this.getCurrentSession();
 
     const report = [
       "=== ユーザーアクション レポート ===",
@@ -363,16 +363,16 @@ class UserActionTracker {
       "",
       "最も使用される機能:",
       ...stats.mostUsedFeatures.map(
-        (feature, index) => `  ${index + 1}. ${feature.type}: ${feature.count}回`
-      )
-    ]
+        (feature, index) => `  ${index + 1}. ${feature.type}: ${feature.count}回`,
+      ),
+    ];
 
-    return report.join("\n")
+    return report.join("\n");
   }
 }
 
 // シングルトンインスタンス
-export const userActionTracker = new UserActionTracker()
+export const userActionTracker = new UserActionTracker();
 
 /**
  * よく使われるアクション追跡用のヘルパー関数
@@ -384,28 +384,28 @@ export const trackAction = {
   gameLaunched: (gameId: string, gameTitle: string, duration?: number) =>
     userActionTracker.trackAction("game_launched", `ゲーム起動: ${gameTitle}`, {
       entityId: gameId,
-      duration
+      duration,
     }),
 
   saveUploaded: (gameId: string, fileSize?: number) =>
     userActionTracker.trackAction("save_uploaded", "セーブデータアップロード", {
       entityId: gameId,
-      metadata: { fileSize }
+      metadata: { fileSize },
     }),
 
   pageVisited: (pageName: string) =>
     userActionTracker.trackAction("page_visited", `ページ表示: ${pageName}`, {
-      metadata: { pageName }
+      metadata: { pageName },
     }),
 
   searchPerformed: (query: string, resultCount: number) =>
     userActionTracker.trackAction("search_performed", `検索実行: ${query}`, {
-      metadata: { query, resultCount }
+      metadata: { query, resultCount },
     }),
 
   errorOccurred: (error: Error, context: string) =>
     userActionTracker.trackAction("error_occurred", `エラー発生: ${context}`, {
       error: { message: error.message, stack: error.stack },
-      metadata: { context }
-    })
-}
+      metadata: { context },
+    }),
+};

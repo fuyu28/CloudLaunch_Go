@@ -19,27 +19,27 @@
  * ```
  */
 
-import { FaTrash } from "react-icons/fa"
-import { IoIosPlay } from "react-icons/io"
-import { MdEdit } from "react-icons/md"
+import { FaTrash } from "react-icons/fa";
+import { IoIosPlay } from "react-icons/io";
+import { MdEdit } from "react-icons/md";
 
 /**
  * ゲーム基本操作ボタンコンポーネントのprops
  */
 export type GameActionButtonsProps = {
   /** ゲームID */
-  gameId: string
+  gameId: string;
   /** セーブデータフォルダパス */
-  saveDataFolderPath?: string
+  saveDataFolderPath?: string;
   /** ゲーム起動時のコールバック */
-  onLaunchGame: () => void
+  onLaunchGame: () => void;
   /** ゲーム編集時のコールバック */
-  onEditGame: () => void
+  onEditGame: () => void;
   /** ゲーム削除時のコールバック */
-  onDeleteGame: () => void
+  onDeleteGame: () => void;
   /** 起動中フラグ */
-  isLaunching?: boolean
-}
+  isLaunching?: boolean;
+};
 
 /**
  * ゲーム基本操作ボタンコンポーネント
@@ -53,7 +53,7 @@ export function GameActionButtons({
   onLaunchGame,
   onEditGame,
   onDeleteGame,
-  isLaunching
+  isLaunching,
 }: GameActionButtonsProps): React.JSX.Element {
   return (
     <div className="space-y-3">
@@ -75,7 +75,7 @@ export function GameActionButtons({
         </button>
       </div>
     </div>
-  )
+  );
 }
 
-export default GameActionButtons
+export default GameActionButtons;

@@ -17,10 +17,10 @@ export const NETWORK_FEATURES = {
   UPLOAD_SAVE_DATA: "セーブデータアップロード",
   DOWNLOAD_SAVE_DATA: "セーブデータダウンロード",
   CREDENTIAL_TEST: "接続テスト",
-  CLOUD_BACKUP: "クラウドバックアップ"
-} as const
+  CLOUD_BACKUP: "クラウドバックアップ",
+} as const;
 
-export type NetworkFeature = (typeof NETWORK_FEATURES)[keyof typeof NETWORK_FEATURES]
+export type NetworkFeature = (typeof NETWORK_FEATURES)[keyof typeof NETWORK_FEATURES];
 
 /**
  * 指定された機能がネットワークを必要とするかどうかを判定
@@ -29,7 +29,7 @@ export type NetworkFeature = (typeof NETWORK_FEATURES)[keyof typeof NETWORK_FEAT
  * @returns ネットワークが必要な機能の場合true
  */
 export function isNetworkFeature(feature: string): feature is NetworkFeature {
-  return Object.values(NETWORK_FEATURES).includes(feature as NetworkFeature)
+  return Object.values(NETWORK_FEATURES).includes(feature as NetworkFeature);
 }
 
 /**
@@ -39,7 +39,7 @@ export function isNetworkFeature(feature: string): feature is NetworkFeature {
  * @returns 無効化用のCSSクラス
  */
 export function getOfflineDisabledClasses(isOfflineMode: boolean): string {
-  return isOfflineMode ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
+  return isOfflineMode ? "opacity-50 cursor-not-allowed pointer-events-none" : "";
 }
 
 /**
@@ -49,7 +49,7 @@ export function getOfflineDisabledClasses(isOfflineMode: boolean): string {
  * @returns 警告メッセージ
  */
 export function getOfflineWarningMessage(feature: NetworkFeature): string {
-  return `${feature}はオフラインモードでは利用できません。設定からオフラインモードを無効にしてください。`
+  return `${feature}はオフラインモードでは利用できません。設定からオフラインモードを無効にしてください。`;
 }
 
 /**
@@ -63,12 +63,12 @@ export function getOfflineWarningMessage(feature: NetworkFeature): string {
 export function checkNetworkFeatureExecution(
   isOfflineMode: boolean,
   feature: NetworkFeature,
-  onError?: (message: string) => void
+  onError?: (message: string) => void,
 ): boolean {
   if (isOfflineMode) {
-    const message = getOfflineWarningMessage(feature)
-    onError?.(message)
-    return false
+    const message = getOfflineWarningMessage(feature);
+    onError?.(message);
+    return false;
   }
-  return true
+  return true;
 }

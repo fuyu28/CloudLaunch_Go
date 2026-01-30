@@ -5,185 +5,189 @@
  * サイドメニューからアクセス可能な全メモ閲覧画面です。
  */
 
-import { autoTrackingAtom } from "@renderer/state/settings"
-import { useAtomValue } from "jotai"
-import { useEffect, useState, useCallback, useMemo } from "react"
-import { CiSearch } from "react-icons/ci"
-import { FaPlus, FaFolder, FaSync } from "react-icons/fa"
-import { IoFilterOutline } from "react-icons/io5"
-import { TbSortAscending, TbSortDescending } from "react-icons/tb"
-import { VscChromeClose } from "react-icons/vsc"
-import { Link, useNavigate } from "react-router-dom"
+import { autoTrackingAtom } from "@renderer/state/settings";
+import { useAtomValue } from "jotai";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { CiSearch } from "react-icons/ci";
+import { FaPlus, FaFolder, FaSync } from "react-icons/fa";
+import { IoFilterOutline } from "react-icons/io5";
+import { TbSortAscending, TbSortDescending } from "react-icons/tb";
+import { VscChromeClose } from "react-icons/vsc";
+import { Link, useNavigate } from "react-router-dom";
 
-import ConfirmModal from "@renderer/components/ConfirmModal"
-import FloatingButton from "@renderer/components/FloatingButton"
-import MemoCardBase from "@renderer/components/MemoCardBase"
+import ConfirmModal from "@renderer/components/ConfirmModal";
+import FloatingButton from "@renderer/components/FloatingButton";
+import MemoCardBase from "@renderer/components/MemoCardBase";
 
-import { useDebounce } from "@renderer/hooks/useDebounce"
-import { useDropdownMenu } from "@renderer/hooks/useDropdownMenu"
-import { useMemoOperations } from "@renderer/hooks/useMemoOperations"
-import { useToastHandler } from "@renderer/hooks/useToastHandler"
+import { useDebounce } from "@renderer/hooks/useDebounce";
+import { useDropdownMenu } from "@renderer/hooks/useDropdownMenu";
+import { useMemoOperations } from "@renderer/hooks/useMemoOperations";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import type { GameType } from "src/types/game"
-import type { MemoType } from "src/types/memo"
+import type { GameType } from "src/types/game";
+import type { MemoType } from "src/types/memo";
 
-type SortOption = "updatedAt" | "createdAt" | "title"
-type SortDirection = "asc" | "desc"
+type SortOption = "updatedAt" | "createdAt" | "title";
+type SortDirection = "asc" | "desc";
 
 export default function MemoList(): React.JSX.Element {
-  const { showToast } = useToastHandler()
-  const navigate = useNavigate()
+  const { showToast } = useToastHandler();
+  const navigate = useNavigate();
 
-  const [memos, setMemos] = useState<MemoType[]>([])
-  const [games, setGames] = useState<GameType[]>([])
-  const [selectedGameId, setSelectedGameId] = useState<string>("all")
-  const [searchQuery, setSearchQuery] = useState<string>("")
-  const [sortBy, setSortBy] = useState<SortOption>("updatedAt")
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
-  const [isLoading, setIsLoading] = useState(true)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [memos, setMemos] = useState<MemoType[]>([]);
+  const [games, setGames] = useState<GameType[]>([]);
+  const [selectedGameId, setSelectedGameId] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [sortBy, setSortBy] = useState<SortOption>("updatedAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [isLoading, setIsLoading] = useState(true);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const autoTracking = useAtomValue(autoTrackingAtom)
+  const autoTracking = useAtomValue(autoTrackingAtom);
 
   // 検索クエリのデバウンス処理
-  const debouncedSearchQuery = useDebounce(searchQuery, 300)
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // 共通フックを使用
-  const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu()
+  const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu();
   const {
     handleDeleteMemo,
     handleEditMemo,
     handleViewMemo,
     handleDeleteConfirm,
-    handleSyncFromCloud
+    handleSyncFromCloud,
   } = useMemoOperations({
     onDeleteSuccess: (deletedMemoId) => {
-      setMemos((prev) => prev.filter((memo) => memo.id !== deletedMemoId))
-      setDeleteConfirmId(null)
+      setMemos((prev) => prev.filter((memo) => memo.id !== deletedMemoId));
+      setDeleteConfirmId(null);
     },
     closeDropdown,
     openDeleteModal: setDeleteConfirmId,
     onSyncSuccess: () => {
-      fetchData() // 同期後にメモ一覧を再取得
-    }
-  })
+      fetchData(); // 同期後にメモ一覧を再取得
+    },
+  });
 
   // フィルタリング・ソート処理
   const filteredAndSortedMemos = useMemo(() => {
-    let filtered = [...memos]
+    let filtered = [...memos];
 
     // ゲームフィルター
     if (selectedGameId !== "all") {
-      filtered = filtered.filter((memo) => memo.gameId === selectedGameId)
+      filtered = filtered.filter((memo) => memo.gameId === selectedGameId);
     }
 
     // タイトル検索フィルター
     if (debouncedSearchQuery) {
-      const query = debouncedSearchQuery.toLowerCase()
+      const query = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(
         (memo) =>
           memo.title.toLowerCase().includes(query) ||
           memo.content.toLowerCase().includes(query) ||
-          memo.gameTitle?.toLowerCase().includes(query)
-      )
+          memo.gameTitle?.toLowerCase().includes(query),
+      );
     }
 
     // ソート処理
     filtered.sort((a, b) => {
-      let comparison = 0
+      let comparison = 0;
 
       switch (sortBy) {
         case "title":
-          comparison = a.title.localeCompare(b.title, "ja")
-          break
+          comparison = a.title.localeCompare(b.title, "ja");
+          break;
         case "createdAt":
-          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          break
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
         case "updatedAt":
         default:
-          comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-          break
+          comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+          break;
       }
 
-      return sortDirection === "asc" ? comparison : -comparison
-    })
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
 
-    return filtered
-  }, [memos, selectedGameId, debouncedSearchQuery, sortBy, sortDirection])
+    return filtered;
+  }, [memos, selectedGameId, debouncedSearchQuery, sortBy, sortDirection]);
 
   // 全メモ一覧とゲーム一覧を取得する関数
   const fetchData = useCallback(async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
       // 全メモ一覧を取得
-      const memoResult = await window.api.memo.getAllMemos()
+      const memoResult = await window.api.memo.getAllMemos();
       if (memoResult.success && memoResult.data) {
-        setMemos(memoResult.data)
+        setMemos(memoResult.data);
       } else {
-        showToast("メモの取得に失敗しました", "error")
+        showToast("メモの取得に失敗しました", "error");
       }
 
       // ゲーム一覧を取得（フィルター用）
-      const gameResult = await window.api.database.listGames("", "all", "title")
+      const gameResult = await window.api.database.listGames("", "all", "title");
       if (gameResult && Array.isArray(gameResult)) {
         // データベースの型をGameType型に変換
         const transformedGames: GameType[] = gameResult.map((game) => ({
           ...game,
           saveFolderPath: game.saveFolderPath ?? undefined,
-          imagePath: game.imagePath ?? undefined
-        }))
-        setGames(transformedGames)
+          imagePath: game.imagePath ?? undefined,
+        }));
+        setGames(transformedGames);
       }
     } catch (error) {
-      logger.error("データ取得エラー:", { component: "MemoList", function: "unknown", data: error })
-      showToast("データの取得に失敗しました", "error")
+      logger.error("データ取得エラー:", {
+        component: "MemoList",
+        function: "unknown",
+        data: error,
+      });
+      showToast("データの取得に失敗しました", "error");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [showToast])
+  }, [showToast]);
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    fetchData();
+  }, [fetchData]);
 
   // ソート方向を切り替える関数
   const toggleSortDirection = useCallback(() => {
-    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
-  }, [])
+    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+  }, []);
 
   // 検索をクリアする関数
   const clearSearch = useCallback(() => {
-    setSearchQuery("")
-  }, [])
+    setSearchQuery("");
+  }, []);
 
   // メモフォルダを開く処理
   const handleOpenMemoFolder = useCallback(async () => {
     try {
-      const result = await window.api.memo.getMemoRootDir()
+      const result = await window.api.memo.getMemoRootDir();
       if (result.success && result.data) {
-        await window.api.window.openFolder(result.data)
-        showToast("メモフォルダを開きました", "success")
+        await window.api.window.openFolder(result.data);
+        showToast("メモフォルダを開きました", "success");
       } else {
-        showToast("メモフォルダの取得に失敗しました", "error")
+        showToast("メモフォルダの取得に失敗しました", "error");
       }
     } catch (error) {
       logger.error("フォルダ操作エラー:", {
         component: "MemoList",
         function: "unknown",
-        data: error
-      })
-      showToast("フォルダを開けませんでした", "error")
+        data: error,
+      });
+      showToast("フォルダを開けませんでした", "error");
     }
-  }, [showToast])
+  }, [showToast]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="loading loading-spinner loading-lg"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -305,8 +309,8 @@ export default function MemoList(): React.JSX.Element {
           {(searchQuery || selectedGameId !== "all") && (
             <button
               onClick={() => {
-                clearSearch()
-                setSelectedGameId("all")
+                clearSearch();
+                setSelectedGameId("all");
               }}
               className="btn btn-ghost btn-xs"
             >
@@ -391,5 +395,5 @@ export default function MemoList(): React.JSX.Element {
         onCancel={() => setDeleteConfirmId(null)}
       />
     </div>
-  )
+  );
 }

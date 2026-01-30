@@ -17,13 +17,13 @@
  * - DaisyUI コンポーネント
  */
 
-import { useAtom } from "jotai"
-import { useEffect, useState } from "react"
-import toast from "react-hot-toast"
+import { useAtom } from "jotai";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import { DAISYUI_THEMES } from "@renderer/constants/themes"
+import { DAISYUI_THEMES } from "@renderer/constants/themes";
 import {
   themeAtom,
   changeThemeAtom,
@@ -34,9 +34,9 @@ import {
   autoTrackingAtom,
   uploadConcurrencyAtom,
   sortOptionLabels,
-  filterStateLabels
-} from "../state/settings"
-import type { SortOption, FilterOption } from "src/types/menu"
+  filterStateLabels,
+} from "../state/settings";
+import type { SortOption, FilterOption } from "src/types/menu";
 
 /**
  * 一般設定コンポーネント
@@ -47,160 +47,160 @@ import type { SortOption, FilterOption } from "src/types/menu"
  * @returns 一般設定コンポーネント要素
  */
 export default function GeneralSettings(): React.JSX.Element {
-  const [currentTheme] = useAtom(themeAtom)
-  const [isChangingTheme] = useAtom(isChangingThemeAtom)
-  const [, changeTheme] = useAtom(changeThemeAtom)
-  const [defaultSortOption, setDefaultSortOption] = useAtom(defaultSortOptionAtom)
-  const [defaultFilterState, setDefaultFilterState] = useAtom(defaultFilterStateAtom)
-  const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom)
-  const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom)
-  const [uploadConcurrency, setUploadConcurrency] = useAtom(uploadConcurrencyAtom)
-  const [isSyncingAll, setIsSyncingAll] = useState(false)
+  const [currentTheme] = useAtom(themeAtom);
+  const [isChangingTheme] = useAtom(isChangingThemeAtom);
+  const [, changeTheme] = useAtom(changeThemeAtom);
+  const [defaultSortOption, setDefaultSortOption] = useAtom(defaultSortOptionAtom);
+  const [defaultFilterState, setDefaultFilterState] = useAtom(defaultFilterStateAtom);
+  const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom);
+  const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom);
+  const [uploadConcurrency, setUploadConcurrency] = useAtom(uploadConcurrencyAtom);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // ソート変更ハンドラー
   const handleSortChange = (newSortOption: SortOption): void => {
-    setDefaultSortOption(newSortOption)
-    toast.success(`デフォルトソート順を「${sortOptionLabels[newSortOption]}」に変更しました`)
-  }
+    setDefaultSortOption(newSortOption);
+    toast.success(`デフォルトソート順を「${sortOptionLabels[newSortOption]}」に変更しました`);
+  };
 
   // フィルター変更ハンドラー
   const handleFilterChange = (newFilterState: FilterOption): void => {
-    setDefaultFilterState(newFilterState)
-    toast.success(`デフォルトフィルターを「${filterStateLabels[newFilterState]}」に変更しました`)
-  }
+    setDefaultFilterState(newFilterState);
+    toast.success(`デフォルトフィルターを「${filterStateLabels[newFilterState]}」に変更しました`);
+  };
 
   // オフラインモード変更ハンドラー
   const handleOfflineModeChange = async (enabled: boolean): Promise<void> => {
-    setOfflineMode(enabled)
+    setOfflineMode(enabled);
     try {
-      const result = await window.api.settings.updateOfflineMode(enabled)
+      const result = await window.api.settings.updateOfflineMode(enabled);
       if (!result.success) {
-        toast.error("オフラインモードの更新に失敗しました")
-        return
+        toast.error("オフラインモードの更新に失敗しました");
+        return;
       }
       if (enabled) {
-        toast.success("オフラインモードを有効にしました")
+        toast.success("オフラインモードを有効にしました");
       } else {
-        toast.success("オフラインモードを無効にしました")
+        toast.success("オフラインモードを無効にしました");
       }
     } catch (error) {
       logger.error("オフラインモード更新エラー:", {
         component: "GeneralSettings",
         function: "handleOfflineModeChange",
-        data: error
-      })
-      toast.error("オフラインモードの更新に失敗しました")
+        data: error,
+      });
+      toast.error("オフラインモードの更新に失敗しました");
     }
-  }
+  };
 
   // 自動ゲーム検出変更ハンドラー
   const handleAutoTrackingChange = async (enabled: boolean): Promise<void> => {
-    setAutoTracking(enabled)
+    setAutoTracking(enabled);
 
     // メインプロセスに設定変更を通知
     try {
-      const result = await window.api.settings.updateAutoTracking(enabled)
+      const result = await window.api.settings.updateAutoTracking(enabled);
       if (result.success) {
         if (enabled) {
-          toast.success("自動ゲーム検出を有効にしました")
+          toast.success("自動ゲーム検出を有効にしました");
         } else {
-          toast.success("自動ゲーム検出を無効にしました")
+          toast.success("自動ゲーム検出を無効にしました");
         }
       } else {
-        toast.error("設定の更新に失敗しました")
+        toast.error("設定の更新に失敗しました");
       }
     } catch (error) {
       logger.error("自動ゲーム検出設定の更新エラー:", {
         component: "GeneralSettings",
         function: "unknown",
-        data: error
-      })
-      toast.error("設定の更新に失敗しました")
+        data: error,
+      });
+      toast.error("設定の更新に失敗しました");
     }
-  }
+  };
 
   const applyUploadConcurrency = async (value: number, showToast: boolean): Promise<void> => {
     try {
-      const result = await window.api.settings.updateUploadConcurrency(value)
+      const result = await window.api.settings.updateUploadConcurrency(value);
       if (!result.success) {
         if (showToast) {
-          toast.error("同時アップロード数の更新に失敗しました")
+          toast.error("同時アップロード数の更新に失敗しました");
         }
       } else if (showToast) {
-        toast.success(`同時アップロード数を ${value} に設定しました`)
+        toast.success(`同時アップロード数を ${value} に設定しました`);
       }
     } catch (error) {
       logger.error("同時アップロード数設定の更新エラー:", {
         component: "GeneralSettings",
         function: "unknown",
-        data: error
-      })
+        data: error,
+      });
       if (showToast) {
-        toast.error("同時アップロード数の更新に失敗しました")
+        toast.error("同時アップロード数の更新に失敗しました");
       }
     }
-  }
+  };
 
   const handleUploadConcurrencyChange = async (value: number): Promise<void> => {
-    const nextValue = Math.min(32, Math.max(1, value))
-    setUploadConcurrency(nextValue)
-    await applyUploadConcurrency(nextValue, true)
-  }
+    const nextValue = Math.min(32, Math.max(1, value));
+    setUploadConcurrency(nextValue);
+    await applyUploadConcurrency(nextValue, true);
+  };
 
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
-      const result = await window.api.file.openLogsDirectory()
+      const result = await window.api.file.openLogsDirectory();
       if (result.success) {
-        toast.success("ログフォルダを開きました")
+        toast.success("ログフォルダを開きました");
       } else {
-        toast.error(result.message || "ログフォルダを開くことができませんでした")
+        toast.error(result.message || "ログフォルダを開くことができませんでした");
       }
     } catch (error) {
       logger.error("ログフォルダを開くエラー:", {
         component: "GeneralSettings",
         function: "handleOpenLogsDirectory",
-        data: error
-      })
-      toast.error("ログフォルダを開くことができませんでした")
+        data: error,
+      });
+      toast.error("ログフォルダを開くことができませんでした");
     }
-  }
+  };
 
   const handleSyncAllGames = async (): Promise<void> => {
     if (offlineMode) {
-      toast.error("オフラインモードでは同期できません")
-      return
+      toast.error("オフラインモードでは同期できません");
+      return;
     }
-    setIsSyncingAll(true)
+    setIsSyncingAll(true);
     try {
-      const result = await window.api.cloudSync.syncAllGames()
+      const result = await window.api.cloudSync.syncAllGames();
       if (!result.success || !result.data) {
-        toast.error(result.message || "クラウド同期に失敗しました")
-        return
+        toast.error(result.message || "クラウド同期に失敗しました");
+        return;
       }
-      const summary = result.data
+      const summary = result.data;
       toast.success(
-        `同期完了: アップロード${summary.uploadedGames}件 / ダウンロード${summary.downloadedGames}件`
-      )
+        `同期完了: アップロード${summary.uploadedGames}件 / ダウンロード${summary.downloadedGames}件`,
+      );
     } catch (error) {
       logger.error("全ゲーム同期エラー:", {
         component: "GeneralSettings",
         function: "handleSyncAllGames",
-        data: error
-      })
-      toast.error("クラウド同期に失敗しました")
+        data: error,
+      });
+      toast.error("クラウド同期に失敗しました");
     } finally {
-      setIsSyncingAll(false)
+      setIsSyncingAll(false);
     }
-  }
+  };
 
   useEffect(() => {
-    void applyUploadConcurrency(uploadConcurrency, false)
-  }, [])
+    void applyUploadConcurrency(uploadConcurrency, false);
+  }, []);
 
   useEffect(() => {
-    void window.api.settings.updateOfflineMode(offlineMode)
-  }, [])
+    void window.api.settings.updateOfflineMode(offlineMode);
+  }, []);
 
   return (
     <div className="w-full">
@@ -427,5 +427,5 @@ export default function GeneralSettings(): React.JSX.Element {
         </div>
       </div>
     </div>
-  )
+  );
 }

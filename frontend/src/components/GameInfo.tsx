@@ -9,31 +9,31 @@
  * - メモ化による最適化
  */
 
-import { memo } from "react"
+import { memo } from "react";
 
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat"
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
-import DynamicImage from "./DynamicImage"
-import GameActionButtons from "./GameActionButtons"
-import PlayStatusSelector from "./PlayStatusSelector"
-import type { GameType } from "src/types/game"
+import DynamicImage from "./DynamicImage";
+import GameActionButtons from "./GameActionButtons";
+import PlayStatusSelector from "./PlayStatusSelector";
+import type { GameType } from "src/types/game";
 
 type GameInfoProps = {
   /** ゲーム情報 */
-  game: GameType
+  game: GameType;
   /** プレイステータス更新中フラグ */
-  isUpdatingStatus: boolean
+  isUpdatingStatus: boolean;
   /** 起動中フラグ */
-  isLaunching?: boolean
+  isLaunching?: boolean;
   /** プレイステータス変更ハンドラ */
-  onStatusChange: (status: string) => void
+  onStatusChange: (status: string) => void;
   /** ゲーム起動ハンドラ */
-  onLaunchGame: () => void
+  onLaunchGame: () => void;
   /** ゲーム編集ハンドラ */
-  onEditGame: () => void
+  onEditGame: () => void;
   /** ゲーム削除ハンドラ */
-  onDeleteGame: () => void
-}
+  onDeleteGame: () => void;
+};
 
 /**
  * ゲーム情報表示コンポーネント
@@ -48,9 +48,9 @@ const GameInfo = memo(function GameInfo({
   onStatusChange,
   onLaunchGame,
   onEditGame,
-  onDeleteGame
+  onDeleteGame,
 }: GameInfoProps): React.JSX.Element {
-  const { formatSmart, formatDateWithTime } = useTimeFormat()
+  const { formatSmart, formatDateWithTime } = useTimeFormat();
 
   return (
     <div className="card bg-base-100 shadow-xl">
@@ -108,7 +108,7 @@ const GameInfo = memo(function GameInfo({
         </div>
       </div>
     </div>
-  )
-})
+  );
+});
 
-export default GameInfo
+export default GameInfo;

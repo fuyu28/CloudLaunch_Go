@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod";
 
 /**
  * ファイルパス検証用の基本スキーマ
@@ -10,13 +10,13 @@ const baseFilePathSchema = z
   .refine(
     (path) => {
       // パストラバーサル攻撃対策: ../ や ..\\ を含むパスを拒否
-      const normalizedPath = path.replace(/\\/g, "/")
-      return !normalizedPath.includes("../") && !normalizedPath.includes("..\\")
+      const normalizedPath = path.replace(/\\/g, "/");
+      return !normalizedPath.includes("../") && !normalizedPath.includes("..\\");
     },
     {
-      message: "無効なファイルパスです（パストラバーサル攻撃の可能性）"
-    }
-  )
+      message: "無効なファイルパスです（パストラバーサル攻撃の可能性）",
+    },
+  );
 
 /**
  * アップロード用ファイルパス検証スキーマ
@@ -25,8 +25,8 @@ const baseFilePathSchema = z
 export const uploadFilePathSchema = z.object({
   localPath: baseFilePathSchema,
   gameId: z.uuid("有効なゲームIDを指定してください"),
-  comment: z.string().max(500, "コメントは500文字以内で入力してください").optional()
-})
+  comment: z.string().max(500, "コメントは500文字以内で入力してください").optional(),
+});
 
 /**
  * ダウンロード用ファイルパス検証スキーマ
@@ -35,8 +35,8 @@ export const uploadFilePathSchema = z.object({
 export const downloadFilePathSchema = z.object({
   remotePath: z.string().min(1, "リモートパスは必須です"),
   localPath: baseFilePathSchema,
-  gameId: z.uuid("有効なゲームIDを指定してください")
-})
+  gameId: z.uuid("有効なゲームIDを指定してください"),
+});
 
 /**
  * ファイル選択ダイアログ用スキーマ
@@ -49,8 +49,8 @@ export const fileSelectionSchema = z.object({
     .array(
       z.object({
         name: z.string().min(1, "フィルター名は必須です"),
-        extensions: z.array(z.string().min(1, "拡張子は必須です"))
-      })
+        extensions: z.array(z.string().min(1, "拡張子は必須です")),
+      }),
     )
     .optional(),
   properties: z
@@ -63,11 +63,11 @@ export const fileSelectionSchema = z.object({
         "createDirectory",
         "promptToCreate",
         "noResolveAliases",
-        "treatPackageAsDirectory"
-      ])
+        "treatPackageAsDirectory",
+      ]),
     )
-    .optional()
-})
+    .optional(),
+});
 
 /**
  * ファイル存在チェック用スキーマ
@@ -76,25 +76,25 @@ export const fileSelectionSchema = z.object({
 export const fileExistenceSchema = z.object({
   path: baseFilePathSchema,
   type: z.enum(["file", "directory"]),
-  checkAccess: z.boolean().default(false)
-})
+  checkAccess: z.boolean().default(false),
+});
 
 /**
  * アップロードファイルパスデータの型定義（zodスキーマから自動生成）
  */
-export type UploadFilePathData = z.infer<typeof uploadFilePathSchema>
+export type UploadFilePathData = z.infer<typeof uploadFilePathSchema>;
 
 /**
  * ダウンロードファイルパスデータの型定義（zodスキーマから自動生成）
  */
-export type DownloadFilePathData = z.infer<typeof downloadFilePathSchema>
+export type DownloadFilePathData = z.infer<typeof downloadFilePathSchema>;
 
 /**
  * ファイル選択データの型定義（zodスキーマから自動生成）
  */
-export type FileSelectionData = z.infer<typeof fileSelectionSchema>
+export type FileSelectionData = z.infer<typeof fileSelectionSchema>;
 
 /**
  * ファイル存在チェックデータの型定義（zodスキーマから自動生成）
  */
-export type FileExistenceData = z.infer<typeof fileExistenceSchema>
+export type FileExistenceData = z.infer<typeof fileExistenceSchema>;

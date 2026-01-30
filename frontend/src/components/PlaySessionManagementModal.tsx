@@ -16,47 +16,47 @@
  * @param onProcessUpdated - セッション情報更新時のコールバック
  */
 
-import { useCallback, useEffect, useState, useMemo } from "react"
-import { FaEdit } from "react-icons/fa"
-import { RxCross1 } from "react-icons/rx"
+import { useCallback, useEffect, useState, useMemo } from "react";
+import { FaEdit } from "react-icons/fa";
+import { RxCross1 } from "react-icons/rx";
 
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat"
-import { useToastHandler } from "@renderer/hooks/useToastHandler"
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import ConfirmModal from "./ConfirmModal"
-import { playSessionEditSchema } from "@renderer/schemas/playSession"
-import type { PlaySessionType } from "src/types/game"
-import { useZodValidation } from "../hooks/useZodValidation"
+import ConfirmModal from "./ConfirmModal";
+import { playSessionEditSchema } from "@renderer/schemas/playSession";
+import type { PlaySessionType } from "src/types/game";
+import { useZodValidation } from "../hooks/useZodValidation";
 
 /**
  * 編集用のフォームデータ
  */
 type EditFormData = Record<string, unknown> & {
-  sessionName: string
-}
+  sessionName: string;
+};
 
 /**
  * 編集フォームのフィールド名の型
  */
-type EditFormFields = keyof Pick<EditFormData, "sessionName">
+type EditFormFields = keyof Pick<EditFormData, "sessionName">;
 
 /**
  * セッション管理モーダルのProps
  */
 type PlaySessionManagementModalProps = {
   /** モーダルの開閉状態 */
-  isOpen: boolean
+  isOpen: boolean;
   /** モーダルを閉じる関数 */
-  onClose: () => void
+  onClose: () => void;
   /** 対象のゲームID */
-  gameId: string
+  gameId: string;
   /** ゲームタイトル */
-  gameTitle: string
+  gameTitle: string;
   /** セッション情報更新時のコールバック */
-  onProcessUpdated?: () => void
-}
+  onProcessUpdated?: () => void;
+};
 
 /**
  * セッション管理モーダルコンポーネント
@@ -66,101 +66,101 @@ export default function PlaySessionManagementModal({
   onClose,
   gameId,
   gameTitle,
-  onProcessUpdated
+  onProcessUpdated,
 }: PlaySessionManagementModalProps): React.JSX.Element {
-  const [processes, setProcesses] = useState<PlaySessionType[]>([])
-  const [loading, setLoading] = useState(false)
-  const [selectedProcessId, setSelectedProcessId] = useState<string | undefined>(undefined)
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingProcess, setEditingProcess] = useState<PlaySessionType | undefined>(undefined)
+  const [processes, setProcesses] = useState<PlaySessionType[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedProcessId, setSelectedProcessId] = useState<string | undefined>(undefined);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingProcess, setEditingProcess] = useState<PlaySessionType | undefined>(undefined);
   const [editFormData, setEditFormData] = useState<EditFormData>({
-    sessionName: ""
-  })
+    sessionName: "",
+  });
 
   // フォームデータをuseMemoでラップ
-  const memoizedEditFormData = useMemo(() => editFormData, [editFormData])
+  const memoizedEditFormData = useMemo(() => editFormData, [editFormData]);
 
   // バリデーション
-  const validation = useZodValidation(playSessionEditSchema, memoizedEditFormData)
-  const { formatSmart, formatDateWithTime } = useTimeFormat()
-  const { showToast } = useToastHandler()
+  const validation = useZodValidation(playSessionEditSchema, memoizedEditFormData);
+  const { formatSmart, formatDateWithTime } = useTimeFormat();
+  const { showToast } = useToastHandler();
 
   /**
    * セッション情報を取得
    */
   const fetchProcesses = useCallback(async () => {
-    if (!gameId) return
+    if (!gameId) return;
 
-    setLoading(true)
+    setLoading(true);
     try {
-      const result = await window.api.database.getPlaySessions(gameId)
+      const result = await window.api.database.getPlaySessions(gameId);
       if (result.success && result.data) {
-        setProcesses(result.data)
+        setProcesses(result.data);
       } else {
-        showToast("セッション情報の取得に失敗しました", "error")
+        showToast("セッション情報の取得に失敗しました", "error");
       }
     } catch (error) {
       logger.error("セッション情報取得エラー:", {
         component: "PlaySessionManagementModal",
         function: "unknown",
-        data: error
-      })
-      showToast("セッション情報の取得に失敗しました", "error")
+        data: error,
+      });
+      showToast("セッション情報の取得に失敗しました", "error");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [gameId, showToast])
+  }, [gameId, showToast]);
 
   /**
    * 編集モーダルを開く
    */
   const openEditModal = useCallback(
     (process: PlaySessionType) => {
-      setEditingProcess(process)
+      setEditingProcess(process);
       setEditFormData({
-        sessionName: process.sessionName ?? "未設定"
-      })
-      validation.resetTouched() // タッチ状態をリセット
-      setIsEditModalOpen(true)
+        sessionName: process.sessionName ?? "未設定",
+      });
+      validation.resetTouched(); // タッチ状態をリセット
+      setIsEditModalOpen(true);
     },
-    [validation]
-  )
+    [validation],
+  );
 
   /**
    * 編集モーダルを閉じる
    */
   const closeEditModal = useCallback(() => {
-    setIsEditModalOpen(false)
-    setEditingProcess(undefined)
+    setIsEditModalOpen(false);
+    setEditingProcess(undefined);
     setEditFormData({
-      sessionName: ""
-    })
-    validation.resetTouched() // タッチ状態をリセット
-  }, [validation])
+      sessionName: "",
+    });
+    validation.resetTouched(); // タッチ状態をリセット
+  }, [validation]);
 
   /**
    * フォーム入力変更処理
    */
   const handleFormChange = useCallback(
     (field: EditFormFields, value: string | null) => {
-      setEditFormData((prev) => ({ ...prev, [field]: value }))
-      validation.touch(field)
+      setEditFormData((prev) => ({ ...prev, [field]: value }));
+      validation.touch(field);
     },
-    [validation]
-  )
+    [validation],
+  );
 
   /**
    * セッション編集処理
    */
   const handleEditSession = useCallback(async () => {
-    if (!editingProcess) return
+    if (!editingProcess) return;
 
     // バリデーション実行
-    const validationResult = validation.validate()
+    const validationResult = validation.validate();
     if (!validationResult.isValid) {
-      showToast("入力内容に問題があります", "error")
-      return
+      showToast("入力内容に問題があります", "error");
+      return;
     }
 
     try {
@@ -168,25 +168,25 @@ export default function PlaySessionManagementModal({
       if (memoizedEditFormData.sessionName !== editingProcess.sessionName) {
         const nameResult = await window.api.database.updateSessionName(
           editingProcess.id,
-          memoizedEditFormData.sessionName
-        )
+          memoizedEditFormData.sessionName,
+        );
         if (!nameResult.success) {
-          showToast("セッション名の更新に失敗しました", "error")
-          return
+          showToast("セッション名の更新に失敗しました", "error");
+          return;
         }
       }
 
-      showToast("セッションを更新しました", "success")
-      await fetchProcesses()
-      onProcessUpdated?.()
-      closeEditModal()
+      showToast("セッションを更新しました", "success");
+      await fetchProcesses();
+      onProcessUpdated?.();
+      closeEditModal();
     } catch (error) {
       logger.error("セッション編集エラー:", {
         component: "PlaySessionManagementModal",
         function: "unknown",
-        data: error
-      })
-      showToast("セッションの更新に失敗しました", "error")
+        data: error,
+      });
+      showToast("セッションの更新に失敗しました", "error");
     }
   }, [
     editingProcess,
@@ -195,66 +195,66 @@ export default function PlaySessionManagementModal({
     fetchProcesses,
     onProcessUpdated,
     showToast,
-    closeEditModal
-  ])
+    closeEditModal,
+  ]);
 
   /**
    * セッション削除処理
    */
   const handleDeleteProcess = useCallback(async () => {
-    if (!selectedProcessId) return
+    if (!selectedProcessId) return;
 
     try {
-      const result = await window.api.database.deletePlaySession(selectedProcessId)
+      const result = await window.api.database.deletePlaySession(selectedProcessId);
       if (result.success) {
-        showToast("セッションを削除しました", "success")
-        await fetchProcesses()
-        onProcessUpdated?.()
+        showToast("セッションを削除しました", "success");
+        await fetchProcesses();
+        onProcessUpdated?.();
       } else {
-        showToast("セッションの削除に失敗しました", "error")
+        showToast("セッションの削除に失敗しました", "error");
       }
     } catch (error) {
       logger.error("セッション削除エラー:", {
         component: "PlaySessionManagementModal",
         function: "unknown",
-        data: error
-      })
-      showToast("セッションの削除に失敗しました", "error")
+        data: error,
+      });
+      showToast("セッションの削除に失敗しました", "error");
     } finally {
-      setIsDeleteModalOpen(false)
-      setSelectedProcessId(undefined)
+      setIsDeleteModalOpen(false);
+      setSelectedProcessId(undefined);
     }
-  }, [selectedProcessId, fetchProcesses, onProcessUpdated, showToast])
+  }, [selectedProcessId, fetchProcesses, onProcessUpdated, showToast]);
 
   /**
    * 削除確認モーダルを開く
    */
   const openDeleteModal = useCallback((processId: string) => {
-    setSelectedProcessId(processId)
-    setIsDeleteModalOpen(true)
-  }, [])
+    setSelectedProcessId(processId);
+    setIsDeleteModalOpen(true);
+  }, []);
 
   /**
    * 削除確認モーダルを閉じる
    */
   const closeDeleteModal = useCallback(() => {
-    setIsDeleteModalOpen(false)
-    setSelectedProcessId(undefined)
-  }, [])
+    setIsDeleteModalOpen(false);
+    setSelectedProcessId(undefined);
+  }, []);
 
   /**
    * モーダルが開かれたときにセッション情報を取得
    */
   useEffect(() => {
     if (isOpen) {
-      fetchProcesses()
+      fetchProcesses();
     }
-  }, [isOpen, fetchProcesses])
+  }, [isOpen, fetchProcesses]);
 
   /**
    * 選択されたセッションの情報を取得
    */
-  const selectedProcess = processes.find((p) => p.id === selectedProcessId)
+  const selectedProcess = processes.find((p) => p.id === selectedProcessId);
 
   return (
     <>
@@ -368,7 +368,6 @@ export default function PlaySessionManagementModal({
                 <div className="text-error text-sm mt-1">{validation.getError("sessionName")}</div>
               )}
             </div>
-
           </div>
 
           <div className="modal-action">
@@ -386,5 +385,5 @@ export default function PlaySessionManagementModal({
         </div>
       </div>
     </>
-  )
+  );
 }

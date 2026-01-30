@@ -8,10 +8,10 @@
  * - エラーログの記録
  */
 
-import toast from "react-hot-toast"
+import toast from "react-hot-toast";
 
-import { logger } from "./logger"
-import type { ApiResult } from "src/types/result"
+import { logger } from "./logger";
+import type { ApiResult } from "src/types/result";
 
 /**
  * ApiResultのエラーハンドリングとトースト表示
@@ -22,21 +22,21 @@ import type { ApiResult } from "src/types/result"
 export function handleApiError<T = void>(
   result: ApiResult<T>,
   fallbackMessage: string = "エラーが発生しました",
-  toastId?: string
+  toastId?: string,
 ): void {
-  let message: string
+  let message: string;
 
   if (result.success) {
-    message = fallbackMessage
+    message = fallbackMessage;
   } else {
     // result.success === false の場合、result.message が存在する
-    message = (result as { success: false; message: string }).message || fallbackMessage
+    message = (result as { success: false; message: string }).message || fallbackMessage;
   }
 
   if (toastId) {
-    toast.error(message, { id: toastId })
+    toast.error(message, { id: toastId });
   } else {
-    toast.error(message)
+    toast.error(message);
   }
 }
 
@@ -48,21 +48,21 @@ export function handleApiError<T = void>(
  */
 export function handleUnexpectedError(error: unknown, context: string, toastId?: string): void {
   // デバッグ時のみコンソールにログ出力
-  const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test"
+  const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
   if (isDev) {
     logger.error(`予期しないエラー (${context}):`, {
       component: "errorHandler",
       function: "handleUnexpectedError",
       error: error instanceof Error ? error : new Error(String(error)),
-      data: { context }
-    })
+      data: { context },
+    });
   }
 
-  const message = "予期しないエラーが発生しました"
+  const message = "予期しないエラーが発生しました";
   if (toastId) {
-    toast.error(message, { id: toastId })
+    toast.error(message, { id: toastId });
   } else {
-    toast.error(message)
+    toast.error(message);
   }
 }
 
@@ -73,9 +73,9 @@ export function handleUnexpectedError(error: unknown, context: string, toastId?:
  */
 export function showSuccessToast(message: string, toastId?: string): void {
   if (toastId) {
-    toast.success(message, { id: toastId })
+    toast.success(message, { id: toastId });
   } else {
-    toast.success(message)
+    toast.success(message);
   }
 }
 
@@ -91,22 +91,22 @@ export async function withLoadingToast<T>(
   asyncOperation: () => Promise<ApiResult<T>>,
   loadingMessage: string,
   successMessage: string,
-  errorContext: string
+  errorContext: string,
 ): Promise<ApiResult<T>> {
-  const loadingToastId = toast.loading(loadingMessage)
+  const loadingToastId = toast.loading(loadingMessage);
 
   try {
-    const result = await asyncOperation()
+    const result = await asyncOperation();
 
     if (result.success) {
-      showSuccessToast(successMessage, loadingToastId)
+      showSuccessToast(successMessage, loadingToastId);
     } else {
-      handleApiError(result, "エラーが発生しました", loadingToastId)
+      handleApiError(result, "エラーが発生しました", loadingToastId);
     }
 
-    return result
+    return result;
   } catch (error) {
-    handleUnexpectedError(error, errorContext, loadingToastId)
-    return { success: false, message: "予期しないエラーが発生しました" }
+    handleUnexpectedError(error, errorContext, loadingToastId);
+    return { success: false, message: "予期しないエラーが発生しました" };
   }
 }

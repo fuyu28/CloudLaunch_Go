@@ -13,21 +13,21 @@
  * - react-hot-toast（トースト表示）
  */
 
-import { useAtom } from "jotai"
-import toast from "react-hot-toast"
+import { useAtom } from "jotai";
+import toast from "react-hot-toast";
 
-import { offlineModeAtom } from "../state/settings"
+import { offlineModeAtom } from "../state/settings";
 
 type OfflineModeHook = {
   /** オフラインモードが有効かどうか */
-  isOfflineMode: boolean
+  isOfflineMode: boolean;
   /** ネットワーク機能が利用可能かどうか */
-  isNetworkAvailable: boolean
+  isNetworkAvailable: boolean;
   /** オフラインモード時のエラーメッセージを表示 */
-  showOfflineError: (feature?: string) => void
+  showOfflineError: (feature?: string) => void;
   /** ネットワーク機能実行前のチェック */
-  checkNetworkFeature: (feature?: string) => boolean
-}
+  checkNetworkFeature: (feature?: string) => boolean;
+};
 
 /**
  * オフラインモード判定用のカスタムフック
@@ -50,26 +50,26 @@ type OfflineModeHook = {
  * ```
  */
 export function useOfflineMode(): OfflineModeHook {
-  const [isOfflineMode] = useAtom(offlineModeAtom)
+  const [isOfflineMode] = useAtom(offlineModeAtom);
 
-  const isNetworkAvailable = !isOfflineMode
+  const isNetworkAvailable = !isOfflineMode;
 
   const showOfflineError = (feature = "この機能"): void => {
-    toast.error(`${feature}はオフラインモードでは利用できません`)
-  }
+    toast.error(`${feature}はオフラインモードでは利用できません`);
+  };
 
   const checkNetworkFeature = (feature = "この機能"): boolean => {
     if (isOfflineMode) {
-      showOfflineError(feature)
-      return false
+      showOfflineError(feature);
+      return false;
     }
-    return true
-  }
+    return true;
+  };
 
   return {
     isOfflineMode,
     isNetworkAvailable,
     showOfflineError,
-    checkNetworkFeature
-  }
+    checkNetworkFeature,
+  };
 }

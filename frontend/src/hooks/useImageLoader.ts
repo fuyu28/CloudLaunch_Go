@@ -10,24 +10,24 @@
  * - マウント状態の管理
  */
 
-import { useEffect, useState } from "react"
-import toast from "react-hot-toast"
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import type { ApiResult } from "src/types/result"
+import type { ApiResult } from "src/types/result";
 
 /**
  * 画像読み込み状態の型定義
  */
 type ImageLoadState = {
   /** 読み込み済み画像のdata URL */
-  imageSrc?: string
+  imageSrc?: string;
   /** 読み込み中フラグ */
-  isLoading: boolean
+  isLoading: boolean;
   /** エラー状態 */
-  error?: string
-}
+  error?: string;
+};
 
 /**
  * NoImage SVGをbase64エンコードしたdata URL
@@ -42,9 +42,9 @@ const createNoImageDataUrl = (): string => {
         No Image
       </text>
     </svg>
-  `
-  return `data:image/svg+xml;base64,${btoa(svg)}`
-}
+  `;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+};
 
 /**
  * 画像読み込み管理用カスタムフック
@@ -56,16 +56,16 @@ export const useImageLoader = (src: string): ImageLoadState => {
   const [state, setState] = useState<ImageLoadState>(() => ({
     imageSrc: undefined,
     isLoading: true,
-    error: undefined
-  }))
+    error: undefined,
+  }));
 
   useEffect(() => {
-    let mounted = true
+    let mounted = true;
 
     const loadImage = async (): Promise<void> => {
-      if (!mounted) return
+      if (!mounted) return;
 
-      setState((prev) => ({ ...prev, isLoading: true, error: undefined }))
+      setState((prev) => ({ ...prev, isLoading: true, error: undefined }));
 
       // 空文字列または未定義の場合はNoImageを表示（トーストなし）
       if (!src || src.trim() === "") {
@@ -73,38 +73,38 @@ export const useImageLoader = (src: string): ImageLoadState => {
           setState({
             imageSrc: createNoImageDataUrl(),
             isLoading: false,
-            error: undefined
-          })
+            error: undefined,
+          });
         }
-        return
+        return;
       }
 
       try {
-        const result = await validateAndLoadImage(src)
+        const result = await validateAndLoadImage(src);
 
         if (mounted) {
           if (result.success && result.data) {
             setState({
               imageSrc: result.data,
               isLoading: false,
-              error: undefined
-            })
+              error: undefined,
+            });
           } else {
             // 画像読み込み失敗時はNoImageを表示し、エラートーストも表示
-            const errorMessage = result.success ? "データが取得できませんでした" : result.message
+            const errorMessage = result.success ? "データが取得できませんでした" : result.message;
             logger.warn("画像読み込み失敗:", {
               component: "useImageLoader",
               function: "loadImage",
-              data: { src, errorMessage }
-            })
+              data: { src, errorMessage },
+            });
             if (errorMessage) {
-              toast.error(`画像読み込み失敗: ${errorMessage}`)
+              toast.error(`画像読み込み失敗: ${errorMessage}`);
             }
             setState({
               imageSrc: createNoImageDataUrl(),
               isLoading: false,
-              error: errorMessage || "画像読み込みに失敗しました"
-            })
+              error: errorMessage || "画像読み込みに失敗しました",
+            });
           }
         }
       } catch (error) {
@@ -112,27 +112,27 @@ export const useImageLoader = (src: string): ImageLoadState => {
           logger.error("Error loading image:", {
             component: "useImageLoader",
             function: "loadImage",
-            error: error instanceof Error ? error : new Error(String(error))
-          })
-          const errorMsg = error instanceof Error ? error.message : "不明なエラー"
-          toast.error(`画像読み込みエラー: ${errorMsg}`)
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+          const errorMsg = error instanceof Error ? error.message : "不明なエラー";
+          toast.error(`画像読み込みエラー: ${errorMsg}`);
           setState({
             imageSrc: createNoImageDataUrl(),
             isLoading: false,
-            error: errorMsg
-          })
+            error: errorMsg,
+          });
         }
       }
-    }
+    };
 
-    loadImage()
+    loadImage();
     return () => {
-      mounted = false
-    }
-  }, [src])
+      mounted = false;
+    };
+  }, [src]);
 
-  return state
-}
+  return state;
+};
 
 /**
  * 画像パスを検証し、適切なAPIを呼び出して画像を読み込む
@@ -142,46 +142,46 @@ export const useImageLoader = (src: string): ImageLoadState => {
  */
 const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => {
   // URLの形式を事前に検証
-  const isHttpUrl = src.startsWith("http://") || src.startsWith("https://")
-  const isFileUrl = src.startsWith("file://")
-  const isAbsolutePath = /^[A-Za-z]:\\/.test(src) || src.startsWith("/")
+  const isHttpUrl = src.startsWith("http://") || src.startsWith("https://");
+  const isFileUrl = src.startsWith("file://");
+  const isAbsolutePath = /^[A-Za-z]:\\/.test(src) || src.startsWith("/");
 
   // 有効なパス形式かチェック
   if (!isHttpUrl && !isFileUrl && !isAbsolutePath) {
     return {
       success: false,
-      message: `無効な画像パス形式: ${src}`
-    }
+      message: `無効な画像パス形式: ${src}`,
+    };
   }
 
   // HTTP(S) URLの場合は追加の検証
   if (isHttpUrl) {
     try {
-      new URL(src) // URL形式の検証
+      new URL(src); // URL形式の検証
     } catch {
       return {
         success: false,
-        message: `無効なURL形式: ${src}`
-      }
+        message: `無効なURL形式: ${src}`,
+      };
     }
   }
 
   // file:// か絶対パスならローカル読み込み
-  const isLocal = isFileUrl || isAbsolutePath
+  const isLocal = isFileUrl || isAbsolutePath;
 
   try {
     if (isLocal) {
-      const path = src.replace(/^file:\/\//, "")
-      const result = (await window.api.loadImage.loadImageFromLocal(path)) as ApiResult<string>
-      return result
+      const path = src.replace(/^file:\/\//, "");
+      const result = (await window.api.loadImage.loadImageFromLocal(path)) as ApiResult<string>;
+      return result;
     } else {
-      const result = (await window.api.loadImage.loadImageFromWeb(src)) as ApiResult<string>
-      return result
+      const result = (await window.api.loadImage.loadImageFromWeb(src)) as ApiResult<string>;
+      return result;
     }
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "不明なエラー"
-    }
+      message: error instanceof Error ? error.message : "不明なエラー",
+    };
   }
-}
+};

@@ -17,7 +17,7 @@ export enum PathType {
   /** ディレクトリパス */
   DIRECTORY = "directory",
   /** どちらでも可 */
-  ANY = "any"
+  ANY = "any",
 }
 
 /**
@@ -33,7 +33,7 @@ export enum FilePathType {
   /** データファイル */
   DATA = "data",
   /** 一般ファイル */
-  GENERAL = "general"
+  GENERAL = "general",
 }
 
 /**
@@ -41,81 +41,81 @@ export enum FilePathType {
  */
 export type PathValidationResult = {
   /** 検証が成功したかどうか */
-  isValid: boolean
+  isValid: boolean;
   /** エラーメッセージ（失敗時） */
-  message?: string
+  message?: string;
   /** 正規化されたパス */
-  normalizedPath?: string
+  normalizedPath?: string;
   /** 検出されたパスの種類 */
-  detectedType?: PathType
-}
+  detectedType?: PathType;
+};
 
 /**
  * ファイル情報
  */
 export type FileInfo = {
   /** ファイルパス */
-  path: string
+  path: string;
   /** ファイル名（拡張子含む） */
-  name: string
+  name: string;
   /** ファイル名（拡張子なし） */
-  nameWithoutExtension: string
+  nameWithoutExtension: string;
   /** 拡張子（ドット含む） */
-  extension: string
+  extension: string;
   /** 親ディレクトリのパス */
-  directory: string
+  directory: string;
   /** ファイルサイズ（バイト） */
-  size?: number
+  size?: number;
   /** 最終更新日時 */
-  lastModified?: Date
-}
+  lastModified?: Date;
+};
 
 /**
  * パス操作のオプション
  */
 export type PathOptions = {
   /** パスの正規化を行うかどうか */
-  normalize?: boolean
+  normalize?: boolean;
   /** 相対パスを許可するかどうか */
-  allowRelative?: boolean
+  allowRelative?: boolean;
   /** プラットフォーム固有の検証を行うかどうか */
-  platformSpecific?: boolean
-}
+  platformSpecific?: boolean;
+};
 
 /**
  * ファイル選択フィルター
  */
 export type FileFilter = {
   /** フィルター名 */
-  name: string
+  name: string;
   /** 許可する拡張子（ドットなし） */
-  extensions: string[]
-}
+  extensions: string[];
+};
 
 /**
  * S3キー情報
  */
 export type S3KeyInfo = {
   /** S3キー */
-  key: string
+  key: string;
   /** バケット名 */
-  bucket?: string
+  bucket?: string;
   /** リージョン */
-  region?: string
+  region?: string;
   /** プレフィックス */
-  prefix?: string
-}
+  prefix?: string;
+};
 
 /**
  * リモートパス設定
  */
 export type RemotePathConfig = {
   /** ベースパス */
-  basePath: string
+  basePath: string;
   /** ゲーム名テンプレート */
-  gameNameTemplate?: string
+  gameNameTemplate?: string;
   /** セーブデータフォルダ名 */
-  saveDataFolder?: string
+  saveDataFolder?: string;
   /** 日付フォーマット */
-  dateFormat?: string
-}
+  dateFormat?: string;
+};

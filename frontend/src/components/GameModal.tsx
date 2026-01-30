@@ -14,24 +14,24 @@
  * - react-hot-toast エラー通知
  */
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef } from "react";
 
-import { BaseModal } from "./BaseModal"
-import { GameFormFields } from "./GameFormFields"
-import type { InputGameData } from "src/types/game"
-import type { ApiResult } from "src/types/result"
-import { useFileSelection } from "../hooks/useFileSelection"
-import { useGameFormValidationZod } from "../hooks/useGameFormValidationZod"
-import { handleApiError, handleUnexpectedError } from "../utils/errorHandler"
+import { BaseModal } from "./BaseModal";
+import { GameFormFields } from "./GameFormFields";
+import type { InputGameData } from "src/types/game";
+import type { ApiResult } from "src/types/result";
+import { useFileSelection } from "../hooks/useFileSelection";
+import { useGameFormValidationZod } from "../hooks/useGameFormValidationZod";
+import { handleApiError, handleUnexpectedError } from "../utils/errorHandler";
 
 type GameFormModalProps = {
-  mode: "add" | "edit"
-  initialData?: InputGameData | undefined
-  isOpen: boolean
-  onClose: () => void
-  onClosed?: () => void
-  onSubmit: (gameData: InputGameData) => Promise<ApiResult>
-}
+  mode: "add" | "edit";
+  initialData?: InputGameData | undefined;
+  isOpen: boolean;
+  onClose: () => void;
+  onClosed?: () => void;
+  onSubmit: (gameData: InputGameData) => Promise<ApiResult>;
+};
 
 const initialValues: InputGameData = {
   title: "",
@@ -39,13 +39,13 @@ const initialValues: InputGameData = {
   saveFolderPath: "",
   exePath: "",
   imagePath: "",
-  playStatus: "unplayed"
-}
+  playStatus: "unplayed",
+};
 
 const modeMap: Record<string, string> = {
   add: "追加",
-  edit: "更新"
-}
+  edit: "更新",
+};
 
 export default function GameFormModal({
   mode,
@@ -53,114 +53,114 @@ export default function GameFormModal({
   isOpen,
   onClose,
   onClosed,
-  onSubmit
+  onSubmit,
 }: GameFormModalProps): React.JSX.Element {
   const [gameData, setGameData] = useState<InputGameData>(
-    mode === "edit" && initialData ? initialData : initialValues
-  )
-  const [submitting, setSubmitting] = useState(false)
-  const { isBrowsing, selectFile, selectFolder } = useFileSelection()
-  const validation = useGameFormValidationZod(gameData)
-  const prevIsOpenRef = useRef(isOpen)
+    mode === "edit" && initialData ? initialData : initialValues,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const { isBrowsing, selectFile, selectFolder } = useFileSelection();
+  const validation = useGameFormValidationZod(gameData);
+  const prevIsOpenRef = useRef(isOpen);
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
-      setGameData(initialData)
+      setGameData(initialData);
     } else {
-      setGameData(initialValues)
+      setGameData(initialValues);
     }
-  }, [initialData, isOpen, mode])
+  }, [initialData, isOpen, mode]);
 
   // モーダルが開かれるたびにtouchedFieldsをリセット
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
-      validation.resetTouchedFields()
+      validation.resetTouchedFields();
     }
-    prevIsOpenRef.current = isOpen
-  }, [isOpen, validation])
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, validation]);
 
   const browseImage = useCallback(async () => {
     await selectFile([{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif"] }], (filePath) => {
-      setGameData((prev) => ({ ...prev, imagePath: filePath }))
+      setGameData((prev) => ({ ...prev, imagePath: filePath }));
       // ファイル選択後にリアルタイムバリデーションをトリガー
-      validation.markFieldAsTouched("imagePath")
+      validation.markFieldAsTouched("imagePath");
       // ファイル存在チェックを実行
-      validation.validateFileField("imagePath")
-    })
-  }, [selectFile, validation])
+      validation.validateFileField("imagePath");
+    });
+  }, [selectFile, validation]);
 
   const browseExe = useCallback(async () => {
     await selectFile([{ name: "Executable", extensions: ["exe", "app"] }], (filePath) => {
-      setGameData((prev) => ({ ...prev, exePath: filePath }))
+      setGameData((prev) => ({ ...prev, exePath: filePath }));
       // ファイル選択後にリアルタイムバリデーションをトリガー
-      validation.markFieldAsTouched("exePath")
+      validation.markFieldAsTouched("exePath");
       // ファイル存在チェックを実行
-      validation.validateFileField("exePath")
-    })
-  }, [selectFile, validation])
+      validation.validateFileField("exePath");
+    });
+  }, [selectFile, validation]);
 
   const browseSaveFolder = useCallback(async () => {
     await selectFolder((folderPath) => {
-      setGameData((prev) => ({ ...prev, saveFolderPath: folderPath }))
+      setGameData((prev) => ({ ...prev, saveFolderPath: folderPath }));
       // フォルダ選択後にリアルタイムバリデーションをトリガー
-      validation.markFieldAsTouched("saveFolderPath")
+      validation.markFieldAsTouched("saveFolderPath");
       // ファイル存在チェックを実行
-      validation.validateFileField("saveFolderPath")
-    })
-  }, [selectFolder, validation])
+      validation.validateFileField("saveFolderPath");
+    });
+  }, [selectFolder, validation]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
     setGameData((prev) => ({
       ...prev,
-      [name]: value
-    }))
+      [name]: value,
+    }));
 
     // リアルタイムバリデーションのためフィールドをタッチ済みとしてマーク
-    validation.markFieldAsTouched(name as keyof InputGameData)
+    validation.markFieldAsTouched(name as keyof InputGameData);
 
     // ファイル存在チェックはuseGameFormValidationZodのuseEffectで自動実行される
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
+    e.preventDefault();
 
     // 送信前にすべてのフィールドをタッチ済みにしてエラーを表示
-    validation.markAllFieldsAsTouched()
+    validation.markAllFieldsAsTouched();
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
       // ファイル存在チェックを含む非同期バリデーションを実行
-      const validationResult = await validation.validateAllFieldsWithFileCheck()
+      const validationResult = await validation.validateAllFieldsWithFileCheck();
       if (!validationResult.isValid) {
         // バリデーションエラーがある場合は送信を停止
-        return
+        return;
       }
 
-      const result = await onSubmit(gameData)
+      const result = await onSubmit(gameData);
       if (result.success) {
-        resetForm()
-        onClose()
+        resetForm();
+        onClose();
       } else {
-        handleApiError(result, "エラーが発生しました")
+        handleApiError(result, "エラーが発生しました");
       }
     } catch (error) {
-      handleUnexpectedError(error, "ゲーム情報の送信")
+      handleUnexpectedError(error, "ゲーム情報の送信");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const resetForm = (): void => {
-    setGameData(initialValues)
-    setSubmitting(false)
-    validation.resetTouchedFields()
-  }
+    setGameData(initialValues);
+    setSubmitting(false);
+    validation.resetTouchedFields();
+  };
 
   const handleCancel = (): void => {
-    resetForm()
-    onClose()
-  }
+    resetForm();
+    onClose();
+  };
 
   const footer = (
     <div className="flex justify-end space-x-2">
@@ -176,7 +176,7 @@ export default function GameFormModal({
         {`${modeMap[mode]}${submitting ? "中…" : ""}`}
       </button>
     </div>
-  )
+  );
 
   return (
     <BaseModal
@@ -200,5 +200,5 @@ export default function GameFormModal({
         />
       </form>
     </BaseModal>
-  )
+  );
 }

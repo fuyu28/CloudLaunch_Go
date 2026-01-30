@@ -7,22 +7,22 @@
  * - プレイセッション追加・管理
  */
 
-import { memo } from "react"
-import { FaPlus, FaCog } from "react-icons/fa"
+import { memo } from "react";
+import { FaPlus, FaCog } from "react-icons/fa";
 
-import PlaySessionCardSimple from "./PlaySessionCardSimple"
-import type { GameType } from "src/types/game"
+import PlaySessionCardSimple from "./PlaySessionCardSimple";
+import type { GameType } from "src/types/game";
 
 type PlayStatisticsProps = {
   /** ゲーム情報 */
-  game: GameType
+  game: GameType;
   /** 更新キー（データ再取得トリガー） */
-  refreshKey: number
+  refreshKey: number;
   /** プレイセッション追加ハンドラ */
-  onAddPlaySession: () => void
+  onAddPlaySession: () => void;
   /** プロセス管理モーダル開く */
-  onOpenProcessManagement: () => void
-}
+  onOpenProcessManagement: () => void;
+};
 
 /**
  * プレイ統計コンポーネント
@@ -34,7 +34,7 @@ const PlayStatistics = memo(function PlayStatistics({
   game,
   refreshKey,
   onAddPlaySession,
-  onOpenProcessManagement
+  onOpenProcessManagement,
 }: PlayStatisticsProps): React.JSX.Element {
   return (
     <div className="card bg-base-100 shadow-xl">
@@ -76,7 +76,7 @@ const PlayStatistics = memo(function PlayStatistics({
         </div>
       </div>
     </div>
-  )
-})
+  );
+});
 
-export default PlayStatistics
+export default PlayStatistics;

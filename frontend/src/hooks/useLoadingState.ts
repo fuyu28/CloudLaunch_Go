@@ -14,19 +14,19 @@
  * ```
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback } from "react";
 
-import { useToastHandler, executeWithToast, type ToastOptions } from "./useToastHandler"
+import { useToastHandler, executeWithToast, type ToastOptions } from "./useToastHandler";
 
 /**
  * ローディング状態の型定義
  */
 export type LoadingState = {
   /** ローディング中かどうか */
-  isLoading: boolean
+  isLoading: boolean;
   /** エラーメッセージ */
-  error: string | undefined
-}
+  error: string | undefined;
+};
 
 /**
  * ローディング状態管理フック
@@ -39,26 +39,26 @@ export type LoadingState = {
  */
 export function useLoadingState(initialLoading = false): {
   /** ローディング中かどうか */
-  isLoading: boolean
+  isLoading: boolean;
   /** エラーメッセージ */
-  error: string | undefined
+  error: string | undefined;
   /** ローディング状態を設定 */
-  setLoading: (loading: boolean) => void
+  setLoading: (loading: boolean) => void;
   /** エラー状態を設定 */
-  setError: (error: string | undefined) => void
+  setError: (error: string | undefined) => void;
   /** 状態をリセット */
-  reset: () => void
+  reset: () => void;
   /** トースト付きで非同期処理を実行 */
   executeWithLoading: <T>(
     asyncFn: () => Promise<T>,
-    options?: ToastOptions
-  ) => Promise<T | undefined>
+    options?: ToastOptions,
+  ) => Promise<T | undefined>;
 } {
   const [state, setState] = useState<LoadingState>({
     isLoading: initialLoading,
-    error: undefined
-  })
-  const toastHandler = useToastHandler()
+    error: undefined,
+  });
+  const toastHandler = useToastHandler();
 
   /**
    * ローディング状態を設定する
@@ -66,8 +66,8 @@ export function useLoadingState(initialLoading = false): {
    * @param loading - ローディング中かどうか
    */
   const setLoading = useCallback((loading: boolean) => {
-    setState((prev) => ({ ...prev, isLoading: loading }))
-  }, [])
+    setState((prev) => ({ ...prev, isLoading: loading }));
+  }, []);
 
   /**
    * エラー状態を設定する
@@ -75,15 +75,15 @@ export function useLoadingState(initialLoading = false): {
    * @param error - エラーメッセージまたはundefined
    */
   const setError = useCallback((error: string | undefined) => {
-    setState((prev) => ({ ...prev, error }))
-  }, [])
+    setState((prev) => ({ ...prev, error }));
+  }, []);
 
   /**
    * 状態をリセットする
    */
   const reset = useCallback(() => {
-    setState({ isLoading: false, error: undefined })
-  }, [])
+    setState({ isLoading: false, error: undefined });
+  }, []);
 
   /**
    * トースト付きで非同期処理を実行する
@@ -95,27 +95,27 @@ export function useLoadingState(initialLoading = false): {
   const executeWithLoading = useCallback(
     async <T>(asyncFn: () => Promise<T>, options?: ToastOptions): Promise<T | undefined> => {
       try {
-        setLoading(true)
-        setError(undefined)
+        setLoading(true);
+        setError(undefined);
 
-        const result = await executeWithToast(asyncFn, options || {}, toastHandler)
-        return result
+        const result = await executeWithToast(asyncFn, options || {}, toastHandler);
+        return result;
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        setError(errorMsg)
-        return undefined
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        setError(errorMsg);
+        return undefined;
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     },
-    [setLoading, setError, toastHandler]
-  )
+    [setLoading, setError, toastHandler],
+  );
 
   return {
     ...state,
     setLoading,
     setError,
     reset,
-    executeWithLoading
-  }
+    executeWithLoading,
+  };
 }

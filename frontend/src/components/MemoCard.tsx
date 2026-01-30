@@ -5,93 +5,93 @@
  * メモ一覧への遷移と簡単なメモ情報を表示します。
  */
 
-import { useEffect, useState, useCallback, useMemo } from "react"
-import { FaBookOpen, FaPlus } from "react-icons/fa"
-import { Link } from "react-router-dom"
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { FaBookOpen, FaPlus } from "react-icons/fa";
+import { Link } from "react-router-dom";
 
-import { useDropdownMenu } from "@renderer/hooks/useDropdownMenu"
-import { useMemoOperations } from "@renderer/hooks/useMemoOperations"
+import { useDropdownMenu } from "@renderer/hooks/useDropdownMenu";
+import { useMemoOperations } from "@renderer/hooks/useMemoOperations";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import ConfirmModal from "./ConfirmModal"
-import MemoCardBase from "./MemoCardBase"
-import type { MemoType } from "src/types/memo"
+import ConfirmModal from "./ConfirmModal";
+import MemoCardBase from "./MemoCardBase";
+import type { MemoType } from "src/types/memo";
 
 type MemoCardProps = {
-  gameId: string
-}
+  gameId: string;
+};
 
 export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
-  const [memos, setMemos] = useState<MemoType[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [memos, setMemos] = useState<MemoType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // 共通フックを使用
-  const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu()
+  const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu();
   const {
     handleDeleteMemo,
     handleEditMemo,
     handleViewMemo,
     handleDeleteConfirm,
-    handleSyncFromCloud
+    handleSyncFromCloud,
   } = useMemoOperations({
     gameId,
     onDeleteSuccess: () => {
-      fetchMemos() // メモ削除後に一覧を再取得
-      setDeleteConfirmId(null)
+      fetchMemos(); // メモ削除後に一覧を再取得
+      setDeleteConfirmId(null);
     },
     closeDropdown,
     openDeleteModal: setDeleteConfirmId,
     onSyncSuccess: () => {
-      fetchMemos() // 同期後にメモ一覧を再取得
-    }
-  })
+      fetchMemos(); // 同期後にメモ一覧を再取得
+    },
+  });
 
   // メモ一覧を取得
   const fetchMemos = useCallback(async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
-      const result = await window.api.memo.getMemosByGameId(gameId)
+      const result = await window.api.memo.getMemosByGameId(gameId);
       if (result.success && result.data) {
-        setMemos(result.data)
+        setMemos(result.data);
       }
     } catch (error) {
-      logger.error("メモ取得エラー:", { component: "MemoCard", function: "unknown", data: error })
+      logger.error("メモ取得エラー:", { component: "MemoCard", function: "unknown", data: error });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [gameId])
+  }, [gameId]);
 
   useEffect(() => {
-    fetchMemos()
-  }, [fetchMemos])
+    fetchMemos();
+  }, [fetchMemos]);
 
   // 表示するメモリストと統計をメモ化
   const displayData = useMemo(() => {
-    const displayMemos = memos.slice(0, 3)
-    const remainingCount = Math.max(0, memos.length - 3)
+    const displayMemos = memos.slice(0, 3);
+    const remainingCount = Math.max(0, memos.length - 3);
 
     return {
       displayMemos,
       remainingCount,
       totalCount: memos.length,
-      hasMore: remainingCount > 0
-    }
-  }, [memos])
+      hasMore: remainingCount > 0,
+    };
+  }, [memos]);
 
   // メモ統計情報をメモ化
   const memoStats = useMemo(() => {
-    if (memos.length === 0) return null
+    if (memos.length === 0) return null;
 
-    const totalChars = memos.reduce((sum, memo) => sum + memo.content.length, 0)
-    const avgChars = Math.round(totalChars / memos.length)
+    const totalChars = memos.reduce((sum, memo) => sum + memo.content.length, 0);
+    const avgChars = Math.round(totalChars / memos.length);
 
     return {
       totalChars,
-      avgChars
-    }
-  }, [memos])
+      avgChars,
+    };
+  }, [memos]);
 
   return (
     <div className="card bg-base-100 shadow-xl h-full">
@@ -186,5 +186,5 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
         onCancel={() => setDeleteConfirmId(null)}
       />
     </div>
-  )
+  );
 }

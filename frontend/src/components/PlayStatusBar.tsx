@@ -14,16 +14,16 @@
  * ```
  */
 
-import { autoTrackingAtom } from "@renderer/state/settings"
-import { useAtom } from "jotai"
-import React, { useEffect, useState } from "react"
-import { FaClock, FaGamepad } from "react-icons/fa"
+import { autoTrackingAtom } from "@renderer/state/settings";
+import { useAtom } from "jotai";
+import React, { useEffect, useState } from "react";
+import { FaClock, FaGamepad } from "react-icons/fa";
 
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat"
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import type { MonitoringGameStatus } from "src/types/game"
+import type { MonitoringGameStatus } from "src/types/game";
 
 /**
  * プレイ状況バーコンポーネント
@@ -34,57 +34,57 @@ import type { MonitoringGameStatus } from "src/types/game"
  * @returns プレイ状況バー要素
  */
 export function PlayStatusBar(): React.JSX.Element {
-  const [autoTracking] = useAtom(autoTrackingAtom)
-  const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([])
-  const [, setCurrentTime] = useState<Date>(new Date())
-  const { formatShort } = useTimeFormat()
+  const [autoTracking] = useAtom(autoTrackingAtom);
+  const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([]);
+  const [, setCurrentTime] = useState<Date>(new Date());
+  const { formatShort } = useTimeFormat();
 
   // 監視状況を更新
   const updateMonitoringStatus = React.useCallback(async (): Promise<void> => {
     // 自動ゲーム検出がOFFの場合は更新しない
     if (!autoTracking) {
-      return
+      return;
     }
 
     try {
-      const status = await window.api.processMonitor.getMonitoringStatus()
-      setMonitoringGames(status)
+      const status = await window.api.processMonitor.getMonitoringStatus();
+      setMonitoringGames(status);
     } catch (error) {
       logger.error("監視状況の取得に失敗しました:", {
         component: "PlayStatusBar",
         function: "unknown",
-        data: error
-      })
+        data: error,
+      });
     }
-  }, [autoTracking])
+  }, [autoTracking]);
 
   // 時間更新とステータス更新
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTime(new Date())
-      updateMonitoringStatus()
-    }, 1000)
+      setCurrentTime(new Date());
+      updateMonitoringStatus();
+    }, 1000);
 
-    return () => clearInterval(interval)
-  }, [updateMonitoringStatus])
+    return () => clearInterval(interval);
+  }, [updateMonitoringStatus]);
 
   // 初期化
   useEffect(() => {
     // 少し遅延させて監視状態を取得（メインプロセスの初期化を待つ）
     const timer = setTimeout(() => {
-      updateMonitoringStatus()
-    }, 1000)
+      updateMonitoringStatus();
+    }, 1000);
 
-    return () => clearTimeout(timer)
-  }, [updateMonitoringStatus])
+    return () => clearTimeout(timer);
+  }, [updateMonitoringStatus]);
 
   // 自動ゲーム検出がOFFの場合は非表示
   if (!autoTracking) {
-    return <></>
+    return <></>;
   }
 
-  const playingGames = monitoringGames.filter((game) => game.isPlaying)
-  const hasPlayingGames = playingGames.length > 0
+  const playingGames = monitoringGames.filter((game) => game.isPlaying);
+  const hasPlayingGames = playingGames.length > 0;
 
   return (
     <div className="bg-base-300 border-t border-base-content/10 px-4 py-1 h-12">
@@ -116,7 +116,7 @@ export function PlayStatusBar(): React.JSX.Element {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default PlayStatusBar
+export default PlayStatusBar;

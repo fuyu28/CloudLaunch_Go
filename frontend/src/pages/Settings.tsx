@@ -15,13 +15,13 @@
  * - 分離されたコンポーネント
  */
 
-import { useState } from "react"
-import { Link } from "react-router-dom"
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
-import GeneralSettings from "@renderer/components/GeneralSettings"
-import R2S3Settings from "@renderer/components/R2S3Settings"
+import GeneralSettings from "@renderer/components/GeneralSettings";
+import R2S3Settings from "@renderer/components/R2S3Settings";
 
-type TabType = "general" | "r2s3"
+type TabType = "general" | "r2s3";
 
 /**
  * 設定ページコンポーネント
@@ -31,7 +31,7 @@ type TabType = "general" | "r2s3"
  * @returns 設定ページ要素
  */
 export default function Settings(): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<TabType>("general")
+  const [activeTab, setActiveTab] = useState<TabType>("general");
 
   return (
     <div className="container mx-auto px-6 py-8">
@@ -71,5 +71,5 @@ export default function Settings(): React.JSX.Element {
         </div>
       </div>
     </div>
-  )
+  );
 }

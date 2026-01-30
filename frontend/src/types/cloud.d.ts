@@ -13,49 +13,49 @@
  */
 export type CloudDataItem = {
   /** ゲーム名/フォルダ名 */
-  name: string
+  name: string;
   /** 総ファイルサイズ（バイト） */
-  totalSize: number
+  totalSize: number;
   /** ファイル数 */
-  fileCount: number
+  fileCount: number;
   /** 最終更新日時 */
-  lastModified: Date
+  lastModified: Date;
   /** リモートパス（削除時に使用） */
-  remotePath: string
-}
+  remotePath: string;
+};
 
 /**
  * クラウドファイル詳細情報の型定義
  */
 export type CloudFileDetail = {
   /** ファイル名 */
-  name: string
+  name: string;
   /** ファイルサイズ（バイト） */
-  size: number
+  size: number;
   /** 最終更新日時 */
-  lastModified: Date
+  lastModified: Date;
   /** S3オブジェクトキー */
-  key: string
+  key: string;
   /** 相対パス */
-  relativePath: string
-}
+  relativePath: string;
+};
 
 /**
  * クラウドディレクトリツリーノードの型定義
  */
 export type CloudDirectoryNode = {
   /** ノード名 */
-  name: string
+  name: string;
   /** フルパス */
-  path: string
+  path: string;
   /** ディレクトリかどうか */
-  isDirectory: boolean
+  isDirectory: boolean;
   /** ファイルサイズ（ディレクトリの場合は配下の総サイズ） */
-  size: number
+  size: number;
   /** 最終更新日時 */
-  lastModified: Date
+  lastModified: Date;
   /** 子ノード */
-  children?: CloudDirectoryNode[]
+  children?: CloudDirectoryNode[];
   /** S3オブジェクトキー（ファイルの場合） */
-  objectKey?: string
-}
+  objectKey?: string;
+};

@@ -26,26 +26,26 @@
  */
 export type SettingsFormFieldProps = {
   /** ラベルテキスト */
-  label: string
+  label: string;
   /** 現在の値 */
-  value: string
+  value: string;
   /** 値変更時のコールバック */
-  onChange: (value: string) => void
+  onChange: (value: string) => void;
   /** プレースホルダーテキスト */
-  placeholder?: string
+  placeholder?: string;
   /** パスワードフィールドかどうか */
-  type?: "text" | "password"
+  type?: "text" | "password";
   /** フィールドを無効化する場合は true */
-  disabled?: boolean
+  disabled?: boolean;
   /** 必須フィールドかどうか */
-  required?: boolean
+  required?: boolean;
   /** エラーメッセージ */
-  error?: string
+  error?: string;
   /** ヘルプテキスト */
-  helpText?: string
+  helpText?: string;
   /** ラベルの幅（Tailwind CSS クラス） */
-  labelWidth?: string
-}
+  labelWidth?: string;
+};
 
 /**
  * 設定フォームフィールドコンポーネント
@@ -65,7 +65,7 @@ export function SettingsFormField({
   required = false,
   error,
   helpText,
-  labelWidth = "w-36"
+  labelWidth = "w-36",
 }: SettingsFormFieldProps): React.JSX.Element {
   return (
     <div className="flex flex-col space-y-1">
@@ -91,7 +91,7 @@ export function SettingsFormField({
       {/* ヘルプテキスト */}
       {helpText && !error && <div className="text-base-content text-xs ml-36">{helpText}</div>}
     </div>
-  )
+  );
 }
 
-export default SettingsFormField
+export default SettingsFormField;

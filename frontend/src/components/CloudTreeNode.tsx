@@ -4,22 +4,22 @@
  * ツリービューでのディレクトリ・ファイル表示とインタラクション機能を提供します。
  */
 
-import { FiFolder, FiFile, FiTrash2, FiChevronRight, FiChevronDown } from "react-icons/fi"
+import { FiFolder, FiFile, FiTrash2, FiChevronRight, FiChevronDown } from "react-icons/fi";
 
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils"
-import { formatFileSize, formatDate, countFilesRecursively } from "@renderer/utils/cloudUtils"
+import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import { formatFileSize, formatDate, countFilesRecursively } from "@renderer/utils/cloudUtils";
 
 /**
  * ツリーノードコンポーネントのプロパティ
  */
 type CloudTreeNodeProps = {
-  node: CloudDirectoryNode
-  level: number
-  expandedNodes: Set<string>
-  onToggleExpand: (path: string) => void
-  onDelete: (node: CloudDirectoryNode) => void
-  onSelect: (node: CloudDirectoryNode) => void
-}
+  node: CloudDirectoryNode;
+  level: number;
+  expandedNodes: Set<string>;
+  onToggleExpand: (path: string) => void;
+  onDelete: (node: CloudDirectoryNode) => void;
+  onSelect: (node: CloudDirectoryNode) => void;
+};
 
 /**
  * クラウドディレクトリツリーノードコンポーネント
@@ -30,10 +30,10 @@ export default function CloudTreeNode({
   expandedNodes,
   onToggleExpand,
   onDelete,
-  onSelect
+  onSelect,
 }: CloudTreeNodeProps): React.JSX.Element {
-  const isExpanded = expandedNodes.has(node.path)
-  const hasChildren = node.children && node.children.length > 0
+  const isExpanded = expandedNodes.has(node.path);
+  const hasChildren = node.children && node.children.length > 0;
 
   return (
     <>
@@ -87,8 +87,8 @@ export default function CloudTreeNode({
           {/* 削除ボタン */}
           <button
             onClick={(e) => {
-              e.stopPropagation()
-              onDelete(node)
+              e.stopPropagation();
+              onDelete(node);
             }}
             className="btn btn-sm btn-ghost btn-error opacity-0 group-hover:opacity-100 transition-opacity ml-2"
             title={node.isDirectory ? `${node.name} 以下を削除` : `${node.name} ファイルを削除`}
@@ -115,5 +115,5 @@ export default function CloudTreeNode({
         </div>
       )}
     </>
-  )
+  );
 }

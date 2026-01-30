@@ -1,9 +1,9 @@
-import type { WindowApi } from "../wailsBridge"
+import type { WindowApi } from "../wailsBridge";
 
 declare global {
   interface Window {
-    api: WindowApi
+    api: WindowApi;
   }
 }
 
-export {}
+export {};

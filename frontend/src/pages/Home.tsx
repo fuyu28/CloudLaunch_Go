@@ -1,41 +1,41 @@
-import { useAtom } from "jotai"
-import { useEffect, useState, useCallback } from "react"
-import { IoIosAdd } from "react-icons/io"
+import { useAtom } from "jotai";
+import { useEffect, useState, useCallback } from "react";
+import { IoIosAdd } from "react-icons/io";
 
-import FloatingButton from "@renderer/components/FloatingButton"
-import GameGrid from "@renderer/components/GameGrid"
-import GameFormModal from "@renderer/components/GameModal"
-import GameSearchFilter from "@renderer/components/GameSearchFilter"
+import FloatingButton from "@renderer/components/FloatingButton";
+import GameGrid from "@renderer/components/GameGrid";
+import GameFormModal from "@renderer/components/GameModal";
+import GameSearchFilter from "@renderer/components/GameSearchFilter";
 
-import { CONFIG, MESSAGES } from "@renderer/constants"
-import { useDebounce } from "@renderer/hooks/useDebounce"
-import { useGameActions } from "@renderer/hooks/useGameActions"
-import { useLoadingState } from "@renderer/hooks/useLoadingState"
+import { CONFIG, MESSAGES } from "@renderer/constants";
+import { useDebounce } from "@renderer/hooks/useDebounce";
+import { useGameActions } from "@renderer/hooks/useGameActions";
+import { useLoadingState } from "@renderer/hooks/useLoadingState";
 import {
   searchWordAtom,
   filterAtom,
   sortAtom,
   sortDirectionAtom,
-  visibleGamesAtom
-} from "@renderer/state/home"
-import { autoTrackingAtom } from "@renderer/state/settings"
-import type { GameType } from "src/types/game"
+  visibleGamesAtom,
+} from "@renderer/state/home";
+import { autoTrackingAtom } from "@renderer/state/settings";
+import type { GameType } from "src/types/game";
 
 export default function Home(): React.ReactElement {
-  const [searchWord, setSearchWord] = useAtom(searchWordAtom)
-  const [filter, setFilter] = useAtom(filterAtom)
-  const [sort, setSort] = useAtom(sortAtom)
-  const [sortDirection, setSortDirection] = useAtom(sortDirectionAtom)
-  const [visibleGames, setVisibleGames] = useAtom(visibleGamesAtom)
-  const [autoTracking] = useAtom(autoTrackingAtom)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [searchWord, setSearchWord] = useAtom(searchWordAtom);
+  const [filter, setFilter] = useAtom(filterAtom);
+  const [sort, setSort] = useAtom(sortAtom);
+  const [sortDirection, setSortDirection] = useAtom(sortDirectionAtom);
+  const [visibleGames, setVisibleGames] = useAtom(visibleGamesAtom);
+  const [autoTracking] = useAtom(autoTrackingAtom);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 検索語をデバウンス
-  const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS)
+  const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
 
   // ローディング状態管理
-  const gameListLoading = useLoadingState()
-  const gameActionLoading = useLoadingState()
+  const gameListLoading = useLoadingState();
+  const gameActionLoading = useLoadingState();
 
   // ゲーム操作フック
   const { createGameAndRefreshList } = useGameActions({
@@ -44,55 +44,55 @@ export default function Home(): React.ReactElement {
     sort,
     sortDirection,
     onGamesUpdate: setVisibleGames,
-    onModalClose: () => setIsModalOpen(false)
-  })
+    onModalClose: () => setIsModalOpen(false),
+  });
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     const fetchGames = async (): Promise<void> => {
       const games = await gameListLoading.executeWithLoading(
         () => window.api.database.listGames(debouncedSearchWord, filter, sort, sortDirection),
         {
           errorMessage: MESSAGES.GAME.LIST_FETCH_FAILED,
-          showToast: true
-        }
-      )
+          showToast: true,
+        },
+      );
 
       if (!cancelled && games) {
-        setVisibleGames(games as GameType[])
+        setVisibleGames(games as GameType[]);
       }
-    }
+    };
 
-    fetchGames()
+    fetchGames();
     return () => {
-      cancelled = true
-    }
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchWord, filter, sort, sortDirection])
+  }, [debouncedSearchWord, filter, sort, sortDirection]);
 
-  const handleAddGame = createGameAndRefreshList
+  const handleAddGame = createGameAndRefreshList;
 
   const handleLaunchGame = useCallback(
     async (exePath: string) => {
       await gameActionLoading.executeWithLoading(
         async () => {
-          const result = await window.api.game.launchGame(exePath)
+          const result = await window.api.game.launchGame(exePath);
           if (!result.success) {
-            throw new Error(result.message)
+            throw new Error(result.message);
           }
-          return result
+          return result;
         },
         {
           loadingMessage: MESSAGES.GAME.LAUNCHING,
           successMessage: MESSAGES.GAME.LAUNCHED,
           errorMessage: MESSAGES.GAME.LAUNCH_FAILED,
-          showToast: true
-        }
-      )
+          showToast: true,
+        },
+      );
     },
-    [gameActionLoading]
-  )
+    [gameActionLoading],
+  );
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
@@ -128,5 +128,5 @@ export default function Home(): React.ReactElement {
         onSubmit={handleAddGame}
       />
     </div>
-  )
+  );
 }

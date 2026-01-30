@@ -20,34 +20,34 @@
  * ```
  */
 
-import { useState, useEffect, useRef } from "react"
-import { FaClock, FaEdit, FaPlay, FaStop, FaCheck, FaTimes } from "react-icons/fa"
+import { useState, useEffect, useRef } from "react";
+import { FaClock, FaEdit, FaPlay, FaStop, FaCheck, FaTimes } from "react-icons/fa";
 
-import { useTimeFormat, timeUtils } from "@renderer/hooks/useTimeFormat"
+import { useTimeFormat, timeUtils } from "@renderer/hooks/useTimeFormat";
 
 /**
  * プレイセッション追加モーダルのprops
  */
 export type PlaySessionModalProps = {
   /** モーダルが開いているかどうか */
-  isOpen: boolean
+  isOpen: boolean;
   /** モーダルを閉じる時のコールバック */
-  onClose: () => void
+  onClose: () => void;
   /** プレイセッションを追加する時のコールバック */
-  onSubmit: (duration: number, sessionName?: string) => Promise<void>
+  onSubmit: (duration: number, sessionName?: string) => Promise<void>;
   /** ゲームのタイトル */
-  gameTitle: string
-}
+  gameTitle: string;
+};
 
 /**
  * モーダルのモード（手動追加 or タイマー）
  */
-type ModalMode = "manual" | "timer"
+type ModalMode = "manual" | "timer";
 
 /**
  * タイマーの状態
  */
-type TimerState = "stopped" | "running" | "paused"
+type TimerState = "stopped" | "running" | "paused";
 
 /**
  * プレイセッション追加モーダルコンポーネント
@@ -62,152 +62,152 @@ export function PlaySessionModal({
   isOpen,
   onClose,
   onSubmit,
-  gameTitle
+  gameTitle,
 }: PlaySessionModalProps): React.JSX.Element {
-  const [mode, setMode] = useState<ModalMode>("manual")
-  const [hoursInput, setHoursInput] = useState<string>("")
-  const [minutesInput, setMinutesInput] = useState<string>("")
-  const [secondsInput, setSecondsInput] = useState<string>("")
-  const [sessionName, setSessionName] = useState<string>("")
-  const [timerSeconds, setTimerSeconds] = useState<number>(0)
-  const [timerState, setTimerState] = useState<TimerState>("stopped")
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
-  const [error, setError] = useState<string>("")
+  const [mode, setMode] = useState<ModalMode>("manual");
+  const [hoursInput, setHoursInput] = useState<string>("");
+  const [minutesInput, setMinutesInput] = useState<string>("");
+  const [secondsInput, setSecondsInput] = useState<string>("");
+  const [sessionName, setSessionName] = useState<string>("");
+  const [timerSeconds, setTimerSeconds] = useState<number>(0);
+  const [timerState, setTimerState] = useState<TimerState>("stopped");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
 
-  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined)
-  const { formatShort } = useTimeFormat()
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const { formatShort } = useTimeFormat();
 
   // モーダルが開いたときの初期化
   useEffect(() => {
     if (isOpen) {
-      setMode("manual")
-      setHoursInput("")
-      setMinutesInput("")
-      setSecondsInput("")
-      setSessionName("")
-      setTimerSeconds(0)
-      setTimerState("stopped")
-      setError("")
-      setIsSubmitting(false)
+      setMode("manual");
+      setHoursInput("");
+      setMinutesInput("");
+      setSecondsInput("");
+      setSessionName("");
+      setTimerSeconds(0);
+      setTimerState("stopped");
+      setError("");
+      setIsSubmitting(false);
     }
-  }, [isOpen])
+  }, [isOpen]);
 
   // タイマー処理
   useEffect(() => {
     if (timerState === "running") {
       intervalRef.current = setInterval(() => {
-        setTimerSeconds((prev) => prev + 1)
-      }, 1000)
+        setTimerSeconds((prev) => prev + 1);
+      }, 1000);
     } else {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+        clearInterval(intervalRef.current);
       }
     }
 
     return () => {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+        clearInterval(intervalRef.current);
       }
-    }
-  }, [timerState])
+    };
+  }, [timerState]);
 
   /**
    * 入力値を数値に変換（空文字列の場合は0）
    */
   const parseInputValue = (value: string): number => {
-    const parsed = parseInt(value)
-    return isNaN(parsed) ? 0 : parsed
-  }
+    const parsed = parseInt(value);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   /**
    * 手動追加フォームのバリデーション
    * @returns バリデーション結果
    */
   const validateManualInput = (): boolean => {
-    const hours = parseInputValue(hoursInput)
-    const minutes = parseInputValue(minutesInput)
-    const seconds = parseInputValue(secondsInput)
-    const totalSeconds = timeUtils.toSeconds(hours, minutes, seconds)
+    const hours = parseInputValue(hoursInput);
+    const minutes = parseInputValue(minutesInput);
+    const seconds = parseInputValue(secondsInput);
+    const totalSeconds = timeUtils.toSeconds(hours, minutes, seconds);
     if (totalSeconds <= 0) {
-      setError("プレイ時間は1秒以上で入力してください")
-      return false
+      setError("プレイ時間は1秒以上で入力してください");
+      return false;
     }
     if (totalSeconds > 86400) {
       // 24時間制限
-      setError("プレイ時間は24時間以内で入力してください")
-      return false
+      setError("プレイ時間は24時間以内で入力してください");
+      return false;
     }
-    return true
-  }
+    return true;
+  };
 
   /**
    * タイマー開始処理
    */
   const handleStartTimer = (): void => {
-    setTimerState("running")
-    setError("")
-  }
+    setTimerState("running");
+    setError("");
+  };
 
   /**
    * タイマー停止処理
    */
   const handleStopTimer = (): void => {
-    setTimerState("paused")
-  }
+    setTimerState("paused");
+  };
 
   /**
    * タイマー再開処理
    */
   const handleResumeTimer = (): void => {
-    setTimerState("running")
-  }
+    setTimerState("running");
+  };
 
   /**
    * プレイセッション追加処理
    */
   const handleSubmitSession = async (): Promise<void> => {
-    setIsSubmitting(true)
-    setError("")
+    setIsSubmitting(true);
+    setError("");
 
     try {
-      let duration: number
+      let duration: number;
 
       if (mode === "manual") {
         if (!validateManualInput()) {
-          setIsSubmitting(false)
-          return
+          setIsSubmitting(false);
+          return;
         }
-        const hours = parseInputValue(hoursInput)
-        const minutes = parseInputValue(minutesInput)
-        const seconds = parseInputValue(secondsInput)
-        duration = timeUtils.toSeconds(hours, minutes, seconds)
+        const hours = parseInputValue(hoursInput);
+        const minutes = parseInputValue(minutesInput);
+        const seconds = parseInputValue(secondsInput);
+        duration = timeUtils.toSeconds(hours, minutes, seconds);
       } else {
         if (timerSeconds <= 0) {
-          setError("タイマーを開始してからセッションを追加してください")
-          setIsSubmitting(false)
-          return
+          setError("タイマーを開始してからセッションを追加してください");
+          setIsSubmitting(false);
+          return;
         }
-        duration = timerSeconds
+        duration = timerSeconds;
       }
 
-      await onSubmit(duration, sessionName.trim() || undefined)
-      onClose()
+      await onSubmit(duration, sessionName.trim() || undefined);
+      onClose();
     } catch {
-      setError("プレイセッションの追加に失敗しました")
+      setError("プレイセッションの追加に失敗しました");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   /**
    * モーダルを閉じる処理
    */
   const handleClose = (): void => {
     if (intervalRef.current) {
-      clearInterval(intervalRef.current)
+      clearInterval(intervalRef.current);
     }
-    onClose()
-  }
+    onClose();
+  };
 
   return (
     <div className={`modal ${isOpen ? "modal-open" : ""}`}>
@@ -264,11 +264,11 @@ export function PlaySessionModal({
                   className="input input-bordered w-full"
                   value={hoursInput}
                   onChange={(e) => {
-                    const value = e.target.value
+                    const value = e.target.value;
                     if (value === "" || /^\d+$/.test(value)) {
-                      const numValue = value === "" ? 0 : parseInt(value)
+                      const numValue = value === "" ? 0 : parseInt(value);
                       if (numValue >= 0 && numValue <= 23) {
-                        setHoursInput(value)
+                        setHoursInput(value);
                       }
                     }
                   }}
@@ -285,11 +285,11 @@ export function PlaySessionModal({
                   className="input input-bordered w-full"
                   value={minutesInput}
                   onChange={(e) => {
-                    const value = e.target.value
+                    const value = e.target.value;
                     if (value === "" || /^\d+$/.test(value)) {
-                      const numValue = value === "" ? 0 : parseInt(value)
+                      const numValue = value === "" ? 0 : parseInt(value);
                       if (numValue >= 0 && numValue <= 59) {
-                        setMinutesInput(value)
+                        setMinutesInput(value);
                       }
                     }
                   }}
@@ -306,11 +306,11 @@ export function PlaySessionModal({
                   className="input input-bordered w-full"
                   value={secondsInput}
                   onChange={(e) => {
-                    const value = e.target.value
+                    const value = e.target.value;
                     if (value === "" || /^\d+$/.test(value)) {
-                      const numValue = value === "" ? 0 : parseInt(value)
+                      const numValue = value === "" ? 0 : parseInt(value);
                       if (numValue >= 0 && numValue <= 59) {
-                        setSecondsInput(value)
+                        setSecondsInput(value);
                       }
                     }
                   }}
@@ -325,8 +325,8 @@ export function PlaySessionModal({
                 timeUtils.toSeconds(
                   parseInputValue(hoursInput),
                   parseInputValue(minutesInput),
-                  parseInputValue(secondsInput)
-                )
+                  parseInputValue(secondsInput),
+                ),
               )}
             </div>
           </div>
@@ -401,7 +401,7 @@ export function PlaySessionModal({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default PlaySessionModal
+export default PlaySessionModal;

@@ -28,7 +28,7 @@ export const MESSAGES = {
     UPDATE_FAILED: "ゲームの更新に失敗しました。",
     DELETE_FAILED: "ゲームの削除に失敗しました。",
     ALREADY_EXISTS: (title: string) => `ゲーム「${title}」は既に存在します。`,
-    PLAY_TIME_RECORD_FAILED: "プレイ時間の記録に失敗しました。"
+    PLAY_TIME_RECORD_FAILED: "プレイ時間の記録に失敗しました。",
   },
 
   // セーブデータ関連
@@ -39,14 +39,14 @@ export const MESSAGES = {
     UPLOAD_FAILED: "セーブデータのアップロードに失敗しました",
     DOWNLOADING: "セーブデータをダウンロード中…",
     DOWNLOADED: "セーブデータのダウンロードに成功しました。",
-    DOWNLOAD_FAILED: "セーブデータのダウンロードに失敗しました"
+    DOWNLOAD_FAILED: "セーブデータのダウンロードに失敗しました",
   },
 
   // 接続・認証関連
   CONNECTION: {
     CHECKING: "接続確認中...",
     OK: "接続OK",
-    INVALID_CREDENTIALS: "クレデンシャルが有効ではありません"
+    INVALID_CREDENTIALS: "クレデンシャルが有効ではありません",
   },
 
   // 認証関連
@@ -55,7 +55,7 @@ export const MESSAGES = {
     CREDENTIAL_INVALID: "認証情報が無効です。設定を確認してください。",
     SAVING: "認証情報を保存しています...",
     SAVED: "認証情報を保存しました",
-    SAVE_FAILED: "認証情報の保存に失敗しました"
+    SAVE_FAILED: "認証情報の保存に失敗しました",
   },
 
   // ファイル操作関連
@@ -63,13 +63,13 @@ export const MESSAGES = {
     SELECT_ERROR: "ファイル選択中にエラーが発生しました",
     FOLDER_SELECT_ERROR: "フォルダ選択中にエラーが発生しました",
     NOT_FOUND: "ファイルが見つかりません。パスを確認してください。",
-    ACCESS_DENIED: "ファイルへのアクセス権がありません。権限設定を確認してください。"
+    ACCESS_DENIED: "ファイルへのアクセス権がありません。権限設定を確認してください。",
   },
 
   // Steam関連
   STEAM: {
     EXE_NOT_FOUND: "Steam 実行ファイルが見つかりません",
-    ACCESS_DENIED: "Steam へのアクセス権がありません"
+    ACCESS_DENIED: "Steam へのアクセス権がありません",
   },
 
   // AWS/R2エラー関連
@@ -78,7 +78,7 @@ export const MESSAGES = {
     INVALID_REGION: "リージョン名が正しくありません。",
     INVALID_ACCESS_KEY: "アクセスキーIDが正しくありません。",
     INVALID_CREDENTIALS: "認証情報が正しくありません。",
-    NETWORK_ERROR: "ネットワークエラーです。エンドポイントとネットワークの接続を確認してください。"
+    NETWORK_ERROR: "ネットワークエラーです。エンドポイントとネットワークの接続を確認してください。",
   },
 
   // 一般的なエラー
@@ -87,7 +87,7 @@ export const MESSAGES = {
     GENERAL: "エラーが発生しました",
     NETWORK: "ネットワークエラーが発生しました",
     FILE_NOT_FOUND: "ファイルが見つかりません",
-    PERMISSION_DENIED: "アクセス権限がありません"
+    PERMISSION_DENIED: "アクセス権限がありません",
   },
 
   // UI関連
@@ -96,7 +96,7 @@ export const MESSAGES = {
     CANCEL: "キャンセル",
     SAVE: "保存",
     DELETE: "削除",
-    CLOSE: "閉じる"
+    CLOSE: "閉じる",
   },
 
   // バリデーション関連
@@ -112,7 +112,7 @@ export const MESSAGES = {
     INVALID_URL_FORMAT: "エンドポイントが有効な URL 形式ではありません",
     INVALID_BUCKET_NAME_FORMAT: "バケット名の形式が正しくありません",
     INVALID_ACCESS_KEY_FORMAT: "アクセスキー ID の形式が正しくありません",
-    INVALID_SECRET_KEY_FORMAT: "シークレットアクセスキーの形式が正しくありません"
+    INVALID_SECRET_KEY_FORMAT: "シークレットアクセスキーの形式が正しくありません",
   },
 
   // IPCエラー関連
@@ -127,7 +127,8 @@ export const MESSAGES = {
     WEB_IMAGE_LOAD_FAILED: (message: string) => `Web画像の読み込みに失敗しました: ${message}`,
     IMAGE_FETCH_FAILED: (statusText: string) => `画像の取得に失敗しました: ${statusText}`,
     FILE_SELECTION_FAILED: (message: string) => `ファイル選択中にエラーが発生しました: ${message}`,
-    FOLDER_SELECTION_FAILED: (message: string) => `フォルダ選択中にエラーが発生しました: ${message}`
+    FOLDER_SELECTION_FAILED: (message: string) =>
+      `フォルダ選択中にエラーが発生しました: ${message}`,
   },
 
   // 認証サービス関連
@@ -141,16 +142,16 @@ export const MESSAGES = {
       "システムキーチェーンへのアクセスが拒否されました。アプリケーションの権限を確認してください。",
     GET_ERROR: (error: string) => `認証情報の取得エラー: ${error}`,
     VALIDATION_FAILED: (error: string) => `認証情報の検証中にエラーが発生しました: ${error}`,
-    VALIDATION_UNKNOWN: "認証情報の検証中に不明なエラーが発生しました"
+    VALIDATION_UNKNOWN: "認証情報の検証中に不明なエラーが発生しました",
   },
 
   // R2クライアント関連
   R2_CLIENT: {
-    CREDENTIALS_NOT_SET: "R2/S3 のクレデンシャルが設定されていません"
-  }
-} as const
+    CREDENTIALS_NOT_SET: "R2/S3 のクレデンシャルが設定されていません",
+  },
+} as const;
 
 /**
  * メッセージ定数の型定義
  */
-export type Messages = typeof MESSAGES
+export type Messages = typeof MESSAGES;

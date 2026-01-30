@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod";
 
 /**
  * ゲーム登録・編集用のバリデーションスキーマ
@@ -10,13 +10,13 @@ export const gameSchema = z.object({
   imagePath: z.string().optional().or(z.literal("")),
   exePath: z.string().min(1, "実行ファイルのパスは必須です"),
   saveFolderPath: z.string().optional().or(z.literal("")),
-  playStatus: z.enum(["unplayed", "playing", "played"])
-})
+  playStatus: z.enum(["unplayed", "playing", "played"]),
+});
 
 /**
  * ゲームデータの型定義（zodスキーマから自動生成）
  */
-export type GameData = z.infer<typeof gameSchema>
+export type GameData = z.infer<typeof gameSchema>;
 
 /**
  * ゲームフォーム入力データの追加バリデーション
@@ -30,14 +30,14 @@ export const gameFormSchema = gameSchema
         data.exePath &&
         ![".exe", ".app"].some((ext) => data.exePath.toLowerCase().endsWith(ext))
       ) {
-        return false
+        return false;
       }
-      return true
+      return true;
     },
     {
       message: "実行ファイル（.exe または .app）を指定してください",
-      path: ["exePath"]
-    }
+      path: ["exePath"],
+    },
   )
   .refine(
     (data) => {
@@ -45,27 +45,27 @@ export const gameFormSchema = gameSchema
       if (data.imagePath && data.imagePath.trim()) {
         // URLの判定
         try {
-          new URL(data.imagePath)
+          new URL(data.imagePath);
           // URLの場合は拡張子チェック
-          const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"]
-          const url = new URL(data.imagePath)
-          const pathname = url.pathname.toLowerCase()
-          return imageExtensions.some((ext) => pathname.endsWith(ext))
+          const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
+          const url = new URL(data.imagePath);
+          const pathname = url.pathname.toLowerCase();
+          return imageExtensions.some((ext) => pathname.endsWith(ext));
         } catch {
           // ローカルファイルの場合は拡張子チェック
-          const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"]
+          const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
           if (!imageExtensions.some((ext) => data.imagePath!.toLowerCase().endsWith(ext))) {
-            return false
+            return false;
           }
         }
       }
-      return true
+      return true;
     },
     {
       message: "画像ファイル（PNG、JPG、GIF等）または画像URLを指定してください",
-      path: ["imagePath"]
-    }
-  )
+      path: ["imagePath"],
+    },
+  );
 
 /**
  * ゲームプロセス監視状態のスキーマ
@@ -76,10 +76,10 @@ export const monitoringGameStatusSchema = z.object({
   gameTitle: z.string().min(1, "ゲームタイトルは必須です"),
   exeName: z.string().min(1, "実行ファイル名は必須です"),
   isPlaying: z.boolean(),
-  playTime: z.number().min(0, "プレイ時間は0以上である必要があります")
-})
+  playTime: z.number().min(0, "プレイ時間は0以上である必要があります"),
+});
 
 /**
  * ゲーム監視状態の型定義
  */
-export type MonitoringGameStatus = z.infer<typeof monitoringGameStatusSchema>
+export type MonitoringGameStatus = z.infer<typeof monitoringGameStatusSchema>;

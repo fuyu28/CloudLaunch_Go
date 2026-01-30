@@ -16,7 +16,7 @@ export const CONFIG = {
   // タイミング関連（ミリ秒）
   TIMING: {
     /** 検索のデバウンス時間 */
-    SEARCH_DEBOUNCE_MS: 300
+    SEARCH_DEBOUNCE_MS: 300,
   },
 
   // バリデーション関連
@@ -28,7 +28,7 @@ export const CONFIG = {
     /** ゲームタイトルの最大文字数 */
     TITLE_MAX_LENGTH: 100,
     /** パブリッシャー名の最大文字数 */
-    PUBLISHER_MAX_LENGTH: 100
+    PUBLISHER_MAX_LENGTH: 100,
   },
 
   // デフォルト値
@@ -36,7 +36,7 @@ export const CONFIG = {
     /** デフォルトリージョン */
     REGION: "auto",
     /** デフォルトプレイステータス */
-    PLAY_STATUS: "unplayed" as const
+    PLAY_STATUS: "unplayed" as const,
   },
 
   // UI関連
@@ -46,7 +46,7 @@ export const CONFIG = {
     /** フローティングボタンの位置 */
     FLOATING_BUTTON_POSITION: "bottom-16 right-6",
     /** アイコンサイズ */
-    ICON_SIZE: 28
+    ICON_SIZE: 28,
   },
 
   // ファイル関連
@@ -54,7 +54,7 @@ export const CONFIG = {
     /** 画像ファイルの拡張子リスト */
     IMAGE_EXTENSIONS: ["png", "jpg", "jpeg", "gif"] as const,
     /** 実行ファイルの拡張子リスト */
-    EXECUTABLE_EXTENSIONS: ["exe", "app"] as const
+    EXECUTABLE_EXTENSIONS: ["exe", "app"] as const,
   },
 
   // ファイルサイズ関連
@@ -62,7 +62,7 @@ export const CONFIG = {
     /** 最大アップロードサイズ (MB) */
     MAX_UPLOAD_SIZE_MB: 100,
     /** 最大画像サイズ (MB) */
-    MAX_IMAGE_SIZE_MB: 10
+    MAX_IMAGE_SIZE_MB: 10,
   },
 
   // AWS S3/R2関連
@@ -74,7 +74,7 @@ export const CONFIG = {
     /** リクエストタイムアウト (ms) */
     REQUEST_TIMEOUT_MS: 30000,
     /** オブジェクト一覧取得の最大反復回数（無限ループ防止） */
-    MAX_LIST_ITERATIONS: 1000
+    MAX_LIST_ITERATIONS: 1000,
   },
 
   // Steam関連
@@ -82,23 +82,23 @@ export const CONFIG = {
     /** Steamアプリ起動フラグ */
     APPLAUNCH_FLAG: "-applaunch",
     /** VR無効化フラグ */
-    NO_VR_FLAG: "--no-vr"
+    NO_VR_FLAG: "--no-vr",
   },
 
   // Prisma関連
   PRISMA: {
     /** 重複エラーコード */
-    UNIQUE_CONSTRAINT_ERROR: "P2002"
+    UNIQUE_CONSTRAINT_ERROR: "P2002",
   },
 
   // パス関連
   PATH: {
     /** リモートパスのテンプレート */
-    REMOTE_PATH_TEMPLATE: (title: string) => `games/${title}/save_data`
-  }
-} as const
+    REMOTE_PATH_TEMPLATE: (title: string) => `games/${title}/save_data`,
+  },
+} as const;
 
 /**
  * 設定値定数の型定義
  */
-export type Config = typeof CONFIG
+export type Config = typeof CONFIG;

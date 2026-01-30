@@ -9,22 +9,22 @@
  * - パフォーマンスログの記録
  */
 
-import { logger } from "./logger"
+import { logger } from "./logger";
 
 /**
  * パフォーマンス測定結果
  */
 export interface PerformanceResult {
   /** 操作名 */
-  operation: string
+  operation: string;
   /** 実行時間（ミリ秒） */
-  duration: number
+  duration: number;
   /** 開始時刻 */
-  startTime: number
+  startTime: number;
   /** 終了時刻 */
-  endTime: number
+  endTime: number;
   /** 追加のメタデータ */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -48,33 +48,33 @@ const PERFORMANCE_THRESHOLDS = {
   /** ページ読み込み */
   pageload: 2000,
   /** 一般的な操作 */
-  default: 5000
-} as const
+  default: 5000,
+} as const;
 
 /**
  * パフォーマンス統計
  */
 interface PerformanceStats {
   /** 操作回数 */
-  count: number
+  count: number;
   /** 合計実行時間 */
-  totalDuration: number
+  totalDuration: number;
   /** 平均実行時間 */
-  averageDuration: number
+  averageDuration: number;
   /** 最小実行時間 */
-  minDuration: number
+  minDuration: number;
   /** 最大実行時間 */
-  maxDuration: number
+  maxDuration: number;
   /** 最後の測定時刻 */
-  lastMeasured: Date
+  lastMeasured: Date;
 }
 
 /**
  * パフォーマンス監視クラス
  */
 class PerformanceMonitor {
-  private stats = new Map<string, PerformanceStats>()
-  private activeTimers = new Map<string, number>()
+  private stats = new Map<string, PerformanceStats>();
+  private activeTimers = new Map<string, number>();
 
   /**
    * パフォーマンス測定を開始
@@ -84,28 +84,28 @@ class PerformanceMonitor {
    * @returns 測定終了関数
    */
   startTimer(operation: string, metadata?: Record<string, unknown>): () => PerformanceResult {
-    const startTime = window.performance.now()
-    const timerId = `${operation}_${Date.now()}_${Math.random()}`
+    const startTime = window.performance.now();
+    const timerId = `${operation}_${Date.now()}_${Math.random()}`;
 
-    this.activeTimers.set(timerId, startTime)
+    this.activeTimers.set(timerId, startTime);
 
     return (): PerformanceResult => {
-      const endTime = window.performance.now()
-      const duration = endTime - startTime
+      const endTime = window.performance.now();
+      const duration = endTime - startTime;
 
-      this.activeTimers.delete(timerId)
+      this.activeTimers.delete(timerId);
 
       const result: PerformanceResult = {
         operation,
         duration,
         startTime,
         endTime,
-        metadata
-      }
+        metadata,
+      };
 
-      this.recordPerformance(result)
-      return result
-    }
+      this.recordPerformance(result);
+      return result;
+    };
   }
 
   /**
@@ -119,26 +119,26 @@ class PerformanceMonitor {
   async measureAsync<T>(
     operation: string,
     asyncFn: () => Promise<T>,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ): Promise<{ result: T; performance: PerformanceResult }> {
-    const endTimer = this.startTimer(operation, metadata)
+    const endTimer = this.startTimer(operation, metadata);
 
     try {
-      const result = await asyncFn()
-      const performanceResult = endTimer()
+      const result = await asyncFn();
+      const performanceResult = endTimer();
 
-      return { result, performance: performanceResult }
+      return { result, performance: performanceResult };
     } catch (error) {
-      const performanceResult = endTimer()
+      const performanceResult = endTimer();
 
       // エラーが発生した場合もパフォーマンスを記録
       logger.warn("パフォーマンス測定中にエラーが発生", {
         component: "PerformanceMonitor",
         function: "measureAsync",
-        data: { operation, duration: performanceResult.duration, error }
-      })
+        data: { operation, duration: performanceResult.duration, error },
+      });
 
-      throw error
+      throw error;
     }
   }
 
@@ -153,25 +153,25 @@ class PerformanceMonitor {
   measure<T>(
     operation: string,
     syncFn: () => T,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ): { result: T; performance: PerformanceResult } {
-    const endTimer = this.startTimer(operation, metadata)
+    const endTimer = this.startTimer(operation, metadata);
 
     try {
-      const result = syncFn()
-      const performanceResult = endTimer()
+      const result = syncFn();
+      const performanceResult = endTimer();
 
-      return { result, performance: performanceResult }
+      return { result, performance: performanceResult };
     } catch (error) {
-      const performanceResult = endTimer()
+      const performanceResult = endTimer();
 
       logger.warn("パフォーマンス測定中にエラーが発生", {
         component: "PerformanceMonitor",
         function: "measure",
-        data: { operation, duration: performanceResult.duration, error }
-      })
+        data: { operation, duration: performanceResult.duration, error },
+      });
 
-      throw error
+      throw error;
     }
   }
 
@@ -180,24 +180,24 @@ class PerformanceMonitor {
    */
   private recordPerformance(result: PerformanceResult): void {
     // 統計を更新
-    this.updateStats(result)
+    this.updateStats(result);
 
     // しきい値チェック
-    this.checkThreshold(result)
+    this.checkThreshold(result);
 
     // ログに記録
-    this.logPerformance(result)
+    this.logPerformance(result);
   }
 
   /**
    * パフォーマンス統計を更新
    */
   private updateStats(result: PerformanceResult): void {
-    const existing = this.stats.get(result.operation)
+    const existing = this.stats.get(result.operation);
 
     if (existing) {
-      const newCount = existing.count + 1
-      const newTotalDuration = existing.totalDuration + result.duration
+      const newCount = existing.count + 1;
+      const newTotalDuration = existing.totalDuration + result.duration;
 
       const updatedStats: PerformanceStats = {
         count: newCount,
@@ -205,10 +205,10 @@ class PerformanceMonitor {
         averageDuration: newTotalDuration / newCount,
         minDuration: Math.min(existing.minDuration, result.duration),
         maxDuration: Math.max(existing.maxDuration, result.duration),
-        lastMeasured: new Date()
-      }
+        lastMeasured: new Date(),
+      };
 
-      this.stats.set(result.operation, updatedStats)
+      this.stats.set(result.operation, updatedStats);
     } else {
       const newStats: PerformanceStats = {
         count: 1,
@@ -216,10 +216,10 @@ class PerformanceMonitor {
         averageDuration: result.duration,
         minDuration: result.duration,
         maxDuration: result.duration,
-        lastMeasured: new Date()
-      }
+        lastMeasured: new Date(),
+      };
 
-      this.stats.set(result.operation, newStats)
+      this.stats.set(result.operation, newStats);
     }
   }
 
@@ -229,7 +229,7 @@ class PerformanceMonitor {
   private checkThreshold(result: PerformanceResult): void {
     const threshold =
       PERFORMANCE_THRESHOLDS[result.operation as keyof typeof PERFORMANCE_THRESHOLDS] ||
-      PERFORMANCE_THRESHOLDS.default
+      PERFORMANCE_THRESHOLDS.default;
 
     if (result.duration > threshold) {
       logger.warn("パフォーマンス警告: しきい値を超過", {
@@ -240,9 +240,9 @@ class PerformanceMonitor {
           duration: `${result.duration.toFixed(2)}ms`,
           threshold: `${threshold}ms`,
           exceeded: `${(result.duration - threshold).toFixed(2)}ms`,
-          metadata: result.metadata
-        }
-      })
+          metadata: result.metadata,
+        },
+      });
     }
   }
 
@@ -250,7 +250,7 @@ class PerformanceMonitor {
    * パフォーマンス結果をログに記録
    */
   private logPerformance(result: PerformanceResult): void {
-    const stats = this.stats.get(result.operation)
+    const stats = this.stats.get(result.operation);
 
     logger.info("パフォーマンス測定完了", {
       component: "PerformanceMonitor",
@@ -260,9 +260,9 @@ class PerformanceMonitor {
         duration: `${result.duration.toFixed(2)}ms`,
         average: stats ? `${stats.averageDuration.toFixed(2)}ms` : "N/A",
         count: stats?.count || 1,
-        metadata: result.metadata
-      }
-    })
+        metadata: result.metadata,
+      },
+    });
   }
 
   /**
@@ -270,9 +270,9 @@ class PerformanceMonitor {
    */
   getStats(operation?: string): Map<string, PerformanceStats> | PerformanceStats | undefined {
     if (operation) {
-      return this.stats.get(operation)
+      return this.stats.get(operation);
     }
-    return new Map(this.stats)
+    return new Map(this.stats);
   }
 
   /**
@@ -280,16 +280,16 @@ class PerformanceMonitor {
    */
   resetStats(operation?: string): void {
     if (operation) {
-      this.stats.delete(operation)
+      this.stats.delete(operation);
       logger.info("パフォーマンス統計をリセット", {
         component: "PerformanceMonitor",
-        data: { operation }
-      })
+        data: { operation },
+      });
     } else {
-      this.stats.clear()
+      this.stats.clear();
       logger.info("全パフォーマンス統計をリセット", {
-        component: "PerformanceMonitor"
-      })
+        component: "PerformanceMonitor",
+      });
     }
   }
 
@@ -297,23 +297,23 @@ class PerformanceMonitor {
    * アクティブなタイマー数を取得
    */
   getActiveTimerCount(): number {
-    return this.activeTimers.size
+    return this.activeTimers.size;
   }
 
   /**
    * 現在のパフォーマンス状況をレポート
    */
   generateReport(): string {
-    const report: string[] = ["=== パフォーマンス レポート ==="]
+    const report: string[] = ["=== パフォーマンス レポート ==="];
 
     if (this.stats.size === 0) {
-      report.push("統計データなし")
-      return report.join("\n")
+      report.push("統計データなし");
+      return report.join("\n");
     }
 
     const sortedStats = Array.from(this.stats.entries()).sort(
-      ([, a], [, b]) => b.averageDuration - a.averageDuration
-    )
+      ([, a], [, b]) => b.averageDuration - a.averageDuration,
+    );
 
     for (const [operation, stats] of sortedStats) {
       report.push(`
@@ -323,17 +323,17 @@ class PerformanceMonitor {
   最小時間: ${stats.minDuration.toFixed(2)}ms
   最大時間: ${stats.maxDuration.toFixed(2)}ms
   合計時間: ${stats.totalDuration.toFixed(2)}ms
-  最終測定: ${stats.lastMeasured.toLocaleString()}`)
+  最終測定: ${stats.lastMeasured.toLocaleString()}`);
     }
 
-    report.push(`\nアクティブタイマー: ${this.activeTimers.size}`)
+    report.push(`\nアクティブタイマー: ${this.activeTimers.size}`);
 
-    return report.join("\n")
+    return report.join("\n");
   }
 }
 
 // シングルトンインスタンス
-export const performanceMonitor = new PerformanceMonitor()
+export const performanceMonitor = new PerformanceMonitor();
 
 /**
  * 便利なパフォーマンス測定用ヘルパー
@@ -379,5 +379,5 @@ export const performance = {
    * ページ読み込みパフォーマンス測定
    */
   measurePageLoad: <T>(syncFn: () => T, pageName: string) =>
-    performanceMonitor.measure("pageload", syncFn, { pageName })
-}
+    performanceMonitor.measure("pageload", syncFn, { pageName }),
+};

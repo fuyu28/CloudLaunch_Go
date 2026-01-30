@@ -2,52 +2,52 @@
  * @fileoverview プロセス監視のデバッグページ
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ProcessSnapshotItem = {
-  name: string
-  pid: number
-  cmd: string
-  normalizedName: string
-  normalizedCmd: string
-}
+  name: string;
+  pid: number;
+  cmd: string;
+  normalizedName: string;
+  normalizedCmd: string;
+};
 
 type ProcessSnapshot = {
-  source: string
-  items: ProcessSnapshotItem[]
-}
+  source: string;
+  items: ProcessSnapshotItem[];
+};
 
 export default function DebugProcess(): React.JSX.Element {
-  const [snapshot, setSnapshot] = useState<ProcessSnapshot>({ source: "none", items: [] })
-  const [filter, setFilter] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [snapshot, setSnapshot] = useState<ProcessSnapshot>({ source: "none", items: [] });
+  const [filter, setFilter] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadSnapshot = useCallback(async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
-      const data = await window.api.processMonitor.getProcessSnapshot()
-      setSnapshot(data)
+      const data = await window.api.processMonitor.getProcessSnapshot();
+      setSnapshot(data);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    loadSnapshot()
-  }, [loadSnapshot])
+    loadSnapshot();
+  }, [loadSnapshot]);
 
   const filteredItems = useMemo(() => {
-    const keyword = filter.trim().toLowerCase()
-    if (!keyword) return snapshot.items
+    const keyword = filter.trim().toLowerCase();
+    if (!keyword) return snapshot.items;
     return snapshot.items.filter((item) => {
       return (
         item.name.toLowerCase().includes(keyword) ||
         item.cmd.toLowerCase().includes(keyword) ||
         item.normalizedName.toLowerCase().includes(keyword) ||
         item.normalizedCmd.toLowerCase().includes(keyword)
-      )
-    })
-  }, [filter, snapshot.items])
+      );
+    });
+  }, [filter, snapshot.items]);
 
   return (
     <div className="container mx-auto px-6 py-8">
@@ -58,7 +58,10 @@ export default function DebugProcess(): React.JSX.Element {
             取得したプロセス一覧と正規化後の値を確認できます（source: {snapshot.source}）
           </p>
         </div>
-        <button className={`btn btn-primary ${isLoading ? "btn-disabled" : ""}`} onClick={loadSnapshot}>
+        <button
+          className={`btn btn-primary ${isLoading ? "btn-disabled" : ""}`}
+          onClick={loadSnapshot}
+        >
           {isLoading ? "取得中..." : "再取得"}
         </button>
       </div>
@@ -105,5 +108,5 @@ export default function DebugProcess(): React.JSX.Element {
         </table>
       </div>
     </div>
-  )
+  );
 }

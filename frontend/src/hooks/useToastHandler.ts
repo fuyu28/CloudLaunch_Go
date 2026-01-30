@@ -8,38 +8,38 @@
  * - カスタマイズ可能なメッセージ
  */
 
-import { useCallback } from "react"
-import toast from "react-hot-toast"
+import { useCallback } from "react";
+import toast from "react-hot-toast";
 
 /**
  * トーストオプション
  */
 export type ToastOptions = {
   /** ローディング中のメッセージ */
-  loadingMessage?: string
+  loadingMessage?: string;
   /** 成功時のメッセージ */
-  successMessage?: string
+  successMessage?: string;
   /** エラー時のメッセージ */
-  errorMessage?: string
+  errorMessage?: string;
   /** トースト表示を有効にするかどうか */
-  showToast?: boolean
-}
+  showToast?: boolean;
+};
 
 /**
  * トーストハンドラーの戻り値
  */
 export type ToastHandler = {
   /** ローディングトーストを表示 */
-  showLoading: (message?: string) => string | undefined
+  showLoading: (message?: string) => string | undefined;
   /** 成功トーストを表示 */
-  showSuccess: (message: string, toastId?: string) => void
+  showSuccess: (message: string, toastId?: string) => void;
   /** エラートーストを表示 */
-  showError: (message: string, toastId?: string) => void
+  showError: (message: string, toastId?: string) => void;
   /** トーストを削除 */
-  dismiss: (toastId: string) => void
+  dismiss: (toastId: string) => void;
   /** 汎用トースト表示 */
-  showToast: (message: string, type: "success" | "error" | "loading") => void
-}
+  showToast: (message: string, type: "success" | "error" | "loading") => void;
+};
 
 /**
  * トーストハンドリングフック
@@ -51,52 +51,52 @@ export type ToastHandler = {
 export function useToastHandler(): ToastHandler {
   const showLoading = useCallback((message?: string): string | undefined => {
     if (message) {
-      return toast.loading(message)
+      return toast.loading(message);
     }
-    return undefined
-  }, [])
+    return undefined;
+  }, []);
 
   const showSuccess = useCallback((message: string, toastId?: string): void => {
     if (toastId) {
-      toast.success(message, { id: toastId })
+      toast.success(message, { id: toastId });
     } else {
-      toast.success(message)
+      toast.success(message);
     }
-  }, [])
+  }, []);
 
   const showError = useCallback((message: string, toastId?: string): void => {
     if (toastId) {
-      toast.error(message, { id: toastId })
+      toast.error(message, { id: toastId });
     } else {
-      toast.error(message)
+      toast.error(message);
     }
-  }, [])
+  }, []);
 
   const dismiss = useCallback((toastId: string): void => {
-    toast.dismiss(toastId)
-  }, [])
+    toast.dismiss(toastId);
+  }, []);
 
   const showToast = useCallback((message: string, type: "success" | "error" | "loading"): void => {
     switch (type) {
       case "success":
-        toast.success(message)
-        break
+        toast.success(message);
+        break;
       case "error":
-        toast.error(message)
-        break
+        toast.error(message);
+        break;
       case "loading":
-        toast.loading(message)
-        break
+        toast.loading(message);
+        break;
     }
-  }, [])
+  }, []);
 
   return {
     showLoading,
     showSuccess,
     showError,
     dismiss,
-    showToast
-  }
+    showToast,
+  };
 }
 
 /**
@@ -110,37 +110,37 @@ export function useToastHandler(): ToastHandler {
 export async function executeWithToast<T>(
   asyncFn: () => Promise<T>,
   options: ToastOptions,
-  toastHandler: ToastHandler
+  toastHandler: ToastHandler,
 ): Promise<T | undefined> {
-  const { loadingMessage, successMessage, errorMessage, showToast = true } = options
+  const { loadingMessage, successMessage, errorMessage, showToast = true } = options;
 
-  let toastId: string | undefined
+  let toastId: string | undefined;
 
   try {
     if (showToast && loadingMessage) {
-      toastId = toastHandler.showLoading(loadingMessage)
+      toastId = toastHandler.showLoading(loadingMessage);
     }
 
-    const result = await asyncFn()
+    const result = await asyncFn();
 
     if (showToast) {
       if (successMessage) {
-        toastHandler.showSuccess(successMessage, toastId)
+        toastHandler.showSuccess(successMessage, toastId);
       } else if (toastId) {
-        toastHandler.dismiss(toastId)
+        toastHandler.dismiss(toastId);
       }
     }
 
-    return result
+    return result;
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorMsg = error instanceof Error ? error.message : String(error);
 
     if (showToast) {
-      const displayMessage = errorMessage || errorMsg
-      toastHandler.showError(displayMessage, toastId)
+      const displayMessage = errorMessage || errorMsg;
+      toastHandler.showError(displayMessage, toastId);
     }
 
     // エラーを再スローして呼び出し元でハンドリングできるようにする
-    throw error
+    throw error;
   }
 }

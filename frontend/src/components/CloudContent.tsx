@@ -11,43 +11,43 @@
  * - ローディング状態の表示
  */
 
-import { FiCloud, FiFolder } from "react-icons/fi"
+import { FiCloud, FiFolder } from "react-icons/fi";
 
-import type { ViewMode } from "./CloudHeader"
-import { CloudItemCard, DirectoryNodeCard } from "./CloudItemCard"
-import CloudTreeNode from "./CloudTreeNode"
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils"
-import type { CloudDataItem } from "@renderer/hooks/useCloudData"
+import type { ViewMode } from "./CloudHeader";
+import { CloudItemCard, DirectoryNodeCard } from "./CloudItemCard";
+import CloudTreeNode from "./CloudTreeNode";
+import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem } from "@renderer/hooks/useCloudData";
 
 /**
  * クラウドコンテンツのプロパティ
  */
 type CloudContentProps = {
   /** ビューモード */
-  viewMode: ViewMode
+  viewMode: ViewMode;
   /** ローディング状態 */
-  loading: boolean
+  loading: boolean;
   /** クラウドデータ */
-  cloudData: CloudDataItem[]
+  cloudData: CloudDataItem[];
   /** ディレクトリツリー */
-  directoryTree: CloudDirectoryNode[]
+  directoryTree: CloudDirectoryNode[];
   /** 現在のパス */
-  currentPath: string[]
+  currentPath: string[];
   /** 現在のディレクトリノード */
-  currentDirectoryNodes: CloudDirectoryNode[]
+  currentDirectoryNodes: CloudDirectoryNode[];
   /** 展開されたノード */
-  expandedNodes: Set<string>
+  expandedNodes: Set<string>;
   /** ノード展開切り替えコールバック */
-  onToggleExpand: (path: string) => void
+  onToggleExpand: (path: string) => void;
   /** ノード選択コールバック */
-  onSelectNode: (node: CloudDirectoryNode) => void
+  onSelectNode: (node: CloudDirectoryNode) => void;
   /** 削除コールバック */
-  onDelete: (item: CloudDataItem | CloudDirectoryNode) => void
+  onDelete: (item: CloudDataItem | CloudDirectoryNode) => void;
   /** ディレクトリ移動コールバック */
-  onNavigateToDirectory: (directoryName: string) => void
+  onNavigateToDirectory: (directoryName: string) => void;
   /** 詳細表示コールバック */
-  onViewDetails: (item: CloudDataItem) => void
-}
+  onViewDetails: (item: CloudDataItem) => void;
+};
 
 /**
  * 空状態コンポーネント
@@ -55,11 +55,11 @@ type CloudContentProps = {
 function EmptyState({
   icon: Icon,
   title,
-  description
+  description,
 }: {
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  description: string
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
 }): React.JSX.Element {
   return (
     <div className="text-center py-12">
@@ -67,7 +67,7 @@ function EmptyState({
       <h3 className="text-xl font-medium text-base-content/70 mb-2">{title}</h3>
       <p className="text-base-content/50">{description}</p>
     </div>
-  )
+  );
 }
 
 /**
@@ -88,14 +88,14 @@ export function CloudContent({
   onSelectNode,
   onDelete,
   onNavigateToDirectory,
-  onViewDetails
+  onViewDetails,
 }: CloudContentProps): React.JSX.Element {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
         <div className="loading loading-spinner loading-lg"></div>
       </div>
-    )
+    );
   }
 
   if (viewMode === "cards") {
@@ -143,7 +143,7 @@ export function CloudContent({
           </div>
         )}
       </div>
-    )
+    );
   }
 
   // ツリービュー
@@ -172,5 +172,5 @@ export function CloudContent({
         </div>
       )}
     </div>
-  )
+  );
 }

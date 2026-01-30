@@ -11,34 +11,34 @@
  * - ローディング状態の表示
  */
 
-import { FiTrash2, FiRefreshCw, FiCloud, FiFolder, FiFolderPlus } from "react-icons/fi"
+import { FiTrash2, FiRefreshCw, FiCloud, FiFolder, FiFolderPlus } from "react-icons/fi";
 
-import type { CloudDataItem, CloudDirectoryNode } from "@renderer/hooks/useCloudData"
+import type { CloudDataItem, CloudDirectoryNode } from "@renderer/hooks/useCloudData";
 
 /**
  * ビューモードの型定義
  */
-export type ViewMode = "cards" | "tree"
+export type ViewMode = "cards" | "tree";
 
 /**
  * クラウドヘッダーのプロパティ
  */
 type CloudHeaderProps = {
   /** 現在のビューモード */
-  viewMode: ViewMode
+  viewMode: ViewMode;
   /** ビューモード変更コールバック */
-  onViewModeChange: (mode: ViewMode) => void
+  onViewModeChange: (mode: ViewMode) => void;
   /** クラウドデータ */
-  cloudData: CloudDataItem[]
+  cloudData: CloudDataItem[];
   /** ディレクトリツリー */
-  directoryTree: CloudDirectoryNode[]
+  directoryTree: CloudDirectoryNode[];
   /** ローディング状態 */
-  loading: boolean
+  loading: boolean;
   /** 更新コールバック */
-  onRefresh: () => void
+  onRefresh: () => void;
   /** 全削除コールバック */
-  onDeleteAll: () => void
-}
+  onDeleteAll: () => void;
+};
 
 /**
  * クラウドページヘッダーコンポーネント
@@ -53,9 +53,9 @@ export function CloudHeader({
   directoryTree,
   loading,
   onRefresh,
-  onDeleteAll
+  onDeleteAll,
 }: CloudHeaderProps): React.JSX.Element {
-  const hasData = cloudData.length > 0 || directoryTree.length > 0
+  const hasData = cloudData.length > 0 || directoryTree.length > 0;
 
   return (
     <div className="flex items-center justify-between mb-6">
@@ -101,5 +101,5 @@ export function CloudHeader({
         </button>
       </div>
     </div>
-  )
+  );
 }

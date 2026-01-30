@@ -9,129 +9,129 @@
  */
 
 // バリデーション関連の型
-export * from "./validation"
+export * from "./validation";
 
 // パス関連の型
-export * from "./path"
+export * from "./path";
 
 // 既存の型も再エクスポート
-export * from "./result"
-export * from "./error"
+export * from "./result";
+export * from "./error";
 
 /**
  * 汎用的なオプション型
  */
 export type SelectOption<T = string> = {
   /** 表示ラベル */
-  label: string
+  label: string;
   /** 値 */
-  value: T
+  value: T;
   /** 無効化されているかどうか */
-  disabled?: boolean
-}
+  disabled?: boolean;
+};
 
 /**
  * ページネーション情報
  */
 export type PaginationInfo = {
   /** 現在のページ */
-  currentPage: number
+  currentPage: number;
   /** 総ページ数 */
-  totalPages: number
+  totalPages: number;
   /** 1ページあたりのアイテム数 */
-  itemsPerPage: number
+  itemsPerPage: number;
   /** 総アイテム数 */
-  totalItems: number
-}
+  totalItems: number;
+};
 
 /**
  * ソート情報
  */
 export type SortInfo<T extends string = string> = {
   /** ソートフィールド */
-  field: T
+  field: T;
   /** ソート方向 */
-  direction: "asc" | "desc"
-}
+  direction: "asc" | "desc";
+};
 
 /**
  * 検索フィルター
  */
 export type SearchFilter = {
   /** 検索クエリ */
-  query?: string
+  query?: string;
   /** カテゴリ */
-  category?: string
+  category?: string;
   /** 日付範囲 */
   dateRange?: {
-    from?: Date
-    to?: Date
-  }
-}
+    from?: Date;
+    to?: Date;
+  };
+};
 
 /**
  * ローディング状態
  */
 export type LoadingState = {
   /** ローディング中かどうか */
-  isLoading: boolean
+  isLoading: boolean;
   /** エラーメッセージ */
-  error?: string
+  error?: string;
   /** 最終更新日時 */
-  lastUpdated?: Date
-}
+  lastUpdated?: Date;
+};
 
 /**
  * 非同期操作の状態
  */
-export type AsyncStatus = "idle" | "loading" | "success" | "error"
+export type AsyncStatus = "idle" | "loading" | "success" | "error";
 
 /**
  * 非同期操作の状態管理
  */
 export type AsyncState<T = unknown> = {
   /** 現在の状態 */
-  status: AsyncStatus
+  status: AsyncStatus;
   /** データ */
-  data?: T
+  data?: T;
   /** エラー情報 */
-  error?: string
-}
+  error?: string;
+};
 
 /**
  * キーと値のペア（汎用）
  */
 export type KeyValuePair<K = string, V = unknown> = {
-  key: K
-  value: V
-}
+  key: K;
+  value: V;
+};
 
 /**
  * 範囲指定
  */
 export type Range<T = number> = {
   /** 最小値 */
-  min: T
+  min: T;
   /** 最大値 */
-  max: T
-}
+  max: T;
+};
 
 /**
  * 座標情報
  */
 export type Coordinates = {
   /** X座標 */
-  x: number
+  x: number;
   /** Y座標 */
-  y: number
-}
+  y: number;
+};
 
 /**
  * サイズ情報
  */
 export type Size = {
   /** 幅 */
-  width: number
+  width: number;
   /** 高さ */
-  height: number
-}
+  height: number;
+};

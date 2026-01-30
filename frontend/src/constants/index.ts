@@ -8,6 +8,6 @@
  * - 定数の統一的なアクセス
  */
 
-export { MESSAGES, type Messages } from "./messages"
-export { CONFIG, type Config } from "./config"
-export { PATTERNS, type Patterns } from "./patterns"
+export { MESSAGES, type Messages } from "./messages";
+export { CONFIG, type Config } from "./config";
+export { PATTERNS, type Patterns } from "./patterns";

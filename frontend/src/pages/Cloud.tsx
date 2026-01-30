@@ -12,59 +12,59 @@
  * - ナビゲーション機能
  */
 
-import { useCallback, useEffect, useState } from "react"
-import { useAtomValue } from "jotai"
+import { useCallback, useEffect, useState } from "react";
+import { useAtomValue } from "jotai";
 
-import { CloudBreadcrumb } from "@renderer/components/CloudBreadcrumb"
-import { CloudContent } from "@renderer/components/CloudContent"
-import { CloudDeleteModal } from "@renderer/components/CloudDeleteModal"
-import { CloudFileDetailsModal } from "@renderer/components/CloudFileDetailsModal"
-import { CloudHeader, type ViewMode } from "@renderer/components/CloudHeader"
+import { CloudBreadcrumb } from "@renderer/components/CloudBreadcrumb";
+import { CloudContent } from "@renderer/components/CloudContent";
+import { CloudDeleteModal } from "@renderer/components/CloudDeleteModal";
+import { CloudFileDetailsModal } from "@renderer/components/CloudFileDetailsModal";
+import { CloudHeader, type ViewMode } from "@renderer/components/CloudHeader";
 
-import { isValidCredsAtom } from "@renderer/state/credentials"
+import { isValidCredsAtom } from "@renderer/state/credentials";
 
 import {
   useCloudData,
   type CloudDataItem,
-  type CloudFileDetail
-} from "@renderer/hooks/useCloudData"
-import { useOfflineMode } from "@renderer/hooks/useOfflineMode"
-import { useToastHandler } from "@renderer/hooks/useToastHandler"
-import { useValidateCreds } from "@renderer/hooks/useValidCreds"
+  type CloudFileDetail,
+} from "@renderer/hooks/useCloudData";
+import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
+import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils"
-import type { GameType } from "src/types/game"
+import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { GameType } from "src/types/game";
 
 /**
  * クラウドデータ管理ページメインコンポーネント
  */
 export default function Cloud(): React.JSX.Element {
   // 状態管理
-  const [viewMode, setViewMode] = useState<ViewMode>("cards")
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<CloudDataItem | CloudDirectoryNode | null>(
-    null
-  )
+    null,
+  );
   const [detailsModal, setDetailsModal] = useState<{
-    item: CloudDataItem | null
-    files: CloudFileDetail[]
-    loading: boolean
+    item: CloudDataItem | null;
+    files: CloudFileDetail[];
+    loading: boolean;
   }>({
     item: null,
     files: [],
-    loading: false
-  })
-  const [games, setGames] = useState<GameType[]>([])
-  const [selectedGameId, setSelectedGameId] = useState<string>("")
-  const [isSyncingGame, setIsSyncingGame] = useState(false)
-  const [isLoadingGames, setIsLoadingGames] = useState(false)
+    loading: false,
+  });
+  const [games, setGames] = useState<GameType[]>([]);
+  const [selectedGameId, setSelectedGameId] = useState<string>("");
+  const [isSyncingGame, setIsSyncingGame] = useState(false);
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
 
-  const isValidCreds = useAtomValue(isValidCredsAtom)
-  const validateCreds = useValidateCreds()
-  const { showToast } = useToastHandler()
-  const { isOfflineMode } = useOfflineMode()
+  const isValidCreds = useAtomValue(isValidCredsAtom);
+  const validateCreds = useValidateCreds();
+  const { showToast } = useToastHandler();
+  const { isOfflineMode } = useOfflineMode();
 
   // クラウドデータ管理フック
   const {
@@ -77,79 +77,79 @@ export default function Cloud(): React.JSX.Element {
     navigateToDirectory,
     navigateBack,
     navigateToPath,
-    deleteCloudData
-  } = useCloudData()
+    deleteCloudData,
+  } = useCloudData();
 
   const fetchGames = useCallback(async (): Promise<void> => {
-    setIsLoadingGames(true)
+    setIsLoadingGames(true);
     try {
-      const gameList = await window.api.database.listGames("", "all", "title", "asc")
-      setGames(gameList)
+      const gameList = await window.api.database.listGames("", "all", "title", "asc");
+      setGames(gameList);
       if (gameList.length > 0) {
         setSelectedGameId((prev) =>
-          gameList.some((game) => game.id === prev) ? prev : gameList[0].id
-        )
+          gameList.some((game) => game.id === prev) ? prev : gameList[0].id,
+        );
       } else {
-        setSelectedGameId("")
+        setSelectedGameId("");
       }
     } catch (error) {
       logger.error("ゲーム一覧の取得に失敗しました:", {
         component: "Cloud",
         function: "fetchGames",
-        data: error
-      })
-      showToast("ゲーム一覧の取得に失敗しました", "error")
-      setGames([])
-      setSelectedGameId("")
+        data: error,
+      });
+      showToast("ゲーム一覧の取得に失敗しました", "error");
+      setGames([]);
+      setSelectedGameId("");
     } finally {
-      setIsLoadingGames(false)
+      setIsLoadingGames(false);
     }
-  }, [showToast])
+  }, [showToast]);
 
   const handleSyncSelectedGame = useCallback(async (): Promise<void> => {
     if (!selectedGameId) {
-      showToast("同期するゲームを選択してください", "error")
-      return
+      showToast("同期するゲームを選択してください", "error");
+      return;
     }
     if (isOfflineMode) {
-      showToast("オフラインモードでは同期できません", "error")
-      return
+      showToast("オフラインモードでは同期できません", "error");
+      return;
     }
-    setIsSyncingGame(true)
+    setIsSyncingGame(true);
     try {
-      const result = await window.api.cloudSync.syncGame(selectedGameId)
+      const result = await window.api.cloudSync.syncGame(selectedGameId);
       if (!result.success || !result.data) {
-        showToast(result.message || "クラウド同期に失敗しました", "error")
-        return
+        showToast(result.message || "クラウド同期に失敗しました", "error");
+        return;
       }
       showToast(
         `同期完了: アップロード${result.data.uploadedGames}件 / ダウンロード${result.data.downloadedGames}件`,
-        "success"
-      )
+        "success",
+      );
     } catch (error) {
       logger.error("ゲーム同期エラー:", {
         component: "Cloud",
         function: "handleSyncSelectedGame",
-        data: error
-      })
-      showToast("クラウド同期に失敗しました", "error")
+        data: error,
+      });
+      showToast("クラウド同期に失敗しました", "error");
     } finally {
-      setIsSyncingGame(false)
+      setIsSyncingGame(false);
     }
-  }, [selectedGameId, isOfflineMode, showToast])
+  }, [selectedGameId, isOfflineMode, showToast]);
 
   /**
    * ツリーノードの展開・折りたたみ
    */
   const handleToggleExpand = (path: string): void => {
-    const newExpanded = new Set(expandedNodes)
+    const newExpanded = new Set(expandedNodes);
     if (newExpanded.has(path)) {
-      newExpanded.delete(path)
+      newExpanded.delete(path);
     } else {
-      newExpanded.add(path)
+      newExpanded.add(path);
     }
-    setExpandedNodes(newExpanded)
-  }
+    setExpandedNodes(newExpanded);
+  };
 
   /**
    * ツリーノード選択
@@ -159,12 +159,12 @@ export default function Cloud(): React.JSX.Element {
       logger.debug("ファイルが選択されました:", {
         component: "Cloud",
         function: "unknown",
-        data: node.name
-      })
+        data: node.name,
+      });
     } else {
-      handleToggleExpand(node.path)
+      handleToggleExpand(node.path);
     }
-  }
+  };
 
   /**
    * 全削除処理
@@ -176,69 +176,69 @@ export default function Cloud(): React.JSX.Element {
       isDirectory: true,
       size: cloudData.reduce((sum, item) => sum + item.totalSize, 0),
       lastModified: new Date(),
-      children: []
-    } as CloudDirectoryNode
-    setDeleteConfirm(allDeleteItem)
-  }
+      children: [],
+    } as CloudDirectoryNode;
+    setDeleteConfirm(allDeleteItem);
+  };
 
   /**
    * クラウドデータを削除
    */
   const handleDelete = async (item: CloudDataItem | CloudDirectoryNode): Promise<void> => {
     try {
-      await deleteCloudData(item)
+      await deleteCloudData(item);
     } finally {
-      setDeleteConfirm(null)
+      setDeleteConfirm(null);
     }
-  }
+  };
 
   /**
    * ファイル詳細を表示
    */
   const handleViewDetails = async (item: CloudDataItem): Promise<void> => {
-    setDetailsModal({ item, files: [], loading: true })
+    setDetailsModal({ item, files: [], loading: true });
 
     try {
-      const result = await window.api.cloudData.getCloudFileDetails(item.remotePath)
+      const result = await window.api.cloudData.getCloudFileDetails(item.remotePath);
       if (result.success && result.data) {
         setDetailsModal((prev) => ({
           ...prev,
           files: result.data!,
-          loading: false
-        }))
+          loading: false,
+        }));
       } else {
         import("react-hot-toast").then(({ toast }) => {
-          toast.error("ファイル詳細の取得に失敗しました")
-        })
-        setDetailsModal((prev) => ({ ...prev, loading: false }))
+          toast.error("ファイル詳細の取得に失敗しました");
+        });
+        setDetailsModal((prev) => ({ ...prev, loading: false }));
       }
     } catch (error) {
       logger.error("ファイル詳細取得エラー:", {
         component: "Cloud",
         function: "unknown",
-        data: error
-      })
+        data: error,
+      });
       import("react-hot-toast").then(({ toast }) => {
-        toast.error("ファイル詳細の取得に失敗しました")
-      })
-      setDetailsModal((prev) => ({ ...prev, loading: false }))
+        toast.error("ファイル詳細の取得に失敗しました");
+      });
+      setDetailsModal((prev) => ({ ...prev, loading: false }));
     }
-  }
+  };
 
   // コンポーネントマウント時にデータを取得
   useEffect(() => {
-    fetchCloudData()
-  }, [fetchCloudData])
+    fetchCloudData();
+  }, [fetchCloudData]);
 
   useEffect(() => {
     if (!isOfflineMode) {
-      validateCreds()
+      validateCreds();
     }
-  }, [validateCreds, isOfflineMode])
+  }, [validateCreds, isOfflineMode]);
 
   useEffect(() => {
-    fetchGames()
-  }, [fetchGames])
+    fetchGames();
+  }, [fetchGames]);
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -342,5 +342,5 @@ export default function Cloud(): React.JSX.Element {
         loading={detailsModal.loading}
       />
     </div>
-  )
+  );
 }

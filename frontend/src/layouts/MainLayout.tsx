@@ -1,41 +1,41 @@
-import { themeAtom } from "@renderer/state/settings"
-import { useAtom } from "jotai"
-import { useRef, useEffect } from "react"
-import { Toaster } from "react-hot-toast"
-import { FaEdit } from "react-icons/fa"
-import { FiMenu, FiCloud } from "react-icons/fi"
-import { IoIosHome, IoIosSettings } from "react-icons/io"
-import { VscChromeClose, VscChromeMaximize, VscChromeMinimize } from "react-icons/vsc"
-import { Outlet, NavLink, useLocation } from "react-router-dom"
+import { themeAtom } from "@renderer/state/settings";
+import { useAtom } from "jotai";
+import { useRef, useEffect } from "react";
+import { Toaster } from "react-hot-toast";
+import { FaEdit } from "react-icons/fa";
+import { FiMenu, FiCloud } from "react-icons/fi";
+import { IoIosHome, IoIosSettings } from "react-icons/io";
+import { VscChromeClose, VscChromeMaximize, VscChromeMinimize } from "react-icons/vsc";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
 
-import PlayStatusBar from "@renderer/components/PlayStatusBar"
+import PlayStatusBar from "@renderer/components/PlayStatusBar";
 
 export default function MainLayout(): React.JSX.Element {
-  const location = useLocation()
-  const drawerRef = useRef<HTMLInputElement>(null)
-  const [currentTheme] = useAtom(themeAtom)
-  const isHome = location.pathname === "/"
-  const isSettings = location.pathname === "/settings"
-  const isMemo = location.pathname === "/memo" || location.pathname.startsWith("/memo/")
-  const isCloud = location.pathname === "/cloud"
+  const location = useLocation();
+  const drawerRef = useRef<HTMLInputElement>(null);
+  const [currentTheme] = useAtom(themeAtom);
+  const isHome = location.pathname === "/";
+  const isSettings = location.pathname === "/settings";
+  const isMemo = location.pathname === "/memo" || location.pathname.startsWith("/memo/");
+  const isCloud = location.pathname === "/cloud";
 
   const pageMap: [boolean, string][] = [
     [isHome, "ホーム"],
     [isSettings, "設定"],
     [isCloud, "クラウド"],
-    [isMemo, "メモ"]
-  ]
+    [isMemo, "メモ"],
+  ];
 
-  const pageLabel = pageMap.find(([cond]) => cond)?.[1] ?? ""
+  const pageLabel = pageMap.find(([cond]) => cond)?.[1] ?? "";
 
   const closeDrawer = (): void => {
-    if (drawerRef.current) drawerRef.current.checked = false
-  }
+    if (drawerRef.current) drawerRef.current.checked = false;
+  };
 
   // テーマ初期化：アプリケーション起動時にHTMLのdata-theme属性を設定
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", currentTheme)
-  }, [currentTheme])
+    document.documentElement.setAttribute("data-theme", currentTheme);
+  }, [currentTheme]);
   return (
     <div className="drawer drawer-mobile min-h-screen bg-base-200">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" ref={drawerRef} />
@@ -188,5 +188,5 @@ export default function MainLayout(): React.JSX.Element {
 
       <Toaster position="bottom-center" />
     </div>
-  )
+  );
 }

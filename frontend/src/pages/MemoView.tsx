@@ -5,112 +5,112 @@
  * react-markdownを使用してmarkdownを適切にレンダリングします。
  */
 
-import { useEffect, useState, useCallback } from "react"
-import { FaArrowLeft, FaEdit, FaTrash, FaExternalLinkAlt } from "react-icons/fa"
-import ReactMarkdown from "react-markdown"
-import { useParams, Link, useNavigate } from "react-router-dom"
+import { useEffect, useState, useCallback } from "react";
+import { FaArrowLeft, FaEdit, FaTrash, FaExternalLinkAlt } from "react-icons/fa";
+import ReactMarkdown from "react-markdown";
+import { useParams, Link, useNavigate } from "react-router-dom";
 
-import ConfirmModal from "@renderer/components/ConfirmModal"
+import ConfirmModal from "@renderer/components/ConfirmModal";
 
-import { useMemoNavigation } from "@renderer/hooks/useMemoNavigation"
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat"
-import { useToastHandler } from "@renderer/hooks/useToastHandler"
+import { useMemoNavigation } from "@renderer/hooks/useMemoNavigation";
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import type { MemoType } from "src/types/memo"
+import type { MemoType } from "src/types/memo";
 
 export default function MemoView(): React.JSX.Element {
-  const { memoId } = useParams<{ memoId: string }>()
-  const navigate = useNavigate()
-  const { showToast } = useToastHandler()
-  const { formatDateWithTime } = useTimeFormat()
-  const { handleBack, searchParams } = useMemoNavigation()
+  const { memoId } = useParams<{ memoId: string }>();
+  const navigate = useNavigate();
+  const { showToast } = useToastHandler();
+  const { formatDateWithTime } = useTimeFormat();
+  const { handleBack, searchParams } = useMemoNavigation();
 
-  const [memo, setMemo] = useState<MemoType | null>(null)
-  const [gameTitle, setGameTitle] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [memo, setMemo] = useState<MemoType | null>(null);
+  const [gameTitle, setGameTitle] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // メモデータを取得
   const fetchMemo = useCallback(async () => {
-    if (!memoId) return
+    if (!memoId) return;
 
-    setIsLoading(true)
+    setIsLoading(true);
     try {
-      const memoResult = await window.api.memo.getMemoById(memoId)
+      const memoResult = await window.api.memo.getMemoById(memoId);
       if (memoResult.success && memoResult.data) {
-        setMemo(memoResult.data)
+        setMemo(memoResult.data);
 
         // ゲーム情報も取得
-        const gameResult = await window.api.database.getGameById(memoResult.data.gameId)
+        const gameResult = await window.api.database.getGameById(memoResult.data.gameId);
         if (gameResult) {
-          setGameTitle(gameResult.title)
+          setGameTitle(gameResult.title);
         }
       } else {
-        showToast("メモが見つかりません", "error")
-        navigate(-1)
+        showToast("メモが見つかりません", "error");
+        navigate(-1);
       }
     } catch (error) {
-      logger.error("メモ取得エラー:", { component: "MemoView", function: "unknown", data: error })
-      showToast("メモの取得に失敗しました", "error")
-      navigate(-1)
+      logger.error("メモ取得エラー:", { component: "MemoView", function: "unknown", data: error });
+      showToast("メモの取得に失敗しました", "error");
+      navigate(-1);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [memoId, showToast, navigate])
+  }, [memoId, showToast, navigate]);
 
   useEffect(() => {
-    fetchMemo()
-  }, [fetchMemo])
+    fetchMemo();
+  }, [fetchMemo]);
 
   // メモ削除処理
   const handleDeleteMemo = useCallback(async () => {
-    if (!memo) return
+    if (!memo) return;
 
     try {
-      const result = await window.api.memo.deleteMemo(memo.id)
+      const result = await window.api.memo.deleteMemo(memo.id);
       if (result.success) {
-        showToast("メモを削除しました", "success")
-        navigate(`/memo/list/${memo.gameId}`)
+        showToast("メモを削除しました", "success");
+        navigate(`/memo/list/${memo.gameId}`);
       } else {
-        showToast(result.message || "メモの削除に失敗しました", "error")
+        showToast(result.message || "メモの削除に失敗しました", "error");
       }
     } catch (error) {
-      logger.error("メモ削除エラー:", { component: "MemoView", function: "unknown", data: error })
-      showToast("メモの削除に失敗しました", "error")
+      logger.error("メモ削除エラー:", { component: "MemoView", function: "unknown", data: error });
+      showToast("メモの削除に失敗しました", "error");
     }
-    setShowDeleteModal(false)
-  }, [memo, showToast, navigate])
+    setShowDeleteModal(false);
+  }, [memo, showToast, navigate]);
 
   // メモファイルを開く処理
   const handleOpenMemoFile = useCallback(async () => {
-    if (!memo) return
+    if (!memo) return;
 
     try {
-      const result = await window.api.memo.getMemoFilePath(memo.id)
+      const result = await window.api.memo.getMemoFilePath(memo.id);
       if (result.success && result.data) {
-        await window.api.window.openFolder(result.data)
-        showToast("メモファイルを開きました", "success")
+        await window.api.window.openFolder(result.data);
+        showToast("メモファイルを開きました", "success");
       } else {
-        showToast("メモファイルの取得に失敗しました", "error")
+        showToast("メモファイルの取得に失敗しました", "error");
       }
     } catch (error) {
       logger.error("ファイル操作エラー:", {
         component: "MemoView",
         function: "unknown",
-        data: error
-      })
-      showToast("ファイルを開けませんでした", "error")
+        data: error,
+      });
+      showToast("ファイルを開けませんでした", "error");
     }
-  }, [memo, showToast])
+  }, [memo, showToast]);
 
   if (!memoId) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-error">メモIDが指定されていません</div>
       </div>
-    )
+    );
   }
 
   if (isLoading) {
@@ -118,7 +118,7 @@ export default function MemoView(): React.JSX.Element {
       <div className="flex items-center justify-center min-h-screen">
         <div className="loading loading-spinner loading-lg"></div>
       </div>
-    )
+    );
   }
 
   if (!memo) {
@@ -126,7 +126,7 @@ export default function MemoView(): React.JSX.Element {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-error">メモが見つかりません</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -203,7 +203,7 @@ export default function MemoView(): React.JSX.Element {
                   </blockquote>
                 ),
                 code: ({ children, className }) => {
-                  const isInline = !className
+                  const isInline = !className;
                   return isInline ? (
                     <code className="bg-base-200 px-1 py-0.5 rounded text-sm font-mono text-base-content">
                       {children}
@@ -212,7 +212,7 @@ export default function MemoView(): React.JSX.Element {
                     <code className="block bg-base-200 p-4 rounded text-sm font-mono text-base-content overflow-x-auto">
                       {children}
                     </code>
-                  )
+                  );
                 },
                 a: ({ children, href }) => (
                   <a
@@ -227,7 +227,7 @@ export default function MemoView(): React.JSX.Element {
                 strong: ({ children }) => (
                   <strong className="font-bold text-base-content">{children}</strong>
                 ),
-                em: ({ children }) => <em className="italic text-base-content">{children}</em>
+                em: ({ children }) => <em className="italic text-base-content">{children}</em>,
               }}
             >
               {memo.content || "*内容がありません*"}
@@ -247,5 +247,5 @@ export default function MemoView(): React.JSX.Element {
         onCancel={() => setShowDeleteModal(false)}
       />
     </div>
-  )
+  );
 }

@@ -22,35 +22,35 @@
  * ```
  */
 
-import { MESSAGES } from "@renderer/constants"
+import { MESSAGES } from "@renderer/constants";
 
 /**
  * ファイル選択ボタンコンポーネントのprops
  */
 export type FileSelectButtonProps = {
   /** ラベルテキスト */
-  label: string
+  label: string;
   /** 現在選択されているファイルパス */
-  value: string
+  value: string;
   /** ファイルパス変更時のコールバック */
-  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   /** ファイル選択ダイアログを開くコールバック */
-  onBrowse: () => void
+  onBrowse: () => void;
   /** 選択中などで無効化する場合は true */
-  disabled?: boolean
+  disabled?: boolean;
   /** プレースホルダーテキスト */
-  placeholder?: string
+  placeholder?: string;
   /** 入力フィールドの名前属性 */
-  name?: string
+  name?: string;
   /** 必須フィールドかどうか */
-  required?: boolean
+  required?: boolean;
   /** 参照ボタンのテキスト */
-  browseButtonText?: string
+  browseButtonText?: string;
   /** エラーメッセージ */
-  errorMessage?: string
+  errorMessage?: string;
   /** フィールドがフォーカスを失った時のコールバック */
-  onBlur?: () => void
-}
+  onBlur?: () => void;
+};
 
 /**
  * ファイル選択ボタンコンポーネント
@@ -71,9 +71,9 @@ export function FileSelectButton({
   required = false,
   browseButtonText = MESSAGES.UI.BROWSE,
   errorMessage,
-  onBlur
+  onBlur,
 }: FileSelectButtonProps): React.JSX.Element {
-  const inputId = name || label.replace(/\s+/g, "-").toLowerCase()
+  const inputId = name || label.replace(/\s+/g, "-").toLowerCase();
 
   return (
     <div>
@@ -103,7 +103,7 @@ export function FileSelectButton({
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default FileSelectButton
+export default FileSelectButton;

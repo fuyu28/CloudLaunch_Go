@@ -1,103 +1,103 @@
-import { isValidCredsAtom } from "@renderer/state/credentials"
-import { visibleGamesAtom, currentGameIdAtom } from "@renderer/state/home"
-import { useAtomValue, useSetAtom } from "jotai"
-import { useCallback, useEffect, useState } from "react"
-import { FaArrowLeftLong } from "react-icons/fa6"
-import { useParams, useNavigate, Navigate } from "react-router-dom"
+import { isValidCredsAtom } from "@renderer/state/credentials";
+import { visibleGamesAtom, currentGameIdAtom } from "@renderer/state/home";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useCallback, useEffect, useState } from "react";
+import { FaArrowLeftLong } from "react-icons/fa6";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 
-import CloudDataCard from "@renderer/components/CloudDataCard"
-import ConfirmModal from "@renderer/components/ConfirmModal"
-import GameInfo from "@renderer/components/GameInfo"
-import GameFormModal from "@renderer/components/GameModal"
-import MemoCard from "@renderer/components/MemoCard"
-import PlaySessionManagementModal from "@renderer/components/PlaySessionManagementModal"
-import PlaySessionModal from "@renderer/components/PlaySessionModal"
-import PlayStatistics from "@renderer/components/PlayStatistics"
+import CloudDataCard from "@renderer/components/CloudDataCard";
+import ConfirmModal from "@renderer/components/ConfirmModal";
+import GameInfo from "@renderer/components/GameInfo";
+import GameFormModal from "@renderer/components/GameModal";
+import MemoCard from "@renderer/components/MemoCard";
+import PlaySessionManagementModal from "@renderer/components/PlaySessionManagementModal";
+import PlaySessionModal from "@renderer/components/PlaySessionModal";
+import PlayStatistics from "@renderer/components/PlayStatistics";
 
-import { useGameEdit } from "@renderer/hooks/useGameEdit"
-import { useGameSaveData } from "@renderer/hooks/useGameSaveData"
-import { useOfflineMode } from "@renderer/hooks/useOfflineMode"
-import { useToastHandler } from "@renderer/hooks/useToastHandler"
-import { useValidateCreds } from "@renderer/hooks/useValidCreds"
+import { useGameEdit } from "@renderer/hooks/useGameEdit";
+import { useGameSaveData } from "@renderer/hooks/useGameSaveData";
+import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
+import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
-import { logger } from "@renderer/utils/logger"
+import { logger } from "@renderer/utils/logger";
 
-import type { GameType } from "src/types/game"
+import type { GameType } from "src/types/game";
 
 export default function GameDetail(): React.JSX.Element {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const setVisibleGames = useSetAtom(visibleGamesAtom)
-  const setCurrentGameId = useSetAtom(currentGameIdAtom)
-  const visibleGames = useAtomValue(visibleGamesAtom)
-  const isValidCreds = useAtomValue(isValidCredsAtom)
-  const validateCreds = useValidateCreds()
-  const [game, setGame] = useState<GameType | undefined>(undefined)
-  const [isLoadingGame, setIsLoadingGame] = useState(true)
-  const [isPlaySessionModalOpen, setIsPlaySessionModalOpen] = useState(false)
-  const [isProcessModalOpen, setIsProcessModalOpen] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
-  const { showToast } = useToastHandler()
-  const { isOfflineMode, checkNetworkFeature } = useOfflineMode()
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const setVisibleGames = useSetAtom(visibleGamesAtom);
+  const setCurrentGameId = useSetAtom(currentGameIdAtom);
+  const visibleGames = useAtomValue(visibleGamesAtom);
+  const isValidCreds = useAtomValue(isValidCredsAtom);
+  const validateCreds = useValidateCreds();
+  const [game, setGame] = useState<GameType | undefined>(undefined);
+  const [isLoadingGame, setIsLoadingGame] = useState(true);
+  const [isPlaySessionModalOpen, setIsPlaySessionModalOpen] = useState(false);
+  const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const { showToast } = useToastHandler();
+  const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
 
   // ゲームデータを取得
   useEffect(() => {
-    if (!id) return
+    if (!id) return;
 
     const fetchGame = async (): Promise<void> => {
-      setIsLoadingGame(true)
+      setIsLoadingGame(true);
       try {
         // まずvisibleGamesから検索
-        const existingGame = visibleGames.find((g) => g.id === id)
+        const existingGame = visibleGames.find((g) => g.id === id);
         if (existingGame) {
-          setGame(existingGame)
-          setCurrentGameId(id)
-          setIsLoadingGame(false)
-          return
+          setGame(existingGame);
+          setCurrentGameId(id);
+          setIsLoadingGame(false);
+          return;
         }
 
         // visibleGamesにない場合は直接データベースから取得
-        const fetchedGame = await window.api.database.getGameById(id)
+        const fetchedGame = await window.api.database.getGameById(id);
         if (fetchedGame) {
           // APIから返されたデータは既にtransformされているのでそのまま使用
-          const transformedGame = fetchedGame as GameType
-          setGame(transformedGame)
-          setCurrentGameId(id)
+          const transformedGame = fetchedGame as GameType;
+          setGame(transformedGame);
+          setCurrentGameId(id);
           // visibleGamesも更新
           setVisibleGames((prev) => {
-            const exists = prev.find((g) => g.id === id)
-            return exists ? prev : [...prev, transformedGame]
-          })
+            const exists = prev.find((g) => g.id === id);
+            return exists ? prev : [...prev, transformedGame];
+          });
         } else {
-          setGame(undefined)
+          setGame(undefined);
         }
       } catch (error) {
         logger.error("ゲームデータの取得に失敗", {
           component: "GameDetail",
           function: "loadGame",
           error: error instanceof Error ? error : new Error(String(error)),
-          data: { gameId: id }
-        })
-        setGame(undefined)
+          data: { gameId: id },
+        });
+        setGame(undefined);
       } finally {
-        setIsLoadingGame(false)
+        setIsLoadingGame(false);
       }
-    }
+    };
 
-    fetchGame()
-  }, [id, visibleGames, setCurrentGameId, setVisibleGames])
+    fetchGame();
+  }, [id, visibleGames, setCurrentGameId, setVisibleGames]);
 
   // コンポーネントのアンマウント時にIDをクリア
   useEffect(() => {
     return () => {
-      setCurrentGameId(null)
-    }
+      setCurrentGameId(null);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   // カスタムフック
-  const { uploadSaveData, downloadSaveData, isUploading, isDownloading } = useGameSaveData()
+  const { uploadSaveData, downloadSaveData, isUploading, isDownloading } = useGameSaveData();
   const {
     editData,
     isEditModalOpen,
@@ -110,146 +110,145 @@ export default function GameDetail(): React.JSX.Element {
     closeDelete,
     handleUpdateGame,
     handleDeleteGame,
-    handleLaunchGame
-  } = useGameEdit(game, navigate, setVisibleGames)
+    handleLaunchGame,
+  } = useGameEdit(game, navigate, setVisibleGames);
 
   useEffect(() => {
     if (!isOfflineMode) {
-      validateCreds()
+      validateCreds();
     }
-  }, [validateCreds, isOfflineMode])
+  }, [validateCreds, isOfflineMode]);
 
-  const handleBack = useCallback(() => navigate(-1), [navigate])
+  const handleBack = useCallback(() => navigate(-1), [navigate]);
 
   // セーブデータ操作のコールバック
   const handleUploadSaveData = useCallback(async (): Promise<void> => {
     if (!checkNetworkFeature("セーブデータアップロード")) {
-      return
+      return;
     }
     if (game) {
-      await uploadSaveData(game)
+      await uploadSaveData(game);
     }
-  }, [game, uploadSaveData, checkNetworkFeature])
+  }, [game, uploadSaveData, checkNetworkFeature]);
 
   const handleDownloadSaveData = useCallback(async (): Promise<void> => {
     if (!checkNetworkFeature("セーブデータダウンロード")) {
-      return
+      return;
     }
     if (game) {
-      await downloadSaveData(game)
+      await downloadSaveData(game);
     }
-  }, [game, downloadSaveData, checkNetworkFeature])
+  }, [game, downloadSaveData, checkNetworkFeature]);
 
   // プレイセッション追加関連のコールバック
   const handleOpenPlaySessionModal = (): void => {
-    setIsPlaySessionModalOpen(true)
-  }
+    setIsPlaySessionModalOpen(true);
+  };
 
   const handleClosePlaySessionModal = (): void => {
-    setIsPlaySessionModalOpen(false)
-  }
-
+    setIsPlaySessionModalOpen(false);
+  };
 
   // 全データを再取得する関数
   const refreshGameData = useCallback(async () => {
-    if (!game?.id) return
+    if (!game?.id) return;
 
     try {
       // ゲームデータを再取得
-      const updatedGame = await window.api.database.getGameById(game.id)
+      const updatedGame = await window.api.database.getGameById(game.id);
 
       if (updatedGame) {
         // ローカルの状態を更新（APIから返されたデータは既にtransformされている）
-        const transformedGame = updatedGame as GameType
-        setGame(transformedGame)
+        const transformedGame = updatedGame as GameType;
+        setGame(transformedGame);
         // visibleGamesも更新
-        setVisibleGames((prev) => prev.map((g) => (g.id === game.id ? transformedGame : g)))
+        setVisibleGames((prev) => prev.map((g) => (g.id === game.id ? transformedGame : g)));
       }
       // リフレッシュキーを更新してコンポーネントの再レンダリングを促す
-      setRefreshKey((prev) => prev + 1)
+      setRefreshKey((prev) => prev + 1);
     } catch (error) {
       logger.error("ゲームデータの更新に失敗", {
         component: "GameDetail",
         function: "refreshGameData",
         error: error instanceof Error ? error : new Error(String(error)),
-        data: { gameId: game?.id }
-      })
+        data: { gameId: game?.id },
+      });
     }
-  }, [game?.id, setVisibleGames])
+  }, [game?.id, setVisibleGames]);
 
   const handleAddPlaySession = useCallback(
     async (duration: number, sessionName?: string): Promise<void> => {
-      if (!game) return
+      if (!game) return;
 
       try {
-        const result = await window.api.database.createSession(duration, game.id, sessionName)
+        const result = await window.api.database.createSession(duration, game.id, sessionName);
         if (result.success) {
-          showToast("プレイセッションを追加しました", "success")
+          showToast("プレイセッションを追加しました", "success");
           // 全データを再取得
-          await refreshGameData()
+          await refreshGameData();
         } else {
-          showToast(result.message || "プレイセッションの追加に失敗しました", "error")
+          showToast(result.message || "プレイセッションの追加に失敗しました", "error");
         }
       } catch {
-        showToast("プレイセッションの追加に失敗しました", "error")
+        showToast("プレイセッションの追加に失敗しました", "error");
       }
     },
-    [game, showToast, refreshGameData]
-  )
+    [game, showToast, refreshGameData],
+  );
 
   const handleSyncGame = useCallback(
     async (showResult = true): Promise<boolean> => {
-      if (!game) return false
+      if (!game) return false;
       if (isOfflineMode) {
         if (showResult) {
-          showToast("オフラインモードでは同期できません", "error")
+          showToast("オフラインモードでは同期できません", "error");
         }
-        return false
+        return false;
       }
       try {
-        const result = await window.api.cloudSync.syncGame(game.id)
+        const result = await window.api.cloudSync.syncGame(game.id);
         if (!result.success || !result.data) {
           if (showResult) {
-            showToast(result.message || "クラウド同期に失敗しました", "error")
+            showToast(result.message || "クラウド同期に失敗しました", "error");
           }
-          return false
+          return false;
         }
         if (showResult) {
           showToast(
             `同期完了: アップロード${result.data.uploadedGames}件 / ダウンロード${result.data.downloadedGames}件`,
-            "success"
-          )
+            "success",
+          );
         }
-        return true
+        return true;
       } catch (error) {
         logger.error("ゲーム同期エラー:", {
           component: "GameDetail",
           function: "handleSyncGame",
-          data: error
-        })
+          data: error,
+        });
         if (showResult) {
-          showToast("クラウド同期に失敗しました", "error")
+          showToast("クラウド同期に失敗しました", "error");
         }
-        return false
+        return false;
       }
     },
-    [game, isOfflineMode, showToast]
-  )
+    [game, isOfflineMode, showToast],
+  );
 
   const handleLaunchGameWithSync = useCallback(async (): Promise<void> => {
-    if (!game) return
+    if (!game) return;
     if (!isOfflineMode && isValidCreds) {
-      await handleSyncGame(false)
+      await handleSyncGame(false);
     }
-    await handleLaunchGame()
-  }, [game, isOfflineMode, isValidCreds, handleSyncGame, handleLaunchGame])
+    await handleLaunchGame();
+  }, [game, isOfflineMode, isValidCreds, handleSyncGame, handleLaunchGame]);
 
   // プレイステータス変更のハンドラー
   const handleStatusChange = useCallback(
     async (newStatus: "unplayed" | "playing" | "played"): Promise<void> => {
-      if (!game) return
+      if (!game) return;
 
-      setIsUpdatingStatus(true)
+      setIsUpdatingStatus(true);
       try {
         // 現在のゲームデータを使用してupdateGameを呼び出し
         const updateData = {
@@ -258,35 +257,35 @@ export default function GameDetail(): React.JSX.Element {
           imagePath: game.imagePath,
           exePath: game.exePath,
           saveFolderPath: game.saveFolderPath,
-          playStatus: newStatus
-        }
+          playStatus: newStatus,
+        };
 
-        const result = await window.api.database.updateGame(game.id, updateData)
+        const result = await window.api.database.updateGame(game.id, updateData);
 
         if (result.success) {
-          showToast("プレイステータスを更新しました", "success")
+          showToast("プレイステータスを更新しました", "success");
           // 全データを再取得
-          await refreshGameData()
+          await refreshGameData();
         } else {
-          showToast(result.message || "プレイステータスの更新に失敗しました", "error")
+          showToast(result.message || "プレイステータスの更新に失敗しました", "error");
         }
       } catch (error) {
         logger.error("プレイステータスの更新エラー", {
           component: "GameDetail",
           function: "handleStatusChange",
           error: error instanceof Error ? error : new Error(String(error)),
-          data: { gameId: game.id, newStatus }
-        })
-        showToast("プレイステータスの更新に失敗しました", "error")
+          data: { gameId: game.id, newStatus },
+        });
+        showToast("プレイステータスの更新に失敗しました", "error");
       } finally {
-        setIsUpdatingStatus(false)
+        setIsUpdatingStatus(false);
       }
     },
-    [game, showToast, refreshGameData]
-  )
+    [game, showToast, refreshGameData],
+  );
 
   if (!id) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/" replace />;
   }
 
   // ローディング中の表示
@@ -295,12 +294,12 @@ export default function GameDetail(): React.JSX.Element {
       <div className="flex items-center justify-center min-h-screen">
         <div className="loading loading-spinner loading-lg"></div>
       </div>
-    )
+    );
   }
 
   // ゲームが見つからない場合のみリダイレクト
   if (!game) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/" replace />;
   }
 
   return (
@@ -393,5 +392,5 @@ export default function GameDetail(): React.JSX.Element {
         onProcessUpdated={refreshGameData}
       />
     </div>
-  )
+  );
 }

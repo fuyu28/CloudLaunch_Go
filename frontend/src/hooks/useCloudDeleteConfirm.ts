@@ -12,12 +12,12 @@
  * - 追加警告の生成
  */
 
-import { useMemo } from "react"
+import { useMemo } from "react";
 
-import type { CloudDataItem } from "./useCloudData"
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils"
-import { formatFileSize, countFilesRecursively } from "@renderer/utils/cloudUtils"
-import type { WarningItem } from "@renderer/components/ConfirmModal"
+import type { CloudDataItem } from "./useCloudData";
+import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import { formatFileSize, countFilesRecursively } from "@renderer/utils/cloudUtils";
+import type { WarningItem } from "@renderer/components/ConfirmModal";
 
 /**
  * 削除確認ロジックのフック
@@ -28,113 +28,113 @@ import type { WarningItem } from "@renderer/components/ConfirmModal"
  */
 export function useCloudDeleteConfirm(
   item: CloudDataItem | CloudDirectoryNode | null,
-  cloudData: CloudDataItem[]
+  cloudData: CloudDataItem[],
 ): {
-  deleteMessage: string
-  fileCountMessage: string
-  subText: string | undefined
-  sizeMessage: string
-  additionalWarnings: WarningItem[]
+  deleteMessage: string;
+  fileCountMessage: string;
+  subText: string | undefined;
+  sizeMessage: string;
+  additionalWarnings: WarningItem[];
 } {
   const deleteMessage = useMemo((): string => {
     if (!item) {
-      return ""
+      return "";
     }
 
-    const itemName = item.name
+    const itemName = item.name;
 
     // CloudDirectoryNode（ツリービューからの削除）の場合
     if ("path" in item) {
-      const directoryNode = item as CloudDirectoryNode
+      const directoryNode = item as CloudDirectoryNode;
       if (directoryNode.isDirectory) {
-        return `${itemName}以下のディレクトリ・ファイルを完全に削除しますか？`
+        return `${itemName}以下のディレクトリ・ファイルを完全に削除しますか？`;
       } else {
-        return `${itemName}ファイルを完全に削除しますか？`
+        return `${itemName}ファイルを完全に削除しますか？`;
       }
     }
 
     // CloudDataItem（カードビューからの削除）の場合
-    return `${itemName}のクラウドデータを完全に削除しますか？`
-  }, [item])
+    return `${itemName}のクラウドデータを完全に削除しますか？`;
+  }, [item]);
 
   const fileCountMessage = useMemo((): string => {
     if (!item) {
-      return "0 個のファイルが削除されます"
+      return "0 個のファイルが削除されます";
     }
 
     // CloudDataItem（カードビューからの削除）の場合
     if ("fileCount" in item) {
-      return `${item.fileCount} 個のファイルが削除されます`
+      return `${item.fileCount} 個のファイルが削除されます`;
     }
 
     // CloudDirectoryNode（ツリービューからの削除）の場合
     if ("path" in item) {
-      const directoryNode = item as CloudDirectoryNode
+      const directoryNode = item as CloudDirectoryNode;
 
       // 全削除の場合
       if (directoryNode.path === "*") {
-        const totalFiles = cloudData.reduce((sum, cloudItem) => sum + cloudItem.fileCount, 0)
-        return `全ての ${totalFiles} 個のファイルが削除されます`
+        const totalFiles = cloudData.reduce((sum, cloudItem) => sum + cloudItem.fileCount, 0);
+        return `全ての ${totalFiles} 個のファイルが削除されます`;
       }
 
       // 単一ファイルの場合
       if (!directoryNode.isDirectory) {
-        return "1 個のファイルが削除されます"
+        return "1 個のファイルが削除されます";
       }
 
       // ディレクトリの場合（再帰的にカウント）
-      const fileCount = countFilesRecursively(directoryNode)
-      return `${fileCount} 個のファイルが削除されます`
+      const fileCount = countFilesRecursively(directoryNode);
+      return `${fileCount} 個のファイルが削除されます`;
     }
 
-    return "0 個のファイルが削除されます"
-  }, [item, cloudData])
+    return "0 個のファイルが削除されます";
+  }, [item, cloudData]);
 
   const subText = useMemo((): string | undefined => {
     if (!item || !("path" in item)) {
-      return undefined
+      return undefined;
     }
 
-    const directoryNode = item as CloudDirectoryNode
-    const pathInfo = directoryNode.path
-    const fileLabel = !directoryNode.isDirectory ? " (ファイル)" : ""
+    const directoryNode = item as CloudDirectoryNode;
+    const pathInfo = directoryNode.path;
+    const fileLabel = !directoryNode.isDirectory ? " (ファイル)" : "";
 
-    return `パス: ${pathInfo}${fileLabel}`
-  }, [item])
+    return `パス: ${pathInfo}${fileLabel}`;
+  }, [item]);
 
   const sizeMessage = useMemo((): string => {
     if (!item) {
-      return "総容量: 0 B"
+      return "総容量: 0 B";
     }
 
-    let size: number
+    let size: number;
     if ("totalSize" in item) {
-      size = item.totalSize
+      size = item.totalSize;
     } else {
-      size = item.size
+      size = item.size;
     }
 
-    return `総容量: ${formatFileSize(size)}`
-  }, [item])
+    return `総容量: ${formatFileSize(size)}`;
+  }, [item]);
 
   const additionalWarnings = useMemo((): WarningItem[] => {
     if (!item || !("path" in item)) {
-      return []
+      return [];
     }
 
-    const directoryNode = item as CloudDirectoryNode
+    const directoryNode = item as CloudDirectoryNode;
     if (directoryNode.isDirectory) {
-      return [{ text: "サブディレクトリも含めて完全に削除されます" }]
+      return [{ text: "サブディレクトリも含めて完全に削除されます" }];
     }
 
-    return []
-  }, [item])
+    return [];
+  }, [item]);
 
   return {
     deleteMessage,
     fileCountMessage,
     subText,
     sizeMessage,
-    additionalWarnings
-  }
+    additionalWarnings,
+  };
 }

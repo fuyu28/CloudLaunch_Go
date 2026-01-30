@@ -21,26 +21,26 @@
  * ```
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback } from "react";
 
-import { handleApiError, withLoadingToast } from "@renderer/utils/errorHandler"
+import { handleApiError, withLoadingToast } from "@renderer/utils/errorHandler";
 
-import type { GameType } from "src/types/game"
-import { createRemotePath } from "@renderer/utils"
+import type { GameType } from "src/types/game";
+import { createRemotePath } from "@renderer/utils";
 
 /**
  * ゲームセーブデータ操作フックの戻り値
  */
 export type GameSaveDataResult = {
   /** セーブデータアップロード関数 */
-  uploadSaveData: (game: GameType) => Promise<void>
+  uploadSaveData: (game: GameType) => Promise<void>;
   /** セーブデータダウンロード関数 */
-  downloadSaveData: (game: GameType) => Promise<void>
+  downloadSaveData: (game: GameType) => Promise<void>;
   /** アップロード中かどうか */
-  isUploading: boolean
+  isUploading: boolean;
   /** ダウンロード中かどうか */
-  isDownloading: boolean
-}
+  isDownloading: boolean;
+};
 
 /**
  * ゲームセーブデータ操作フック
@@ -50,8 +50,8 @@ export type GameSaveDataResult = {
  * @returns セーブデータ操作機能とローディング状態
  */
 export function useGameSaveData(): GameSaveDataResult {
-  const [isUploading, setIsUploading] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   /**
    * セーブデータをクラウドにアップロードする
@@ -63,28 +63,28 @@ export function useGameSaveData(): GameSaveDataResult {
     if (!game.saveFolderPath) {
       handleApiError({
         success: false,
-        message: "セーブデータフォルダが設定されていません。"
-      })
-      return
+        message: "セーブデータフォルダが設定されていません。",
+      });
+      return;
     }
 
-    setIsUploading(true)
+    setIsUploading(true);
 
     try {
       // リモートパスの生成（ゲームタイトルベース）
-      const remotePath = createRemotePath(game.title)
+      const remotePath = createRemotePath(game.title);
 
       // アップロード実行（トースト付き）
       await withLoadingToast(
         () => window.api.saveData.upload.uploadSaveDataFolder(game.saveFolderPath!, remotePath),
         "セーブデータをアップロード中…",
         "セーブデータのアップロードに成功しました。",
-        "セーブデータのアップロード"
-      )
+        "セーブデータのアップロード",
+      );
     } finally {
-      setIsUploading(false)
+      setIsUploading(false);
     }
-  }, [])
+  }, []);
 
   /**
    * セーブデータをクラウドからダウンロードする
@@ -96,35 +96,35 @@ export function useGameSaveData(): GameSaveDataResult {
     if (!game.saveFolderPath) {
       handleApiError({
         success: false,
-        message: "セーブデータフォルダが設定されていません。"
-      })
-      return
+        message: "セーブデータフォルダが設定されていません。",
+      });
+      return;
     }
 
-    setIsDownloading(true)
+    setIsDownloading(true);
 
     try {
       // リモートパスの生成（ゲームタイトルベース）
-      const remotePath = createRemotePath(game.title)
+      const remotePath = createRemotePath(game.title);
 
       // ダウンロード実行（トースト付き）
       await withLoadingToast(
         () => window.api.saveData.download.downloadSaveData(game.saveFolderPath!, remotePath),
         "セーブデータをダウンロード中…",
         "セーブデータのダウンロードに成功しました。",
-        "セーブデータのダウンロード"
-      )
+        "セーブデータのダウンロード",
+      );
     } finally {
-      setIsDownloading(false)
+      setIsDownloading(false);
     }
-  }, [])
+  }, []);
 
   return {
     uploadSaveData,
     downloadSaveData,
     isUploading,
-    isDownloading
-  }
+    isDownloading,
+  };
 }
 
-export default useGameSaveData
+export default useGameSaveData;

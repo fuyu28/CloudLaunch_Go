@@ -11,28 +11,28 @@
  * - 削除/キャンセルの操作
  */
 
-import { FiAlertTriangle } from "react-icons/fi"
+import { FiAlertTriangle } from "react-icons/fi";
 
-import { useCloudDeleteConfirm } from "@renderer/hooks/useCloudDeleteConfirm"
+import { useCloudDeleteConfirm } from "@renderer/hooks/useCloudDeleteConfirm";
 
-import ConfirmModal from "./ConfirmModal"
-import type { ConfirmDetails, WarningItem } from "./ConfirmModal"
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils"
-import type { CloudDataItem } from "@renderer/hooks/useCloudData"
+import ConfirmModal from "./ConfirmModal";
+import type { ConfirmDetails, WarningItem } from "./ConfirmModal";
+import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem } from "@renderer/hooks/useCloudData";
 
 /**
  * 削除確認モーダルのプロパティ
  */
 type CloudDeleteModalProps = {
   /** 削除対象のアイテム */
-  deleteConfirm: CloudDataItem | CloudDirectoryNode | null
+  deleteConfirm: CloudDataItem | CloudDirectoryNode | null;
   /** キャンセルコールバック */
-  onCancel: () => void
+  onCancel: () => void;
   /** 削除実行コールバック */
-  onConfirm: (item: CloudDataItem | CloudDirectoryNode) => void
+  onConfirm: (item: CloudDataItem | CloudDirectoryNode) => void;
   /** 全クラウドデータ（全削除時の計算用） */
-  cloudData: CloudDataItem[]
-}
+  cloudData: CloudDataItem[];
+};
 
 /**
  * クラウドデータ削除確認モーダル
@@ -44,10 +44,10 @@ export function CloudDeleteModal({
   deleteConfirm,
   onCancel,
   onConfirm,
-  cloudData
+  cloudData,
 }: CloudDeleteModalProps): React.JSX.Element {
   const { deleteMessage, fileCountMessage, subText, sizeMessage, additionalWarnings } =
-    useCloudDeleteConfirm(deleteConfirm, cloudData)
+    useCloudDeleteConfirm(deleteConfirm, cloudData);
 
   return (
     <ConfirmModal
@@ -68,15 +68,15 @@ export function CloudDeleteModal({
             { text: "削除されたデータは復元できません" },
             {
               text: fileCountMessage,
-              highlight: true
+              highlight: true,
             },
             {
-              text: sizeMessage
+              text: sizeMessage,
             },
-            ...additionalWarnings
-          ] as WarningItem[]
+            ...additionalWarnings,
+          ] as WarningItem[],
         } as ConfirmDetails
       }
     />
-  )
+  );
 }

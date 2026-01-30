@@ -5,51 +5,51 @@
  * クラウド上のデータ情報を表示するカードコンポーネントです。
  */
 
-import { useCallback, useEffect, useState, memo } from "react"
-import { FaUpload, FaDownload, FaCloud, FaCloudDownloadAlt, FaFile } from "react-icons/fa"
+import { useCallback, useEffect, useState, memo } from "react";
+import { FaUpload, FaDownload, FaCloud, FaCloudDownloadAlt, FaFile } from "react-icons/fa";
 
-import { useOfflineMode } from "@renderer/hooks/useOfflineMode"
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat"
+import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
-import { logger } from "@renderer/utils/logger"
-import { getOfflineDisabledClasses } from "@renderer/utils/offlineUtils"
+import { logger } from "@renderer/utils/logger";
+import { getOfflineDisabledClasses } from "@renderer/utils/offlineUtils";
 
 type CloudDataInfo = {
-  exists: boolean
-  uploadedAt?: Date | string
-  size?: number
-  comment?: string
-}
+  exists: boolean;
+  uploadedAt?: Date | string;
+  size?: number;
+  comment?: string;
+};
 
 type CloudFileDetails = {
-  exists: boolean
-  totalSize: number
+  exists: boolean;
+  totalSize: number;
   files: Array<{
-    name: string
-    size: number
-    lastModified: Date | string
-    key: string
-  }>
-}
+    name: string;
+    size: number;
+    lastModified: Date | string;
+    key: string;
+  }>;
+};
 
 type CloudDataCardProps = {
   /** ゲームID */
-  gameId: string
+  gameId: string;
   /** ゲームタイトル */
-  gameTitle: string
+  gameTitle: string;
   /** セーブフォルダパスが設定されているか */
-  hasSaveFolder: boolean
+  hasSaveFolder: boolean;
   /** 認証情報が有効か */
-  isValidCreds: boolean
+  isValidCreds: boolean;
   /** アップロード処理中か */
-  isUploading: boolean
+  isUploading: boolean;
   /** ダウンロード処理中か */
-  isDownloading: boolean
+  isDownloading: boolean;
   /** アップロード処理 */
-  onUpload: () => Promise<void>
+  onUpload: () => Promise<void>;
   /** ダウンロード処理 */
-  onDownload: () => Promise<void>
-}
+  onDownload: () => Promise<void>;
+};
 
 /**
  * クラウドデータ管理カードコンポーネント
@@ -64,122 +64,122 @@ function CloudDataCard({
   isUploading,
   isDownloading,
   onUpload,
-  onDownload
+  onDownload,
 }: CloudDataCardProps): React.JSX.Element {
-  const { formatDateWithTime } = useTimeFormat()
-  const { isOfflineMode, checkNetworkFeature } = useOfflineMode()
-  const [cloudData, setCloudData] = useState<CloudDataInfo>({ exists: false })
-  const [fileDetails, setFileDetails] = useState<CloudFileDetails | undefined>(undefined)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isFileDetailsLoading, setIsFileDetailsLoading] = useState(false)
-  const [lastFetchedGameId, setLastFetchedGameId] = useState<string | undefined>(undefined)
+  const { formatDateWithTime } = useTimeFormat();
+  const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
+  const [cloudData, setCloudData] = useState<CloudDataInfo>({ exists: false });
+  const [fileDetails, setFileDetails] = useState<CloudFileDetails | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFileDetailsLoading, setIsFileDetailsLoading] = useState(false);
+  const [lastFetchedGameId, setLastFetchedGameId] = useState<string | undefined>(undefined);
 
   // ファイル詳細情報を取得
   const fetchFileDetails = useCallback(
     async (forceRefresh = false) => {
-      if (!isValidCreds || !gameId || isOfflineMode) return
+      if (!isValidCreds || !gameId || isOfflineMode) return;
 
       // 同じゲームIDで既にデータを取得済みの場合はスキップ（強制リフレッシュ以外）
       if (!forceRefresh && lastFetchedGameId === gameId && fileDetails !== undefined) {
-        setIsLoading(false)
-        return
+        setIsLoading(false);
+        return;
       }
 
       try {
-        setIsFileDetailsLoading(true)
-        const result = await window.api.saveData.download.getCloudFileDetails(gameId)
+        setIsFileDetailsLoading(true);
+        const result = await window.api.saveData.download.getCloudFileDetails(gameId);
 
         if (result.success && result.data) {
-          setFileDetails(result.data)
-          setLastFetchedGameId(gameId)
+          setFileDetails(result.data);
+          setLastFetchedGameId(gameId);
 
           // ファイル詳細情報から基本情報も設定
           if (result.data.exists) {
             const latestFile = result.data.files.sort(
-              (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
-            )[0]
+              (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime(),
+            )[0];
 
             setCloudData({
               exists: true,
               uploadedAt: latestFile?.lastModified,
               size: result.data.totalSize,
-              comment: ""
-            })
+              comment: "",
+            });
           } else {
-            setCloudData({ exists: false })
+            setCloudData({ exists: false });
           }
         } else {
-          setFileDetails({ exists: false, totalSize: 0, files: [] })
-          setCloudData({ exists: false })
-          setLastFetchedGameId(gameId)
+          setFileDetails({ exists: false, totalSize: 0, files: [] });
+          setCloudData({ exists: false });
+          setLastFetchedGameId(gameId);
         }
       } catch (error) {
         logger.error("ファイル詳細情報の取得に失敗:", {
           component: "CloudDataCard",
           function: "unknown",
-          data: error
-        })
-        setFileDetails({ exists: false, totalSize: 0, files: [] })
-        setCloudData({ exists: false })
-        setLastFetchedGameId(gameId)
+          data: error,
+        });
+        setFileDetails({ exists: false, totalSize: 0, files: [] });
+        setCloudData({ exists: false });
+        setLastFetchedGameId(gameId);
       } finally {
-        setIsFileDetailsLoading(false)
-        setIsLoading(false)
+        setIsFileDetailsLoading(false);
+        setIsLoading(false);
       }
     },
-    [fileDetails, gameId, isValidCreds, lastFetchedGameId, isOfflineMode]
-  )
+    [fileDetails, gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
+  );
 
   // gameIdが変わった場合に状態をリセット
   useEffect(() => {
     if (lastFetchedGameId !== gameId) {
-      setIsLoading(true)
-      setCloudData({ exists: false })
-      setFileDetails(undefined)
+      setIsLoading(true);
+      setCloudData({ exists: false });
+      setFileDetails(undefined);
     }
-  }, [gameId, lastFetchedGameId])
+  }, [gameId, lastFetchedGameId]);
 
   useEffect(() => {
     // gameIdまたはisValidCredsが変わった場合のみ実行（オフライン時は除く）
     if (gameId && isValidCreds && !isOfflineMode) {
-      fetchFileDetails()
+      fetchFileDetails();
     }
-  }, [gameId, isValidCreds, isOfflineMode, fetchFileDetails])
+  }, [gameId, isValidCreds, isOfflineMode, fetchFileDetails]);
 
   // アップロード完了後にデータを再取得
   const handleUpload = useCallback(async () => {
     if (!checkNetworkFeature("セーブデータアップロード")) {
-      return
+      return;
     }
-    await onUpload()
-    await fetchFileDetails(true) // 強制リフレッシュ
-  }, [onUpload, fetchFileDetails, checkNetworkFeature])
+    await onUpload();
+    await fetchFileDetails(true); // 強制リフレッシュ
+  }, [onUpload, fetchFileDetails, checkNetworkFeature]);
 
   // ダウンロード実行
   const handleDownload = useCallback(async () => {
     if (!checkNetworkFeature("セーブデータダウンロード")) {
-      return
+      return;
     }
-    await onDownload()
-  }, [onDownload, checkNetworkFeature])
+    await onDownload();
+  }, [onDownload, checkNetworkFeature]);
 
   // ファイルサイズをフォーマット
   const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return "不明"
+    if (!bytes) return "不明";
 
-    const units = ["B", "KB", "MB", "GB"]
-    let size = bytes
-    let unitIndex = 0
+    const units = ["B", "KB", "MB", "GB"];
+    let size = bytes;
+    let unitIndex = 0;
 
     while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024
-      unitIndex++
+      size /= 1024;
+      unitIndex++;
     }
 
-    return `${size.toFixed(1)} ${units[unitIndex]}`
-  }
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
+  };
 
-  const disabledClasses = getOfflineDisabledClasses(isOfflineMode)
+  const disabledClasses = getOfflineDisabledClasses(isOfflineMode);
 
   return (
     <div className={`card bg-base-100 shadow-xl h-full ${disabledClasses}`}>
@@ -320,8 +320,8 @@ function CloudDataCard({
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // propsが変わった場合のみ再レンダリング
-export default memo(CloudDataCard)
+export default memo(CloudDataCard);

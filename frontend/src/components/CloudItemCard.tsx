@@ -4,21 +4,21 @@
  * カードビューでのクラウドデータアイテム表示とアクション機能を提供します。
  */
 
-import { FiFolder, FiFile, FiTrash2 } from "react-icons/fi"
+import { FiFolder, FiFile, FiTrash2 } from "react-icons/fi";
 
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils"
-import { formatFileSize, formatDate, countFilesRecursively } from "@renderer/utils/cloudUtils"
-import type { CloudDataItem } from "@renderer/hooks/useCloudData"
+import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import { formatFileSize, formatDate, countFilesRecursively } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem } from "@renderer/hooks/useCloudData";
 
 /**
  * クラウドデータアイテムカードのプロパティ
  */
 type CloudItemCardProps = {
-  item: CloudDataItem
-  onDelete: (item: CloudDataItem) => void
-  onViewDetails: (item: CloudDataItem) => void
-  onNavigate?: (directoryName: string) => void
-}
+  item: CloudDataItem;
+  onDelete: (item: CloudDataItem) => void;
+  onViewDetails: (item: CloudDataItem) => void;
+  onNavigate?: (directoryName: string) => void;
+};
 
 /**
  * クラウドデータアイテムカードコンポーネント
@@ -27,13 +27,13 @@ export function CloudItemCard({
   item,
   onDelete,
   onViewDetails,
-  onNavigate
+  onNavigate,
 }: CloudItemCardProps): React.JSX.Element {
   const handleClick = (): void => {
     if (onNavigate) {
-      onNavigate(item.name)
+      onNavigate(item.name);
     }
-  }
+  };
 
   return (
     <div
@@ -62,8 +62,8 @@ export function CloudItemCard({
         <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={(e) => {
-              e.stopPropagation()
-              onViewDetails(item)
+              e.stopPropagation();
+              onViewDetails(item);
             }}
             className="btn btn-sm btn-ghost tooltip"
             data-tip="詳細表示"
@@ -72,8 +72,8 @@ export function CloudItemCard({
           </button>
           <button
             onClick={(e) => {
-              e.stopPropagation()
-              onDelete(item)
+              e.stopPropagation();
+              onDelete(item);
             }}
             className="btn btn-sm btn-error btn-ghost tooltip"
             data-tip="削除"
@@ -85,17 +85,17 @@ export function CloudItemCard({
 
       <div className="text-xs text-base-content/60">最終更新: {formatDate(item.lastModified)}</div>
     </div>
-  )
+  );
 }
 
 /**
  * ディレクトリノードカードのプロパティ
  */
 type DirectoryNodeCardProps = {
-  node: CloudDirectoryNode
-  onNavigate?: (directoryName: string) => void
-  onDelete: (node: CloudDirectoryNode) => void
-}
+  node: CloudDirectoryNode;
+  onNavigate?: (directoryName: string) => void;
+  onDelete: (node: CloudDirectoryNode) => void;
+};
 
 /**
  * ディレクトリノードカードコンポーネント
@@ -103,13 +103,13 @@ type DirectoryNodeCardProps = {
 export function DirectoryNodeCard({
   node,
   onNavigate,
-  onDelete
+  onDelete,
 }: DirectoryNodeCardProps): React.JSX.Element {
   const handleClick = (): void => {
     if (node.isDirectory && onNavigate) {
-      onNavigate(node.name)
+      onNavigate(node.name);
     }
-  }
+  };
 
   return (
     <div
@@ -144,8 +144,8 @@ export function DirectoryNodeCard({
         <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={(e) => {
-              e.stopPropagation()
-              onDelete(node)
+              e.stopPropagation();
+              onDelete(node);
             }}
             className="btn btn-sm btn-error btn-ghost tooltip"
             data-tip={node.isDirectory ? "ディレクトリ削除" : "ファイル削除"}
@@ -157,5 +157,5 @@ export function DirectoryNodeCard({
 
       <div className="text-xs text-base-content/60">最終更新: {formatDate(node.lastModified)}</div>
     </div>
-  )
+  );
 }

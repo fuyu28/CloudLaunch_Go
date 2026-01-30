@@ -17,16 +17,16 @@
  * - React Suspenseライクなローディング表示
  */
 
-import { memo } from "react"
+import { memo } from "react";
 
-import { useImageLoader } from "@renderer/hooks/useImageLoader"
+import { useImageLoader } from "@renderer/hooks/useImageLoader";
 
-import type { ImgHTMLAttributes } from "react"
+import type { ImgHTMLAttributes } from "react";
 
 // ① ImgHTMLAttributes で <img> の全属性を継承
 type DynamicImgProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
-  src: string // 普通のURL or ローカルファイルパス（空文字列の場合はNoImage）
-}
+  src: string; // 普通のURL or ローカルファイルパス（空文字列の場合はNoImage）
+};
 
 /**
  * 動的画像読み込みコンポーネント
@@ -38,7 +38,7 @@ const DynamicImage = memo(function DynamicImage({
   src: originalSrc,
   ...imgProps
 }: DynamicImgProps): React.JSX.Element {
-  const { imageSrc, isLoading } = useImageLoader(originalSrc)
+  const { imageSrc, isLoading } = useImageLoader(originalSrc);
 
   // ローディング中の表示
   if (isLoading && !imageSrc) {
@@ -48,17 +48,17 @@ const DynamicImage = memo(function DynamicImage({
         style={{
           width: imgProps.width || "100%",
           height: imgProps.height || "200px",
-          ...imgProps.style
+          ...imgProps.style,
         }}
       >
         <span className="text-sm">Loading...</span>
       </div>
-    )
+    );
   }
 
   // 画像またはNoImageを表示
   if (imageSrc) {
-    return <img src={imageSrc} {...imgProps} />
+    return <img src={imageSrc} {...imgProps} />;
   }
 
   // フォールバック（通常は発生しない）
@@ -68,12 +68,12 @@ const DynamicImage = memo(function DynamicImage({
       style={{
         width: imgProps.width || "100%",
         height: imgProps.height || "200px",
-        ...imgProps.style
+        ...imgProps.style,
       }}
     >
       <span className="text-sm">No Image</span>
     </div>
-  )
-})
+  );
+});
 
-export default DynamicImage
+export default DynamicImage;

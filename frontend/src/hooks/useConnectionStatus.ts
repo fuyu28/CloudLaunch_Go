@@ -14,22 +14,22 @@
  * ```
  */
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react";
 
-import { useValidateCreds } from "./useValidCreds"
-import type { AsyncStatus } from "src/types/common"
+import { useValidateCreds } from "./useValidCreds";
+import type { AsyncStatus } from "src/types/common";
 
 /**
  * 接続状態フックの戻り値
  */
 export type ConnectionStatusResult = {
   /** 接続状態 */
-  status: AsyncStatus
+  status: AsyncStatus;
   /** エラーメッセージ */
-  message: string | undefined
+  message: string | undefined;
   /** 接続確認関数 */
-  check: () => Promise<void>
-}
+  check: () => Promise<void>;
+};
 
 /**
  * 接続状態管理フック
@@ -39,9 +39,9 @@ export type ConnectionStatusResult = {
  * @returns 接続状態と確認機能
  */
 export function useConnectionStatus(): ConnectionStatusResult {
-  const validateCreds = useValidateCreds()
-  const [status, setStatus] = useState<AsyncStatus>("loading")
-  const [message, setMessage] = useState<string | undefined>(undefined)
+  const validateCreds = useValidateCreds();
+  const [status, setStatus] = useState<AsyncStatus>("loading");
+  const [message, setMessage] = useState<string | undefined>(undefined);
 
   /**
    * 接続状態を確認する関数
@@ -49,20 +49,20 @@ export function useConnectionStatus(): ConnectionStatusResult {
    * 認証情報の有効性を検証し、接続状態を更新します。
    */
   const check: () => Promise<void> = useCallback(async () => {
-    setStatus("loading")
-    const ok = await validateCreds()
+    setStatus("loading");
+    const ok = await validateCreds();
     if (ok) {
-      setStatus("success")
-      setMessage(undefined)
+      setStatus("success");
+      setMessage(undefined);
     } else {
-      setStatus("error")
-      setMessage("クレデンシャルが有効ではありません")
+      setStatus("error");
+      setMessage("クレデンシャルが有効ではありません");
     }
-  }, [validateCreds])
+  }, [validateCreds]);
 
   useEffect(() => {
-    check()
-  }, [check])
+    check();
+  }, [check]);
 
-  return { status, message, check }
+  return { status, message, check };
 }

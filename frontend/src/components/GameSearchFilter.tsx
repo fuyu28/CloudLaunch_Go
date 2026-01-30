@@ -9,31 +9,31 @@
  * - メモ化による最適化
  */
 
-import { memo, useCallback } from "react"
-import { CiSearch } from "react-icons/ci"
-import { IoFilterOutline } from "react-icons/io5"
-import { TbSortAscending, TbSortDescending } from "react-icons/tb"
+import { memo, useCallback } from "react";
+import { CiSearch } from "react-icons/ci";
+import { IoFilterOutline } from "react-icons/io5";
+import { TbSortAscending, TbSortDescending } from "react-icons/tb";
 
-import type { FilterOption, SortOption, SortDirection } from "src/types/menu"
+import type { FilterOption, SortOption, SortDirection } from "src/types/menu";
 
 type GameSearchFilterProps = {
   /** 検索ワード */
-  searchWord: string
+  searchWord: string;
   /** ソートオプション */
-  sort: SortOption
+  sort: SortOption;
   /** ソート方向 */
-  sortDirection: SortDirection
+  sortDirection: SortDirection;
   /** フィルタオプション */
-  filter: FilterOption
+  filter: FilterOption;
   /** 検索ワード変更ハンドラ */
-  onSearchWordChange: (value: string) => void
+  onSearchWordChange: (value: string) => void;
   /** ソート変更ハンドラ */
-  onSortChange: (value: SortOption) => void
+  onSortChange: (value: SortOption) => void;
   /** ソート方向変更ハンドラ */
-  onSortDirectionChange: (value: SortDirection) => void
+  onSortDirectionChange: (value: SortDirection) => void;
   /** フィルタ変更ハンドラ */
-  onFilterChange: (value: FilterOption) => void
-}
+  onFilterChange: (value: FilterOption) => void;
+};
 
 /**
  * ゲーム検索・フィルタコンポーネント
@@ -49,32 +49,32 @@ const GameSearchFilter = memo(function GameSearchFilter({
   onSearchWordChange,
   onSortChange,
   onSortDirectionChange,
-  onFilterChange
+  onFilterChange,
 }: GameSearchFilterProps): React.JSX.Element {
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      onSearchWordChange(e.target.value)
+      onSearchWordChange(e.target.value);
     },
-    [onSearchWordChange]
-  )
+    [onSearchWordChange],
+  );
 
   const handleSortChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onSortChange(e.target.value as SortOption)
+      onSortChange(e.target.value as SortOption);
     },
-    [onSortChange]
-  )
+    [onSortChange],
+  );
 
   const handleFilterChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onFilterChange(e.target.value as FilterOption)
+      onFilterChange(e.target.value as FilterOption);
     },
-    [onFilterChange]
-  )
+    [onFilterChange],
+  );
 
   const handleSortDirectionToggle = useCallback(() => {
-    onSortDirectionChange(sortDirection === "asc" ? "desc" : "asc")
-  }, [sortDirection, onSortDirectionChange])
+    onSortDirectionChange(sortDirection === "asc" ? "desc" : "asc");
+  }, [sortDirection, onSortDirectionChange]);
 
   return (
     <div className="bg-base-100 p-4 rounded-lg mb-4 mx-4 shadow-sm">
@@ -144,7 +144,7 @@ const GameSearchFilter = memo(function GameSearchFilter({
         </div>
       </div>
     </div>
-  )
-})
+  );
+});
 
-export default GameSearchFilter
+export default GameSearchFilter;

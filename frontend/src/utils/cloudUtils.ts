@@ -11,11 +11,11 @@
  * @returns 読みやすい形式の文字列
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B"
-  const k = 1024
-  const sizes = ["B", "KB", "MB", "GB", "TB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 /**
@@ -29,22 +29,22 @@ export function formatDate(date: Date): string {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(date))
+    minute: "2-digit",
+  }).format(new Date(date));
 }
 
 /**
  * クラウドディレクトリツリーノードの型定義
  */
 export type CloudDirectoryNode = {
-  name: string
-  path: string
-  isDirectory: boolean
-  size: number
-  lastModified: Date
-  children?: CloudDirectoryNode[]
-  objectKey?: string
-}
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size: number;
+  lastModified: Date;
+  children?: CloudDirectoryNode[];
+  objectKey?: string;
+};
 
 /**
  * ディレクトリノードから再帰的にファイル数を計算
@@ -53,16 +53,16 @@ export type CloudDirectoryNode = {
  */
 export function countFilesRecursively(node: CloudDirectoryNode): number {
   if (!node.isDirectory) {
-    return 1
+    return 1;
   }
 
-  let fileCount = 0
+  let fileCount = 0;
   if (node.children) {
     node.children.forEach((child) => {
-      fileCount += countFilesRecursively(child)
-    })
+      fileCount += countFilesRecursively(child);
+    });
   }
-  return fileCount
+  return fileCount;
 }
 
 /**
@@ -73,16 +73,16 @@ export function countFilesRecursively(node: CloudDirectoryNode): number {
  */
 export function getNodesByPath(tree: CloudDirectoryNode[], path: string[]): CloudDirectoryNode[] {
   if (path.length === 0) {
-    return tree
+    return tree;
   }
 
-  let currentNodes = tree
+  let currentNodes = tree;
   for (const pathSegment of path) {
-    const targetNode = currentNodes.find((node) => node.name === pathSegment && node.isDirectory)
+    const targetNode = currentNodes.find((node) => node.name === pathSegment && node.isDirectory);
     if (!targetNode || !targetNode.children) {
-      return []
+      return [];
     }
-    currentNodes = targetNode.children
+    currentNodes = targetNode.children;
   }
-  return currentNodes
+  return currentNodes;
 }

@@ -5,40 +5,40 @@
  * MemoCardとMemoListで共通使用されます。
  */
 
-import { memo, useMemo, useCallback } from "react"
-import { FaGamepad } from "react-icons/fa"
+import { memo, useMemo, useCallback } from "react";
+import { FaGamepad } from "react-icons/fa";
 
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat"
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
-import MemoDropdownMenu from "./MemoDropdownMenu"
-import type { MemoType } from "src/types/memo"
+import MemoDropdownMenu from "./MemoDropdownMenu";
+import type { MemoType } from "src/types/memo";
 
 type MemoCardBaseProps = {
   /** メモデータ */
-  memo: MemoType
+  memo: MemoType;
   /** カードクリック時の処理 */
-  onClick: (memoId: string) => void
+  onClick: (memoId: string) => void;
   /** ドロップダウンが開いているかどうか */
-  isDropdownOpen: boolean
+  isDropdownOpen: boolean;
   /** ドロップダウンの開閉処理 */
-  onDropdownToggle: (memoId: string, event: React.MouseEvent) => void
+  onDropdownToggle: (memoId: string, event: React.MouseEvent) => void;
   /** 編集ボタンクリック処理 */
-  onEdit: (memoId: string, event: React.MouseEvent) => void
+  onEdit: (memoId: string, event: React.MouseEvent) => void;
   /** 削除ボタンクリック処理 */
-  onDelete: (memoId: string, event: React.MouseEvent) => void
+  onDelete: (memoId: string, event: React.MouseEvent) => void;
   /** 同期ボタンクリック処理（オプション、メモ一覧ページのみ） */
-  onSyncFromCloud?: (event: React.MouseEvent) => void
+  onSyncFromCloud?: (event: React.MouseEvent) => void;
   /** カードのスタイルクラス（オプション） */
-  className?: string
+  className?: string;
   /** タイトルの最大文字数（オプション、デフォルト: 制限なし） */
-  titleMaxLength?: number
+  titleMaxLength?: number;
   /** 内容プレビューの最大文字数（オプション、デフォルト: 80） */
-  contentMaxLength?: number
+  contentMaxLength?: number;
   /** ゲーム名を表示するかどうか（オプション、デフォルト: true） */
-  showGameTitle?: boolean
+  showGameTitle?: boolean;
   /** ドロップダウンメニューの位置クラス（オプション） */
-  dropdownPosition?: string
-}
+  dropdownPosition?: string;
+};
 
 /**
  * メモカード基本コンポーネント
@@ -58,39 +58,39 @@ function MemoCardBase({
   titleMaxLength,
   contentMaxLength = 80,
   showGameTitle = true,
-  dropdownPosition = "absolute top-2 right-2"
+  dropdownPosition = "absolute top-2 right-2",
 }: MemoCardBaseProps): React.JSX.Element {
-  const { formatDateWithTime } = useTimeFormat()
+  const { formatDateWithTime } = useTimeFormat();
 
   // テキストの切り詰め処理を最適化
   const truncatedTexts = useMemo(() => {
     const truncatedTitle =
       titleMaxLength && memo.title.length > titleMaxLength
         ? `${memo.title.substring(0, titleMaxLength)}...`
-        : memo.title
+        : memo.title;
 
     const truncatedContent =
       memo.content.length > contentMaxLength
         ? `${memo.content.substring(0, contentMaxLength)}...`
-        : memo.content
+        : memo.content;
 
-    return { truncatedTitle, truncatedContent }
-  }, [memo.title, memo.content, titleMaxLength, contentMaxLength])
+    return { truncatedTitle, truncatedContent };
+  }, [memo.title, memo.content, titleMaxLength, contentMaxLength]);
 
   // フォーマット済み日時をメモ化
   const formattedDate = useMemo(() => {
-    return formatDateWithTime(memo.updatedAt)
-  }, [memo.updatedAt, formatDateWithTime])
+    return formatDateWithTime(memo.updatedAt);
+  }, [memo.updatedAt, formatDateWithTime]);
 
   // クリックハンドラーをメモ化
   const handleCardClick = useCallback(() => {
-    onClick(memo.id)
-  }, [onClick, memo.id])
+    onClick(memo.id);
+  }, [onClick, memo.id]);
 
   // CSSクラスをメモ化
   const cardClassName = useMemo(() => {
-    return `${className} cursor-pointer hover:bg-base-200 transition-colors duration-200 relative`
-  }, [className])
+    return `${className} cursor-pointer hover:bg-base-200 transition-colors duration-200 relative`;
+  }, [className]);
 
   return (
     <div className={cardClassName} onClick={handleCardClick}>
@@ -127,7 +127,7 @@ function MemoCardBase({
         className={dropdownPosition}
       />
     </div>
-  )
+  );
 }
 
 // React.memoでコンポーネントをメモ化
@@ -144,5 +144,5 @@ export default memo(MemoCardBase, (prevProps, nextProps) => {
     prevProps.titleMaxLength === nextProps.titleMaxLength &&
     prevProps.contentMaxLength === nextProps.contentMaxLength &&
     prevProps.showGameTitle === nextProps.showGameTitle
-  )
-})
+  );
+});

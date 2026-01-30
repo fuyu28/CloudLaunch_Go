@@ -1,19 +1,19 @@
-import type { ReactNode } from "react"
+import type { ReactNode } from "react";
 
 export type FloatingButtonProps = {
   /** ボタン内に表示するアイコンやテキスト */
-  children: ReactNode
+  children: ReactNode;
   /** クリック時のハンドラ */
-  onClick: () => void
+  onClick: () => void;
   /** 画面内での固定位置 （例: "bottom-6 right-6"） */
-  positionClass?: string
+  positionClass?: string;
   /** ボタンの色*/
-  btnColor?: string
+  btnColor?: string;
   /** ボタンの追加クラス */
-  className?: string
+  className?: string;
   /** aria-label */
-  ariaLabel?: string
-}
+  ariaLabel?: string;
+};
 
 export default function FloatingButton({
   children,
@@ -21,7 +21,7 @@ export default function FloatingButton({
   positionClass = "bottom-16 right-6",
   btnColor = "btn-primary",
   className = "",
-  ariaLabel
+  ariaLabel,
 }: FloatingButtonProps): React.JSX.Element {
   return (
     <button
@@ -39,5 +39,5 @@ export default function FloatingButton({
     >
       {children}
     </button>
-  )
+  );
 }

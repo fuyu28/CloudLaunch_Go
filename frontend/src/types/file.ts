@@ -4,11 +4,11 @@ export enum PathType {
   File = "File",
   NotFound = "NotFound",
   NoPermission = "NoPermission",
-  UnknownError = "UnknownError"
+  UnknownError = "UnknownError",
 }
 
 export type ValidatePathResult = {
-  ok: boolean // ファイル形式が正しいかどうか
-  type?: string // 読み取ったファイル形式
-  errorType?: PathType // ok=false のときにエラー種別
-}
+  ok: boolean; // ファイル形式が正しいかどうか
+  type?: string; // 読み取ったファイル形式
+  errorType?: PathType; // ok=false のときにエラー種別
+};

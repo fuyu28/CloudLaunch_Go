@@ -11,26 +11,26 @@
  * - ローディング状態の管理
  */
 
-import { FiFolder, FiFile } from "react-icons/fi"
+import { FiFolder, FiFile } from "react-icons/fi";
 
-import { formatFileSize, formatDate } from "@renderer/utils/cloudUtils"
-import type { CloudDataItem, CloudFileDetail } from "@renderer/hooks/useCloudData"
+import { formatFileSize, formatDate } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem, CloudFileDetail } from "@renderer/hooks/useCloudData";
 
 /**
  * ファイル詳細モーダルのプロパティ
  */
 type CloudFileDetailsModalProps = {
   /** モーダルが開いているかどうか */
-  isOpen: boolean
+  isOpen: boolean;
   /** モーダルを閉じるコールバック */
-  onClose: () => void
+  onClose: () => void;
   /** 表示対象のアイテム */
-  item: CloudDataItem | null
+  item: CloudDataItem | null;
   /** ファイル詳細一覧 */
-  files: CloudFileDetail[]
+  files: CloudFileDetail[];
   /** ローディング状態 */
-  loading: boolean
-}
+  loading: boolean;
+};
 
 /**
  * クラウドファイル詳細表示モーダル
@@ -43,10 +43,10 @@ export function CloudFileDetailsModal({
   onClose,
   item,
   files,
-  loading
+  loading,
 }: CloudFileDetailsModalProps): React.JSX.Element {
   if (!isOpen || !item) {
-    return <></>
+    return <></>;
   }
 
   return (
@@ -107,5 +107,5 @@ export function CloudFileDetailsModal({
         </div>
       </div>
     </div>
-  )
+  );
 }

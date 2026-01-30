@@ -1,17 +1,17 @@
 // src/App.tsx
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route } from "react-router-dom";
 
-import { ErrorBoundary } from "./components/ErrorBoundary"
-import MainLayout from "./layouts/MainLayout"
-import Cloud from "./pages/Cloud"
-import GameDetail from "./pages/GameDetail"
-import Home from "./pages/Home"
-import MemoCreate from "./pages/MemoCreate"
-import MemoEditor from "./pages/MemoEditor"
-import MemoList from "./pages/MemoList"
-import MemoView from "./pages/MemoView"
-import Settings from "./pages/Settings"
-import DebugProcess from "./pages/DebugProcess"
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import MainLayout from "./layouts/MainLayout";
+import Cloud from "./pages/Cloud";
+import GameDetail from "./pages/GameDetail";
+import Home from "./pages/Home";
+import MemoCreate from "./pages/MemoCreate";
+import MemoEditor from "./pages/MemoEditor";
+import MemoList from "./pages/MemoList";
+import MemoView from "./pages/MemoView";
+import Settings from "./pages/Settings";
+import DebugProcess from "./pages/DebugProcess";
 
 export default function App(): React.JSX.Element {
   return (
@@ -33,5 +33,5 @@ export default function App(): React.JSX.Element {
         </Route>
       </Routes>
     </ErrorBoundary>
-  )
+  );
 }

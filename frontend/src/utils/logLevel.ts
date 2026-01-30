@@ -9,7 +9,7 @@
  * - ログレベル階層の管理
  */
 
-export type LogLevel = "debug" | "info" | "warn" | "error" | "off"
+export type LogLevel = "debug" | "info" | "warn" | "error" | "off";
 
 /**
  * ログレベルの優先度（数字が大きいほど高い優先度）
@@ -19,36 +19,36 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   info: 1,
   warn: 2,
   error: 3,
-  off: 4
-}
+  off: 4,
+};
 
 /**
  * ログレベル設定管理クラス
  */
 class LogLevelManager {
-  private currentLevel: LogLevel
-  private defaultLevel: LogLevel
+  private currentLevel: LogLevel;
+  private defaultLevel: LogLevel;
 
   constructor() {
-    this.defaultLevel = this.getDefaultLogLevel()
-    this.currentLevel = this.loadSavedLogLevel() || this.defaultLevel
+    this.defaultLevel = this.getDefaultLogLevel();
+    this.currentLevel = this.loadSavedLogLevel() || this.defaultLevel;
   }
 
   /**
    * 環境に基づくデフォルトログレベルを取得
    */
   private getDefaultLogLevel(): LogLevel {
-    const nodeEnv = process.env.NODE_ENV
+    const nodeEnv = process.env.NODE_ENV;
 
     switch (nodeEnv) {
       case "development":
-        return "debug"
+        return "debug";
       case "test":
-        return "warn"
+        return "warn";
       case "production":
-        return "info"
+        return "info";
       default:
-        return "info"
+        return "info";
     }
   }
 
@@ -57,14 +57,14 @@ class LogLevelManager {
    */
   private loadSavedLogLevel(): LogLevel | null {
     try {
-      const saved = localStorage.getItem("cloudlaunch_log_level")
+      const saved = localStorage.getItem("cloudlaunch_log_level");
       if (saved && this.isValidLogLevel(saved)) {
-        return saved as LogLevel
+        return saved as LogLevel;
       }
     } catch (error) {
-      console.warn("ログレベル設定の読み込みに失敗:", error)
+      console.warn("ログレベル設定の読み込みに失敗:", error);
     }
-    return null
+    return null;
   }
 
   /**
@@ -72,9 +72,9 @@ class LogLevelManager {
    */
   private saveLogLevel(level: LogLevel): void {
     try {
-      localStorage.setItem("cloudlaunch_log_level", level)
+      localStorage.setItem("cloudlaunch_log_level", level);
     } catch (error) {
-      console.warn("ログレベル設定の保存に失敗:", error)
+      console.warn("ログレベル設定の保存に失敗:", error);
     }
   }
 
@@ -82,14 +82,14 @@ class LogLevelManager {
    * 有効なログレベルかチェック
    */
   private isValidLogLevel(level: string): boolean {
-    return Object.keys(LOG_LEVEL_PRIORITY).includes(level)
+    return Object.keys(LOG_LEVEL_PRIORITY).includes(level);
   }
 
   /**
    * 現在のログレベルを取得
    */
   getCurrentLevel(): LogLevel {
-    return this.currentLevel
+    return this.currentLevel;
   }
 
   /**
@@ -97,15 +97,15 @@ class LogLevelManager {
    */
   setLevel(level: LogLevel): void {
     if (!this.isValidLogLevel(level)) {
-      throw new Error(`無効なログレベル: ${level}`)
+      throw new Error(`無効なログレベル: ${level}`);
     }
 
-    this.currentLevel = level
-    this.saveLogLevel(level)
+    this.currentLevel = level;
+    this.saveLogLevel(level);
 
     // 設定変更をログに記録（ただし、offに設定する場合は記録しない）
     if (level !== "off") {
-      console.info(`ログレベルを変更しました: ${level}`)
+      console.info(`ログレベルを変更しました: ${level}`);
     }
   }
 
@@ -113,7 +113,7 @@ class LogLevelManager {
    * ログレベルをデフォルトにリセット
    */
   resetToDefault(): void {
-    this.setLevel(this.defaultLevel)
+    this.setLevel(this.defaultLevel);
   }
 
   /**
@@ -121,24 +121,24 @@ class LogLevelManager {
    */
   shouldLog(level: LogLevel): boolean {
     if (this.currentLevel === "off") {
-      return false
+      return false;
     }
 
-    return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.currentLevel]
+    return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.currentLevel];
   }
 
   /**
    * デフォルトログレベルを取得
    */
   getDefaultLevel(): LogLevel {
-    return this.defaultLevel
+    return this.defaultLevel;
   }
 
   /**
    * 利用可能なログレベル一覧を取得
    */
   getAvailableLevels(): LogLevel[] {
-    return Object.keys(LOG_LEVEL_PRIORITY) as LogLevel[]
+    return Object.keys(LOG_LEVEL_PRIORITY) as LogLevel[];
   }
 
   /**
@@ -150,63 +150,63 @@ class LogLevelManager {
       info: "情報、警告、エラーログを出力",
       warn: "警告とエラーログのみ出力",
       error: "エラーログのみ出力",
-      off: "ログ出力を無効化"
-    }
+      off: "ログ出力を無効化",
+    };
 
-    return descriptions[level]
+    return descriptions[level];
   }
 
   /**
    * 現在の設定の詳細情報を取得
    */
   getConfigInfo(): {
-    current: LogLevel
-    default: LogLevel
-    environment: string
-    description: string
+    current: LogLevel;
+    default: LogLevel;
+    environment: string;
+    description: string;
   } {
     return {
       current: this.currentLevel,
       default: this.defaultLevel,
       environment: process.env.NODE_ENV || "unknown",
-      description: this.getLevelDescription(this.currentLevel)
-    }
+      description: this.getLevelDescription(this.currentLevel),
+    };
   }
 }
 
 // シングルトンインスタンス
-export const logLevelManager = new LogLevelManager()
+export const logLevelManager = new LogLevelManager();
 
 /**
  * ログレベル管理用のReactフック
  */
 export function useLogLevel(): {
-  currentLevel: LogLevel
-  setLevel: (level: LogLevel) => void
-  resetToDefault: () => void
-  shouldLog: (level: LogLevel) => boolean
-  availableLevels: LogLevel[]
-  getLevelDescription: (level: LogLevel) => string
+  currentLevel: LogLevel;
+  setLevel: (level: LogLevel) => void;
+  resetToDefault: () => void;
+  shouldLog: (level: LogLevel) => boolean;
+  availableLevels: LogLevel[];
+  getLevelDescription: (level: LogLevel) => string;
   configInfo: {
-    current: LogLevel
-    default: LogLevel
-    environment: string
-    description: string
-  }
+    current: LogLevel;
+    default: LogLevel;
+    environment: string;
+    description: string;
+  };
 } {
-  const getCurrentLevel = (): LogLevel => logLevelManager.getCurrentLevel()
-  const setLevel = (level: LogLevel): void => logLevelManager.setLevel(level)
-  const resetToDefault = (): void => logLevelManager.resetToDefault()
-  const shouldLog = (level: LogLevel): boolean => logLevelManager.shouldLog(level)
-  const getAvailableLevels = (): LogLevel[] => logLevelManager.getAvailableLevels()
+  const getCurrentLevel = (): LogLevel => logLevelManager.getCurrentLevel();
+  const setLevel = (level: LogLevel): void => logLevelManager.setLevel(level);
+  const resetToDefault = (): void => logLevelManager.resetToDefault();
+  const shouldLog = (level: LogLevel): boolean => logLevelManager.shouldLog(level);
+  const getAvailableLevels = (): LogLevel[] => logLevelManager.getAvailableLevels();
   const getLevelDescription = (level: LogLevel): string =>
-    logLevelManager.getLevelDescription(level)
+    logLevelManager.getLevelDescription(level);
   const getConfigInfo = (): {
-    current: LogLevel
-    default: LogLevel
-    environment: string
-    description: string
-  } => logLevelManager.getConfigInfo()
+    current: LogLevel;
+    default: LogLevel;
+    environment: string;
+    description: string;
+  } => logLevelManager.getConfigInfo();
 
   return {
     currentLevel: getCurrentLevel(),
@@ -215,15 +215,15 @@ export function useLogLevel(): {
     shouldLog,
     availableLevels: getAvailableLevels(),
     getLevelDescription,
-    configInfo: getConfigInfo()
-  }
+    configInfo: getConfigInfo(),
+  };
 }
 
 /**
  * ログレベル設定コンポーネント用のプロパティ
  */
 export interface LogLevelSettingsProps {
-  onLevelChange?: (level: LogLevel) => void
-  showDescription?: boolean
-  compact?: boolean
+  onLevelChange?: (level: LogLevel) => void;
+  showDescription?: boolean;
+  compact?: boolean;
 }

@@ -11,34 +11,34 @@
  * - リトライ機能
  */
 
-import React, { Component } from "react"
-import { FiAlertTriangle, FiRefreshCw, FiChevronDown, FiChevronUp } from "react-icons/fi"
+import React, { Component } from "react";
+import { FiAlertTriangle, FiRefreshCw, FiChevronDown, FiChevronUp } from "react-icons/fi";
 
-import { logger } from "../utils/logger"
-import type { ReactNode } from "react"
+import { logger } from "../utils/logger";
+import type { ReactNode } from "react";
 
 /**
  * エラーバウンダリのProps
  */
 interface ErrorBoundaryProps {
   /** 子コンポーネント */
-  children: ReactNode
+  children: ReactNode;
   /** フォールバック表示をカスタマイズする場合 */
-  fallback?: (error: Error, errorInfo: React.ErrorInfo, retry: () => void) => ReactNode
+  fallback?: (error: Error, errorInfo: React.ErrorInfo, retry: () => void) => ReactNode;
   /** エラー発生時のコールバック */
-  onError?: (error: Error, errorInfo: React.ErrorInfo) => void
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
   /** リセット時のコールバック */
-  onReset?: () => void
+  onReset?: () => void;
 }
 
 /**
  * エラーバウンダリのState
  */
 interface ErrorBoundaryState {
-  hasError: boolean
-  error: Error | null
-  errorInfo: React.ErrorInfo | null
-  showDetails: boolean
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+  showDetails: boolean;
 }
 
 /**
@@ -49,13 +49,13 @@ interface ErrorBoundaryState {
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
-    super(props)
+    super(props);
     this.state = {
       hasError: false,
       error: null,
       errorInfo: null,
-      showDetails: false
-    }
+      showDetails: false,
+    };
   }
 
   /**
@@ -64,8 +64,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return {
       hasError: true,
-      error
-    }
+      error,
+    };
   }
 
   /**
@@ -76,16 +76,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       component: "ErrorBoundary",
       function: "componentDidCatch",
       error,
-      data: errorInfo
-    })
+      data: errorInfo,
+    });
 
     this.setState({
-      errorInfo
-    })
+      errorInfo,
+    });
 
     // カスタムエラーハンドラーがあれば実行
     if (this.props.onError) {
-      this.props.onError(error, errorInfo)
+      this.props.onError(error, errorInfo);
     }
 
     // メインプロセスにエラーを報告
@@ -93,8 +93,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       message: error.message,
       stack: error.stack || "",
       componentStack: errorInfo.componentStack || undefined,
-      timestamp: new Date().toISOString()
-    })
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**
@@ -105,28 +105,28 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       hasError: false,
       error: null,
       errorInfo: null,
-      showDetails: false
-    })
+      showDetails: false,
+    });
 
     if (this.props.onReset) {
-      this.props.onReset()
+      this.props.onReset();
     }
-  }
+  };
 
   /**
    * エラー詳細の表示/非表示を切り替え
    */
   toggleDetails = (): void => {
     this.setState((prevState) => ({
-      showDetails: !prevState.showDetails
-    }))
-  }
+      showDetails: !prevState.showDetails,
+    }));
+  };
 
   /**
    * デフォルトのフォールバックUI
    */
   renderDefaultFallback(): React.JSX.Element {
-    const { error, errorInfo, showDetails } = this.state
+    const { error, errorInfo, showDetails } = this.state;
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-base-100 p-4">
@@ -213,24 +213,24 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   render(): ReactNode {
-    const { hasError, error, errorInfo } = this.state
-    const { children, fallback } = this.props
+    const { hasError, error, errorInfo } = this.state;
+    const { children, fallback } = this.props;
 
     if (hasError && error) {
       // カスタムフォールバックがある場合はそれを使用
       if (fallback) {
-        return fallback(error, errorInfo!, this.handleReset)
+        return fallback(error, errorInfo!, this.handleReset);
       }
 
       // デフォルトフォールバックを使用
-      return this.renderDefaultFallback()
+      return this.renderDefaultFallback();
     }
 
-    return children
+    return children;
   }
 }
 
@@ -238,9 +238,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
  * エラーバウンダリの設定オプション
  */
 export interface ErrorBoundaryOptions {
-  fallback?: ErrorBoundaryProps["fallback"]
-  onError?: ErrorBoundaryProps["onError"]
-  onReset?: ErrorBoundaryProps["onReset"]
+  fallback?: ErrorBoundaryProps["fallback"];
+  onError?: ErrorBoundaryProps["onError"];
+  onReset?: ErrorBoundaryProps["onReset"];
 }
 
 /**
@@ -252,17 +252,17 @@ export interface ErrorBoundaryOptions {
  */
 export function withErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
-  options: ErrorBoundaryOptions = {}
+  options: ErrorBoundaryOptions = {},
 ): React.ComponentType<P> {
   const WrappedComponent = (props: P): React.JSX.Element => (
     <ErrorBoundary {...options}>
       <Component {...props} />
     </ErrorBoundary>
-  )
+  );
 
-  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`
+  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`;
 
-  return WrappedComponent
+  return WrappedComponent;
 }
 
 /**
@@ -277,17 +277,17 @@ export function useErrorHandler(): { handleError: (error: Error, context?: strin
       component: "useErrorHandler",
       function: "handleError",
       error,
-      context
-    })
+      context,
+    });
 
     // メインプロセスにエラーを報告
     window.api.errorReport.reportError({
       message: error.message,
       stack: error.stack || "",
       context,
-      timestamp: new Date().toISOString()
-    })
-  }, [])
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
 
-  return { handleError }
+  return { handleError };
 }

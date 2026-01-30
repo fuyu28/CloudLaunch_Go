@@ -1,17 +1,17 @@
-import { memo, useCallback } from "react"
-import { IoIosPlay } from "react-icons/io"
-import { Link } from "react-router-dom"
+import { memo, useCallback } from "react";
+import { IoIosPlay } from "react-icons/io";
+import { Link } from "react-router-dom";
 
-import DynamicImage from "./DynamicImage"
+import DynamicImage from "./DynamicImage";
 
 type GameCardProps = {
-  id: string
-  title: string
-  publisher: string
-  imagePath: string
-  exePath: string
-  onLaunchGame: (exePath: string) => void
-}
+  id: string;
+  title: string;
+  publisher: string;
+  imagePath: string;
+  exePath: string;
+  onLaunchGame: (exePath: string) => void;
+};
 
 const GameCard = memo(function GameCard({
   id,
@@ -19,15 +19,15 @@ const GameCard = memo(function GameCard({
   publisher,
   imagePath,
   exePath,
-  onLaunchGame
+  onLaunchGame,
 }: GameCardProps): React.JSX.Element {
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
-      e.preventDefault()
-      onLaunchGame(exePath)
+      e.preventDefault();
+      onLaunchGame(exePath);
     },
-    [exePath, onLaunchGame]
-  )
+    [exePath, onLaunchGame],
+  );
 
   return (
     <div
@@ -74,7 +74,7 @@ const GameCard = memo(function GameCard({
         </div>
       </Link>
     </div>
-  )
-})
+  );
+});
 
-export default GameCard
+export default GameCard;

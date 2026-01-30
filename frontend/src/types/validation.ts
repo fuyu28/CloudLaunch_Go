@@ -13,92 +13,92 @@
  */
 export type ValidationResult = {
   /** バリデーションが成功したかどうか */
-  isValid: boolean
+  isValid: boolean;
   /** エラーメッセージ（失敗時） */
-  message?: string
-}
+  message?: string;
+};
 
 /**
  * 複数のエラーメッセージを持つバリデーション結果
  */
 export type ValidationResultMultiple = {
   /** バリデーションが成功したかどうか */
-  isValid: boolean
+  isValid: boolean;
   /** エラーメッセージの配列（失敗時） */
-  errors: string[]
-}
+  errors: string[];
+};
 
 /**
  * 複数フィールドのバリデーションエラー（汎用型）
  */
 export type ValidationErrors<T extends string = string> = {
-  [K in T]?: string
-}
+  [K in T]?: string;
+};
 
 /**
  * ゲームフォーム専用のバリデーションエラー型
  */
 export type GameFormValidationErrors = {
-  title?: string
-  publisher?: string
-  exePath?: string
-  saveFolderPath?: string
-  imagePath?: string
-}
+  title?: string;
+  publisher?: string;
+  exePath?: string;
+  saveFolderPath?: string;
+  imagePath?: string;
+};
 
 /**
  * 設定フォーム専用のバリデーションエラー型
  */
 export type SettingsFormValidationErrors = {
-  bucketName?: string
-  region?: string
-  endpoint?: string
-  accessKeyId?: string
-  secretAccessKey?: string
-}
+  bucketName?: string;
+  region?: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+};
 
 /**
  * バリデーション関数の型定義
  */
-export type ValidationFunction<T = unknown> = (value: T) => ValidationResult
+export type ValidationFunction<T = unknown> = (value: T) => ValidationResult;
 
 /**
  * 非同期バリデーション関数の型定義
  */
-export type AsyncValidationFunction<T = unknown> = (value: T) => Promise<ValidationResult>
+export type AsyncValidationFunction<T = unknown> = (value: T) => Promise<ValidationResult>;
 
 /**
  * フィールドバリデーター型
  */
 export type FieldValidator<T = string> = {
   /** フィールド名 */
-  field: string
+  field: string;
   /** バリデーション関数 */
-  validator: ValidationFunction<T>
+  validator: ValidationFunction<T>;
   /** 必須かどうか */
-  required?: boolean
-}
+  required?: boolean;
+};
 
 /**
  * フォームバリデーター型
  */
 export type FormValidator<T extends Record<string, unknown>> = {
   /** フォームデータ */
-  data: T
+  data: T;
   /** フィールドバリデーターの配列 */
-  validators: FieldValidator[]
-}
+  validators: FieldValidator[];
+};
 
 /**
  * バリデーション設定
  */
 export type ValidationConfig = {
   /** 必須バリデーションのメッセージテンプレート */
-  requiredMessage?: string
+  requiredMessage?: string;
   /** 最小長バリデーションのメッセージテンプレート */
-  minLengthMessage?: string
+  minLengthMessage?: string;
   /** 最大長バリデーションのメッセージテンプレート */
-  maxLengthMessage?: string
+  maxLengthMessage?: string;
   /** URL形式バリデーションのメッセージテンプレート */
-  urlMessage?: string
-}
+  urlMessage?: string;
+};
