@@ -228,6 +228,19 @@ func (app *App) GetProcessSnapshot() result.ApiResult[models.ProcessSnapshot] {
 	return result.OkResult(snapshot)
 }
 
+// ComputeLocalSaveHash はローカルセーブデータのハッシュを計算する。
+func (app *App) ComputeLocalSaveHash(localPath string) result.ApiResult[string] {
+	trimmed := strings.TrimSpace(localPath)
+	if trimmed == "" {
+		return result.ErrorResult[string]("パスが不正です", "localPath is empty")
+	}
+	hash, err := storage.HashDirectory(trimmed)
+	if err != nil {
+		return errorResult[string]("ハッシュ計算に失敗しました", err)
+	}
+	return result.OkResult(hash)
+}
+
 // PauseMonitoringSession はセッションを中断する。
 func (app *App) PauseMonitoringSession(gameID string) result.ApiResult[bool] {
 	if app.ProcessMonitor == nil {

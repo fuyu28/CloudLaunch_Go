@@ -38,6 +38,7 @@ export default function GameDetail(): React.JSX.Element {
   const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const { showToast } = useToastHandler();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
 
@@ -235,13 +236,47 @@ export default function GameDetail(): React.JSX.Element {
     [game, isOfflineMode, showToast],
   );
 
-  const handleLaunchGameWithSync = useCallback(async (): Promise<void> => {
+  const launchGameDirect = useCallback(async (): Promise<void> => {
     if (!game) return;
     if (!isOfflineMode && isValidCreds) {
       await handleSyncGame(false);
     }
     await handleLaunchGame();
   }, [game, isOfflineMode, isValidCreds, handleSyncGame, handleLaunchGame]);
+
+  const handleLaunchGameWithSync = useCallback(async (): Promise<void> => {
+    if (!game) return;
+    if (!game.saveFolderPath || isOfflineMode || !isValidCreds) {
+      await launchGameDirect();
+      return;
+    }
+    const cloudHashResult = await window.api.saveData.hash.getCloudHash(game.id);
+    if (!cloudHashResult.success || !cloudHashResult.data?.hash) {
+      await launchGameDirect();
+      return;
+    }
+    const localHashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
+    if (
+      localHashResult.success &&
+      localHashResult.data &&
+      localHashResult.data !== cloudHashResult.data.hash
+    ) {
+      setIsDownloadConfirmOpen(true);
+      return;
+    }
+    await launchGameDirect();
+  }, [game, isOfflineMode, isValidCreds, launchGameDirect]);
+
+  const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
+    setIsDownloadConfirmOpen(false);
+    await handleDownloadSaveData();
+    await launchGameDirect();
+  }, [handleDownloadSaveData, launchGameDirect]);
+
+  const handleSkipDownloadAndLaunch = useCallback(async (): Promise<void> => {
+    setIsDownloadConfirmOpen(false);
+    await launchGameDirect();
+  }, [launchGameDirect]);
 
   // プレイステータス変更のハンドラー
   const handleStatusChange = useCallback(
@@ -353,6 +388,18 @@ export default function GameDetail(): React.JSX.Element {
       </div>
 
       {/* モーダル */}
+
+      {/* 起動前セーブデータ同期 */}
+      <ConfirmModal
+        id="download-save-before-launch-modal"
+        isOpen={isDownloadConfirmOpen}
+        title="セーブデータの同期"
+        message={`${game.title} のセーブデータがクラウドと異なります。\nダウンロードしますか？`}
+        cancelText="しない"
+        confirmText="ダウンロードする"
+        onConfirm={handleDownloadAndLaunch}
+        onCancel={handleSkipDownloadAndLaunch}
+      />
 
       {/* 削除 */}
       <ConfirmModal

@@ -81,6 +81,10 @@ export function useGameSaveData(): GameSaveDataResult {
         "セーブデータのアップロードに成功しました。",
         "セーブデータのアップロード",
       );
+      const hashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
+      if (hashResult.success && hashResult.data) {
+        await window.api.saveData.hash.saveCloudHash(game.id, hashResult.data);
+      }
     } finally {
       setIsUploading(false);
     }

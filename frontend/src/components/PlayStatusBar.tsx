@@ -15,15 +15,20 @@
  */
 
 import { autoTrackingAtom } from "@renderer/state/settings";
-import { useAtom } from "jotai";
+import { isValidCredsAtom } from "@renderer/state/credentials";
+import { useAtom, useAtomValue } from "jotai";
 import React, { useEffect, useMemo, useState } from "react";
 import { FaClock, FaGamepad } from "react-icons/fa";
 
+import ConfirmModal from "@renderer/components/ConfirmModal";
+import BaseModal from "@renderer/components/BaseModal";
+
+import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
 import { logger } from "@renderer/utils/logger";
-
-import BaseModal from "@renderer/components/BaseModal";
+import { createRemotePath } from "@renderer/utils";
 
 import type { MonitoringGameStatus } from "src/types/game";
 
@@ -37,11 +42,20 @@ import type { MonitoringGameStatus } from "src/types/game";
  */
 export function PlayStatusBar(): React.JSX.Element {
   const [autoTracking] = useAtom(autoTrackingAtom);
+  const isValidCreds = useAtomValue(isValidCredsAtom);
   const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([]);
   const [pendingConfirmationGame, setPendingConfirmationGame] =
     useState<MonitoringGameStatus | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{
+    gameId: string;
+    gameTitle: string;
+    saveFolderPath: string;
+    localHash: string;
+  } | null>(null);
   const [, setCurrentTime] = useState<Date>(new Date());
   const { formatShort } = useTimeFormat();
+  const { isOfflineMode } = useOfflineMode();
+  const { showToast } = useToastHandler();
 
   // 監視状況を更新
   const updateMonitoringStatus = React.useCallback(async (): Promise<void> => {
@@ -122,6 +136,33 @@ export function PlayStatusBar(): React.JSX.Element {
     await updateMonitoringStatus();
   };
 
+  const checkUploadPrompt = React.useCallback(
+    async (gameId: string): Promise<void> => {
+      if (isOfflineMode || !isValidCreds) {
+        return;
+      }
+      const game = await window.api.database.getGameById(gameId);
+      if (!game || !game.saveFolderPath) {
+        return;
+      }
+      const localHashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
+      if (!localHashResult.success || !localHashResult.data) {
+        return;
+      }
+      const cloudHashResult = await window.api.saveData.hash.getCloudHash(gameId);
+      const cloudHash = cloudHashResult.success ? cloudHashResult.data?.hash : null;
+      if (!cloudHash || cloudHash !== localHashResult.data) {
+        setPendingUpload({
+          gameId,
+          gameTitle: game.title,
+          saveFolderPath: game.saveFolderPath,
+          localHash: localHashResult.data,
+        });
+      }
+    },
+    [isOfflineMode, isValidCreds],
+  );
+
   const handleEnd = async (gameId: string): Promise<void> => {
     const result = await window.api.processMonitor.endSession(gameId);
     if (!result.success) {
@@ -133,6 +174,7 @@ export function PlayStatusBar(): React.JSX.Element {
     }
     setPendingConfirmationGame(null);
     await updateMonitoringStatus();
+    await checkUploadPrompt(gameId);
   };
 
   const handleKeepPaused = async (gameId: string): Promise<void> => {
@@ -146,6 +188,26 @@ export function PlayStatusBar(): React.JSX.Element {
     }
     setPendingConfirmationGame(null);
     await updateMonitoringStatus();
+  };
+
+  const handleUploadAfterEnd = async (): Promise<void> => {
+    if (!pendingUpload) return;
+    const remotePath = createRemotePath(pendingUpload.gameId);
+    const result = await window.api.saveData.upload.uploadSaveDataFolder(
+      pendingUpload.saveFolderPath,
+      remotePath,
+    );
+    if (result.success) {
+      await window.api.saveData.hash.saveCloudHash(pendingUpload.gameId, pendingUpload.localHash);
+      showToast("セーブデータをクラウドにアップロードしました", "success");
+    } else {
+      showToast(result.message || "セーブデータのアップロードに失敗しました", "error");
+    }
+    setPendingUpload(null);
+  };
+
+  const handleSkipUploadAfterEnd = (): void => {
+    setPendingUpload(null);
   };
 
   return (
@@ -229,6 +291,20 @@ export function PlayStatusBar(): React.JSX.Element {
           </div>
         )}
       </BaseModal>
+      <ConfirmModal
+        id="upload-save-after-session-modal"
+        isOpen={!!pendingUpload}
+        title="セーブデータの同期"
+        message={
+          pendingUpload
+            ? `${pendingUpload.gameTitle} のセーブデータがクラウドと異なります。\nアップロードしますか？`
+            : ""
+        }
+        cancelText="しない"
+        confirmText="アップロードする"
+        onConfirm={handleUploadAfterEnd}
+        onCancel={handleSkipUploadAfterEnd}
+      />
     </>
   );
 }

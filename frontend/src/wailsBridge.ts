@@ -72,6 +72,9 @@ import {
   PauseMonitoringSession,
   ResumeMonitoringSession,
   EndMonitoringSession,
+  ComputeLocalSaveHash,
+  GetCloudSaveHash,
+  SaveCloudSaveHash,
   ValidateCredential,
   ValidateSavedCredential,
 } from "../wailsjs/go/app/App";
@@ -158,6 +161,13 @@ export type WindowApi = {
       getCloudFileDetails: (
         gameId: string,
       ) => Promise<ApiResult<{ exists: boolean; totalSize: number; files: CloudFileDetail[] }>>;
+    };
+    hash: {
+      computeLocalHash: (localPath: string) => Promise<ApiResult<string>>;
+      getCloudHash: (
+        gameId: string,
+      ) => Promise<ApiResult<{ hash: string; updatedAt: Date } | null>>;
+      saveCloudHash: (gameId: string, hash: string) => Promise<ApiResult<void>>;
     };
   };
   loadImage: {
@@ -590,6 +600,26 @@ export const createWailsBridge = (): WindowApi => {
                   files: CloudFileDetail[];
                 },
               }
+            : { success: false, message: result.error?.message ?? "エラー" };
+        },
+      },
+      hash: {
+        computeLocalHash: async (localPath) => {
+          const result = await ComputeLocalSaveHash(localPath);
+          return result.success
+            ? { success: true, data: result.data as string }
+            : { success: false, message: result.error?.message ?? "エラー" };
+        },
+        getCloudHash: async (gameId) => {
+          const result = await GetCloudSaveHash(gameId);
+          return result.success
+            ? { success: true, data: result.data as { hash: string; updatedAt: Date } | null }
+            : { success: false, message: result.error?.message ?? "エラー" };
+        },
+        saveCloudHash: async (gameId, hash) => {
+          const result = await SaveCloudSaveHash(gameId, hash);
+          return result.success
+            ? { success: true }
             : { success: false, message: result.error?.message ?? "エラー" };
         },
       },

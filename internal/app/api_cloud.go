@@ -251,6 +251,51 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 	return result.OkResult(CloudFileDetailsResult{Exists: len(files) > 0, TotalSize: total, Files: files})
 }
 
+// GetCloudSaveHash はクラウド上のセーブデータハッシュを取得する。
+func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHashMetadata] {
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[*storage.SaveHashMetadata]("ゲームIDが不正です", "gameID is empty")
+	}
+	ctx := app.context()
+	client, bucket, error := app.getDefaultS3Client(ctx)
+	if error != nil {
+		return errorResult[*storage.SaveHashMetadata]("取得に失敗しました", error)
+	}
+	key := createSaveHashPath(trimmed)
+	metadata, error := storage.LoadSaveHash(ctx, client, bucket, key)
+	if error != nil {
+		if storage.IsNotFoundError(error) {
+			return result.OkResult[*storage.SaveHashMetadata](nil)
+		}
+		return errorResult[*storage.SaveHashMetadata]("取得に失敗しました", error)
+	}
+	return result.OkResult(metadata)
+}
+
+// SaveCloudSaveHash はクラウドにセーブデータハッシュを保存する。
+func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[bool] {
+	trimmed := strings.TrimSpace(gameID)
+	trimmedHash := strings.TrimSpace(hash)
+	if trimmed == "" || trimmedHash == "" {
+		return result.ErrorResult[bool]("入力が不正です", "gameID or hash is empty")
+	}
+	ctx := app.context()
+	client, bucket, error := app.getDefaultS3Client(ctx)
+	if error != nil {
+		return errorResult[bool]("保存に失敗しました", error)
+	}
+	key := createSaveHashPath(trimmed)
+	metadata := storage.SaveHashMetadata{
+		Hash:      trimmedHash,
+		UpdatedAt: time.Now(),
+	}
+	if error := storage.SaveSaveHash(ctx, client, bucket, key, metadata); error != nil {
+		return errorResult[bool]("保存に失敗しました", error)
+	}
+	return result.OkResult(true)
+}
+
 // DownloadSaveData はクラウドからダウンロードする。
 func (app *App) DownloadSaveData(localPath string, remotePath string) result.ApiResult[bool] {
 	ctx := app.context()
@@ -388,6 +433,10 @@ func flattenDirectoryBuilders(nodes map[string]*directoryNodeBuilder) []CloudDir
 
 func createGamePrefix(gameID string) string {
 	return "games/" + strings.TrimSpace(gameID) + "/"
+}
+
+func createSaveHashPath(gameID string) string {
+	return "games/" + strings.TrimSpace(gameID) + "/save_hash.json"
 }
 
 func detectImageMime(path string) string {
