@@ -9,9 +9,13 @@
  * - メモ化による最適化
  */
 
-import { memo } from "react";
+import { memo, useCallback } from "react";
+import { FiMoreVertical } from "react-icons/fi";
 
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+
+import { logger } from "@renderer/utils/logger";
+import { getParentDirectory } from "@renderer/utils/pathUtils";
 
 import DynamicImage from "./DynamicImage";
 import GameActionButtons from "./GameActionButtons";
@@ -51,6 +55,23 @@ const GameInfo = memo(function GameInfo({
   onDeleteGame,
 }: GameInfoProps): React.JSX.Element {
   const { formatSmart, formatDateWithTime } = useTimeFormat();
+  const saveDirectory = game.saveFolderPath?.trim() ?? "";
+  const gameDirectory = game.exePath ? getParentDirectory(game.exePath) : "";
+
+  const handleOpenFolder = useCallback(async (path: string): Promise<void> => {
+    if (!path) {
+      return;
+    }
+    try {
+      await window.api.window.openFolder(path);
+    } catch (error) {
+      logger.error("フォルダを開けませんでした:", {
+        component: "GameInfo",
+        function: "handleOpenFolder",
+        data: error,
+      });
+    }
+  }, []);
 
   return (
     <div className="card bg-base-100 shadow-xl">
@@ -69,7 +90,34 @@ const GameInfo = memo(function GameInfo({
           <div className="flex-1 flex flex-col justify-between">
             {/* ゲーム情報 */}
             <div>
-              <h1 className="text-3xl font-bold mb-2">{game.title}</h1>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <h1 className="text-3xl font-bold">{game.title}</h1>
+                <div className="dropdown dropdown-end">
+                  <button className="btn btn-ghost btn-sm" type="button">
+                    <FiMoreVertical className="text-lg" />
+                  </button>
+                  <ul className="dropdown-content menu bg-base-100 rounded-box shadow w-56 z-10">
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFolder(saveDirectory)}
+                        disabled={!saveDirectory}
+                      >
+                        セーブディレクトリを開く
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFolder(gameDirectory)}
+                        disabled={!gameDirectory}
+                      >
+                        ゲームディレクトリを開く
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
               <p className="text-lg text-base-content/70 mb-4">{game.publisher}</p>
 
               {/* プレイステータス */}
