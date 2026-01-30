@@ -128,11 +128,8 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 		cloudMap[game.ID] = game
 	}
 
-	merged := make(map[string]storage.CloudGameMetadata)
+	merged := make(map[string]storage.CloudGameMetadata, len(cloudMap))
 	for id, cloudGame := range cloudMap {
-		if gameID != "" && id != gameID {
-			continue
-		}
 		merged[id] = cloudGame
 	}
 
