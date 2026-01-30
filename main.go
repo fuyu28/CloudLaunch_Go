@@ -23,9 +23,10 @@ func main() {
 	}
 
 	err = wails.Run(&options.App{
-		Title:  "CloudLaunch",
-		Width:  1200,
-		Height: 800,
+		Title:     "CloudLaunch",
+		Width:     1200,
+		Height:    800,
+		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
