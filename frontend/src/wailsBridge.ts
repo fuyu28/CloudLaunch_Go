@@ -20,6 +20,7 @@ import type {
 } from "src/types/memo";
 import type { Creds } from "src/types/creds";
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "./hooks/useCloudData";
+import type { CloudMetadata } from "src/types/cloud";
 
 import {
   CreateGame,
@@ -59,6 +60,7 @@ import {
   DownloadSaveData,
   OpenFolder,
   OpenLogsDirectory,
+  LoadCloudMetadata,
   SaveCredential,
   SelectFile,
   SelectFolder,
@@ -151,6 +153,9 @@ export type WindowApi = {
     deleteCloudData: (path: string) => Promise<ApiResult<void>>;
     deleteFile: (path: string) => Promise<ApiResult<void>>;
     getCloudFileDetails: (path: string) => Promise<ApiResult<CloudFileDetail[]>>;
+  };
+  cloudMetadata: {
+    loadCloudMetadata: () => Promise<ApiResult<CloudMetadata>>;
   };
   saveData: {
     upload: {
@@ -570,6 +575,14 @@ export const createWailsBridge = (): WindowApi => {
         const result = await GetCloudFileDetails(path);
         return result.success
           ? { success: true, data: (result.data ?? []) as CloudFileDetail[] }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+    },
+    cloudMetadata: {
+      loadCloudMetadata: async () => {
+        const result = await LoadCloudMetadata("default");
+        return result.success && result.data
+          ? { success: true, data: result.data as CloudMetadata }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
     },

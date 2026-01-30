@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { IoIosAdd } from "react-icons/io";
 
 import FloatingButton from "@renderer/components/FloatingButton";
+import GameAddMenuModal from "@renderer/components/GameAddMenuModal";
+import CloudGameImportModal from "@renderer/components/CloudGameImportModal";
 import GameGrid from "@renderer/components/GameGrid";
 import GameFormModal from "@renderer/components/GameModal";
 import GameSearchFilter from "@renderer/components/GameSearchFilter";
@@ -28,7 +30,9 @@ export default function Home(): React.ReactElement {
   const [sortDirection, setSortDirection] = useAtom(sortDirectionAtom);
   const [visibleGames, setVisibleGames] = useAtom(visibleGamesAtom);
   const [autoTracking] = useAtom(autoTrackingAtom);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isGameFormOpen, setIsGameFormOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   // 検索語をデバウンス
   const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
@@ -44,8 +48,22 @@ export default function Home(): React.ReactElement {
     sort,
     sortDirection,
     onGamesUpdate: setVisibleGames,
-    onModalClose: () => setIsModalOpen(false),
+    onModalClose: () => setIsGameFormOpen(false),
   });
+
+  const refreshGameList = useCallback(async (): Promise<void> => {
+    const games = await gameListLoading.executeWithLoading(
+      () => window.api.database.listGames(debouncedSearchWord, filter, sort, sortDirection),
+      {
+        errorMessage: MESSAGES.GAME.LIST_FETCH_FAILED,
+        showToast: true,
+      },
+    );
+
+    if (games) {
+      setVisibleGames(games as GameType[]);
+    }
+  }, [debouncedSearchWord, filter, gameListLoading, setVisibleGames, sort, sortDirection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,19 +131,39 @@ export default function Home(): React.ReactElement {
 
       {/* ゲーム追加ボタン */}
       <FloatingButton
-        onClick={() => setIsModalOpen(true)}
+        onClick={() => setIsAddMenuOpen(true)}
         ariaLabel="ゲームを追加"
         positionClass={autoTracking ? "bottom-16 right-6" : "bottom-6 right-6"}
       >
         <IoIosAdd size={28} />
       </FloatingButton>
 
+      <GameAddMenuModal
+        isOpen={isAddMenuOpen}
+        onClose={() => setIsAddMenuOpen(false)}
+        onSelectNew={() => {
+          setIsAddMenuOpen(false);
+          setIsGameFormOpen(true);
+        }}
+        onSelectCloud={() => {
+          setIsAddMenuOpen(false);
+          setIsImportOpen(true);
+        }}
+      />
+
       {/* ゲーム登録モーダル */}
       <GameFormModal
         mode="add"
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isGameFormOpen}
+        onClose={() => setIsGameFormOpen(false)}
         onSubmit={handleAddGame}
+      />
+
+      <CloudGameImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        localGames={visibleGames}
+        onImported={refreshGameList}
       />
     </div>
   );

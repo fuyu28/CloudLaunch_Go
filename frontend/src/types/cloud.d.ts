@@ -8,6 +8,8 @@
  * - クラウドディレクトリツリーの型定義
  */
 
+import type { PlayStatus } from "./game";
+
 /**
  * クラウドデータアイテムの型定義
  */
@@ -58,4 +60,30 @@ export type CloudDirectoryNode = {
   children?: CloudDirectoryNode[];
   /** S3オブジェクトキー（ファイルの場合） */
   objectKey?: string;
+};
+
+/**
+ * クラウドゲームメタ情報の型定義
+ */
+export type CloudGameMetadata = {
+  id: string;
+  title: string;
+  publisher: string;
+  imageKey?: string;
+  playStatus: PlayStatus;
+  totalPlayTime: number;
+  lastPlayed?: Date | string | null;
+  clearedAt?: Date | string | null;
+  currentChapter?: string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+};
+
+/**
+ * クラウドメタ情報の型定義
+ */
+export type CloudMetadata = {
+  version: number;
+  updatedAt: Date | string;
+  games: CloudGameMetadata[];
 };
