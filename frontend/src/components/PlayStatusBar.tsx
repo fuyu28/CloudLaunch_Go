@@ -242,19 +242,24 @@ export function PlayStatusBar(): React.JSX.Element {
             {hasActiveGames ? (
               <>
                 <FaGamepad className="text-primary text-sm" />
-                <div className="flex flex-col justify-center">
-                  <div className="text-sm font-medium leading-tight">
-                    プレイ中: {activeGames.map((game) => game.gameTitle).join(", ")}
+                <div className="flex flex-1 items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium leading-tight">
+                      プレイ中: {activeGames.map((game) => game.gameTitle).join(", ")}
+                    </div>
+                    <div className="text-xs text-base-content/70 leading-tight truncate">
+                      {activeGames.map((game) => (
+                        <span key={game.gameId} className="mr-4">
+                          {game.exeName}: {formatShort(game.playTime)}
+                          {game.needsConfirmation && "（確認待ち）"}
+                          {game.isPaused && !game.needsConfirmation && "（中断中）"}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-xs text-base-content/70 leading-tight">
-                  {activeGames.map((game) => (
-                    <div key={game.gameId} className="flex w-full items-center gap-3">
-                      <span className="min-w-0 flex-1">
-                        {game.exeName}: {formatShort(game.playTime)}
-                        {game.needsConfirmation && "（確認待ち）"}
-                        {game.isPaused && !game.needsConfirmation && "（中断中）"}
-                      </span>
-                      <div className="ml-auto flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {activeGames.map((game) => (
+                      <div key={game.gameId} className="flex items-center gap-2">
                         {!game.needsConfirmation && !game.isPaused && (
                           <button
                             className="btn btn-sm btn-warning"
@@ -280,8 +285,7 @@ export function PlayStatusBar(): React.JSX.Element {
                           </>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    ))}
                   </div>
                 </div>
               </>
