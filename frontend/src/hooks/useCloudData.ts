@@ -142,7 +142,12 @@ export function useCloudData(): UseCloudDataReturn {
    */
   const navigateToDirectory = useCallback(
     (directoryName: string): void => {
-      const newPath = [...state.currentPath, directoryName];
+      const trimmed = directoryName.trim();
+      if (trimmed === "") {
+        return;
+      }
+      const segments = trimmed.split("/").filter((segment) => segment.length > 0);
+      const newPath = segments.length > 1 ? segments : [...state.currentPath, trimmed];
       setState((prev) => ({ ...prev, currentPath: newPath }));
     },
     [state.currentPath],

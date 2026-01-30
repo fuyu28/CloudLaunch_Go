@@ -108,7 +108,12 @@ func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 		return result.ErrorResult[[]CloudDirectoryNode]("ディレクトリツリー取得に失敗しました", error.Error())
 	}
 
-	root := map[string]*CloudDirectoryNode{}
+	type directoryNodeBuilder struct {
+		node     CloudDirectoryNode
+		children map[string]*directoryNodeBuilder
+	}
+
+	root := map[string]*directoryNodeBuilder{}
 	for _, obj := range objects {
 		segments := strings.Split(obj.Key, "/")
 		currentPath := ""
@@ -122,39 +127,37 @@ func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 			} else {
 				currentPath = currentPath + "/" + seg
 			}
-			node, exists := currentMap[seg]
+			builder, exists := currentMap[seg]
 			if !exists {
-				node = &CloudDirectoryNode{
-					Name:        seg,
-					Path:        currentPath,
-					IsDirectory: idx < len(segments)-1,
+				builder = &directoryNodeBuilder{
+					node: CloudDirectoryNode{
+						Name:        seg,
+						Path:        currentPath,
+						IsDirectory: idx < len(segments)-1,
+					},
+					children: map[string]*directoryNodeBuilder{},
 				}
-				currentMap[seg] = node
+				currentMap[seg] = builder
 			}
 			if idx == len(segments)-1 {
-				node.IsDirectory = false
-				node.Size = obj.Size
+				builder.node.IsDirectory = false
+				builder.node.Size = obj.Size
 				if obj.LastModified > 0 {
-					node.LastModified = time.UnixMilli(obj.LastModified)
+					builder.node.LastModified = time.UnixMilli(obj.LastModified)
 				}
 				key := obj.Key
-				node.ObjectKey = &key
+				builder.node.ObjectKey = &key
 			}
-			if node.IsDirectory {
-				if node.Children == nil {
-					node.Children = []CloudDirectoryNode{}
+			if builder.node.IsDirectory {
+				if builder.children == nil {
+					builder.children = map[string]*directoryNodeBuilder{}
 				}
-				childMap := map[string]*CloudDirectoryNode{}
-				for _, child := range node.Children {
-					child := child
-					childMap[child.Name] = &child
-				}
-				currentMap = childMap
+				currentMap = builder.children
 			}
 		}
 	}
 
-	return result.OkResult(flattenDirectoryNodes(root))
+	return result.OkResult(flattenDirectoryBuilders(root))
 }
 
 // DeleteCloudData は指定パス配下を削除する。
@@ -371,18 +374,13 @@ func detectGamePrefix(key string) string {
 	return key
 }
 
-func flattenDirectoryNodes(nodes map[string]*CloudDirectoryNode) []CloudDirectoryNode {
+func flattenDirectoryBuilders(nodes map[string]*directoryNodeBuilder) []CloudDirectoryNode {
 	result := make([]CloudDirectoryNode, 0, len(nodes))
 	for _, node := range nodes {
-		if len(node.Children) > 0 {
-			childMap := map[string]*CloudDirectoryNode{}
-			for idx := range node.Children {
-				child := node.Children[idx]
-				childMap[child.Name] = &child
-			}
-			node.Children = flattenDirectoryNodes(childMap)
+		if len(node.children) > 0 {
+			node.node.Children = flattenDirectoryBuilders(node.children)
 		}
-		result = append(result, *node)
+		result = append(result, node.node)
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result
