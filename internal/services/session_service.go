@@ -46,6 +46,7 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 	}
 	if created != nil {
 		_ = service.repository.TouchGameUpdatedAt(ctx, created.GameID)
+		service.updateGamePlayTime(ctx, created.GameID, input.Duration, input.PlayedAt)
 	}
 	return result.OkResult(created)
 }
@@ -126,6 +127,30 @@ func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID 
 		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
 	}
 	return result.OkResult(true)
+}
+
+func (service *SessionService) updateGamePlayTime(
+	ctx context.Context,
+	gameID string,
+	duration int64,
+	playedAt time.Time,
+) {
+	current, err := service.repository.GetGameByID(ctx, gameID)
+	if err != nil || current == nil {
+		service.logger.Error("ゲーム取得に失敗", "error", err, "gameId", gameID)
+		return
+	}
+
+	if duration > 0 {
+		current.TotalPlayTime += duration
+	}
+	if current.LastPlayed == nil || playedAt.After(*current.LastPlayed) {
+		current.LastPlayed = &playedAt
+	}
+
+	if _, err := service.repository.UpdateGame(ctx, *current); err != nil {
+		service.logger.Error("プレイ時間更新に失敗", "error", err, "gameId", gameID)
+	}
 }
 
 // SessionInput はセッション作成入力を表す。
