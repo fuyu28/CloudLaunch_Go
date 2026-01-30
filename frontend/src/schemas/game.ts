@@ -79,6 +79,7 @@ export const monitoringGameStatusSchema = z.object({
   playTime: z.number().min(0, "プレイ時間は0以上である必要があります"),
   isPaused: z.boolean(),
   needsConfirmation: z.boolean(),
+  needsResume: z.boolean(),
 });
 
 /**

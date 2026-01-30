@@ -88,6 +88,7 @@ type MonitoringGameStatus struct {
 	PlayTime          int64  `json:"playTime"`
 	IsPaused          bool   `json:"isPaused"`
 	NeedsConfirmation bool   `json:"needsConfirmation"`
+	NeedsResume       bool   `json:"needsResume"`
 }
 
 // ProcessSnapshotItem はプロセス監視デバッグ用の情報を表す。

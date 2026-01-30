@@ -46,6 +46,7 @@ export function PlayStatusBar(): React.JSX.Element {
   const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([]);
   const [pendingConfirmationGame, setPendingConfirmationGame] =
     useState<MonitoringGameStatus | null>(null);
+  const [pendingResumeGame, setPendingResumeGame] = useState<MonitoringGameStatus | null>(null);
   const [pendingUpload, setPendingUpload] = useState<{
     gameId: string;
     gameTitle: string;
@@ -70,6 +71,10 @@ export function PlayStatusBar(): React.JSX.Element {
       const pending = status.find((game) => game.needsConfirmation);
       if (pending && !pendingConfirmationGame) {
         setPendingConfirmationGame(pending);
+      }
+      const resumePending = status.find((game) => game.needsResume && game.isPaused);
+      if (resumePending && !pendingResumeGame) {
+        setPendingResumeGame(resumePending);
       }
     } catch (error) {
       logger.error("監視状況の取得に失敗しました:", {
@@ -133,6 +138,24 @@ export function PlayStatusBar(): React.JSX.Element {
         data: result.message,
       });
     }
+    await updateMonitoringStatus();
+  };
+
+  const handleResumeConfirm = async (gameId: string): Promise<void> => {
+    await handleResume(gameId);
+    setPendingResumeGame(null);
+  };
+
+  const handleKeepPausedConfirm = async (gameId: string): Promise<void> => {
+    const result = await window.api.processMonitor.pauseSession(gameId);
+    if (!result.success) {
+      logger.error("セッション中断に失敗しました:", {
+        component: "PlayStatusBar",
+        function: "handleKeepPausedConfirm",
+        data: result.message,
+      });
+    }
+    setPendingResumeGame(null);
     await updateMonitoringStatus();
   };
 
@@ -304,6 +327,20 @@ export function PlayStatusBar(): React.JSX.Element {
         confirmText="アップロードする"
         onConfirm={handleUploadAfterEnd}
         onCancel={handleSkipUploadAfterEnd}
+      />
+      <ConfirmModal
+        id="resume-session-modal"
+        isOpen={!!pendingResumeGame}
+        title="セッションを再開しますか？"
+        message={
+          pendingResumeGame
+            ? `${pendingResumeGame.gameTitle} が起動されました。\nセッションを再開しますか？`
+            : ""
+        }
+        cancelText="中断を維持"
+        confirmText="再開する"
+        onConfirm={() => pendingResumeGame && handleResumeConfirm(pendingResumeGame.gameId)}
+        onCancel={() => pendingResumeGame && handleKeepPausedConfirm(pendingResumeGame.gameId)}
       />
     </>
   );

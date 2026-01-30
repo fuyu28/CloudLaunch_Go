@@ -42,6 +42,8 @@ export type MonitoringGameStatus = {
   isPaused: boolean;
   /** 終了確認が必要かどうか */
   needsConfirmation: boolean;
+  /** 再開確認が必要かどうか */
+  needsResume: boolean;
 };
 
 export type PlaySessionType = {
