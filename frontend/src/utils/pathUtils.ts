@@ -60,7 +60,7 @@ export function validatePath(
   }
 
   // 元のパス形式を判定（正規化前）
-  const isWindowsPath = /^[a-zA-Z]:\\/.test(filePath) || /^\\\\/.test(filePath)
+  const isWindowsPath = /^[a-zA-Z]:\\/.test(filePath) || filePath.startsWith("\\\\")
   const isUnixPath = filePath.startsWith("/")
 
   if (!isWindowsPath && !isUnixPath) {
