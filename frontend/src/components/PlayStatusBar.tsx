@@ -248,23 +248,37 @@ export function PlayStatusBar(): React.JSX.Element {
                   </div>
                   <div className="text-xs text-base-content/70 leading-tight">
                     {activeGames.map((game) => (
-                      <span key={game.gameId} className="mr-4 inline-flex items-center gap-2">
+                      <div key={game.gameId} className="flex items-center justify-between gap-3">
                         <span>
                           {game.exeName}: {formatShort(game.playTime)}
                           {game.needsConfirmation && "（確認待ち）"}
                           {game.isPaused && !game.needsConfirmation && "（中断中）"}
                         </span>
-                        {!game.needsConfirmation && (
+                        {!game.needsConfirmation && !game.isPaused && (
                           <button
-                            className="btn btn-xs btn-ghost"
-                            onClick={() =>
-                              game.isPaused ? handleResume(game.gameId) : handlePause(game.gameId)
-                            }
+                            className="btn btn-sm btn-warning"
+                            onClick={() => handlePause(game.gameId)}
                           >
-                            {game.isPaused ? "再開" : "中断"}
+                            中断
                           </button>
                         )}
-                      </span>
+                        {!game.needsConfirmation && game.isPaused && (
+                          <span className="inline-flex items-center gap-2">
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => handleResume(game.gameId)}
+                            >
+                              再開
+                            </button>
+                            <button
+                              className="btn btn-sm btn-error"
+                              onClick={() => handleEnd(game.gameId)}
+                            >
+                              終了
+                            </button>
+                          </span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

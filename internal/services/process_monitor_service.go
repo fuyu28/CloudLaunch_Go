@@ -37,6 +37,7 @@ type MonitoringGame struct {
 	PausedAt        *time.Time
 	PendingEnd      bool
 	PendingResume   bool
+	SuppressResume  bool
 }
 
 // ProcessInfo はプロセス情報を保持する。
@@ -235,6 +236,7 @@ func (service *ProcessMonitorService) PauseSession(gameID string) bool {
 	game.IsPaused = true
 	game.PendingEnd = false
 	game.PendingResume = false
+	game.SuppressResume = true
 	game.PausedAt = &now
 	return true
 }
@@ -267,6 +269,7 @@ func (service *ProcessMonitorService) ResumeSession(gameID string) bool {
 	game.IsPaused = false
 	game.PendingEnd = false
 	game.PendingResume = false
+	game.SuppressResume = false
 	game.PausedAt = nil
 	game.PlayStartTime = &now
 	game.LastDetected = &now
@@ -289,6 +292,7 @@ func (service *ProcessMonitorService) EndSession(gameID string) bool {
 	game.IsPaused = false
 	game.PendingEnd = false
 	game.PendingResume = false
+	game.SuppressResume = false
 	game.PausedAt = nil
 	accumulated := game.AccumulatedTime
 	game.AccumulatedTime = 0
@@ -348,7 +352,9 @@ func (service *ProcessMonitorService) checkProcesses() {
 
 		if isRunning {
 			if game.IsPaused {
-				game.PendingResume = true
+				if !game.SuppressResume {
+					game.PendingResume = true
+				}
 				game.LastDetected = &now
 				game.LastNotFound = nil
 				continue
@@ -363,6 +369,9 @@ func (service *ProcessMonitorService) checkProcesses() {
 		} else {
 			if game.PendingResume {
 				game.PendingResume = false
+			}
+			if game.SuppressResume {
+				game.SuppressResume = false
 			}
 			if game.LastNotFound == nil {
 				game.LastNotFound = &now
