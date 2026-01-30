@@ -21,22 +21,12 @@ export function sanitizeFilename(filename: string): string {
 }
 
 /**
- * ゲームタイトルからリモートパス用の安全な文字列を生成
- * @param gameTitle - ゲームタイトル
- * @returns サニタイズされたタイトル
+ * ゲームIDからリモートパスを生成
+ * @param gameId - ゲームID
+ * @returns リモートパス（games/{gameId}/save_data）
  */
-export function sanitizeGameTitle(gameTitle: string): string {
-  return sanitizeFilename(gameTitle);
-}
-
-/**
- * ゲームタイトルからリモートパスを生成
- * @param gameTitle - ゲームタイトル
- * @returns リモートパス（games/{サニタイズされたタイトル}/save_data）
- */
-export function createRemotePath(gameTitle: string): string {
-  const sanitizedTitle = sanitizeGameTitle(gameTitle);
-  return `games/${sanitizedTitle}/save_data`;
+export function createRemotePath(gameId: string): string {
+  return `games/${gameId}/save_data`;
 }
 
 /**

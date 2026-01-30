@@ -31,7 +31,8 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-const cloudMetadataVersion = 1
+const cloudMetadataVersion = 2
+const cloudSessionsFileName = "sessions.json"
 
 // CloudSyncSummary は同期結果の要約を表す。
 type CloudSyncSummary struct {
@@ -167,13 +168,13 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 				summary.UploadedSessions += len(local.Sessions)
 				summary.UploadedImages += uploadedImages
 			case cloud.UpdatedAt.After(local.Game.UpdatedAt):
-				downloadedImages, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, &local.Game)
+				downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, &local.Game)
 				if err != nil {
 					return result.ErrorResult[CloudSyncSummary]("ローカル更新に失敗しました", err.Error())
 				}
 				merged[id] = cloud
 				summary.DownloadedGames++
-				summary.DownloadedSessions += len(cloud.Sessions)
+				summary.DownloadedSessions += downloadedSessions
 				summary.DownloadedImages += downloadedImages
 			default:
 				merged[id] = cloud
@@ -190,22 +191,23 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 			summary.UploadedSessions += len(local.Sessions)
 			summary.UploadedImages += uploadedImages
 		case !hasLocal && hasCloud:
-			downloadedImages, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, nil)
+			downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, nil)
 			if err != nil {
 				return result.ErrorResult[CloudSyncSummary]("ローカル更新に失敗しました", err.Error())
 			}
 			merged[id] = cloud
 			summary.DownloadedGames++
-			summary.DownloadedSessions += len(cloud.Sessions)
+			summary.DownloadedSessions += downloadedSessions
 			summary.DownloadedImages += downloadedImages
 		}
 	}
 
 	if shouldSave {
+		updatedGames := mapToSortedGames(merged)
 		updated := storage.CloudMetadata{
 			Version:   cloudMetadataVersion,
 			UpdatedAt: time.Now(),
-			Games:     mapToSortedGames(merged),
+			Games:     updatedGames,
 		}
 		if err := storage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, updated); err != nil {
 			service.logger.Error("クラウドメタ情報更新に失敗", "error", err)
@@ -219,6 +221,10 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 type localGameBundle struct {
 	Game     models.Game
 	Sessions []models.PlaySession
+}
+
+func cloudSessionsKey(gameID string) string {
+	return fmt.Sprintf("games/%s/%s", gameID, cloudSessionsFileName)
 }
 
 func (service *CloudSyncService) loadLocalGames(ctx context.Context, gameID string) (map[string]localGameBundle, error) {
@@ -272,17 +278,20 @@ func (service *CloudSyncService) buildCloudGame(
 		CurrentChapter: game.CurrentChapter,
 		CreatedAt:      game.CreatedAt,
 		UpdatedAt:      game.UpdatedAt,
-		Sessions:       make([]storage.CloudSessionRecord, 0, len(local.Sessions)),
 	}
 
+	sessions := make([]storage.CloudSessionRecord, 0, len(local.Sessions))
 	for _, session := range local.Sessions {
-		cloudGame.Sessions = append(cloudGame.Sessions, storage.CloudSessionRecord{
+		sessions = append(sessions, storage.CloudSessionRecord{
 			ID:          session.ID,
 			PlayedAt:    session.PlayedAt,
 			Duration:    session.Duration,
 			SessionName: session.SessionName,
 			UpdatedAt:   session.UpdatedAt,
 		})
+	}
+	if err := storage.SaveSessions(ctx, client, bucket, cloudSessionsKey(game.ID), sessions); err != nil {
+		return cloudGame, 0, err
 	}
 
 	if game.ImagePath != nil && strings.TrimSpace(*game.ImagePath) != "" {
@@ -310,7 +319,7 @@ func (service *CloudSyncService) applyCloudGame(
 	bucket string,
 	cloud storage.CloudGameMetadata,
 	local *models.Game,
-) (int, error) {
+) (int, int, error) {
 	exePath := UnconfiguredExePath
 	saveFolder := (*string)(nil)
 	if local != nil {
@@ -325,7 +334,7 @@ func (service *CloudSyncService) applyCloudGame(
 	if cloud.ImageKey != nil && strings.TrimSpace(*cloud.ImageKey) != "" {
 		path, downloaded, err := service.downloadImageIfNeeded(ctx, client, bucket, cloud.ID, *cloud.ImageKey)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 		imagePath = &path
 		if downloaded {
@@ -350,13 +359,18 @@ func (service *CloudSyncService) applyCloudGame(
 	}
 
 	if err := service.repository.UpsertGameSync(ctx, game); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	if err := service.repository.DeletePlaySessionsByGame(ctx, cloud.ID); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	for _, session := range cloud.Sessions {
+
+	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, cloud.ID)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, session := range cloudSessions {
 		playSession := models.PlaySession{
 			ID:          session.ID,
 			GameID:      cloud.ID,
@@ -366,11 +380,28 @@ func (service *CloudSyncService) applyCloudGame(
 			UpdatedAt:   session.UpdatedAt,
 		}
 		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 	}
 
-	return downloadedImages, nil
+	return downloadedImages, len(cloudSessions), nil
+}
+
+func (service *CloudSyncService) loadCloudSessions(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+) ([]storage.CloudSessionRecord, error) {
+	key := cloudSessionsKey(gameID)
+	sessions, err := storage.LoadSessions(ctx, client, bucket, key)
+	if err != nil {
+		if isNotFoundError(err) {
+			return []storage.CloudSessionRecord{}, nil
+		}
+		return nil, err
+	}
+	return sessions, nil
 }
 
 func (service *CloudSyncService) uploadImageIfNeeded(

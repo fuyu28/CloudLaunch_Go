@@ -226,7 +226,7 @@ describe("constants", () => {
 
     it("PATH 設定が適切な値である", () => {
       expect(CONFIG.PATH).toBeDefined();
-      expect(CONFIG.PATH.REMOTE_PATH_TEMPLATE("TestGame")).toBe("games/TestGame/save_data");
+      expect(CONFIG.PATH.REMOTE_PATH_TEMPLATE("test-game-id")).toBe("games/test-game-id/save_data");
     });
   });
 

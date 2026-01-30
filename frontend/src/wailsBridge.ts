@@ -186,9 +186,7 @@ export type WindowApi = {
         skippedGames: number;
       }>
     >;
-    syncGame: (
-      gameId: string,
-    ) => Promise<
+    syncGame: (gameId: string) => Promise<
       ApiResult<{
         uploadedGames: number;
         downloadedGames: number;

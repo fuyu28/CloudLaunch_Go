@@ -71,8 +71,8 @@ export function useGameSaveData(): GameSaveDataResult {
     setIsUploading(true);
 
     try {
-      // リモートパスの生成（ゲームタイトルベース）
-      const remotePath = createRemotePath(game.title);
+      // リモートパスの生成（ゲームIDベース）
+      const remotePath = createRemotePath(game.id);
 
       // アップロード実行（トースト付き）
       await withLoadingToast(
@@ -104,8 +104,8 @@ export function useGameSaveData(): GameSaveDataResult {
     setIsDownloading(true);
 
     try {
-      // リモートパスの生成（ゲームタイトルベース）
-      const remotePath = createRemotePath(game.title);
+      // リモートパスの生成（ゲームIDベース）
+      const remotePath = createRemotePath(game.id);
 
       // ダウンロード実行（トースト付き）
       await withLoadingToast(

@@ -12,27 +12,17 @@ import (
 
 // CloudGameMetadata はクラウドに保存するゲーム情報を表す。
 type CloudGameMetadata struct {
-	ID             string               `json:"id"`
-	Title          string               `json:"title"`
-	Publisher      string               `json:"publisher"`
-	ImageKey       *string              `json:"imageKey,omitempty"`
-	PlayStatus     string               `json:"playStatus"`
-	TotalPlayTime  int64                `json:"totalPlayTime"`
-	LastPlayed     *time.Time           `json:"lastPlayed,omitempty"`
-	ClearedAt      *time.Time           `json:"clearedAt,omitempty"`
-	CurrentChapter *string              `json:"currentChapter,omitempty"`
-	CreatedAt      time.Time            `json:"createdAt"`
-	UpdatedAt      time.Time            `json:"updatedAt"`
-	Sessions       []CloudSessionRecord `json:"sessions"`
-}
-
-// CloudSessionRecord はクラウドに保存するセッション情報を表す。
-type CloudSessionRecord struct {
-	ID          string    `json:"id"`
-	PlayedAt    time.Time `json:"playedAt"`
-	Duration    int64     `json:"duration"`
-	SessionName *string   `json:"sessionName,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID             string     `json:"id"`
+	Title          string     `json:"title"`
+	Publisher      string     `json:"publisher"`
+	ImageKey       *string    `json:"imageKey,omitempty"`
+	PlayStatus     string     `json:"playStatus"`
+	TotalPlayTime  int64      `json:"totalPlayTime"`
+	LastPlayed     *time.Time `json:"lastPlayed,omitempty"`
+	ClearedAt      *time.Time `json:"clearedAt,omitempty"`
+	CurrentChapter *string    `json:"currentChapter,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 // CloudMetadata は全ゲーム情報のまとめを表す。

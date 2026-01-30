@@ -94,7 +94,7 @@ export const CONFIG = {
   // パス関連
   PATH: {
     /** リモートパスのテンプレート */
-    REMOTE_PATH_TEMPLATE: (title: string) => `games/${title}/save_data`,
+    REMOTE_PATH_TEMPLATE: (gameId: string) => `games/${gameId}/save_data`,
   },
 } as const;
 

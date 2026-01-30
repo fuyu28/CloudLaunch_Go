@@ -224,7 +224,7 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 	if game == nil {
 		return result.OkResult(CloudFileDetailsResult{Exists: false, Files: []CloudFileDetail{}})
 	}
-	prefix := createRemotePath(game.Title)
+	prefix := createGamePrefix(game.ID)
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return errorResult[CloudFileDetailsResult]("詳細取得に失敗しました", error)
@@ -388,13 +388,8 @@ func flattenDirectoryNodes(nodes map[string]*CloudDirectoryNode) []CloudDirector
 	return result
 }
 
-func createRemotePath(title string) string {
-	return "games/" + sanitizeTitle(title) + "/save_data"
-}
-
-func sanitizeTitle(title string) string {
-	replacer := strings.NewReplacer("<", "_", ">", "_", ":", "_", "\"", "_", "/", "_", "\\", "_", "|", "_", "?", "_", "*", "_")
-	return replacer.Replace(title)
+func createGamePrefix(gameID string) string {
+	return "games/" + strings.TrimSpace(gameID) + "/"
 }
 
 func detectImageMime(path string) string {
