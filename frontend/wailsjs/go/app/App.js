@@ -190,10 +190,6 @@ export function Shutdown(arg1) {
   return window['go']['app']['App']['Shutdown'](arg1);
 }
 
-export function SyncMemosFromCloud(arg1) {
-  return window['go']['app']['App']['SyncMemosFromCloud'](arg1);
-}
-
 export function SyncAllGames() {
   return window['go']['app']['App']['SyncAllGames']();
 }
@@ -202,16 +198,12 @@ export function SyncGame(arg1) {
   return window['go']['app']['App']['SyncGame'](arg1);
 }
 
+export function SyncMemosFromCloud(arg1) {
+  return window['go']['app']['App']['SyncMemosFromCloud'](arg1);
+}
+
 export function UpdateAutoTracking(arg1) {
   return window['go']['app']['App']['UpdateAutoTracking'](arg1);
-}
-
-export function UpdateOfflineMode(arg1) {
-  return window['go']['app']['App']['UpdateOfflineMode'](arg1);
-}
-
-export function UpdateUploadConcurrency(arg1) {
-  return window['go']['app']['App']['UpdateUploadConcurrency'](arg1);
 }
 
 export function UpdateChapter(arg1, arg2) {
@@ -230,6 +222,10 @@ export function UpdateMemo(arg1, arg2) {
   return window['go']['app']['App']['UpdateMemo'](arg1, arg2);
 }
 
+export function UpdateOfflineMode(arg1) {
+  return window['go']['app']['App']['UpdateOfflineMode'](arg1);
+}
+
 export function UpdatePlayTime(arg1, arg2, arg3) {
   return window['go']['app']['App']['UpdatePlayTime'](arg1, arg2, arg3);
 }
@@ -240,6 +236,10 @@ export function UpdateSessionChapter(arg1, arg2) {
 
 export function UpdateSessionName(arg1, arg2) {
   return window['go']['app']['App']['UpdateSessionName'](arg1, arg2);
+}
+
+export function UpdateUploadConcurrency(arg1) {
+  return window['go']['app']['App']['UpdateUploadConcurrency'](arg1);
 }
 
 export function UploadFolder(arg1, arg2, arg3) {

@@ -101,17 +101,13 @@ export function SetCurrentChapter(arg1:string,arg2:string):Promise<result.ApiRes
 
 export function Shutdown(arg1:context.Context):Promise<void>;
 
+export function SyncAllGames():Promise<result.ApiResult_CloudLaunch_Go_internal_services_CloudSyncSummary_>;
+
+export function SyncGame(arg1:string):Promise<result.ApiResult_CloudLaunch_Go_internal_services_CloudSyncSummary_>;
+
 export function SyncMemosFromCloud(arg1:string):Promise<result.ApiResult_CloudLaunch_Go_internal_app_MemoSyncResult_>;
 
-export function SyncAllGames():Promise<result.ApiResult__CloudLaunch_Go_internal_services_CloudSyncSummary_>;
-
-export function SyncGame(arg1:string):Promise<result.ApiResult__CloudLaunch_Go_internal_services_CloudSyncSummary_>;
-
 export function UpdateAutoTracking(arg1:boolean):Promise<result.ApiResult_bool_>;
-
-export function UpdateOfflineMode(arg1:boolean):Promise<result.ApiResult_bool_>;
-
-export function UpdateUploadConcurrency(arg1:number):Promise<result.ApiResult_bool_>;
 
 export function UpdateChapter(arg1:string,arg2:services.ChapterUpdateInput):Promise<result.ApiResult_CloudLaunch_Go_internal_models_Chapter_>;
 
@@ -121,11 +117,15 @@ export function UpdateGame(arg1:string,arg2:services.GameUpdateInput):Promise<re
 
 export function UpdateMemo(arg1:string,arg2:services.MemoUpdateInput):Promise<result.ApiResult_CloudLaunch_Go_internal_models_Memo_>;
 
+export function UpdateOfflineMode(arg1:boolean):Promise<result.ApiResult_bool_>;
+
 export function UpdatePlayTime(arg1:string,arg2:number,arg3:time.Time):Promise<result.ApiResult_CloudLaunch_Go_internal_models_Game_>;
 
 export function UpdateSessionChapter(arg1:string,arg2:any):Promise<result.ApiResult_bool_>;
 
 export function UpdateSessionName(arg1:string,arg2:string):Promise<result.ApiResult_bool_>;
+
+export function UpdateUploadConcurrency(arg1:number):Promise<result.ApiResult_bool_>;
 
 export function UploadFolder(arg1:string,arg2:string,arg3:string):Promise<result.ApiResult_CloudLaunch_Go_internal_storage_UploadSummary_>;
 
