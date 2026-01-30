@@ -247,13 +247,14 @@ export function PlayStatusBar(): React.JSX.Element {
                     プレイ中: {activeGames.map((game) => game.gameTitle).join(", ")}
                   </div>
                   <div className="text-xs text-base-content/70 leading-tight">
-                    {activeGames.map((game) => (
-                      <div key={game.gameId} className="flex items-center justify-between gap-3">
-                        <span>
-                          {game.exeName}: {formatShort(game.playTime)}
-                          {game.needsConfirmation && "（確認待ち）"}
-                          {game.isPaused && !game.needsConfirmation && "（中断中）"}
-                        </span>
+                  {activeGames.map((game) => (
+                    <div key={game.gameId} className="flex w-full items-center gap-3">
+                      <span className="min-w-0 flex-1">
+                        {game.exeName}: {formatShort(game.playTime)}
+                        {game.needsConfirmation && "（確認待ち）"}
+                        {game.isPaused && !game.needsConfirmation && "（中断中）"}
+                      </span>
+                      <div className="ml-auto flex items-center gap-2">
                         {!game.needsConfirmation && !game.isPaused && (
                           <button
                             className="btn btn-sm btn-warning"
@@ -263,7 +264,7 @@ export function PlayStatusBar(): React.JSX.Element {
                           </button>
                         )}
                         {!game.needsConfirmation && game.isPaused && (
-                          <span className="inline-flex items-center gap-2">
+                          <>
                             <button
                               className="btn btn-sm btn-primary"
                               onClick={() => handleResume(game.gameId)}
@@ -276,10 +277,11 @@ export function PlayStatusBar(): React.JSX.Element {
                             >
                               終了
                             </button>
-                          </span>
+                          </>
                         )}
                       </div>
-                    ))}
+                    </div>
+                  ))}
                   </div>
                 </div>
               </>
