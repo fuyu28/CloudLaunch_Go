@@ -69,6 +69,9 @@ import {
   UpdateMemo,
   UpdateSessionName,
   UploadFolder,
+  PauseMonitoringSession,
+  ResumeMonitoringSession,
+  EndMonitoringSession,
   ValidateCredential,
   ValidateSavedCredential,
 } from "../wailsjs/go/app/App";
@@ -163,6 +166,9 @@ export type WindowApi = {
   };
   processMonitor: {
     getMonitoringStatus: () => Promise<MonitoringGameStatus[]>;
+    pauseSession: (gameId: string) => Promise<ApiResult<void>>;
+    resumeSession: (gameId: string) => Promise<ApiResult<void>>;
+    endSession: (gameId: string) => Promise<ApiResult<void>>;
     getProcessSnapshot: () => Promise<{
       source: string;
       items: Array<{
@@ -623,6 +629,24 @@ export const createWailsBridge = (): WindowApi => {
             normalizedCmd: string;
           }>;
         };
+      },
+      pauseSession: async (gameId) => {
+        const result = await PauseMonitoringSession(gameId);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      resumeSession: async (gameId) => {
+        const result = await ResumeMonitoringSession(gameId);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      endSession: async (gameId) => {
+        const result = await EndMonitoringSession(gameId);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
     },
     cloudSync: {

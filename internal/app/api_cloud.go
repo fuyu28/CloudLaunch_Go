@@ -38,6 +38,11 @@ type CloudDirectoryNode struct {
 	ObjectKey    *string              `json:"objectKey,omitempty"`
 }
 
+type directoryNodeBuilder struct {
+	node     CloudDirectoryNode
+	children map[string]*directoryNodeBuilder
+}
+
 // CloudFileDetail はクラウドファイル詳細を表す。
 type CloudFileDetail struct {
 	Name         string    `json:"name"`
@@ -106,11 +111,6 @@ func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 	objects, error := storage.ListObjects(ctx, client, bucket, "")
 	if error != nil {
 		return result.ErrorResult[[]CloudDirectoryNode]("ディレクトリツリー取得に失敗しました", error.Error())
-	}
-
-	type directoryNodeBuilder struct {
-		node     CloudDirectoryNode
-		children map[string]*directoryNodeBuilder
 	}
 
 	root := map[string]*directoryNodeBuilder{}

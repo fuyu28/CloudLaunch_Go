@@ -38,6 +38,10 @@ export type MonitoringGameStatus = {
   isPlaying: boolean;
   /** プレイ時間（秒） */
   playTime: number;
+  /** 中断中かどうか */
+  isPaused: boolean;
+  /** 終了確認が必要かどうか */
+  needsConfirmation: boolean;
 };
 
 export type PlaySessionType = {

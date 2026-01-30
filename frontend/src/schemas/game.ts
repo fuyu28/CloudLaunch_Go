@@ -77,6 +77,8 @@ export const monitoringGameStatusSchema = z.object({
   exeName: z.string().min(1, "実行ファイル名は必須です"),
   isPlaying: z.boolean(),
   playTime: z.number().min(0, "プレイ時間は0以上である必要があります"),
+  isPaused: z.boolean(),
+  needsConfirmation: z.boolean(),
 });
 
 /**

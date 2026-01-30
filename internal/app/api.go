@@ -228,6 +228,39 @@ func (app *App) GetProcessSnapshot() result.ApiResult[models.ProcessSnapshot] {
 	return result.OkResult(snapshot)
 }
 
+// PauseMonitoringSession はセッションを中断する。
+func (app *App) PauseMonitoringSession(gameID string) result.ApiResult[bool] {
+	if app.ProcessMonitor == nil {
+		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	}
+	if ok := app.ProcessMonitor.PauseSession(strings.TrimSpace(gameID)); !ok {
+		return result.ErrorResult[bool]("中断に失敗しました", "session not found")
+	}
+	return result.OkResult(true)
+}
+
+// ResumeMonitoringSession は中断中セッションを再開する。
+func (app *App) ResumeMonitoringSession(gameID string) result.ApiResult[bool] {
+	if app.ProcessMonitor == nil {
+		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	}
+	if ok := app.ProcessMonitor.ResumeSession(strings.TrimSpace(gameID)); !ok {
+		return result.ErrorResult[bool]("再開に失敗しました", "session not running")
+	}
+	return result.OkResult(true)
+}
+
+// EndMonitoringSession はセッションを終了して保存する。
+func (app *App) EndMonitoringSession(gameID string) result.ApiResult[bool] {
+	if app.ProcessMonitor == nil {
+		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	}
+	if ok := app.ProcessMonitor.EndSession(strings.TrimSpace(gameID)); !ok {
+		return result.ErrorResult[bool]("終了に失敗しました", "session not found")
+	}
+	return result.OkResult(true)
+}
+
 // SelectFile はファイル選択ダイアログを開く。
 func (app *App) SelectFile(filters []FileFilterInput) result.ApiResult[string] {
 	dialogContext := app.runtimeContext()

@@ -16,12 +16,14 @@
 
 import { autoTrackingAtom } from "@renderer/state/settings";
 import { useAtom } from "jotai";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FaClock, FaGamepad } from "react-icons/fa";
 
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
 import { logger } from "@renderer/utils/logger";
+
+import BaseModal from "@renderer/components/BaseModal";
 
 import type { MonitoringGameStatus } from "src/types/game";
 
@@ -36,6 +38,8 @@ import type { MonitoringGameStatus } from "src/types/game";
 export function PlayStatusBar(): React.JSX.Element {
   const [autoTracking] = useAtom(autoTrackingAtom);
   const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([]);
+  const [pendingConfirmationGame, setPendingConfirmationGame] =
+    useState<MonitoringGameStatus | null>(null);
   const [, setCurrentTime] = useState<Date>(new Date());
   const { formatShort } = useTimeFormat();
 
@@ -49,6 +53,10 @@ export function PlayStatusBar(): React.JSX.Element {
     try {
       const status = await window.api.processMonitor.getMonitoringStatus();
       setMonitoringGames(status);
+      const pending = status.find((game) => game.needsConfirmation);
+      if (pending && !pendingConfirmationGame) {
+        setPendingConfirmationGame(pending);
+      }
     } catch (error) {
       logger.error("監視状況の取得に失敗しました:", {
         component: "PlayStatusBar",
@@ -83,39 +91,145 @@ export function PlayStatusBar(): React.JSX.Element {
     return <></>;
   }
 
-  const playingGames = monitoringGames.filter((game) => game.isPlaying);
-  const hasPlayingGames = playingGames.length > 0;
+  const activeGames = useMemo(
+    () =>
+      monitoringGames.filter((game) => game.isPlaying || game.isPaused || game.needsConfirmation),
+    [monitoringGames],
+  );
+  const hasActiveGames = activeGames.length > 0;
+
+  const handlePause = async (gameId: string): Promise<void> => {
+    const result = await window.api.processMonitor.pauseSession(gameId);
+    if (!result.success) {
+      logger.error("セッション中断に失敗しました:", {
+        component: "PlayStatusBar",
+        function: "handlePause",
+        data: result.message,
+      });
+    }
+    await updateMonitoringStatus();
+  };
+
+  const handleResume = async (gameId: string): Promise<void> => {
+    const result = await window.api.processMonitor.resumeSession(gameId);
+    if (!result.success) {
+      logger.error("セッション再開に失敗しました:", {
+        component: "PlayStatusBar",
+        function: "handleResume",
+        data: result.message,
+      });
+    }
+    await updateMonitoringStatus();
+  };
+
+  const handleEnd = async (gameId: string): Promise<void> => {
+    const result = await window.api.processMonitor.endSession(gameId);
+    if (!result.success) {
+      logger.error("セッション終了に失敗しました:", {
+        component: "PlayStatusBar",
+        function: "handleEnd",
+        data: result.message,
+      });
+    }
+    setPendingConfirmationGame(null);
+    await updateMonitoringStatus();
+  };
+
+  const handleKeepPaused = async (gameId: string): Promise<void> => {
+    const result = await window.api.processMonitor.pauseSession(gameId);
+    if (!result.success) {
+      logger.error("セッション中断に失敗しました:", {
+        component: "PlayStatusBar",
+        function: "handleKeepPaused",
+        data: result.message,
+      });
+    }
+    setPendingConfirmationGame(null);
+    await updateMonitoringStatus();
+  };
 
   return (
-    <div className="bg-base-300 border-t border-base-content/10 px-4 py-1 h-12">
-      <div className="flex items-center justify-between h-full">
-        {/* 左側：プレイ状況 */}
-        <div className="flex items-center gap-3">
-          {hasPlayingGames ? (
-            <>
-              <FaGamepad className="text-primary text-sm" />
-              <div className="flex flex-col justify-center">
-                <div className="text-sm font-medium leading-tight">
-                  プレイ中: {playingGames.map((game) => game.gameTitle).join(", ")}
+    <>
+      <div className="bg-base-300 border-t border-base-content/10 px-4 py-1 h-12">
+        <div className="flex items-center justify-between h-full">
+          {/* 左側：プレイ状況 */}
+          <div className="flex items-center gap-3">
+            {hasActiveGames ? (
+              <>
+                <FaGamepad className="text-primary text-sm" />
+                <div className="flex flex-col justify-center">
+                  <div className="text-sm font-medium leading-tight">
+                    プレイ中: {activeGames.map((game) => game.gameTitle).join(", ")}
+                  </div>
+                  <div className="text-xs text-base-content/70 leading-tight">
+                    {activeGames.map((game) => (
+                      <span key={game.gameId} className="mr-4 inline-flex items-center gap-2">
+                        <span>
+                          {game.exeName}: {formatShort(game.playTime)}
+                          {game.needsConfirmation && "（確認待ち）"}
+                          {game.isPaused && !game.needsConfirmation && "（中断中）"}
+                        </span>
+                        {!game.needsConfirmation && (
+                          <button
+                            className="btn btn-xs btn-ghost"
+                            onClick={() =>
+                              game.isPaused ? handleResume(game.gameId) : handlePause(game.gameId)
+                            }
+                          >
+                            {game.isPaused ? "再開" : "中断"}
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-xs text-base-content/70 leading-tight">
-                  {playingGames.map((game) => (
-                    <span key={game.gameId} className="mr-4">
-                      {game.exeName}: {formatShort(game.playTime)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <FaClock className="text-base-content/50 text-sm" />
-              <div className="text-sm text-base-content/70">プレイ中のゲームはありません</div>
-            </>
-          )}
+              </>
+            ) : (
+              <>
+                <FaClock className="text-base-content/50 text-sm" />
+                <div className="text-sm text-base-content/70">プレイ中のゲームはありません</div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      <BaseModal
+        isOpen={!!pendingConfirmationGame}
+        onClose={() => setPendingConfirmationGame(null)}
+        title="プレイを終了しますか？"
+        size="md"
+        showCloseButton={false}
+        closeOnClickOutside={false}
+        closeOnEscape={false}
+        footer={
+          pendingConfirmationGame ? (
+            <>
+              <button
+                className="btn btn-outline"
+                onClick={() => handleKeepPaused(pendingConfirmationGame.gameId)}
+              >
+                No
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => handleEnd(pendingConfirmationGame.gameId)}
+              >
+                Yes
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        {pendingConfirmationGame && (
+          <div className="text-sm">
+            <div className="font-medium mb-2">{pendingConfirmationGame.gameTitle}</div>
+            <p className="text-base-content/70">
+              プロセスが見つかりません。セッションを終了しますか？
+            </p>
+          </div>
+        )}
+      </BaseModal>
+    </>
   );
 }
 

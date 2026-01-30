@@ -33,6 +33,9 @@ type MonitoringGame struct {
 	PlayStartTime   *time.Time
 	AccumulatedTime int64
 	LastNotFound    *time.Time
+	IsPaused        bool
+	PausedAt        *time.Time
+	PendingEnd      bool
 }
 
 // ProcessInfo はプロセス情報を保持する。
@@ -72,7 +75,7 @@ func NewProcessMonitorService(repository *db.Repository, logger *slog.Logger, cl
 		monitoredGames:     make(map[string]*MonitoringGame),
 		autoTracking:       true,
 		interval:           2 * time.Second,
-		sessionTimeout:     4 * time.Second,
+		sessionTimeout:     0,
 		gameCleanupTimeout: 20 * time.Second,
 	}
 }
@@ -148,15 +151,17 @@ func (service *ProcessMonitorService) GetMonitoringStatus() []models.MonitoringG
 	now := time.Now()
 	for _, game := range service.monitoredGames {
 		playTime := game.AccumulatedTime
-		if game.PlayStartTime != nil {
+		if game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd {
 			playTime += int64(now.Sub(*game.PlayStartTime).Seconds())
 		}
 		status = append(status, models.MonitoringGameStatus{
-			GameID:    game.GameID,
-			GameTitle: game.GameTitle,
-			ExeName:   game.ExeName,
-			IsPlaying: game.PlayStartTime != nil,
-			PlayTime:  playTime,
+			GameID:            game.GameID,
+			GameTitle:         game.GameTitle,
+			ExeName:           game.ExeName,
+			IsPlaying:         game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd,
+			PlayTime:          playTime,
+			IsPaused:          game.IsPaused,
+			NeedsConfirmation: game.PendingEnd,
 		})
 	}
 	return status
@@ -212,6 +217,91 @@ func (service *ProcessMonitorService) removeMonitoredGame(gameID string) {
 	service.logger.Info("ゲーム監視を削除", "exeName", game.ExeName, "gameId", gameID)
 }
 
+// PauseSession はセッションを中断状態にする。
+func (service *ProcessMonitorService) PauseSession(gameID string) bool {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	game, exists := service.monitoredGames[gameID]
+	if !exists {
+		return false
+	}
+	now := time.Now()
+	if game.PlayStartTime != nil && !game.IsPaused {
+		game.AccumulatedTime += int64(now.Sub(*game.PlayStartTime).Seconds())
+	}
+	game.PlayStartTime = nil
+	game.IsPaused = true
+	game.PendingEnd = false
+	game.PausedAt = &now
+	return true
+}
+
+// ResumeSession は中断状態のセッションを再開する。
+func (service *ProcessMonitorService) ResumeSession(gameID string) bool {
+	processes, _ := service.getProcesses()
+	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
+	for _, proc := range processes {
+		if proc.Name == "" {
+			continue
+		}
+		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
+			info:          proc,
+			normalized:    normalizeProcessToken(proc.Name),
+			normalizedCmd: normalizeProcessToken(proc.Cmd),
+		})
+	}
+
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	game, exists := service.monitoredGames[gameID]
+	if !exists {
+		return false
+	}
+	if !service.isGameProcessRunning(game.ExeName, game.ExePath, normalizedProcesses) {
+		return false
+	}
+	now := time.Now()
+	game.IsPaused = false
+	game.PendingEnd = false
+	game.PausedAt = nil
+	game.PlayStartTime = &now
+	game.LastDetected = &now
+	return true
+}
+
+// EndSession は現在のセッションを終了して保存する。
+func (service *ProcessMonitorService) EndSession(gameID string) bool {
+	service.mu.Lock()
+	game, exists := service.monitoredGames[gameID]
+	if !exists {
+		service.mu.Unlock()
+		return false
+	}
+	now := time.Now()
+	if game.PlayStartTime != nil {
+		game.AccumulatedTime += int64(now.Sub(*game.PlayStartTime).Seconds())
+	}
+	game.PlayStartTime = nil
+	game.IsPaused = false
+	game.PendingEnd = false
+	game.PausedAt = nil
+	accumulated := game.AccumulatedTime
+	game.AccumulatedTime = 0
+	game.LastNotFound = &now
+	service.mu.Unlock()
+
+	if accumulated > 0 {
+		game.AccumulatedTime = accumulated
+		service.saveSession(*game, now)
+		service.mu.Lock()
+		if current, ok := service.monitoredGames[gameID]; ok {
+			current.AccumulatedTime = 0
+		}
+		service.mu.Unlock()
+	}
+	return true
+}
+
 func (service *ProcessMonitorService) checkProcesses() {
 	processes, _ := service.getProcesses()
 
@@ -254,7 +344,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 		if isRunning {
 			game.LastDetected = &now
 			game.LastNotFound = nil
-			if game.PlayStartTime == nil {
+			if game.PlayStartTime == nil && !game.IsPaused && !game.PendingEnd {
 				game.PlayStartTime = &now
 				game.AccumulatedTime = 0
 				service.logger.Info("ゲーム開始を検知", "title", game.GameTitle, "exeName", game.ExeName)
@@ -263,25 +353,22 @@ func (service *ProcessMonitorService) checkProcesses() {
 			if game.LastNotFound == nil {
 				game.LastNotFound = &now
 			}
-			if game.PlayStartTime != nil && game.LastDetected != nil {
+			if game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd {
 				if now.Sub(*game.LastDetected) > service.sessionTimeout {
 					duration := int64(now.Sub(*game.PlayStartTime).Seconds())
 					if duration > 0 {
 						game.AccumulatedTime += duration
-						sessionsToSave = append(sessionsToSave, pendingSession{
-							Game:    *game,
-							EndedAt: now,
-						})
 					}
 					game.PlayStartTime = nil
+					game.PendingEnd = true
 					game.LastDetected = nil
-					service.logger.Info("ゲーム終了を検知", "title", game.GameTitle, "exeName", game.ExeName)
+					service.logger.Info("ゲーム終了確認待ち", "title", game.GameTitle, "exeName", game.ExeName)
 				}
 			}
 		}
 	}
 	for gameID, game := range service.monitoredGames {
-		if game.PlayStartTime == nil && game.LastNotFound != nil {
+		if game.PlayStartTime == nil && game.LastNotFound != nil && !game.IsPaused && !game.PendingEnd {
 			if now.Sub(*game.LastNotFound) > service.gameCleanupTimeout {
 				gameIDsToCleanup = append(gameIDsToCleanup, gameID)
 			}
@@ -350,11 +437,13 @@ func (service *ProcessMonitorService) saveAllActiveSessions() {
 			duration := int64(now.Sub(*game.PlayStartTime).Seconds())
 			if duration > 0 {
 				game.AccumulatedTime += duration
-				sessions = append(sessions, pendingSession{
-					Game:    *game,
-					EndedAt: now,
-				})
 			}
+		}
+		if game.AccumulatedTime > 0 {
+			sessions = append(sessions, pendingSession{
+				Game:    *game,
+				EndedAt: now,
+			})
 		}
 	}
 	service.mu.Unlock()

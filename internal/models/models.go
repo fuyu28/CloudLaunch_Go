@@ -81,11 +81,13 @@ type ChapterStat struct {
 
 // MonitoringGameStatus はゲーム監視の状態を表す。
 type MonitoringGameStatus struct {
-	GameID    string `json:"gameId"`
-	GameTitle string `json:"gameTitle"`
-	ExeName   string `json:"exeName"`
-	IsPlaying bool   `json:"isPlaying"`
-	PlayTime  int64  `json:"playTime"`
+	GameID            string `json:"gameId"`
+	GameTitle         string `json:"gameTitle"`
+	ExeName           string `json:"exeName"`
+	IsPlaying         bool   `json:"isPlaying"`
+	PlayTime          int64  `json:"playTime"`
+	IsPaused          bool   `json:"isPaused"`
+	NeedsConfirmation bool   `json:"needsConfirmation"`
 }
 
 // ProcessSnapshotItem はプロセス監視デバッグ用の情報を表す。
