@@ -17,7 +17,6 @@
 import { autoTrackingAtom } from "@renderer/state/settings";
 import { isValidCredsAtom } from "@renderer/state/credentials";
 import { useAtom, useAtomValue } from "jotai";
-import React, { useEffect, useMemo, useState } from "react";
 import { FaClock, FaGamepad } from "react-icons/fa";
 
 import ConfirmModal from "@renderer/components/ConfirmModal";
@@ -26,11 +25,10 @@ import BaseModal from "@renderer/components/BaseModal";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
+import { useMonitoringStatus } from "@renderer/hooks/useMonitoringStatus";
+import { useUploadAfterSession } from "@renderer/hooks/useUploadAfterSession";
 
 import { logger } from "@renderer/utils/logger";
-import { createRemotePath } from "@renderer/utils";
-
-import type { MonitoringGameStatus } from "src/types/game";
 
 /**
  * プレイ状況バーコンポーネント
@@ -43,79 +41,25 @@ import type { MonitoringGameStatus } from "src/types/game";
 export function PlayStatusBar(): React.JSX.Element {
   const [autoTracking] = useAtom(autoTrackingAtom);
   const isValidCreds = useAtomValue(isValidCredsAtom);
-  const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([]);
-  const [pendingConfirmationGame, setPendingConfirmationGame] =
-    useState<MonitoringGameStatus | null>(null);
-  const [pendingResumeGame, setPendingResumeGame] = useState<MonitoringGameStatus | null>(null);
-  const [pendingUpload, setPendingUpload] = useState<{
-    gameId: string;
-    gameTitle: string;
-    saveFolderPath: string;
-    localHash: string;
-  } | null>(null);
-  const [uploadingAfterEndGameId, setUploadingAfterEndGameId] = useState<string | null>(null);
-  const [, setCurrentTime] = useState<Date>(new Date());
   const { formatShort } = useTimeFormat();
   const { isOfflineMode } = useOfflineMode();
-  const { showToast, showLoading, showSuccess, showError } = useToastHandler();
-
-  // 監視状況を更新
-  const updateMonitoringStatus = React.useCallback(async (): Promise<void> => {
-    // 自動ゲーム検出がOFFの場合は更新しない
-    if (!autoTracking) {
-      return;
-    }
-
-    try {
-      const status = await window.api.processMonitor.getMonitoringStatus();
-      setMonitoringGames(status);
-      const pending = status.find((game) => game.needsConfirmation);
-      if (pending && !pendingConfirmationGame) {
-        setPendingConfirmationGame(pending);
-      }
-      const resumePending = status.find((game) => game.needsResume && game.isPaused);
-      if (resumePending && !pendingResumeGame) {
-        setPendingResumeGame(resumePending);
-      }
-    } catch (error) {
-      logger.error("監視状況の取得に失敗しました:", {
-        component: "PlayStatusBar",
-        function: "unknown",
-        data: error,
-      });
-    }
-  }, [autoTracking]);
-
-  // 時間更新とステータス更新
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-      updateMonitoringStatus();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [updateMonitoringStatus]);
-
-  // 初期化
-  useEffect(() => {
-    // 少し遅延させて監視状態を取得（メインプロセスの初期化を待つ）
-    const timer = setTimeout(() => {
-      updateMonitoringStatus();
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [updateMonitoringStatus]);
+  const toastHandler = useToastHandler();
+  const {
+    activeGames,
+    pendingConfirmationGame,
+    pendingResumeGame,
+    setPendingConfirmationGame,
+    setPendingResumeGame,
+    updateMonitoringStatus,
+  } = useMonitoringStatus(autoTracking);
+  const { pendingUpload, checkUploadPrompt, handleUploadAfterEnd, handleSkipUploadAfterEnd } =
+    useUploadAfterSession(isOfflineMode, isValidCreds, toastHandler);
 
   // 自動ゲーム検出がOFFの場合は非表示
   if (!autoTracking) {
     return <></>;
   }
 
-  const activeGames = useMemo(
-    () =>
-      monitoringGames.filter((game) => game.isPlaying || game.isPaused || game.needsConfirmation),
-    [monitoringGames],
-  );
   const hasActiveGames = activeGames.length > 0;
 
   const handlePause = async (gameId: string): Promise<void> => {
@@ -160,36 +104,6 @@ export function PlayStatusBar(): React.JSX.Element {
     await updateMonitoringStatus();
   };
 
-  const checkUploadPrompt = React.useCallback(
-    async (gameId: string): Promise<void> => {
-      if (isOfflineMode || !isValidCreds) {
-        return;
-      }
-      if (uploadingAfterEndGameId === gameId) {
-        return;
-      }
-      const game = await window.api.database.getGameById(gameId);
-      if (!game || !game.saveFolderPath) {
-        return;
-      }
-      const localHashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
-      if (!localHashResult.success || !localHashResult.data) {
-        return;
-      }
-      const cloudHashResult = await window.api.saveData.hash.getCloudHash(gameId);
-      const cloudHash = cloudHashResult.success ? cloudHashResult.data?.hash : null;
-      if (!cloudHash || cloudHash !== localHashResult.data) {
-        setPendingUpload({
-          gameId,
-          gameTitle: game.title,
-          saveFolderPath: game.saveFolderPath,
-          localHash: localHashResult.data,
-        });
-      }
-    },
-    [isOfflineMode, isValidCreds, uploadingAfterEndGameId],
-  );
-
   const handleEnd = async (gameId: string): Promise<void> => {
     const result = await window.api.processMonitor.endSession(gameId);
     if (!result.success) {
@@ -215,53 +129,6 @@ export function PlayStatusBar(): React.JSX.Element {
     }
     setPendingConfirmationGame(null);
     await updateMonitoringStatus();
-  };
-
-  const handleUploadAfterEnd = async (): Promise<void> => {
-    if (!pendingUpload) return;
-    const payload = pendingUpload;
-    setPendingUpload(null);
-    setUploadingAfterEndGameId(payload.gameId);
-    const toastId = showLoading("セーブデータをアップロード中…");
-    try {
-      const remotePath = createRemotePath(payload.gameId);
-      const result = await window.api.saveData.upload.uploadSaveDataFolder(
-        payload.saveFolderPath,
-        remotePath,
-      );
-      if (result.success) {
-        await window.api.saveData.hash.saveCloudHash(payload.gameId, payload.localHash);
-        if (toastId) {
-          showSuccess("セーブデータをクラウドにアップロードしました", toastId);
-        } else {
-          showToast("セーブデータをクラウドにアップロードしました", "success");
-        }
-      } else {
-        const message = result.message || "セーブデータのアップロードに失敗しました";
-        if (toastId) {
-          showError(message, toastId);
-        } else {
-          showToast(message, "error");
-        }
-      }
-    } catch (error) {
-      logger.error("セーブデータのアップロードに失敗しました:", {
-        component: "PlayStatusBar",
-        function: "handleUploadAfterEnd",
-        data: error,
-      });
-      if (toastId) {
-        showError("セーブデータのアップロードに失敗しました", toastId);
-      } else {
-        showToast("セーブデータのアップロードに失敗しました", "error");
-      }
-    } finally {
-      setUploadingAfterEndGameId(null);
-    }
-  };
-
-  const handleSkipUploadAfterEnd = (): void => {
-    setPendingUpload(null);
   };
 
   return (
