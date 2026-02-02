@@ -132,8 +132,7 @@ export default function MainLayout(): React.JSX.Element {
           relative
           flex items-center
           h-10 bg-base-100 shadow
-          select-none
-          [-webkit-app-region:drag]
+          select-none app-region-drag
         "
         >
           {/* ドロワー開閉ボタンは no-drag */}
@@ -145,7 +144,7 @@ export default function MainLayout(): React.JSX.Element {
               h-full w-10
               btn btn-ghost p-0 focus:outline-none
             hover:bg-base-300
-              [-webkit-app-region:no-drag]
+              app-region-no-drag
             "
           >
             <FiMenu size={22} />
@@ -155,7 +154,7 @@ export default function MainLayout(): React.JSX.Element {
           <h1 className="flex-1 text-center text-lg font-medium leading-none">{pageLabel}</h1>
 
           {/* ウィンドウ操作ボタン群 */}
-          <div className="absolute inset-y-0 right-0 flex [-webkit-app-region:no-drag]">
+          <div className="absolute inset-y-0 right-0 flex app-region-no-drag">
             <button
               onClick={() => window.api.window.minimize()}
               className="h-10 w-10 flex items-center justify-center hover:bg-base-300"
