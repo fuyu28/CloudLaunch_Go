@@ -38,7 +38,7 @@ export default function MainLayout(): React.JSX.Element {
   }, [currentTheme]);
 
   return (
-    <div className="drawer drawer-mobile min-h-screen bg-base-200">
+    <div className="drawer drawer-mobile min-h-screen bg-base-200 wails-no-drag">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" ref={drawerRef} />
 
       {/* サイドバー */}

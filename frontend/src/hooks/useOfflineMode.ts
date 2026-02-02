@@ -13,6 +13,7 @@
  * - react-hot-toast（トースト表示）
  */
 
+import { useCallback } from "react";
 import { useAtom } from "jotai";
 import toast from "react-hot-toast";
 
@@ -54,17 +55,20 @@ export function useOfflineMode(): OfflineModeHook {
 
   const isNetworkAvailable = !isOfflineMode;
 
-  const showOfflineError = (feature = "この機能"): void => {
+  const showOfflineError = useCallback((feature = "この機能"): void => {
     toast.error(`${feature}はオフラインモードでは利用できません`);
-  };
+  }, []);
 
-  const checkNetworkFeature = (feature = "この機能"): boolean => {
-    if (isOfflineMode) {
-      showOfflineError(feature);
-      return false;
-    }
-    return true;
-  };
+  const checkNetworkFeature = useCallback(
+    (feature = "この機能"): boolean => {
+      if (isOfflineMode) {
+        showOfflineError(feature);
+        return false;
+      }
+      return true;
+    },
+    [isOfflineMode, showOfflineError],
+  );
 
   return {
     isOfflineMode,
