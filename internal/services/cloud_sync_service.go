@@ -382,8 +382,7 @@ func (service *CloudSyncService) applyCloudGame(
 	}
 
 	if total, err := service.repository.SumPlaySessionDurationsByGame(ctx, cloud.ID); err == nil {
-		game.TotalPlayTime = total
-		if _, updateErr := service.repository.UpdateGame(ctx, game); updateErr != nil {
+		if updateErr := service.repository.UpdateGameTotalPlayTime(ctx, cloud.ID, total); updateErr != nil {
 			return 0, 0, updateErr
 		}
 	}

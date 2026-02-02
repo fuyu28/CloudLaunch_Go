@@ -334,6 +334,33 @@ func (repository *Repository) SumPlaySessionDurationsByGame(ctx context.Context,
 	return total, nil
 }
 
+// UpdateGameTotalPlayTime はゲームの総プレイ時間のみ更新する。
+func (repository *Repository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		UPDATE "Game" SET totalPlayTime = ? WHERE id = ?
+	`, totalPlayTime, gameID)
+	return error
+}
+
+// UpdateGameTotalPlayTimeWithLastPlayed は総プレイ時間と最終プレイ日時を更新する。
+func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
+	ctx context.Context,
+	gameID string,
+	totalPlayTime int64,
+	playedAt time.Time,
+) error {
+	_, error := repository.connection.ExecContext(ctx, `
+		UPDATE "Game"
+		SET totalPlayTime = ?,
+		    lastPlayed = CASE
+		      WHEN lastPlayed IS NULL OR lastPlayed < ? THEN ?
+		      ELSE lastPlayed
+		    END
+		WHERE id = ?
+	`, totalPlayTime, playedAt, playedAt, gameID)
+	return error
+}
+
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `
