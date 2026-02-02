@@ -335,9 +335,9 @@ export default function GameDetail(): React.JSX.Element {
   }
 
   return (
-    <div className="bg-base-200 px-6 py-4">
+    <div className="bg-base-200 px-6 ">
       {/* 上段：ゲーム情報カード */}
-      <div className="mb-3">
+      <div className="mb-5">
         <GameInfo
           game={game}
           isUpdatingStatus={isUpdatingStatus}
@@ -352,7 +352,7 @@ export default function GameDetail(): React.JSX.Element {
       </div>
 
       {/* 中段：プレイ統計 */}
-      <div className="mb-4">
+      <div className="mb-5">
         <PlayStatistics
           game={game}
           refreshKey={refreshKey}
@@ -362,7 +362,7 @@ export default function GameDetail(): React.JSX.Element {
       </div>
 
       {/* 下段：その他の管理機能 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* クラウドデータ管理カード */}
         <CloudDataCard
           gameId={game.id}
