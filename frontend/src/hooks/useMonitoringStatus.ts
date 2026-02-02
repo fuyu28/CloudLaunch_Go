@@ -4,7 +4,7 @@
  * プレイ状況の取得・更新と確認モーダル用の状態管理を提供します。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { logger } from "@renderer/utils/logger";
 
@@ -25,6 +25,33 @@ export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusR
   const [pendingConfirmationGame, setPendingConfirmationGame] =
     useState<MonitoringGameStatus | null>(null);
   const [pendingResumeGame, setPendingResumeGame] = useState<MonitoringGameStatus | null>(null);
+  const [isFocused, setIsFocused] = useState<boolean>(
+    typeof document !== "undefined" ? document.visibilityState === "visible" : true,
+  );
+  const hasActiveGamesRef = useRef<boolean>(false);
+  const backoffIndexRef = useRef<number>(0);
+  const pollTimeoutRef = useRef<number | null>(null);
+
+  const clearPollTimeout = useCallback((): void => {
+    if (pollTimeoutRef.current !== null) {
+      window.clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleNextPoll = useCallback(
+    (delayMs: number, handler: () => void): void => {
+      clearPollTimeout();
+      pollTimeoutRef.current = window.setTimeout(() => {
+        handler();
+      }, delayMs);
+    },
+    [clearPollTimeout],
+  );
+
+  const resetBackoff = useCallback((): void => {
+    backoffIndexRef.current = 0;
+  }, []);
 
   const updateMonitoringStatus = useCallback(async (): Promise<void> => {
     if (!autoTracking) {
@@ -34,6 +61,9 @@ export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusR
     try {
       const status = await window.api.processMonitor.getMonitoringStatus();
       setMonitoringGames(status);
+      hasActiveGamesRef.current = status.some(
+        (game) => game.isPlaying || game.isPaused || game.needsConfirmation,
+      );
       const pending = status.find((game) => game.needsConfirmation);
       if (pending && !pendingConfirmationGame) {
         setPendingConfirmationGame(pending);
@@ -49,23 +79,70 @@ export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusR
         data: error,
       });
     }
-  }, [autoTracking, pendingConfirmationGame, pendingResumeGame]);
+
+    if (!autoTracking) {
+      return;
+    }
+    const shouldFastPoll = isFocused || hasActiveGamesRef.current;
+    if (shouldFastPoll) {
+      resetBackoff();
+      scheduleNextPoll(1000, () => void updateMonitoringStatus());
+      return;
+    }
+
+    const backoffDelays = [3000, 5000, 8000, 10000];
+    const delay = backoffDelays[Math.min(backoffIndexRef.current, backoffDelays.length - 1)];
+    backoffIndexRef.current += 1;
+    scheduleNextPoll(delay, () => void updateMonitoringStatus());
+  }, [
+    autoTracking,
+    pendingConfirmationGame,
+    pendingResumeGame,
+    isFocused,
+    resetBackoff,
+    scheduleNextPoll,
+  ]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      void updateMonitoringStatus();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [updateMonitoringStatus]);
+    if (!autoTracking) {
+      clearPollTimeout();
+      return;
+    }
+    resetBackoff();
+    scheduleNextPoll(0, () => void updateMonitoringStatus());
+    return () => {
+      clearPollTimeout();
+    };
+  }, [autoTracking, clearPollTimeout, resetBackoff, scheduleNextPoll]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void updateMonitoringStatus();
-    }, 1000);
+    const handleFocus = (): void => {
+      setIsFocused(true);
+      resetBackoff();
+      scheduleNextPoll(0, () => void updateMonitoringStatus());
+    };
+    const handleBlur = (): void => {
+      setIsFocused(false);
+    };
+    const handleVisibility = (): void => {
+      const visible = document.visibilityState === "visible";
+      setIsFocused(visible);
+      if (visible) {
+        resetBackoff();
+        scheduleNextPoll(0, () => void updateMonitoringStatus());
+      }
+    };
 
-    return () => clearTimeout(timer);
-  }, [updateMonitoringStatus]);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [resetBackoff, scheduleNextPoll]);
 
   const activeGames = useMemo(
     () =>
