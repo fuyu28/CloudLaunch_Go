@@ -322,6 +322,18 @@ func (repository *Repository) DeletePlaySessionsByGame(ctx context.Context, game
 	return error
 }
 
+// SumPlaySessionDurationsByGame はゲームIDのセッション合計時間を取得する。
+func (repository *Repository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
+	row := repository.connection.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(duration), 0) FROM "PlaySession" WHERE gameId = ?
+	`, gameID)
+	var total int64
+	if err := row.Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `

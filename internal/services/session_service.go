@@ -79,6 +79,7 @@ func (service *SessionService) DeleteSession(ctx context.Context, sessionID stri
 	}
 	if session != nil {
 		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
+		service.recalculateTotalPlayTime(ctx, session.GameID)
 	}
 	return result.OkResult(true)
 }
@@ -142,12 +143,35 @@ func (service *SessionService) updateGamePlayTime(
 	}
 
 	if duration > 0 {
-		current.TotalPlayTime += duration
+		total, sumErr := service.repository.SumPlaySessionDurationsByGame(ctx, gameID)
+		if sumErr != nil {
+			service.logger.Error("セッション合計時間の取得に失敗", "error", sumErr, "gameId", gameID)
+			current.TotalPlayTime += duration
+		} else {
+			current.TotalPlayTime = total
+		}
 	}
 	if current.LastPlayed == nil || playedAt.After(*current.LastPlayed) {
 		current.LastPlayed = &playedAt
 	}
 
+	if _, err := service.repository.UpdateGame(ctx, *current); err != nil {
+		service.logger.Error("プレイ時間更新に失敗", "error", err, "gameId", gameID)
+	}
+}
+
+func (service *SessionService) recalculateTotalPlayTime(ctx context.Context, gameID string) {
+	current, err := service.repository.GetGameByID(ctx, gameID)
+	if err != nil || current == nil {
+		service.logger.Error("ゲーム取得に失敗", "error", err, "gameId", gameID)
+		return
+	}
+	total, sumErr := service.repository.SumPlaySessionDurationsByGame(ctx, gameID)
+	if sumErr != nil {
+		service.logger.Error("セッション合計時間の取得に失敗", "error", sumErr, "gameId", gameID)
+		return
+	}
+	current.TotalPlayTime = total
 	if _, err := service.repository.UpdateGame(ctx, *current); err != nil {
 		service.logger.Error("プレイ時間更新に失敗", "error", err, "gameId", gameID)
 	}
