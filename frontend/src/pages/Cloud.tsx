@@ -328,7 +328,7 @@ export default function Cloud(): React.JSX.Element {
         expandedNodes={expandedNodes}
         onToggleExpand={handleToggleExpand}
         onSelectNode={handleSelectNode}
-        onDelete={setDeleteConfirm}
+        onDelete={(item) => setDeleteConfirm(item)}
         onNavigateToDirectory={navigateToDirectory}
         onViewDetails={handleViewDetails}
       />

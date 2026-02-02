@@ -40,7 +40,7 @@ type CloudContentProps = {
   /** ノード選択コールバック */
   onSelectNode: (node: CloudDirectoryNode) => void;
   /** 削除コールバック */
-  onDelete: (item: CloudDataItem | CloudDirectoryNode) => void;
+  onDelete: (item: CloudDirectoryNode) => void;
   /** ディレクトリ移動コールバック */
   onNavigateToDirectory: (directoryName: string) => void;
   /** 詳細表示コールバック */
