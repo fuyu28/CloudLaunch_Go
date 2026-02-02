@@ -36,6 +36,7 @@ export default function MainLayout(): React.JSX.Element {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", currentTheme);
   }, [currentTheme]);
+
   return (
     <div className="drawer drawer-mobile min-h-screen bg-base-200">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" ref={drawerRef} />
@@ -132,7 +133,7 @@ export default function MainLayout(): React.JSX.Element {
           relative
           flex items-center
           h-10 bg-base-100 shadow
-          select-none app-region-drag
+          select-none wails-drag
         "
         >
           {/* ドロワー開閉ボタンは no-drag */}
@@ -144,7 +145,7 @@ export default function MainLayout(): React.JSX.Element {
               h-full w-10
               btn btn-ghost p-0 focus:outline-none
             hover:bg-base-300
-              app-region-no-drag
+              wails-no-drag
             "
           >
             <FiMenu size={22} />
@@ -154,7 +155,7 @@ export default function MainLayout(): React.JSX.Element {
           <h1 className="flex-1 text-center text-lg font-medium leading-none">{pageLabel}</h1>
 
           {/* ウィンドウ操作ボタン群 */}
-          <div className="absolute inset-y-0 right-0 flex app-region-no-drag">
+          <div className="absolute inset-y-0 right-0 flex wails-no-drag">
             <button
               onClick={() => window.api.window.minimize()}
               className="h-10 window-control flex items-center justify-center hover:bg-base-300"
