@@ -157,19 +157,19 @@ export default function MainLayout(): React.JSX.Element {
           <div className="absolute inset-y-0 right-0 flex app-region-no-drag">
             <button
               onClick={() => window.api.window.minimize()}
-              className="h-10 w-10 flex items-center justify-center hover:bg-base-300"
+              className="h-10 window-control flex items-center justify-center hover:bg-base-300"
             >
               <VscChromeMinimize />
             </button>
             <button
               onClick={() => window.api.window.toggleMaximize()}
-              className="h-10 w-10 flex items-center justify-center hover:bg-base-300"
+              className="h-10 window-control flex items-center justify-center hover:bg-base-300"
             >
               <VscChromeMaximize />
             </button>
             <button
               onClick={() => window.api.window.close()}
-              className="h-10 w-10 flex items-center justify-center hover:bg-error hover:text-error-content"
+              className="h-10 window-control flex items-center justify-center hover:bg-error hover:text-error-content"
             >
               <VscChromeClose />
             </button>

@@ -18,6 +18,11 @@
   app-region: no-drag;
 }
 
+/* Window control buttons (match OS spacing) */
+.window-control {
+  width: 46px;
+}
+
 /* Memo Editor Styles */
 .memo-textarea {
   scrollbar-width: thin;
