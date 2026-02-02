@@ -85,6 +85,27 @@ export function sumSizesRecursively(node: CloudDirectoryNode): number {
 }
 
 /**
+ * ディレクトリノードから最新の更新日時を取得
+ * @param node ディレクトリノード
+ * @returns 最新の更新日時
+ */
+export function latestModifiedRecursively(node: CloudDirectoryNode): Date {
+  const baseTime = node.lastModified instanceof Date ? node.lastModified.getTime() : 0;
+  let latest = Number.isFinite(baseTime) ? baseTime : 0;
+
+  if (node.children && node.children.length > 0) {
+    node.children.forEach((child) => {
+      const childTime = latestModifiedRecursively(child).getTime();
+      if (childTime > latest) {
+        latest = childTime;
+      }
+    });
+  }
+
+  return new Date(latest);
+}
+
+/**
  * 指定したパスの子ディレクトリ・ファイルを取得
  * @param tree ディレクトリツリー
  * @param path パス配列

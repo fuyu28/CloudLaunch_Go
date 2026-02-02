@@ -7,7 +7,13 @@
 import { FiFolder, FiFile, FiTrash2, FiChevronRight, FiChevronDown } from "react-icons/fi";
 
 import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-import { formatFileSize, formatDate, countFilesRecursively } from "@renderer/utils/cloudUtils";
+import {
+  formatFileSize,
+  formatDate,
+  countFilesRecursively,
+  sumSizesRecursively,
+  latestModifiedRecursively,
+} from "@renderer/utils/cloudUtils";
 
 /**
  * ツリーノードコンポーネントのプロパティ
@@ -34,6 +40,10 @@ export default function CloudTreeNode({
 }: CloudTreeNodeProps): React.JSX.Element {
   const isExpanded = expandedNodes.has(node.path);
   const hasChildren = node.children && node.children.length > 0;
+  const displaySize = node.isDirectory ? sumSizesRecursively(node) : node.size;
+  const displayLastModified = node.isDirectory
+    ? latestModifiedRecursively(node)
+    : node.lastModified;
 
   return (
     <>
@@ -77,7 +87,7 @@ export default function CloudTreeNode({
               {node.name}
             </div>
             <div className="text-xs text-base-content/60">
-              {formatFileSize(node.size)} • {formatDate(node.lastModified)}
+              {formatFileSize(displaySize)} • {formatDate(displayLastModified)}
               {node.isDirectory && (
                 <span className="ml-2">({countFilesRecursively(node)} ファイル)</span>
               )}
