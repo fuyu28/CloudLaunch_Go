@@ -49,7 +49,7 @@ export type UseCloudDataReturn = {
   currentDirectoryNodes: CloudDirectoryNode[];
 
   // Actions
-  fetchCloudData: () => Promise<void>;
+  fetchCloudData: (mode?: "cards" | "tree") => Promise<void>;
   navigateToDirectory: (directoryName: string) => void;
   navigateBack: () => void;
   navigateToPath: (newPath: string[]) => void;
@@ -88,54 +88,57 @@ export function useCloudData(): UseCloudDataReturn {
   /**
    * クラウドデータ一覧を取得
    */
-  const fetchCloudData = useCallback(async (): Promise<void> => {
-    setState((prev) => ({ ...prev, loading: true }));
+  const fetchCloudData = useCallback(
+    async (mode?: "cards" | "tree"): Promise<void> => {
+      setState((prev) => ({ ...prev, loading: true }));
 
-    try {
-      // 並列でデータを取得
-      const [cardResult, treeResult] = await Promise.all([
-        window.api.cloudData.listCloudData(),
-        window.api.cloudData.getDirectoryTree(),
-      ]);
+      try {
+        const shouldFetchCards = mode === "cards" || mode === undefined;
+        const shouldFetchTree = mode === "tree" || mode === undefined;
+        const [cardResult, treeResult] = await Promise.all([
+          shouldFetchCards ? window.api.cloudData.listCloudData() : Promise.resolve(null),
+          shouldFetchTree ? window.api.cloudData.getDirectoryTree() : Promise.resolve(null),
+        ]);
 
-      // カードビュー用のデータ処理
-      const cloudData = cardResult.success && cardResult.data ? cardResult.data : [];
-      if (!cardResult.success) {
-        toast.error("クラウドデータの取得に失敗しました");
-      }
+        const cloudData =
+          cardResult && cardResult.success && cardResult.data ? cardResult.data : null;
+        if (cardResult && !cardResult.success) {
+          toast.error("クラウドデータの取得に失敗しました");
+        }
 
-      // ツリービュー用のデータ処理
-      const directoryTree = treeResult.success && treeResult.data ? treeResult.data : [];
-      if (!treeResult.success) {
-        logger.warn("ディレクトリツリーの取得に失敗しました", {
+        const directoryTree =
+          treeResult && treeResult.success && treeResult.data ? treeResult.data : null;
+        if (treeResult && !treeResult.success) {
+          logger.warn("ディレクトリツリーの取得に失敗しました", {
+            component: "useCloudData",
+            function: "unknown",
+          });
+        }
+
+        clearNavigationCache();
+        setState((prev) => ({
+          cloudData: cloudData ?? prev.cloudData,
+          directoryTree: directoryTree ?? prev.directoryTree,
+          loading: false,
+          currentPath: prev.currentPath,
+        }));
+      } catch (error) {
+        logger.error("クラウドデータ取得エラー:", {
           component: "useCloudData",
           function: "unknown",
+          data: error,
         });
+        toast.error("クラウドデータの取得に失敗しました");
+        setState((prev) => ({
+          cloudData: mode === "cards" ? [] : prev.cloudData,
+          directoryTree: mode === "tree" ? [] : prev.directoryTree,
+          loading: false,
+          currentPath: prev.currentPath,
+        }));
       }
-
-      // キャッシュクリアと状態更新
-      clearNavigationCache();
-      setState({
-        cloudData,
-        directoryTree,
-        loading: false,
-        currentPath: [],
-      });
-    } catch (error) {
-      logger.error("クラウドデータ取得エラー:", {
-        component: "useCloudData",
-        function: "unknown",
-        data: error,
-      });
-      toast.error("クラウドデータの取得に失敗しました");
-      setState({
-        cloudData: [],
-        directoryTree: [],
-        loading: false,
-        currentPath: [],
-      });
-    }
-  }, [clearNavigationCache]);
+    },
+    [clearNavigationCache],
+  );
 
   /**
    * カードビューでディレクトリに移動

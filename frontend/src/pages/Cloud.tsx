@@ -236,8 +236,8 @@ export default function Cloud(): React.JSX.Element {
 
   // コンポーネントマウント時にデータを取得
   useEffect(() => {
-    fetchCloudData();
-  }, [fetchCloudData]);
+    fetchCloudData(viewMode);
+  }, [fetchCloudData, viewMode]);
 
   useEffect(() => {
     if (!isOfflineMode) {
@@ -258,7 +258,7 @@ export default function Cloud(): React.JSX.Element {
         cloudData={cloudData}
         directoryTree={directoryTree}
         loading={loading}
-        onRefresh={fetchCloudData}
+        onRefresh={() => fetchCloudData(viewMode)}
         onDeleteAll={handleDeleteAll}
       />
 
