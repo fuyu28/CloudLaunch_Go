@@ -183,6 +183,31 @@ export default function MemoForm({
     [selectedGameId, preSelectedGameId, gameTitle, games],
   );
 
+  const uploadMemoToCloud = useCallback(
+    async (targetMemoId?: string) => {
+      if (!targetMemoId) {
+        return;
+      }
+      try {
+        const uploadResult = await window.api.memo.uploadMemoToCloud(targetMemoId);
+        if (!uploadResult.success) {
+          showToast(
+            `クラウド保存に失敗しました${uploadResult.message ? `: ${uploadResult.message}` : ""}`,
+            "error",
+          );
+        }
+      } catch (error) {
+        logger.error("クラウド保存エラー:", {
+          component: "MemoForm",
+          function: "uploadMemoToCloud",
+          data: error,
+        });
+        showToast("クラウド保存中にエラーが発生しました", "error");
+      }
+    },
+    [showToast],
+  );
+
   // 保存処理
   const handleSave = useCallback(
     async (closeAfterSave: boolean = true) => {
@@ -217,6 +242,7 @@ export default function MemoForm({
           result = await window.api.memo.createMemo(createData);
           if (result.success) {
             showToast("メモを作成しました", "success");
+            void uploadMemoToCloud(result.data?.id);
             if (closeAfterSave) {
               onSaveSuccess(saveData.effectiveGameId, result.data?.id);
             }
@@ -234,6 +260,7 @@ export default function MemoForm({
           result = await window.api.memo.updateMemo(memoId, updateData);
           if (result.success) {
             showToast("メモを更新しました", "success");
+            void uploadMemoToCloud(memoId);
             if (closeAfterSave) {
               onSaveSuccess(saveData.effectiveGameId, memoId);
             }
@@ -250,7 +277,7 @@ export default function MemoForm({
         setIsSaving(false);
       }
     },
-    [mode, saveData, memoId, showToast, onSaveSuccess],
+    [mode, saveData, memoId, showToast, onSaveSuccess, uploadMemoToCloud],
   );
 
   // 戻るボタン処理
