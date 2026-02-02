@@ -7,7 +7,6 @@ import (
 	"encoding/csv"
 	"io"
 	"log/slog"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -557,7 +556,7 @@ func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error
 func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	command := exec.CommandContext(
+	command := execCommandHidden(
 		ctx,
 		"powershell",
 		"-Command",
@@ -606,7 +605,7 @@ func (service *ProcessMonitorService) getProcessesFallback() ([]ProcessInfo, err
 func (service *ProcessMonitorService) getProcessesWmic() ([]ProcessInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	command := exec.CommandContext(
+	command := execCommandHidden(
 		ctx,
 		"wmic",
 		"process",
