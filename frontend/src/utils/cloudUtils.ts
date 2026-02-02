@@ -66,6 +66,25 @@ export function countFilesRecursively(node: CloudDirectoryNode): number {
 }
 
 /**
+ * ディレクトリノードから再帰的に合計サイズを計算
+ * @param node ディレクトリノード
+ * @returns 合計サイズ
+ */
+export function sumSizesRecursively(node: CloudDirectoryNode): number {
+  if (!node.isDirectory) {
+    return node.size;
+  }
+
+  let totalSize = 0;
+  if (node.children) {
+    node.children.forEach((child) => {
+      totalSize += sumSizesRecursively(child);
+    });
+  }
+  return totalSize;
+}
+
+/**
  * 指定したパスの子ディレクトリ・ファイルを取得
  * @param tree ディレクトリツリー
  * @param path パス配列

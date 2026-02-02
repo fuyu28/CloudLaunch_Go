@@ -34,6 +34,7 @@ import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
 import { logger } from "@renderer/utils/logger";
 
+import { countFilesRecursively, sumSizesRecursively } from "@renderer/utils/cloudUtils";
 import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
 import type { GameType } from "src/types/game";
 
@@ -195,11 +196,19 @@ export default function Cloud(): React.JSX.Element {
   /**
    * ファイル詳細を表示
    */
-  const handleViewDetails = async (item: CloudDataItem): Promise<void> => {
-    setDetailsModal({ item, files: [], loading: true });
+  const handleViewDetails = async (node: CloudDirectoryNode): Promise<void> => {
+    const detailItem: CloudDataItem = {
+      name: node.name,
+      totalSize: node.isDirectory ? sumSizesRecursively(node) : node.size,
+      fileCount: node.isDirectory ? countFilesRecursively(node) : 1,
+      lastModified: node.lastModified,
+      remotePath: node.path,
+    };
+
+    setDetailsModal({ item: detailItem, files: [], loading: true });
 
     try {
-      const result = await window.api.cloudData.getCloudFileDetails(item.remotePath);
+      const result = await window.api.cloudData.getCloudFileDetails(detailItem.remotePath);
       if (result.success && result.data) {
         setDetailsModal((prev) => ({
           ...prev,
@@ -313,7 +322,6 @@ export default function Cloud(): React.JSX.Element {
       <CloudContent
         viewMode={viewMode}
         loading={loading}
-        cloudData={cloudData}
         directoryTree={directoryTree}
         currentPath={currentPath}
         currentDirectoryNodes={currentDirectoryNodes}

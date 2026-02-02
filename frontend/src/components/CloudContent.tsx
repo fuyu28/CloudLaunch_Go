@@ -14,10 +14,9 @@
 import { FiCloud, FiFolder } from "react-icons/fi";
 
 import type { ViewMode } from "./CloudHeader";
-import { CloudItemCard, DirectoryNodeCard } from "./CloudItemCard";
+import { DirectoryNodeCard } from "./CloudItemCard";
 import CloudTreeNode from "./CloudTreeNode";
 import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-import type { CloudDataItem } from "@renderer/hooks/useCloudData";
 
 /**
  * クラウドコンテンツのプロパティ
@@ -28,7 +27,6 @@ type CloudContentProps = {
   /** ローディング状態 */
   loading: boolean;
   /** クラウドデータ */
-  cloudData: CloudDataItem[];
   /** ディレクトリツリー */
   directoryTree: CloudDirectoryNode[];
   /** 現在のパス */
@@ -46,7 +44,7 @@ type CloudContentProps = {
   /** ディレクトリ移動コールバック */
   onNavigateToDirectory: (directoryName: string) => void;
   /** 詳細表示コールバック */
-  onViewDetails: (item: CloudDataItem) => void;
+  onViewDetails: (item: CloudDirectoryNode) => void;
 };
 
 /**
@@ -79,7 +77,6 @@ function EmptyState({
 export function CloudContent({
   viewMode,
   loading,
-  cloudData,
   directoryTree,
   currentPath,
   currentDirectoryNodes,
@@ -103,8 +100,8 @@ export function CloudContent({
       <div>
         {/* カード表示 */}
         {currentPath.length === 0 ? (
-          // ルートレベル - CloudDataItemを表示
-          cloudData.length === 0 ? (
+          // ルートレベル - DirectoryNodeCardを表示
+          directoryTree.length === 0 ? (
             <EmptyState
               icon={FiCloud}
               title="クラウドデータがありません"
@@ -112,13 +109,13 @@ export function CloudContent({
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cloudData.map((item, index) => (
-                <CloudItemCard
-                  key={index}
-                  item={item}
-                  onDelete={onDelete}
+              {directoryTree.map((node, index) => (
+                <DirectoryNodeCard
+                  key={`${node.path}-${index}`}
+                  node={node}
+                  onDelete={() => onDelete(node)}
                   onViewDetails={onViewDetails}
-                  onNavigate={() => onNavigateToDirectory(item.remotePath)}
+                  onNavigate={node.isDirectory ? () => onNavigateToDirectory(node.path) : undefined}
                 />
               ))}
             </div>
@@ -137,6 +134,7 @@ export function CloudContent({
                 key={`${node.path}-${index}`}
                 node={node}
                 onNavigate={node.isDirectory ? () => onNavigateToDirectory(node.path) : undefined}
+                onViewDetails={onViewDetails}
                 onDelete={() => onDelete(node)}
               />
             ))}

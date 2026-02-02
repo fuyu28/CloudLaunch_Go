@@ -7,7 +7,12 @@
 import { FiFolder, FiFile, FiTrash2 } from "react-icons/fi";
 
 import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-import { formatFileSize, formatDate, countFilesRecursively } from "@renderer/utils/cloudUtils";
+import {
+  formatFileSize,
+  formatDate,
+  countFilesRecursively,
+  sumSizesRecursively,
+} from "@renderer/utils/cloudUtils";
 import type { CloudDataItem } from "@renderer/hooks/useCloudData";
 
 /**
@@ -95,6 +100,7 @@ type DirectoryNodeCardProps = {
   node: CloudDirectoryNode;
   onNavigate?: (directoryName: string) => void;
   onDelete: (node: CloudDirectoryNode) => void;
+  onViewDetails?: (node: CloudDirectoryNode) => void;
 };
 
 /**
@@ -104,12 +110,15 @@ export function DirectoryNodeCard({
   node,
   onNavigate,
   onDelete,
+  onViewDetails,
 }: DirectoryNodeCardProps): React.JSX.Element {
   const handleClick = (): void => {
     if (node.isDirectory && onNavigate) {
       onNavigate(node.name);
     }
   };
+
+  const totalSize = node.isDirectory ? sumSizesRecursively(node) : node.size;
 
   return (
     <div
@@ -136,12 +145,24 @@ export function DirectoryNodeCard({
                   <span>{countFilesRecursively(node)} ファイル</span>
                 </div>
               )}
-              <div>{formatFileSize(node.size)}</div>
+              <div>{formatFileSize(totalSize)}</div>
             </div>
           </div>
         </div>
 
         <div className="flex gap-2 flex-shrink-0">
+          {onViewDetails && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(node);
+              }}
+              className="btn btn-sm btn-ghost tooltip"
+              data-tip="詳細表示"
+            >
+              <FiFile className="text-base" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
