@@ -2,7 +2,6 @@ import { isValidCredsAtom } from "@renderer/state/credentials";
 import { visibleGamesAtom, currentGameIdAtom } from "@renderer/state/home";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useState } from "react";
-import { FaArrowLeftLong } from "react-icons/fa6";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 
 import CloudDataCard from "@renderer/components/CloudDataCard";
@@ -119,8 +118,6 @@ export default function GameDetail(): React.JSX.Element {
       validateCreds();
     }
   }, [validateCreds, isOfflineMode]);
-
-  const handleBack = useCallback(() => navigate(-1), [navigate]);
 
   // セーブデータ操作のコールバック
   const handleUploadSaveData = useCallback(async (): Promise<void> => {
@@ -339,11 +336,6 @@ export default function GameDetail(): React.JSX.Element {
 
   return (
     <div className="bg-base-200 px-6 py-4">
-      <button onClick={handleBack} className="btn btn-ghost mb-4">
-        <FaArrowLeftLong />
-        戻る
-      </button>
-
       {/* 上段：ゲーム情報カード */}
       <div className="mb-3">
         <GameInfo

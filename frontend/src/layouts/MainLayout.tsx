@@ -3,21 +3,23 @@ import { useAtom } from "jotai";
 import { useRef, useEffect } from "react";
 import { Toaster } from "react-hot-toast";
 import { FaEdit } from "react-icons/fa";
-import { FiMenu, FiCloud } from "react-icons/fi";
+import { FiMenu, FiCloud, FiArrowLeft } from "react-icons/fi";
 import { IoIosHome, IoIosSettings } from "react-icons/io";
 import { VscChromeClose, VscChromeMaximize, VscChromeMinimize } from "react-icons/vsc";
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import PlayStatusBar from "@renderer/components/PlayStatusBar";
 
 export default function MainLayout(): React.JSX.Element {
   const location = useLocation();
+  const navigate = useNavigate();
   const drawerRef = useRef<HTMLInputElement>(null);
   const [currentTheme] = useAtom(themeAtom);
   const isHome = location.pathname === "/";
   const isSettings = location.pathname === "/settings";
   const isMemo = location.pathname === "/memo" || location.pathname.startsWith("/memo/");
   const isCloud = location.pathname === "/cloud";
+  const isGameDetail = location.pathname.startsWith("/game/");
 
   const pageMap: [boolean, string][] = [
     [isHome, "ホーム"],
@@ -137,19 +139,38 @@ export default function MainLayout(): React.JSX.Element {
         "
         >
           {/* ドロワー開閉ボタンは no-drag */}
-          <label
-            htmlFor="main-drawer"
-            className="
-              absolute inset-y-0 left-0
-              flex items-center justify-center
-              h-full w-10
-              btn btn-ghost p-0 focus:outline-none
-            hover:bg-base-300
-              wails-no-drag
-            "
-          >
-            <FiMenu size={22} />
-          </label>
+          {isGameDetail ? (
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="
+                absolute inset-y-0 left-0
+                flex items-center justify-center
+                h-full w-10
+                btn btn-ghost p-0 focus:outline-none
+              hover:bg-base-300
+                wails-no-drag
+              "
+              aria-label="ホームに戻る"
+            >
+              <FiArrowLeft size={22} />
+            </button>
+          ) : (
+            <label
+              htmlFor="main-drawer"
+              className="
+                absolute inset-y-0 left-0
+                flex items-center justify-center
+                h-full w-10
+                btn btn-ghost p-0 focus:outline-none
+              hover:bg-base-300
+                wails-no-drag
+              "
+              aria-label="メニューを開く"
+            >
+              <FiMenu size={22} />
+            </label>
+          )}
 
           {/* 中央タイトルもドラッグ可能 */}
           <h1 className="flex-1 text-center text-lg font-medium leading-none">{pageLabel}</h1>
