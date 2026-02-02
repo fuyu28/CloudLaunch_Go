@@ -101,6 +101,7 @@ func (service *SessionService) UpdateSessionChapter(ctx context.Context, session
 	}
 	if session != nil {
 		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
+		service.recalculateTotalPlayTime(ctx, session.GameID)
 	}
 	return result.OkResult(true)
 }
@@ -126,6 +127,7 @@ func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID 
 	}
 	if session != nil {
 		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
+		service.recalculateTotalPlayTime(ctx, session.GameID)
 	}
 	return result.OkResult(true)
 }
