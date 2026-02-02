@@ -10,7 +10,12 @@ import { toast } from "react-hot-toast";
 import { logger } from "@renderer/utils/logger";
 
 import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-import { getNodesByPath } from "@renderer/utils/cloudUtils";
+import {
+  countFilesRecursively,
+  getNodesByPath,
+  latestModifiedRecursively,
+  sumSizesRecursively,
+} from "@renderer/utils/cloudUtils";
 
 // CloudDirectoryNodeを再エクスポート
 export type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
@@ -57,6 +62,27 @@ export type UseCloudDataReturn = {
   clearNavigationCache: () => void;
 };
 
+function buildCloudDataFromTree(tree: CloudDirectoryNode[]): CloudDataItem[] {
+  return tree.map((node) => {
+    if (node.isDirectory) {
+      return {
+        name: node.name,
+        totalSize: sumSizesRecursively(node),
+        fileCount: countFilesRecursively(node),
+        lastModified: latestModifiedRecursively(node),
+        remotePath: node.path,
+      };
+    }
+    return {
+      name: node.name,
+      totalSize: node.size,
+      fileCount: 1,
+      lastModified: node.lastModified,
+      remotePath: node.path,
+    };
+  });
+}
+
 /**
  * クラウドデータ管理フック
  */
@@ -93,18 +119,8 @@ export function useCloudData(): UseCloudDataReturn {
       setState((prev) => ({ ...prev, loading: true }));
 
       try {
-        const shouldFetchCards = mode === "cards" || mode === undefined;
-        const shouldFetchTree = mode === "tree" || mode === undefined;
-        const [cardResult, treeResult] = await Promise.all([
-          shouldFetchCards ? window.api.cloudData.listCloudData() : Promise.resolve(null),
-          shouldFetchTree ? window.api.cloudData.getDirectoryTree() : Promise.resolve(null),
-        ]);
-
-        const cloudData =
-          cardResult && cardResult.success && cardResult.data ? cardResult.data : null;
-        if (cardResult && !cardResult.success) {
-          toast.error("クラウドデータの取得に失敗しました");
-        }
+        const shouldFetchTree = mode === "tree" || mode === "cards" || mode === undefined;
+        const treeResult = shouldFetchTree ? await window.api.cloudData.getDirectoryTree() : null;
 
         const directoryTree =
           treeResult && treeResult.success && treeResult.data ? treeResult.data : null;
@@ -117,7 +133,7 @@ export function useCloudData(): UseCloudDataReturn {
 
         clearNavigationCache();
         setState((prev) => ({
-          cloudData: cloudData ?? prev.cloudData,
+          cloudData: directoryTree ? buildCloudDataFromTree(directoryTree) : prev.cloudData,
           directoryTree: directoryTree ?? prev.directoryTree,
           loading: false,
           currentPath: prev.currentPath,
@@ -130,8 +146,8 @@ export function useCloudData(): UseCloudDataReturn {
         });
         toast.error("クラウドデータの取得に失敗しました");
         setState((prev) => ({
-          cloudData: mode === "cards" ? [] : prev.cloudData,
-          directoryTree: mode === "tree" ? [] : prev.directoryTree,
+          cloudData: mode === "cards" || mode === undefined ? [] : prev.cloudData,
+          directoryTree: mode === "tree" || mode === undefined ? [] : prev.directoryTree,
           loading: false,
           currentPath: prev.currentPath,
         }));
