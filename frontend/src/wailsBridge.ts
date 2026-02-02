@@ -137,7 +137,7 @@ export type WindowApi = {
     getMemoFilePath: (memoId: string) => Promise<ApiResult<string>>;
     getGameMemoDir: (gameId: string) => Promise<ApiResult<string>>;
     uploadMemoToCloud: (memoId: string) => Promise<ApiResult<void>>;
-    downloadMemoFromCloud: (gameTitle: string, memoFileName: string) => Promise<ApiResult<string>>;
+    downloadMemoFromCloud: (gameId: string, memoFileName: string) => Promise<ApiResult<string>>;
     getCloudMemos: () => Promise<ApiResult<CloudMemoInfo[]>>;
     syncMemosFromCloud: (gameId?: string) => Promise<ApiResult<MemoSyncResult>>;
   };
@@ -479,8 +479,8 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      downloadMemoFromCloud: async (gameTitle, memoFileName) => {
-        const result = await DownloadMemoFromCloud(gameTitle, memoFileName);
+      downloadMemoFromCloud: async (gameId, memoFileName) => {
+        const result = await DownloadMemoFromCloud(gameId, memoFileName);
         return result.success
           ? { success: true, data: result.data as string }
           : { success: false, message: result.error?.message ?? "エラー" };

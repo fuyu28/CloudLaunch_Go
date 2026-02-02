@@ -30,16 +30,16 @@ func SanitizeForCloudPath(name string) string {
 }
 
 // BuildMemoPath はメモのクラウドパスを生成する。
-func BuildMemoPath(gameTitle string, memoTitle string, memoID string) string {
-	return "games/" + SanitizeForCloudPath(gameTitle) + "/memo/" + SanitizeForCloudPath(memoTitle) + "_" + memoID + ".md"
+func BuildMemoPath(gameID string, memoTitle string, memoID string) string {
+	return "games/" + strings.TrimSpace(gameID) + "/memo/" + SanitizeForCloudPath(memoTitle) + "_" + memoID + ".md"
 }
 
 // BuildMemoPrefix はメモのプレフィックスを生成する。
-func BuildMemoPrefix(gameTitle string) string {
-	if strings.TrimSpace(gameTitle) == "" {
+func BuildMemoPrefix(gameID string) string {
+	if strings.TrimSpace(gameID) == "" {
 		return "games/"
 	}
-	return "games/" + SanitizeForCloudPath(gameTitle) + "/memo/"
+	return "games/" + strings.TrimSpace(gameID) + "/memo/"
 }
 
 // IsMemoPath はメモパスかどうか判定する。
@@ -48,7 +48,7 @@ func IsMemoPath(path string) bool {
 }
 
 // ExtractMemoInfo はメモパスから情報を抽出する。
-func ExtractMemoInfo(path string) (gameTitle string, memoTitle string, memoID string, ok bool) {
+func ExtractMemoInfo(path string) (gameID string, memoTitle string, memoID string, ok bool) {
 	matches := memoPathRegex.FindStringSubmatch(path)
 	if len(matches) != 4 {
 		return "", "", "", false

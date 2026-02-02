@@ -79,8 +79,8 @@ export type CloudMemoInfo = {
   key: string;
   /** ファイル名 */
   fileName: string;
-  /** ゲームタイトル */
-  gameTitle: string;
+  /** ゲームID */
+  gameId: string;
   /** メモタイトル（ファイル名から抽出） */
   memoTitle: string;
   /** メモID（ファイル名から抽出） */

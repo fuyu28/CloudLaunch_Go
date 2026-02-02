@@ -20,7 +20,7 @@ import (
 type CloudMemoInfo struct {
 	Key          string    `json:"key"`
 	FileName     string    `json:"fileName"`
-	GameTitle    string    `json:"gameTitle"`
+	GameID       string    `json:"gameId"`
 	MemoTitle    string    `json:"memoTitle"`
 	MemoID       string    `json:"memoId"`
 	LastModified time.Time `json:"lastModified"`
@@ -57,7 +57,7 @@ func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
 		if !memo.IsMemoPath(obj.Key) {
 			continue
 		}
-		gameTitle, memoTitle, memoID, ok := memo.ExtractMemoInfo(obj.Key)
+		gameID, memoTitle, memoID, ok := memo.ExtractMemoInfo(obj.Key)
 		if !ok {
 			continue
 		}
@@ -65,7 +65,7 @@ func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
 		memos = append(memos, CloudMemoInfo{
 			Key:          obj.Key,
 			FileName:     fileName,
-			GameTitle:    gameTitle,
+			GameID:       gameID,
 			MemoTitle:    memoTitle,
 			MemoID:       memoID,
 			LastModified: time.UnixMilli(obj.LastModified),
@@ -77,16 +77,16 @@ func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
 }
 
 // DownloadMemoFromCloud はクラウドからメモ内容を取得する。
-func (app *App) DownloadMemoFromCloud(gameTitle string, memoFileName string) result.ApiResult[string] {
+func (app *App) DownloadMemoFromCloud(gameID string, memoFileName string) result.ApiResult[string] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return errorResult[string]("メモのダウンロードに失敗しました", error)
 	}
-	if strings.TrimSpace(gameTitle) == "" || strings.TrimSpace(memoFileName) == "" {
+	if strings.TrimSpace(gameID) == "" || strings.TrimSpace(memoFileName) == "" {
 		return result.ErrorResult[string]("メモのダウンロードに失敗しました", "入力が不正です")
 	}
-	key := fmt.Sprintf("games/%s/memo/%s", memo.SanitizeForCloudPath(gameTitle), memoFileName)
+	key := fmt.Sprintf("games/%s/memo/%s", strings.TrimSpace(gameID), memoFileName)
 	payload, error := storage.DownloadObject(ctx, client, bucket, key)
 	if error != nil {
 		return errorResult[string]("メモのダウンロードに失敗しました", error)
@@ -116,7 +116,7 @@ func (app *App) UploadMemoToCloud(memoID string) result.ApiResult[bool] {
 		return result.ErrorResult[bool]("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
-	key := memo.BuildMemoPath(game.Title, memoData.Title, memoData.ID)
+	key := memo.BuildMemoPath(game.ID, memoData.Title, memoData.ID)
 	payload := memo.GenerateCloudMemoFileContent(memoData.Title, memoData.Content, game.Title)
 	if error := storage.UploadBytes(ctx, client, bucket, key, []byte(payload), "text/markdown"); error != nil {
 		return errorResult[bool]("メモのアップロードに失敗しました", error)
@@ -163,7 +163,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 
 	cloudMap := map[string]CloudMemoInfo{}
 	for _, cloudMemo := range cloudMemos {
-		cloudMap[fmt.Sprintf("%s:%s", cloudMemo.GameTitle, cloudMemo.MemoID)] = cloudMemo
+		cloudMap[fmt.Sprintf("%s:%s", cloudMemo.GameID, cloudMemo.MemoID)] = cloudMemo
 	}
 
 	games, error := app.Database.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
@@ -171,13 +171,8 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 		return errorResult[MemoSyncResult]("メモ同期に失敗しました", error)
 	}
 	gameByID := map[string]models.Game{}
-	gameBySanitizedTitle := map[string]models.Game{}
 	for _, game := range games {
 		gameByID[game.ID] = game
-		sanitized := memo.SanitizeForCloudPath(game.Title)
-		if _, exists := gameBySanitizedTitle[sanitized]; !exists {
-			gameBySanitizedTitle[sanitized] = game
-		}
 	}
 
 	localMemos, error := fetchLocalMemos(ctx, app.Database, gameID)
@@ -197,8 +192,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 		if targetGame != nil && game.ID != targetGame.ID {
 			continue
 		}
-		sanitizedGameTitle := memo.SanitizeForCloudPath(game.Title)
-		key := fmt.Sprintf("%s:%s", sanitizedGameTitle, localMemo.ID)
+		key := fmt.Sprintf("%s:%s", game.ID, localMemo.ID)
 		cloudMemo, exists := cloudMap[key]
 		if !exists {
 			if error := uploadMemoContent(ctx, client, bucket, game, localMemo); error != nil {
@@ -246,20 +240,15 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 		processed[key] = true
 	}
 
-	targetSanitized := ""
-	if targetGame != nil {
-		targetSanitized = memo.SanitizeForCloudPath(targetGame.Title)
-	}
-
 	for _, cloudMemo := range cloudMemos {
-		if targetSanitized != "" && cloudMemo.GameTitle != targetSanitized {
+		if targetGame != nil && cloudMemo.GameID != targetGame.ID {
 			continue
 		}
-		key := fmt.Sprintf("%s:%s", cloudMemo.GameTitle, cloudMemo.MemoID)
+		key := fmt.Sprintf("%s:%s", cloudMemo.GameID, cloudMemo.MemoID)
 		if processed[key] {
 			continue
 		}
-		game, ok := gameBySanitizedTitle[cloudMemo.GameTitle]
+		game, ok := gameByID[cloudMemo.GameID]
 		if !ok {
 			resultData.Skipped++
 			resultData.Details = append(resultData.Details, fmt.Sprintf("ゲームが見つからないためスキップ: %s", cloudMemo.MemoTitle))
@@ -340,7 +329,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 }
 
 func uploadMemoContent(ctx context.Context, client *s3.Client, bucket string, game models.Game, memoData models.Memo) error {
-	key := memo.BuildMemoPath(game.Title, memoData.Title, memoData.ID)
+	key := memo.BuildMemoPath(game.ID, memoData.Title, memoData.ID)
 	payload := memo.GenerateCloudMemoFileContent(memoData.Title, memoData.Content, game.Title)
 	return storage.UploadBytes(ctx, client, bucket, key, []byte(payload), "text/markdown")
 }
