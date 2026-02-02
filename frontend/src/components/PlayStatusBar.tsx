@@ -53,10 +53,11 @@ export function PlayStatusBar(): React.JSX.Element {
     saveFolderPath: string;
     localHash: string;
   } | null>(null);
+  const [uploadingAfterEndGameId, setUploadingAfterEndGameId] = useState<string | null>(null);
   const [, setCurrentTime] = useState<Date>(new Date());
   const { formatShort } = useTimeFormat();
   const { isOfflineMode } = useOfflineMode();
-  const { showToast } = useToastHandler();
+  const { showToast, showLoading, showSuccess, showError } = useToastHandler();
 
   // 監視状況を更新
   const updateMonitoringStatus = React.useCallback(async (): Promise<void> => {
@@ -164,6 +165,9 @@ export function PlayStatusBar(): React.JSX.Element {
       if (isOfflineMode || !isValidCreds) {
         return;
       }
+      if (uploadingAfterEndGameId === gameId) {
+        return;
+      }
       const game = await window.api.database.getGameById(gameId);
       if (!game || !game.saveFolderPath) {
         return;
@@ -183,7 +187,7 @@ export function PlayStatusBar(): React.JSX.Element {
         });
       }
     },
-    [isOfflineMode, isValidCreds],
+    [isOfflineMode, isValidCreds, uploadingAfterEndGameId],
   );
 
   const handleEnd = async (gameId: string): Promise<void> => {
@@ -215,18 +219,45 @@ export function PlayStatusBar(): React.JSX.Element {
 
   const handleUploadAfterEnd = async (): Promise<void> => {
     if (!pendingUpload) return;
-    const remotePath = createRemotePath(pendingUpload.gameId);
-    const result = await window.api.saveData.upload.uploadSaveDataFolder(
-      pendingUpload.saveFolderPath,
-      remotePath,
-    );
-    if (result.success) {
-      await window.api.saveData.hash.saveCloudHash(pendingUpload.gameId, pendingUpload.localHash);
-      showToast("セーブデータをクラウドにアップロードしました", "success");
-    } else {
-      showToast(result.message || "セーブデータのアップロードに失敗しました", "error");
-    }
+    const payload = pendingUpload;
     setPendingUpload(null);
+    setUploadingAfterEndGameId(payload.gameId);
+    const toastId = showLoading("セーブデータをアップロード中…");
+    try {
+      const remotePath = createRemotePath(payload.gameId);
+      const result = await window.api.saveData.upload.uploadSaveDataFolder(
+        payload.saveFolderPath,
+        remotePath,
+      );
+      if (result.success) {
+        await window.api.saveData.hash.saveCloudHash(payload.gameId, payload.localHash);
+        if (toastId) {
+          showSuccess("セーブデータをクラウドにアップロードしました", toastId);
+        } else {
+          showToast("セーブデータをクラウドにアップロードしました", "success");
+        }
+      } else {
+        const message = result.message || "セーブデータのアップロードに失敗しました";
+        if (toastId) {
+          showError(message, toastId);
+        } else {
+          showToast(message, "error");
+        }
+      }
+    } catch (error) {
+      logger.error("セーブデータのアップロードに失敗しました:", {
+        component: "PlayStatusBar",
+        function: "handleUploadAfterEnd",
+        data: error,
+      });
+      if (toastId) {
+        showError("セーブデータのアップロードに失敗しました", toastId);
+      } else {
+        showToast("セーブデータのアップロードに失敗しました", "error");
+      }
+    } finally {
+      setUploadingAfterEndGameId(null);
+    }
   };
 
   const handleSkipUploadAfterEnd = (): void => {
