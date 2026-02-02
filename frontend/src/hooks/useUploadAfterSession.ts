@@ -7,7 +7,7 @@
 import { useCallback, useState } from "react";
 
 import { logger } from "@renderer/utils/logger";
-import { createRemotePath } from "@renderer/utils";
+import { uploadSaveDataAndSyncHash } from "@renderer/utils/saveDataUpload";
 
 import type { ToastHandler } from "@renderer/hooks/useToastHandler";
 
@@ -70,13 +70,12 @@ export function useUploadAfterSession(
     setUploadingAfterEndGameId(payload.gameId);
     const toastId = toastHandler.showLoading("セーブデータをアップロード中…");
     try {
-      const remotePath = createRemotePath(payload.gameId);
-      const result = await window.api.saveData.upload.uploadSaveDataFolder(
-        payload.saveFolderPath,
-        remotePath,
-      );
+      const result = await uploadSaveDataAndSyncHash({
+        gameId: payload.gameId,
+        saveFolderPath: payload.saveFolderPath,
+        localHash: payload.localHash,
+      });
       if (result.success) {
-        await window.api.saveData.hash.saveCloudHash(payload.gameId, payload.localHash);
         if (toastId) {
           toastHandler.showSuccess("セーブデータをクラウドにアップロードしました", toastId);
         } else {

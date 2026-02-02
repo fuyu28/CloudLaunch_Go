@@ -26,7 +26,7 @@ import { useState, useCallback } from "react";
 import { handleApiError, withLoadingToast } from "@renderer/utils/errorHandler";
 
 import type { GameType } from "src/types/game";
-import { createRemotePath } from "@renderer/utils";
+import { uploadSaveDataAndSyncHash } from "@renderer/utils/saveDataUpload";
 
 /**
  * ゲームセーブデータ操作フックの戻り値
@@ -71,20 +71,17 @@ export function useGameSaveData(): GameSaveDataResult {
     setIsUploading(true);
 
     try {
-      // リモートパスの生成（ゲームIDベース）
-      const remotePath = createRemotePath(game.id);
-
       // アップロード実行（トースト付き）
       await withLoadingToast(
-        () => window.api.saveData.upload.uploadSaveDataFolder(game.saveFolderPath!, remotePath),
+        () =>
+          uploadSaveDataAndSyncHash({
+            gameId: game.id,
+            saveFolderPath: game.saveFolderPath!,
+          }),
         "セーブデータをアップロード中…",
         "セーブデータのアップロードに成功しました。",
         "セーブデータのアップロード",
       );
-      const hashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
-      if (hashResult.success && hashResult.data) {
-        await window.api.saveData.hash.saveCloudHash(game.id, hashResult.data);
-      }
     } finally {
       setIsUploading(false);
     }
