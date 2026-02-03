@@ -19,6 +19,10 @@ export default function ErogameScapeSearchModal({
   onClose,
   onSelect,
 }: ErogameScapeSearchModalProps): React.JSX.Element {
+  const sanitizeExternalUrl = useCallback((value: string): string => {
+    return value.replace(/~/g, "%7E");
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ErogameScapeSearchItem[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -191,9 +195,9 @@ export default function ErogameScapeSearchModal({
                       <button
                         type="button"
                         className="btn btn-sm btn-ghost"
-                        onClick={() => BrowserOpenURL(item.gameUrl)}
+                        onClick={() => BrowserOpenURL(sanitizeExternalUrl(item.gameUrl))}
                       >
-                        ページ
+                        開く
                       </button>
                       <button
                         type="button"
