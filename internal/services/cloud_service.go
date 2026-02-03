@@ -43,7 +43,15 @@ func (service *CloudService) UploadFolder(
 		return result.ErrorResult[storage.UploadSummary](message, detail)
 	}
 
-	summary, error := storage.UploadFolder(ctx, client, cfg.Bucket, folderPath, prefix, service.config.S3UploadConcurrency)
+	summary, error := storage.UploadFolder(
+		ctx,
+		client,
+		cfg.Bucket,
+		folderPath,
+		prefix,
+		service.config.S3UploadConcurrency,
+		service.config.S3TransferRetryCount,
+	)
 	if error != nil {
 		service.logger.Error("フォルダアップロードに失敗", "error", error)
 		return result.ErrorResult[storage.UploadSummary]("フォルダアップロードに失敗しました", error.Error())
@@ -93,6 +101,14 @@ func (service *CloudService) SetUploadConcurrency(value int) {
 		return
 	}
 	service.config.S3UploadConcurrency = value
+}
+
+// SetTransferRetryCount はアップロード/ダウンロードのリトライ回数を更新する。
+func (service *CloudService) SetTransferRetryCount(value int) {
+	if value < 0 {
+		return
+	}
+	service.config.S3TransferRetryCount = value
 }
 
 // validateCloudInput はクラウドアップロード入力の基本チェックを行う。

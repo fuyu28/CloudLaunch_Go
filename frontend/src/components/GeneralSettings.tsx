@@ -32,7 +32,8 @@ import {
   defaultFilterStateAtom,
   offlineModeAtom,
   autoTrackingAtom,
-  uploadConcurrencyAtom,
+  transferConcurrencyAtom,
+  transferRetryCountAtom,
   sortOptionLabels,
   filterStateLabels,
 } from "../state/settings";
@@ -54,7 +55,8 @@ export default function GeneralSettings(): React.JSX.Element {
   const [defaultFilterState, setDefaultFilterState] = useAtom(defaultFilterStateAtom);
   const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom);
   const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom);
-  const [uploadConcurrency, setUploadConcurrency] = useAtom(uploadConcurrencyAtom);
+  const [transferConcurrency, setTransferConcurrency] = useAtom(transferConcurrencyAtom);
+  const [transferRetryCount, setTransferRetryCount] = useAtom(transferRetryCountAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // ソート変更ハンドラー
@@ -119,32 +121,60 @@ export default function GeneralSettings(): React.JSX.Element {
     }
   };
 
-  const applyUploadConcurrency = async (value: number, showToast: boolean): Promise<void> => {
+  const applyTransferConcurrency = async (value: number, showToast: boolean): Promise<void> => {
     try {
       const result = await window.api.settings.updateUploadConcurrency(value);
       if (!result.success) {
         if (showToast) {
-          toast.error("同時アップロード数の更新に失敗しました");
+          toast.error("同時転送数の更新に失敗しました");
         }
       } else if (showToast) {
-        toast.success(`同時アップロード数を ${value} に設定しました`);
+        toast.success(`同時転送数を ${value} に設定しました`);
       }
     } catch (error) {
-      logger.error("同時アップロード数設定の更新エラー:", {
+      logger.error("同時転送数設定の更新エラー:", {
         component: "GeneralSettings",
         function: "unknown",
         data: error,
       });
       if (showToast) {
-        toast.error("同時アップロード数の更新に失敗しました");
+        toast.error("同時転送数の更新に失敗しました");
       }
     }
   };
 
-  const handleUploadConcurrencyChange = async (value: number): Promise<void> => {
+  const handleTransferConcurrencyChange = async (value: number): Promise<void> => {
     const nextValue = Math.min(32, Math.max(1, value));
-    setUploadConcurrency(nextValue);
-    await applyUploadConcurrency(nextValue, true);
+    setTransferConcurrency(nextValue);
+    await applyTransferConcurrency(nextValue, true);
+  };
+
+  const applyTransferRetryCount = async (value: number, showToast: boolean): Promise<void> => {
+    try {
+      const result = await window.api.settings.updateTransferRetryCount(value);
+      if (!result.success) {
+        if (showToast) {
+          toast.error("リトライ回数の更新に失敗しました");
+        }
+      } else if (showToast) {
+        toast.success(`リトライ回数を ${value} に設定しました`);
+      }
+    } catch (error) {
+      logger.error("リトライ回数設定の更新エラー:", {
+        component: "GeneralSettings",
+        function: "unknown",
+        data: error,
+      });
+      if (showToast) {
+        toast.error("リトライ回数の更新に失敗しました");
+      }
+    }
+  };
+
+  const handleTransferRetryCountChange = async (value: number): Promise<void> => {
+    const nextValue = Math.min(10, Math.max(0, value));
+    setTransferRetryCount(nextValue);
+    await applyTransferRetryCount(nextValue, true);
   };
 
   // ログフォルダを開くハンドラー
@@ -195,7 +225,11 @@ export default function GeneralSettings(): React.JSX.Element {
   };
 
   useEffect(() => {
-    void applyUploadConcurrency(uploadConcurrency, false);
+    void applyTransferConcurrency(transferConcurrency, false);
+  }, []);
+
+  useEffect(() => {
+    void applyTransferRetryCount(transferRetryCount, false);
   }, []);
 
   useEffect(() => {
@@ -293,10 +327,33 @@ export default function GeneralSettings(): React.JSX.Element {
                 </label>
               </div>
 
+              {/* リトライ回数 */}
+              <div className="form-control mt-4">
+                <label className="label p-0 mb-2">
+                  <span className="label-text font-medium">リトライ回数</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={1}
+                    className="input input-bordered input-sm w-24"
+                    value={transferRetryCount}
+                    onChange={(e) => setTransferRetryCount(Number(e.target.value))}
+                    onBlur={(e) => handleTransferRetryCountChange(Number(e.target.value))}
+                  />
+                  <span className="text-xs text-base-content/50">0〜10</span>
+                </div>
+                <p className="text-xs text-base-content/50 mt-2">
+                  アップロード/ダウンロード共通のリトライ回数です
+                </p>
+              </div>
+
               {/* 同時アップロード数 */}
               <div className="form-control mt-4">
                 <label className="label p-0 mb-2">
-                  <span className="label-text font-medium">同時アップロード数</span>
+                  <span className="label-text font-medium">同時転送数</span>
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -305,14 +362,14 @@ export default function GeneralSettings(): React.JSX.Element {
                     max={32}
                     step={1}
                     className="input input-bordered input-sm w-24"
-                    value={uploadConcurrency}
-                    onChange={(e) => setUploadConcurrency(Number(e.target.value))}
-                    onBlur={(e) => handleUploadConcurrencyChange(Number(e.target.value))}
+                    value={transferConcurrency}
+                    onChange={(e) => setTransferConcurrency(Number(e.target.value))}
+                    onBlur={(e) => handleTransferConcurrencyChange(Number(e.target.value))}
                   />
                   <span className="text-xs text-base-content/50">1〜32</span>
                 </div>
                 <p className="text-xs text-base-content/50 mt-2">
-                  セーブや画像の同時アップロード数を調整します
+                  アップロード/ダウンロード共通の同時転送数です
                 </p>
               </div>
             </div>

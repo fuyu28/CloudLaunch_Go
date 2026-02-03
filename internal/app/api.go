@@ -210,6 +210,18 @@ func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateTransferRetryCount はアップロード/ダウンロードのリトライ回数を更新する。
+func (app *App) UpdateTransferRetryCount(value int) result.ApiResult[bool] {
+	if value < 0 {
+		return result.ErrorResult[bool]("リトライ回数が不正です", "valueが不正です")
+	}
+	app.Config.S3TransferRetryCount = value
+	if app.CloudService != nil {
+		app.CloudService.SetTransferRetryCount(value)
+	}
+	return result.OkResult(true)
+}
+
 // GetMonitoringStatus は監視状態を取得する。
 func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {

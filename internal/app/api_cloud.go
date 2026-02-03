@@ -303,7 +303,15 @@ func (app *App) DownloadSaveData(localPath string, remotePath string) result.Api
 	if error != nil {
 		return errorResult[bool]("ダウンロードに失敗しました", error)
 	}
-	if error := storage.DownloadPrefix(ctx, client, bucket, remotePath, localPath); error != nil {
+	if error := storage.DownloadPrefix(
+		ctx,
+		client,
+		bucket,
+		remotePath,
+		localPath,
+		app.Config.S3UploadConcurrency,
+		app.Config.S3TransferRetryCount,
+	); error != nil {
 		return errorResult[bool]("ダウンロードに失敗しました", error)
 	}
 	return result.OkResult(true)

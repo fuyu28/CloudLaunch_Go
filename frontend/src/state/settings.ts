@@ -57,10 +57,16 @@ export const offlineModeAtom = atomWithStorage<boolean>("offlineMode", false);
 export const autoTrackingAtom = atomWithStorage<boolean>("autoTracking", true);
 
 /**
- * 同時アップロード数設定atom
+ * 同時転送数設定atom（アップロード/ダウンロード共通）
  * LocalStorageに自動保存される
  */
-export const uploadConcurrencyAtom = atomWithStorage<number>("uploadConcurrency", 6);
+export const transferConcurrencyAtom = atomWithStorage<number>("transferConcurrency", 6);
+
+/**
+ * リトライ回数設定atom（アップロード/ダウンロード共通）
+ * LocalStorageに自動保存される
+ */
+export const transferRetryCountAtom = atomWithStorage<number>("transferRetryCount", 3);
 
 /**
  * テーマ変更中の状態atom

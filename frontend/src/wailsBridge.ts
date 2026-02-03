@@ -69,6 +69,7 @@ import {
   UpdateAutoTracking,
   UpdateOfflineMode,
   UpdateUploadConcurrency,
+  UpdateTransferRetryCount,
   UpdateGame,
   UpdateMemo,
   UpdateSessionName,
@@ -96,6 +97,7 @@ export type WindowApi = {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;
     updateOfflineMode: (enabled: boolean) => Promise<ApiResult<void>>;
     updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>;
+    updateTransferRetryCount: (value: number) => Promise<ApiResult<void>>;
   };
   file: {
     selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<ApiResult<string>>;
@@ -275,6 +277,12 @@ export const createWailsBridge = (): WindowApi => {
       },
       updateUploadConcurrency: async (value) => {
         const result = await UpdateUploadConcurrency(value);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      updateTransferRetryCount: async (value) => {
+        const result = await UpdateTransferRetryCount(value);
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };

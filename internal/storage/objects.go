@@ -3,10 +3,13 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -60,9 +63,9 @@ func ListObjects(ctx context.Context, client *s3.Client, bucket string, prefix s
 
 // DeleteObjectsByPrefix は指定プレフィックス配下のオブジェクトを削除する。
 func DeleteObjectsByPrefix(ctx context.Context, client *s3.Client, bucket string, prefix string) error {
-	objects, error := ListObjects(ctx, client, bucket, prefix)
-	if error != nil {
-		return error
+	objects, err := ListObjects(ctx, client, bucket, prefix)
+	if err != nil {
+		return err
 	}
 	if len(objects) == 0 {
 		return nil
@@ -99,12 +102,38 @@ func DeleteObject(ctx context.Context, client *s3.Client, bucket string, key str
 	return error
 }
 
+const defaultDownloadRetryCount = 3
+
 // DownloadPrefix はプレフィックス配下のオブジェクトをダウンロードする。
-func DownloadPrefix(ctx context.Context, client *s3.Client, bucket string, prefix string, destination string) error {
-	objects, error := ListObjects(ctx, client, bucket, prefix)
-	if error != nil {
-		return error
+func DownloadPrefix(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	prefix string,
+	destination string,
+	concurrency int,
+	retryCount int,
+) error {
+	objects, err := ListObjects(ctx, client, bucket, prefix)
+	if err != nil {
+		return err
 	}
+	if len(objects) == 0 {
+		return nil
+	}
+
+	if concurrency <= 0 {
+		concurrency = defaultUploadConcurrency
+	}
+	if retryCount < 0 {
+		retryCount = defaultDownloadRetryCount
+	}
+
+	type downloadTask struct {
+		key        string
+		targetPath string
+	}
+	tasks := make([]downloadTask, 0, len(objects))
 	for _, obj := range objects {
 		relative := strings.TrimPrefix(obj.Key, prefix)
 		relative = strings.TrimPrefix(relative, "/")
@@ -112,24 +141,41 @@ func DownloadPrefix(ctx context.Context, client *s3.Client, bucket string, prefi
 		if error := os.MkdirAll(filepath.Dir(targetPath), 0o700); error != nil {
 			return error
 		}
-		response, error := client.GetObject(ctx, &s3.GetObjectInput{
-			Bucket: &bucket,
-			Key:    &obj.Key,
-		})
-		if error != nil {
-			return error
-		}
-		content, readErr := io.ReadAll(response.Body)
-		closeErr := response.Body.Close()
-		if readErr != nil {
-			return readErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		if error := os.WriteFile(targetPath, content, 0o600); error != nil {
-			return error
-		}
+		tasks = append(tasks, downloadTask{key: obj.Key, targetPath: targetPath})
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var errOnce sync.Once
+	var firstErr error
+
+	for _, task := range tasks {
+		wg.Add(1)
+		task := task
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+
+			if err := downloadObjectWithRetry(ctx, client, bucket, task.key, task.targetPath, retryCount); err != nil {
+				errOnce.Do(func() {
+					firstErr = err
+					cancel()
+				})
+			}
+		}()
+	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return firstErr
 	}
 	return nil
 }
@@ -149,4 +195,68 @@ func DownloadObject(ctx context.Context, client *s3.Client, bucket string, key s
 		}
 	}()
 	return io.ReadAll(response.Body)
+}
+
+func downloadObjectWithRetry(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	key string,
+	targetPath string,
+	retryCount int,
+) error {
+	var lastErr error
+	for attempt := 0; attempt <= retryCount; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if attempt > 0 {
+			backoff := time.Duration(attempt) * 250 * time.Millisecond
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+
+		if err := downloadObjectToPath(ctx, client, bucket, key, targetPath); err != nil {
+			lastErr = err
+			continue
+		}
+		return nil
+	}
+	if lastErr == nil {
+		return errors.New("download retry exceeded")
+	}
+	return lastErr
+}
+
+func downloadObjectToPath(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	key string,
+	targetPath string,
+) error {
+	response, error := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	})
+	if error != nil {
+		return error
+	}
+	content, readErr := io.ReadAll(response.Body)
+	closeErr := response.Body.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if error := os.WriteFile(targetPath, content, 0o600); error != nil {
+		return error
+	}
+	return nil
 }

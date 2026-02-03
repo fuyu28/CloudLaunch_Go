@@ -4,11 +4,13 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -20,7 +22,10 @@ type UploadSummary struct {
 	Keys       []string
 }
 
-const defaultUploadConcurrency = 6
+const (
+	defaultUploadConcurrency = 6
+	defaultUploadRetryCount  = 3
+)
 
 // UploadFile は単一ファイルをアップロードする。
 func UploadFile(ctx context.Context, client *s3.Client, bucket string, key string, filePath string) (size int64, err error) {
@@ -52,7 +57,15 @@ func UploadFile(ctx context.Context, client *s3.Client, bucket string, key strin
 }
 
 // UploadFolder はフォルダ配下のファイルをすべてアップロードする。
-func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderPath string, prefix string, concurrency int) (UploadSummary, error) {
+func UploadFolder(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	folderPath string,
+	prefix string,
+	concurrency int,
+	retryCount int,
+) (UploadSummary, error) {
 	type uploadTask struct {
 		path string
 		key  string
@@ -89,6 +102,9 @@ func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderP
 	if concurrency <= 0 {
 		concurrency = defaultUploadConcurrency
 	}
+	if retryCount < 0 {
+		retryCount = defaultUploadRetryCount
+	}
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var errOnce sync.Once
@@ -108,7 +124,7 @@ func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderP
 			}
 			defer func() { <-sem }()
 
-			size, err := UploadFile(ctx, client, bucket, task.key, task.path)
+			size, err := uploadFileWithRetry(ctx, client, bucket, task.key, task.path, retryCount)
 			if err != nil {
 				errOnce.Do(func() {
 					firstErr = err
@@ -130,6 +146,43 @@ func UploadFolder(ctx context.Context, client *s3.Client, bucket string, folderP
 		return UploadSummary{}, firstErr
 	}
 	return summary, nil
+}
+
+func uploadFileWithRetry(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	key string,
+	filePath string,
+	retryCount int,
+) (int64, error) {
+	var lastErr error
+	for attempt := 0; attempt <= retryCount; attempt++ {
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+		if attempt > 0 {
+			backoff := time.Duration(attempt) * 250 * time.Millisecond
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return 0, ctx.Err()
+			case <-timer.C:
+			}
+		}
+
+		size, err := UploadFile(ctx, client, bucket, key, filePath)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return size, nil
+	}
+	if lastErr == nil {
+		return 0, errors.New("upload retry exceeded")
+	}
+	return 0, lastErr
 }
 
 // UploadJSON はJSONバイト列をアップロードする。

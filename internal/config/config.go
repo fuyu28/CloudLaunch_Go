@@ -10,18 +10,19 @@ import (
 
 // Config はアプリ全体の設定を保持する。
 type Config struct {
-	AppDataDir          string
-	DatabasePath        string
-	LogLevel            string
-	S3Endpoint          string
-	S3Region            string
-	S3Bucket            string
-	S3ForcePathStyle    bool
-	S3UseTLS            bool
-	S3UploadConcurrency int
-	CloudMetadataKey    string
-	CloudImagesPrefix   string
-	CredentialNamespace string
+	AppDataDir           string
+	DatabasePath         string
+	LogLevel             string
+	S3Endpoint           string
+	S3Region             string
+	S3Bucket             string
+	S3ForcePathStyle     bool
+	S3UseTLS             bool
+	S3UploadConcurrency  int
+	S3TransferRetryCount int
+	CloudMetadataKey     string
+	CloudImagesPrefix    string
+	CredentialNamespace  string
 }
 
 // LoadFromEnv は環境変数から設定を読み込む。
@@ -30,18 +31,19 @@ func LoadFromEnv() Config {
 	databasePath := getEnv("CLOUDLAUNCH_DB_PATH", filepath.Join(appDataDir, "app.db"))
 
 	return Config{
-		AppDataDir:          appDataDir,
-		DatabasePath:        databasePath,
-		LogLevel:            getEnv("CLOUDLAUNCH_LOG_LEVEL", "info"),
-		S3Endpoint:          getEnv("CLOUDLAUNCH_S3_ENDPOINT", ""),
-		S3Region:            getEnv("CLOUDLAUNCH_S3_REGION", "auto"),
-		S3Bucket:            getEnv("CLOUDLAUNCH_S3_BUCKET", ""),
-		S3ForcePathStyle:    getEnvBool("CLOUDLAUNCH_S3_FORCE_PATH_STYLE", false),
-		S3UseTLS:            getEnvBool("CLOUDLAUNCH_S3_USE_TLS", true),
-		S3UploadConcurrency: getEnvInt("CLOUDLAUNCH_S3_UPLOAD_CONCURRENCY", 6),
-		CloudMetadataKey:    getEnv("CLOUDLAUNCH_CLOUD_METADATA_KEY", "games.json"),
-		CloudImagesPrefix:   getEnv("CLOUDLAUNCH_CLOUD_IMAGES_PREFIX", "images/"),
-		CredentialNamespace: getEnv("CLOUDLAUNCH_CREDENTIAL_NAMESPACE", "CloudLaunch"),
+		AppDataDir:           appDataDir,
+		DatabasePath:         databasePath,
+		LogLevel:             getEnv("CLOUDLAUNCH_LOG_LEVEL", "info"),
+		S3Endpoint:           getEnv("CLOUDLAUNCH_S3_ENDPOINT", ""),
+		S3Region:             getEnv("CLOUDLAUNCH_S3_REGION", "auto"),
+		S3Bucket:             getEnv("CLOUDLAUNCH_S3_BUCKET", ""),
+		S3ForcePathStyle:     getEnvBool("CLOUDLAUNCH_S3_FORCE_PATH_STYLE", false),
+		S3UseTLS:             getEnvBool("CLOUDLAUNCH_S3_USE_TLS", true),
+		S3UploadConcurrency:  getEnvInt("CLOUDLAUNCH_S3_UPLOAD_CONCURRENCY", 6),
+		S3TransferRetryCount: getEnvInt("CLOUDLAUNCH_S3_RETRY_COUNT", 3),
+		CloudMetadataKey:     getEnv("CLOUDLAUNCH_CLOUD_METADATA_KEY", "games.json"),
+		CloudImagesPrefix:    getEnv("CLOUDLAUNCH_CLOUD_IMAGES_PREFIX", "images/"),
+		CredentialNamespace:  getEnv("CLOUDLAUNCH_CREDENTIAL_NAMESPACE", "CloudLaunch"),
 	}
 }
 
