@@ -16,6 +16,7 @@
 
 import { autoTrackingAtom } from "@renderer/state/settings";
 import { isValidCredsAtom } from "@renderer/state/credentials";
+import { visibleGamesAtom } from "@renderer/state/home";
 import { useAtom, useAtomValue } from "jotai";
 import { FaClock, FaGamepad } from "react-icons/fa";
 
@@ -40,6 +41,7 @@ import { logger } from "@renderer/utils/logger";
  */
 export function PlayStatusBar(): React.JSX.Element {
   const [autoTracking] = useAtom(autoTrackingAtom);
+  const [, setVisibleGames] = useAtom(visibleGamesAtom);
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const { formatShort } = useTimeFormat();
   const { isOfflineMode } = useOfflineMode();
@@ -104,6 +106,20 @@ export function PlayStatusBar(): React.JSX.Element {
     await updateMonitoringStatus();
   };
 
+  const refreshGame = async (gameId: string): Promise<void> => {
+    try {
+      const updated = await window.api.database.getGameById(gameId);
+      if (!updated) return;
+      setVisibleGames((prev) => prev.map((game) => (game.id === gameId ? updated : game)));
+    } catch (error) {
+      logger.warn("ゲーム再取得に失敗しました:", {
+        component: "PlayStatusBar",
+        function: "refreshGame",
+        data: error,
+      });
+    }
+  };
+
   const handleEnd = async (gameId: string): Promise<void> => {
     const result = await window.api.processMonitor.endSession(gameId);
     if (!result.success) {
@@ -115,6 +131,7 @@ export function PlayStatusBar(): React.JSX.Element {
     }
     setPendingConfirmationGame(null);
     await updateMonitoringStatus();
+    await refreshGame(gameId);
     await checkUploadPrompt(gameId);
   };
 
