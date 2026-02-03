@@ -66,6 +66,7 @@ func (service *ErogameScapeService) SearchErogameScape(
 		if titleCell != "" {
 			title = titleCell
 		}
+		title = cleanSearchTitle(title)
 		if title == "" {
 			return
 		}
@@ -90,4 +91,18 @@ func (service *ErogameScapeService) SearchErogameScape(
 		Items:       items,
 		NextPageURL: nextURL,
 	}, nil
+}
+
+func cleanSearchTitle(title string) string {
+	cleaned := strings.TrimSpace(title)
+	if cleaned == "" {
+		return cleaned
+	}
+	if strings.HasSuffix(cleaned, "OHP") {
+		cleaned = strings.TrimSpace(strings.TrimSuffix(cleaned, "OHP"))
+	}
+	if strings.HasSuffix(cleaned, "ＯＨＰ") {
+		cleaned = strings.TrimSpace(strings.TrimSuffix(cleaned, "ＯＨＰ"))
+	}
+	return cleaned
 }
