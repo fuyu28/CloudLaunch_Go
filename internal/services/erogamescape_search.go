@@ -61,7 +61,11 @@ func (service *ErogameScapeService) SearchErogameScape(
 		if error != nil {
 			return
 		}
+		titleCell := strings.TrimSpace(row.Find("td").First().Text())
 		title := strings.TrimSpace(link.Text())
+		if titleCell != "" {
+			title = titleCell
+		}
 		if title == "" {
 			return
 		}
