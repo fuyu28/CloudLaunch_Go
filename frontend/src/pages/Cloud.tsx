@@ -20,6 +20,8 @@ import { CloudContent } from "@renderer/components/CloudContent";
 import { CloudDeleteModal } from "@renderer/components/CloudDeleteModal";
 import { CloudFileDetailsModal } from "@renderer/components/CloudFileDetailsModal";
 import { CloudHeader, type ViewMode } from "@renderer/components/CloudHeader";
+import ConfirmModal from "@renderer/components/ConfirmModal";
+import { FiAlertTriangle } from "react-icons/fi";
 
 import { isValidCredsAtom } from "@renderer/state/credentials";
 
@@ -61,6 +63,11 @@ export default function Cloud(): React.JSX.Element {
   const [selectedGameId, setSelectedGameId] = useState<string>("");
   const [isSyncingGame, setIsSyncingGame] = useState(false);
   const [isLoadingGames, setIsLoadingGames] = useState(false);
+  const [deleteGameTarget, setDeleteGameTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [isDeletingGame, setIsDeletingGame] = useState(false);
 
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
@@ -138,6 +145,37 @@ export default function Cloud(): React.JSX.Element {
       setIsSyncingGame(false);
     }
   }, [selectedGameId, isOfflineMode, showToast]);
+
+  const handleDeleteSelectedGame = useCallback(async (): Promise<void> => {
+    if (!selectedGameId) {
+      showToast("削除するゲームを選択してください", "error");
+      return;
+    }
+    if (isOfflineMode) {
+      showToast("オフラインモードでは削除できません", "error");
+      return;
+    }
+    setIsDeletingGame(true);
+    try {
+      const result = await window.api.cloudSync.deleteGame(selectedGameId);
+      if (!result.success) {
+        showToast(result.message || "クラウド削除に失敗しました", "error");
+        return;
+      }
+      showToast("クラウドデータを削除しました", "success");
+      fetchCloudData(viewMode);
+    } catch (error) {
+      logger.error("クラウド削除エラー:", {
+        component: "Cloud",
+        function: "handleDeleteSelectedGame",
+        data: error,
+      });
+      showToast("クラウド削除に失敗しました", "error");
+    } finally {
+      setIsDeletingGame(false);
+      setDeleteGameTarget(null);
+    }
+  }, [fetchCloudData, isOfflineMode, selectedGameId, showToast, viewMode]);
 
   /**
    * ツリーノードの展開・折りたたみ
@@ -295,6 +333,20 @@ export default function Cloud(): React.JSX.Element {
               {isSyncingGame ? "同期中..." : "選択したゲームを同期"}
             </button>
             <button
+              className="btn btn-error btn-sm w-fit"
+              onClick={() => {
+                const target = games.find((game) => game.id === selectedGameId);
+                if (!target) {
+                  showToast("削除するゲームを選択してください", "error");
+                  return;
+                }
+                setDeleteGameTarget({ id: target.id, title: target.title });
+              }}
+              disabled={isDeletingGame || isOfflineMode || !selectedGameId}
+            >
+              {isDeletingGame ? "削除中..." : "選択したゲームを削除"}
+            </button>
+            <button
               className="btn btn-ghost btn-sm w-fit"
               onClick={fetchGames}
               disabled={isLoadingGames}
@@ -339,6 +391,31 @@ export default function Cloud(): React.JSX.Element {
         onCancel={() => setDeleteConfirm(null)}
         onConfirm={handleDelete}
         cloudData={cloudData}
+      />
+
+      <ConfirmModal
+        id="delete-cloud-game-modal"
+        isOpen={!!deleteGameTarget}
+        onCancel={() => setDeleteGameTarget(null)}
+        onConfirm={handleDeleteSelectedGame}
+        title="クラウドゲームの削除"
+        message={
+          deleteGameTarget
+            ? `「${deleteGameTarget.title}」のクラウドデータを完全に削除しますか？`
+            : ""
+        }
+        confirmText="削除"
+        cancelText="キャンセル"
+        confirmVariant="error"
+        details={{
+          icon: <FiAlertTriangle className="text-error" />,
+          subText: deleteGameTarget ? `GameID: ${deleteGameTarget.id}` : undefined,
+          warnings: [
+            { text: "削除されたデータは復元できません" },
+            { text: "games.jsonの情報も削除されます", highlight: true },
+            { text: "セーブ・サムネイル・セッション・メモも削除されます" },
+          ],
+        }}
       />
 
       {/* ファイル詳細モーダル */}

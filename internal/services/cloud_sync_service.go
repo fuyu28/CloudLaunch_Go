@@ -91,6 +91,61 @@ func (service *CloudSyncService) SyncGame(ctx context.Context, credentialKey str
 	return service.sync(ctx, credentialKey, strings.TrimSpace(gameID))
 }
 
+// DeleteGameFromCloud は指定ゲームのクラウドデータを削除する。
+func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, credentialKey string, gameID string) result.ApiResult[bool] {
+	if service.isOffline() {
+		return result.ErrorResult[bool]("オフラインモードのため削除できません", "offline mode")
+	}
+	trimmedKey, detail, ok := requireNonEmpty(credentialKey, "credentialKey")
+	if !ok {
+		return result.ErrorResult[bool]("認証情報が不正です", detail)
+	}
+	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
+	}
+
+	client, cfg, message, detail, ok := service.newClient(ctx, trimmedKey)
+	if !ok {
+		return result.ErrorResult[bool](message, detail)
+	}
+
+	prefix := fmt.Sprintf("games/%s/", trimmedID)
+	if err := storage.DeleteObjectsByPrefix(ctx, client, cfg.Bucket, prefix); err != nil {
+		service.logger.Error("クラウドデータ削除に失敗", "error", err, "gameId", trimmedID)
+		return result.ErrorResult[bool]("クラウドデータ削除に失敗しました", err.Error())
+	}
+
+	metadata, err := storage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
+	if err != nil {
+		if isNotFoundError(err) {
+			return result.OkResult(true)
+		}
+		service.logger.Error("クラウドメタ情報取得に失敗", "error", err)
+		return result.ErrorResult[bool]("クラウドメタ情報取得に失敗しました", err.Error())
+	}
+
+	updatedGames := make([]storage.CloudGameMetadata, 0, len(metadata.Games))
+	for _, game := range metadata.Games {
+		if game.ID != trimmedID {
+			updatedGames = append(updatedGames, game)
+		}
+	}
+
+	if len(updatedGames) == len(metadata.Games) {
+		return result.OkResult(true)
+	}
+
+	metadata.Games = updatedGames
+	metadata.UpdatedAt = time.Now()
+	if err := storage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, *metadata); err != nil {
+		service.logger.Error("クラウドメタ情報更新に失敗", "error", err)
+		return result.ErrorResult[bool]("クラウドメタ情報更新に失敗しました", err.Error())
+	}
+
+	return result.OkResult(true)
+}
+
 func (service *CloudSyncService) sync(ctx context.Context, credentialKey string, gameID string) result.ApiResult[CloudSyncSummary] {
 	if service.isOffline() {
 		return result.ErrorResult[CloudSyncSummary]("オフラインモードのため同期できません", "offline mode")

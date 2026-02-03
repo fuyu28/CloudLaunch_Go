@@ -221,6 +221,7 @@ export type WindowApi = {
         skippedGames: number;
       }>
     >;
+    deleteGame: (gameId: string) => Promise<ApiResult<void>>;
   };
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>;
@@ -736,6 +737,17 @@ export const createWailsBridge = (): WindowApi => {
               },
             }
           : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      deleteGame: async (gameId) => {
+        try {
+          const result = await (window as any)["go"]["app"]["App"]["DeleteCloudGame"](gameId);
+          return result && result.success
+            ? { success: true }
+            : { success: false, message: result?.error?.message ?? "エラー" };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "削除に失敗しました";
+          return { success: false, message };
+        }
       },
     },
     game: {
