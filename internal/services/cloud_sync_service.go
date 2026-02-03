@@ -374,11 +374,15 @@ func (service *CloudSyncService) applyCloudGame(
 ) (int, int, error) {
 	exePath := UnconfiguredExePath
 	saveFolder := (*string)(nil)
+	localSaveHash := (*string)(nil)
+	localSaveHashUpdatedAt := (*time.Time)(nil)
 	if local != nil {
 		if strings.TrimSpace(local.ExePath) != "" {
 			exePath = local.ExePath
 		}
 		saveFolder = local.SaveFolderPath
+		localSaveHash = local.LocalSaveHash
+		localSaveHashUpdatedAt = local.LocalSaveHashUpdatedAt
 	}
 
 	imagePath := (*string)(nil)
@@ -395,19 +399,21 @@ func (service *CloudSyncService) applyCloudGame(
 	}
 
 	game := models.Game{
-		ID:             cloud.ID,
-		Title:          cloud.Title,
-		Publisher:      cloud.Publisher,
-		ImagePath:      imagePath,
-		ExePath:        exePath,
-		SaveFolderPath: saveFolder,
-		CreatedAt:      cloud.CreatedAt,
-		UpdatedAt:      cloud.UpdatedAt,
-		PlayStatus:     models.PlayStatus(cloud.PlayStatus),
-		TotalPlayTime:  cloud.TotalPlayTime,
-		LastPlayed:     cloud.LastPlayed,
-		ClearedAt:      cloud.ClearedAt,
-		CurrentChapter: cloud.CurrentChapter,
+		ID:                     cloud.ID,
+		Title:                  cloud.Title,
+		Publisher:              cloud.Publisher,
+		ImagePath:              imagePath,
+		ExePath:                exePath,
+		SaveFolderPath:         saveFolder,
+		CreatedAt:              cloud.CreatedAt,
+		UpdatedAt:              cloud.UpdatedAt,
+		LocalSaveHash:          localSaveHash,
+		LocalSaveHashUpdatedAt: localSaveHashUpdatedAt,
+		PlayStatus:             models.PlayStatus(cloud.PlayStatus),
+		TotalPlayTime:          cloud.TotalPlayTime,
+		LastPlayed:             cloud.LastPlayed,
+		ClearedAt:              cloud.ClearedAt,
+		CurrentChapter:         cloud.CurrentChapter,
 	}
 
 	if err := service.repository.UpsertGameSync(ctx, game); err != nil {

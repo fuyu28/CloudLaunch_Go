@@ -17,6 +17,7 @@ import { useGameEdit } from "@renderer/hooks/useGameEdit";
 import { useGameSaveData } from "@renderer/hooks/useGameSaveData";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
 import { logger } from "@renderer/utils/logger";
@@ -38,8 +39,10 @@ export default function GameDetail(): React.JSX.Element {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
+  const [saveSyncMessage, setSaveSyncMessage] = useState("");
   const { showToast } = useToastHandler();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
+  const { formatDateWithTime } = useTimeFormat();
 
   // ゲームデータを取得
   useEffect(() => {
@@ -137,6 +140,28 @@ export default function GameDetail(): React.JSX.Element {
       await downloadSaveData(game);
     }
   }, [game, downloadSaveData, checkNetworkFeature]);
+
+  const toValidDate = useCallback(
+    (value: Date | string | number | null | undefined): Date | null => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    },
+    [],
+  );
+
+  const buildSaveSyncMessage = useCallback(
+    (
+      title: string,
+      localUpdatedAt: Date | string | number | null | undefined,
+      cloudUpdatedAt: Date | string | number | null | undefined,
+    ) => {
+      const localDate = toValidDate(localUpdatedAt);
+      const cloudDate = toValidDate(cloudUpdatedAt);
+      return `${title} のセーブデータがクラウドと異なります。\nローカル最終更新: ${formatDateWithTime(localDate)}\nクラウド最終更新: ${formatDateWithTime(cloudDate)}\nダウンロードしますか？`;
+    },
+    [formatDateWithTime, toValidDate],
+  );
 
   // プレイセッション追加関連のコールバック
   const handleOpenPlaySessionModal = (): void => {
@@ -258,6 +283,13 @@ export default function GameDetail(): React.JSX.Element {
       localHashResult.data &&
       localHashResult.data !== cloudHashResult.data.hash
     ) {
+      setSaveSyncMessage(
+        buildSaveSyncMessage(
+          game.title,
+          game.localSaveHashUpdatedAt,
+          cloudHashResult.data.updatedAt,
+        ),
+      );
       setIsDownloadConfirmOpen(true);
       return;
     }
@@ -266,12 +298,14 @@ export default function GameDetail(): React.JSX.Element {
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
+    setSaveSyncMessage("");
     await handleDownloadSaveData();
     await launchGameDirect();
   }, [handleDownloadSaveData, launchGameDirect]);
 
   const handleSkipDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
+    setSaveSyncMessage("");
     await launchGameDirect();
   }, [launchGameDirect]);
 
@@ -386,7 +420,10 @@ export default function GameDetail(): React.JSX.Element {
         id="download-save-before-launch-modal"
         isOpen={isDownloadConfirmOpen}
         title="セーブデータの同期"
-        message={`${game.title} のセーブデータがクラウドと異なります。\nダウンロードしますか？`}
+        message={
+          saveSyncMessage ||
+          `${game.title} のセーブデータがクラウドと異なります。\nダウンロードしますか？`
+        }
         cancelText="しない"
         confirmText="ダウンロードする"
         onConfirm={handleDownloadAndLaunch}

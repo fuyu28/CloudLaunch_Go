@@ -17,6 +17,7 @@ import { useGameActions } from "@renderer/hooks/useGameActions";
 import { useGameSaveData } from "@renderer/hooks/useGameSaveData";
 import { useLoadingState } from "@renderer/hooks/useLoadingState";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
+import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { isValidCredsAtom } from "@renderer/state/credentials";
 import {
@@ -41,10 +42,12 @@ export default function Home(): React.ReactElement {
   const [isErogameScapeImportOpen, setIsErogameScapeImportOpen] = useState(false);
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const [pendingLaunchGame, setPendingLaunchGame] = useState<GameType | null>(null);
+  const [saveSyncMessage, setSaveSyncMessage] = useState("");
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
   const { isOfflineMode } = useOfflineMode();
   const { downloadSaveData } = useGameSaveData();
+  const { formatDateWithTime } = useTimeFormat();
 
   // 検索語をデバウンス
   const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
@@ -107,6 +110,28 @@ export default function Home(): React.ReactElement {
     }
   }, [validateCreds, isOfflineMode]);
 
+  const toValidDate = useCallback(
+    (value: Date | string | number | null | undefined): Date | null => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    },
+    [],
+  );
+
+  const buildSaveSyncMessage = useCallback(
+    (
+      title: string,
+      localUpdatedAt: Date | string | number | null | undefined,
+      cloudUpdatedAt: Date | string | number | null | undefined,
+    ) => {
+      const localDate = toValidDate(localUpdatedAt);
+      const cloudDate = toValidDate(cloudUpdatedAt);
+      return `${title} のセーブデータがクラウドと異なります。\nローカル最終更新: ${formatDateWithTime(localDate)}\nクラウド最終更新: ${formatDateWithTime(cloudDate)}\nダウンロードしますか？`;
+    },
+    [formatDateWithTime, toValidDate],
+  );
+
   const handleAddGame = createGameAndRefreshList;
 
   const launchGameDirect = useCallback(
@@ -163,6 +188,13 @@ export default function Home(): React.ReactElement {
         localHashResult.data &&
         localHashResult.data !== cloudHashResult.data.hash
       ) {
+        setSaveSyncMessage(
+          buildSaveSyncMessage(
+            game.title,
+            game.localSaveHashUpdatedAt,
+            cloudHashResult.data.updatedAt,
+          ),
+        );
         setPendingLaunchGame(game);
         setIsDownloadConfirmOpen(true);
         return;
@@ -175,6 +207,7 @@ export default function Home(): React.ReactElement {
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
+    setSaveSyncMessage("");
     if (!pendingLaunchGame) {
       return;
     }
@@ -185,6 +218,7 @@ export default function Home(): React.ReactElement {
 
   const handleSkipDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
+    setSaveSyncMessage("");
     if (!pendingLaunchGame) {
       return;
     }
@@ -245,7 +279,10 @@ export default function Home(): React.ReactElement {
         id="download-save-before-launch-modal"
         isOpen={isDownloadConfirmOpen}
         title="セーブデータの同期"
-        message={`${pendingLaunchGame?.title ?? "このゲーム"} のセーブデータがクラウドと異なります。\nダウンロードしますか？`}
+        message={
+          saveSyncMessage ||
+          `${pendingLaunchGame?.title ?? "このゲーム"} のセーブデータがクラウドと異なります。\nダウンロードしますか？`
+        }
         cancelText="しない"
         confirmText="ダウンロードする"
         onConfirm={handleDownloadAndLaunch}
