@@ -17,23 +17,24 @@ import (
 
 // App はWailsと連携するアプリケーション本体を表す。
 type App struct {
-	ctx               context.Context
-	Config            config.Config
-	Logger            *slog.Logger
-	Database          *db.Repository
-	GameService       *services.GameService
-	SessionService    *services.SessionService
-	ChapterService    *services.ChapterService
-	MemoService       *services.MemoService
-	MemoFiles         *memo.FileManager
-	UploadService     *services.UploadService
-	CredentialService *services.CredentialService
-	CloudService      *services.CloudService
-	CloudSyncService  *services.CloudSyncService
-	ProcessMonitor    *services.ProcessMonitorService
-	dbConnection      *sql.DB
-	autoTracking      bool
-	isMonitoring      bool
+	ctx                 context.Context
+	Config              config.Config
+	Logger              *slog.Logger
+	Database            *db.Repository
+	GameService         *services.GameService
+	SessionService      *services.SessionService
+	ChapterService      *services.ChapterService
+	MemoService         *services.MemoService
+	MemoFiles           *memo.FileManager
+	UploadService       *services.UploadService
+	CredentialService   *services.CredentialService
+	CloudService        *services.CloudService
+	CloudSyncService    *services.CloudSyncService
+	ErogameScapeService *services.ErogameScapeService
+	ProcessMonitor      *services.ProcessMonitorService
+	dbConnection        *sql.DB
+	autoTracking        bool
+	isMonitoring        bool
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -67,25 +68,27 @@ func NewApp(ctx context.Context) (*App, error) {
 
 	cloudService := services.NewCloudService(cfg, credentialStore, logger)
 	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
+	erogameScapeService := services.NewErogameScapeService(cfg, logger)
 	processMonitor := services.NewProcessMonitorService(repository, logger, cloudSync)
 
 	app := &App{
-		Config:            cfg,
-		Logger:            logger,
-		Database:          repository,
-		GameService:       services.NewGameService(repository, logger),
-		SessionService:    services.NewSessionService(repository, logger),
-		ChapterService:    services.NewChapterService(repository, logger),
-		MemoService:       services.NewMemoService(repository, memoFiles, logger),
-		MemoFiles:         memoFiles,
-		UploadService:     services.NewUploadService(repository, logger),
-		CredentialService: services.NewCredentialService(credentialStore, logger),
-		CloudService:      cloudService,
-		CloudSyncService:  cloudSync,
-		ProcessMonitor:    processMonitor,
-		dbConnection:      connection,
-		autoTracking:      true,
-		isMonitoring:      false,
+		Config:              cfg,
+		Logger:              logger,
+		Database:            repository,
+		GameService:         services.NewGameService(repository, logger),
+		SessionService:      services.NewSessionService(repository, logger),
+		ChapterService:      services.NewChapterService(repository, logger),
+		MemoService:         services.NewMemoService(repository, memoFiles, logger),
+		MemoFiles:           memoFiles,
+		UploadService:       services.NewUploadService(repository, logger),
+		CredentialService:   services.NewCredentialService(credentialStore, logger),
+		CloudService:        cloudService,
+		CloudSyncService:    cloudSync,
+		ErogameScapeService: erogameScapeService,
+		ProcessMonitor:      processMonitor,
+		dbConnection:        connection,
+		autoTracking:        true,
+		isMonitoring:        false,
 	}
 
 	logger.Info("CloudLaunch backend initialized")

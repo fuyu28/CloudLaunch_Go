@@ -9,6 +9,7 @@ import type {
   PlaySessionType,
   PlayStatus,
   MonitoringGameStatus,
+  GameImport,
 } from "src/types/game";
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu";
 import type {
@@ -79,6 +80,7 @@ import {
   SaveCloudSaveHash,
   ValidateCredential,
   ValidateSavedCredential,
+  FetchFromErogameScape,
 } from "../wailsjs/go/app/App";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../wailsjs/runtime/runtime";
 
@@ -221,6 +223,9 @@ export type WindowApi = {
   };
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>;
+  };
+  erogameScape: {
+    fetchById: (id: string) => Promise<ApiResult<GameImport>>;
   };
   errorReport: {
     reportError: (payload: {
@@ -734,6 +739,25 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
+      },
+    },
+    erogameScape: {
+      fetchById: async (id) => {
+        const trimmed = id.trim();
+        if (!trimmed) {
+          return { success: false, message: "批評空間IDを入力してください" };
+        }
+        const url = `https://erogamescape.dyndns.org/~ap2/ero/toukei_kaiseki/game.php?game=${encodeURIComponent(
+          trimmed,
+        )}`;
+        try {
+          const result = await FetchFromErogameScape(url);
+          return { success: true, data: result as GameImport };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "批評空間からの取得に失敗しました";
+          return { success: false, message };
+        }
       },
     },
     errorReport: {

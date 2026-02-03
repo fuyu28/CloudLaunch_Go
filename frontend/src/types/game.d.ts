@@ -24,6 +24,15 @@ export type InputGameData = {
   playStatus: PlayStatus;
 };
 
+export type GameImport = {
+  erogameScapeId: string;
+  title: string;
+  brand: string;
+  releaseDate: Date | string;
+  imagePath: string;
+  imageUrl?: string;
+};
+
 /**
  * 監視中のゲーム情報
  */

@@ -3,8 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { IoIosAdd } from "react-icons/io";
 
 import FloatingButton from "@renderer/components/FloatingButton";
-import GameAddMenuModal from "@renderer/components/GameAddMenuModal";
 import CloudGameImportModal from "@renderer/components/CloudGameImportModal";
+import ErogameScapeImportModal from "@renderer/components/ErogameScapeImportModal";
 import GameGrid from "@renderer/components/GameGrid";
 import GameFormModal from "@renderer/components/GameModal";
 import GameSearchFilter from "@renderer/components/GameSearchFilter";
@@ -30,9 +30,9 @@ export default function Home(): React.ReactElement {
   const [sortDirection, setSortDirection] = useAtom(sortDirectionAtom);
   const [visibleGames, setVisibleGames] = useAtom(visibleGamesAtom);
   const [autoTracking] = useAtom(autoTrackingAtom);
-  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isGameFormOpen, setIsGameFormOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isErogameScapeImportOpen, setIsErogameScapeImportOpen] = useState(false);
 
   // 検索語をデバウンス
   const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
@@ -126,36 +126,42 @@ export default function Home(): React.ReactElement {
         onFilterChange={setFilter}
       />
 
+      <div className="mx-4 mb-4 flex flex-wrap items-center gap-3">
+        <button type="button" className="btn btn-outline" onClick={() => setIsImportOpen(true)}>
+          既存ゲームを登録
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={() => setIsErogameScapeImportOpen(true)}
+        >
+          批評空間から登録
+        </button>
+      </div>
+
       {/* ゲーム一覧 */}
       <GameGrid games={visibleGames} onLaunchGame={handleLaunchGame} />
 
       {/* ゲーム追加ボタン */}
       <FloatingButton
-        onClick={() => setIsAddMenuOpen(true)}
+        onClick={() => setIsGameFormOpen(true)}
         ariaLabel="ゲームを追加"
         positionClass={autoTracking ? "bottom-16 right-6" : "bottom-6 right-6"}
       >
         <IoIosAdd size={28} />
       </FloatingButton>
 
-      <GameAddMenuModal
-        isOpen={isAddMenuOpen}
-        onClose={() => setIsAddMenuOpen(false)}
-        onSelectNew={() => {
-          setIsAddMenuOpen(false);
-          setIsGameFormOpen(true);
-        }}
-        onSelectCloud={() => {
-          setIsAddMenuOpen(false);
-          setIsImportOpen(true);
-        }}
-      />
-
       {/* ゲーム登録モーダル */}
       <GameFormModal
         mode="add"
         isOpen={isGameFormOpen}
         onClose={() => setIsGameFormOpen(false)}
+        onSubmit={handleAddGame}
+      />
+
+      <ErogameScapeImportModal
+        isOpen={isErogameScapeImportOpen}
+        onClose={() => setIsErogameScapeImportOpen(false)}
         onSubmit={handleAddGame}
       />
 
