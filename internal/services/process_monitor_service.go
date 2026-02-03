@@ -15,6 +15,7 @@ import (
 
 	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/storage"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/unicode"
@@ -429,6 +430,18 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	}
 	current.TotalPlayTime += game.AccumulatedTime
 	current.LastPlayed = &endedAt
+	if current.SaveFolderPath != nil {
+		saveFolderPath := strings.TrimSpace(*current.SaveFolderPath)
+		if saveFolderPath != "" {
+			hash, hashErr := storage.HashDirectory(saveFolderPath)
+			if hashErr != nil {
+				service.logger.Warn("ローカルセーブハッシュの計算に失敗", "error", hashErr)
+			} else {
+				current.LocalSaveHash = &hash
+				current.LocalSaveHashUpdatedAt = &endedAt
+			}
+		}
+	}
 
 	if _, err := service.repository.UpdateGame(ctx, *current); err != nil {
 		service.logger.Error("プレイ時間更新に失敗", "error", err)

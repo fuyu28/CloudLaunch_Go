@@ -18,7 +18,7 @@ type GameGridProps = {
   /** ゲーム一覧 */
   games: GameType[];
   /** ゲーム起動ハンドラ */
-  onLaunchGame: (exePath: string) => void;
+  onLaunchGame: (game: GameType) => void;
 };
 
 /**
@@ -47,15 +47,7 @@ const GameGrid = memo(function GameGrid({ games, onLaunchGame }: GameGridProps):
           style={{ gridTemplateColumns: "repeat(auto-fill, 220px)" }}
         >
           {games.map((game) => (
-            <GameCard
-              key={game.id}
-              id={game.id}
-              title={game.title}
-              publisher={game.publisher}
-              imagePath={game.imagePath || ""}
-              exePath={game.exePath}
-              onLaunchGame={onLaunchGame}
-            />
+            <GameCard key={game.id} game={game} onLaunchGame={onLaunchGame} />
           ))}
         </div>
       </div>

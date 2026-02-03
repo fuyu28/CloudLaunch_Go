@@ -25,6 +25,7 @@ func NewRepository(connection *sql.DB) *Repository {
 func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+		       localSaveHash, localSaveHashUpdatedAt,
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game" WHERE id = ?
 	`, gameID)
@@ -50,6 +51,7 @@ func (repository *Repository) ListGames(
 	queryBuilder := strings.Builder{}
 	queryBuilder.WriteString(`
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+		       localSaveHash, localSaveHashUpdatedAt,
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game"
 	`)
@@ -102,9 +104,11 @@ func (repository *Repository) ListGames(
 // CreateGame はゲームを作成して返す。
 func (repository *Repository) CreateGame(ctx context.Context, game models.Game) (*models.Game, error) {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "Game" (title, publisher, imagePath, exePath, saveFolderPath, playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO "Game" (title, publisher, imagePath, exePath, saveFolderPath, localSaveHash, localSaveHashUpdatedAt,
+			playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
 		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter)
 	if error != nil {
 		return nil, error
@@ -117,9 +121,11 @@ func (repository *Repository) CreateGame(ctx context.Context, game models.Game) 
 func (repository *Repository) UpdateGame(ctx context.Context, game models.Game) (*models.Game, error) {
 	_, error := repository.connection.ExecContext(ctx, `
 		UPDATE "Game" SET title = ?, publisher = ?, imagePath = ?, exePath = ?, saveFolderPath = ?,
+			localSaveHash = ?, localSaveHashUpdatedAt = ?,
 			playStatus = ?, totalPlayTime = ?, lastPlayed = ?, clearedAt = ?, currentChapter = ?
 		WHERE id = ?
 	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
 		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter, game.ID)
 	if error != nil {
 		return nil, error
@@ -133,8 +139,9 @@ func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Ga
 	_, error := repository.connection.ExecContext(ctx, `
 		INSERT INTO "Game" (
 			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+			localSaveHash, localSaveHashUpdatedAt,
 			playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title = excluded.title,
 			publisher = excluded.publisher,
@@ -143,13 +150,16 @@ func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Ga
 			saveFolderPath = excluded.saveFolderPath,
 			createdAt = excluded.createdAt,
 			updatedAt = excluded.updatedAt,
+			localSaveHash = excluded.localSaveHash,
+			localSaveHashUpdatedAt = excluded.localSaveHashUpdatedAt,
 			playStatus = excluded.playStatus,
 			totalPlayTime = excluded.totalPlayTime,
 			lastPlayed = excluded.lastPlayed,
 			clearedAt = excluded.clearedAt,
 			currentChapter = excluded.currentChapter
 	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
-		game.CreatedAt, game.UpdatedAt, game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter)
+		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
+		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter)
 	return error
 }
 
@@ -637,11 +647,13 @@ func normalizeSortDirection(direction string) string {
 // scanGame は1行分のゲームデータを読み取る。
 func scanGame(row scanner) (*models.Game, error) {
 	var (
-		imagePath      sql.NullString
-		saveFolderPath sql.NullString
-		lastPlayed     sql.NullTime
-		clearedAt      sql.NullTime
-		currentChapter sql.NullString
+		imagePath              sql.NullString
+		saveFolderPath         sql.NullString
+		localSaveHash          sql.NullString
+		localSaveHashUpdatedAt sql.NullTime
+		lastPlayed             sql.NullTime
+		clearedAt              sql.NullTime
+		currentChapter         sql.NullString
 	)
 
 	game := models.Game{}
@@ -654,6 +666,8 @@ func scanGame(row scanner) (*models.Game, error) {
 		&saveFolderPath,
 		&game.CreatedAt,
 		&game.UpdatedAt,
+		&localSaveHash,
+		&localSaveHashUpdatedAt,
 		&game.PlayStatus,
 		&game.TotalPlayTime,
 		&lastPlayed,
@@ -666,6 +680,8 @@ func scanGame(row scanner) (*models.Game, error) {
 
 	game.ImagePath = nullStringPtr(imagePath)
 	game.SaveFolderPath = nullStringPtr(saveFolderPath)
+	game.LocalSaveHash = nullStringPtr(localSaveHash)
+	game.LocalSaveHashUpdatedAt = nullTimePtr(localSaveHashUpdatedAt)
 	game.LastPlayed = nullTimePtr(lastPlayed)
 	game.ClearedAt = nullTimePtr(clearedAt)
 	game.CurrentChapter = nullStringPtr(currentChapter)
@@ -757,6 +773,7 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 func (repository *Repository) findLatestGame(ctx context.Context, title string, exePath string) (*models.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+		       localSaveHash, localSaveHashUpdatedAt,
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
 	`, title, exePath)

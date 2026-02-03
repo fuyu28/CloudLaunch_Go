@@ -14,19 +14,21 @@ const (
 
 // Game はゲーム基本情報を表す。
 type Game struct {
-	ID             string     `json:"id"`
-	Title          string     `json:"title"`
-	Publisher      string     `json:"publisher"`
-	ImagePath      *string    `json:"imagePath,omitempty"`
-	ExePath        string     `json:"exePath"`
-	SaveFolderPath *string    `json:"saveFolderPath,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
-	PlayStatus     PlayStatus `json:"playStatus"`
-	TotalPlayTime  int64      `json:"totalPlayTime"`
-	LastPlayed     *time.Time `json:"lastPlayed,omitempty"`
-	ClearedAt      *time.Time `json:"clearedAt,omitempty"`
-	CurrentChapter *string    `json:"currentChapter,omitempty"`
+	ID                     string     `json:"id"`
+	Title                  string     `json:"title"`
+	Publisher              string     `json:"publisher"`
+	ImagePath              *string    `json:"imagePath,omitempty"`
+	ExePath                string     `json:"exePath"`
+	SaveFolderPath         *string    `json:"saveFolderPath,omitempty"`
+	CreatedAt              time.Time  `json:"createdAt"`
+	UpdatedAt              time.Time  `json:"updatedAt"`
+	LocalSaveHash          *string    `json:"localSaveHash,omitempty"`
+	LocalSaveHashUpdatedAt *time.Time `json:"localSaveHashUpdatedAt,omitempty"`
+	PlayStatus             PlayStatus `json:"playStatus"`
+	TotalPlayTime          int64      `json:"totalPlayTime"`
+	LastPlayed             *time.Time `json:"lastPlayed,omitempty"`
+	ClearedAt              *time.Time `json:"clearedAt,omitempty"`
+	CurrentChapter         *string    `json:"currentChapter,omitempty"`
 }
 
 // PlaySession はプレイセッションを表す。

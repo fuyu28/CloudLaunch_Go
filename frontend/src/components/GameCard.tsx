@@ -3,30 +3,20 @@ import { IoIosPlay } from "react-icons/io";
 import { Link } from "react-router-dom";
 
 import DynamicImage from "./DynamicImage";
+import type { GameType } from "src/types/game";
 
 type GameCardProps = {
-  id: string;
-  title: string;
-  publisher: string;
-  imagePath: string;
-  exePath: string;
-  onLaunchGame: (exePath: string) => void;
+  game: GameType;
+  onLaunchGame: (game: GameType) => void;
 };
 
-const GameCard = memo(function GameCard({
-  id,
-  title,
-  publisher,
-  imagePath,
-  exePath,
-  onLaunchGame,
-}: GameCardProps): React.JSX.Element {
+const GameCard = memo(function GameCard({ game, onLaunchGame }: GameCardProps): React.JSX.Element {
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      onLaunchGame(exePath);
+      onLaunchGame(game);
     },
-    [exePath, onLaunchGame],
+    [game, onLaunchGame],
   );
 
   return (
@@ -37,11 +27,11 @@ const GameCard = memo(function GameCard({
         hover:shadow-xl
       "
     >
-      <Link to={`/game/${id}`}>
+      <Link to={`/game/${game.id}`}>
         <div className="group relative h-40 w-full bg-base-200">
           <DynamicImage
-            src={imagePath || ""}
-            alt={title}
+            src={game.imagePath || ""}
+            alt={game.title}
             className="h-full w-full object-cover"
             loading="lazy"
           />
@@ -69,8 +59,8 @@ const GameCard = memo(function GameCard({
           </div>
         </div>
         <div className="p-2 h-20">
-          <h3 className="text-base font-semibold line-clamp-2">{title}</h3>
-          <p className="text-sm text-base-content line-clamp-2">{publisher}</p>
+          <h3 className="text-base font-semibold line-clamp-2">{game.title}</h3>
+          <p className="text-sm text-base-content line-clamp-2">{game.publisher}</p>
         </div>
       </Link>
     </div>

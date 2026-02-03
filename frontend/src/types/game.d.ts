@@ -8,6 +8,8 @@ export type GameType = {
   exePath: string;
   imagePath?: string; // undefined - オプショナル設定
   createdAt: Date;
+  localSaveHash?: string;
+  localSaveHashUpdatedAt: Date | null;
   playStatus: PlayStatus;
   totalPlayTime: number;
   lastPlayed: Date | null; // null - 明確な「未プレイ」状態
