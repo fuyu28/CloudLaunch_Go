@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BaseModal } from "./BaseModal";
 import type { ErogameScapeSearchItem, ErogameScapeSearchResult } from "src/types/erogamescape";
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 type ErogameScapeSearchModalProps = {
   isOpen: boolean;
@@ -186,13 +187,22 @@ export default function ErogameScapeSearchModal({
                         {item.brand ? ` / ${item.brand}` : ""}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline"
-                      onClick={() => onSelect(item)}
-                    >
-                      選択
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => BrowserOpenURL(item.gameUrl)}
+                      >
+                        ページ
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        onClick={() => onSelect(item)}
+                      >
+                        選択
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))}
