@@ -28,7 +28,6 @@ export type GameImport = {
   erogameScapeId: string;
   title: string;
   brand: string;
-  releaseDate: Date | string;
   imagePath: string;
   imageUrl?: string;
 };

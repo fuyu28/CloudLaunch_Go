@@ -76,15 +76,6 @@ func (service *ErogameScapeService) FetchFromErogameScape(ctx context.Context, g
 		return models.GameImport{}, ParseError{Field: "brand", Err: errors.New("brand not found")}
 	}
 
-	releaseText := strings.TrimSpace(doc.Find("#sellday > td > a").First().Text())
-	if releaseText == "" {
-		return models.GameImport{}, ParseError{Field: "releaseDate", Err: errors.New("release date not found")}
-	}
-	releaseDate, error := time.Parse("2006/01/02", releaseText)
-	if error != nil {
-		return models.GameImport{}, ParseError{Field: "releaseDate", Err: error}
-	}
-
 	imageSrc, ok := doc.Find("#main_image img").First().Attr("src")
 	if !ok || strings.TrimSpace(imageSrc) == "" {
 		return models.GameImport{}, ParseError{Field: "imageUrl", Err: errors.New("image url not found")}
@@ -104,7 +95,6 @@ func (service *ErogameScapeService) FetchFromErogameScape(ctx context.Context, g
 		ErogameScapeID: gameID,
 		Title:          title,
 		Brand:          brand,
-		ReleaseDate:    releaseDate,
 		ImagePath:      imagePath,
 		ImageURL:       imageURL,
 	}, nil
