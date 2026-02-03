@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BaseModal } from "./BaseModal";
 import { GameFormFields } from "./GameFormFields";
-import { useDebounce } from "@renderer/hooks/useDebounce";
 import { useFileSelection } from "@renderer/hooks/useFileSelection";
 import { useGameFormValidationZod } from "@renderer/hooks/useGameFormValidationZod";
 import {
@@ -60,43 +59,6 @@ export default function ErogameScapeImportModal({
   const { isBrowsing, selectFile, selectFolder } = useFileSelection();
   const validation = useGameFormValidationZod(gameData);
   const prevIsOpenRef = useRef(isOpen);
-  const debouncedId = useDebounce(erogameId, 600);
-  const debouncedQuery = useDebounce(searchQuery, 600);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const trimmed = debouncedId.trim();
-    if (!trimmed) {
-      setFetchError(null);
-      setImportedInfo(null);
-      return;
-    }
-    if (!erogameScapeIdRegex.test(trimmed)) {
-      setFetchError("批評空間IDは数字のみで入力してください");
-      return;
-    }
-    if (lastFetchedIdRef.current === trimmed) {
-      return;
-    }
-    void fetchFromErogameScape(trimmed);
-  }, [debouncedId, fetchFromErogameScape, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const trimmed = debouncedQuery.trim();
-    if (!trimmed) {
-      setSearchResults([]);
-      setNextPageUrl(null);
-      setSearchError(null);
-      return;
-    }
-    void searchErogameScape(trimmed);
-  }, [debouncedQuery, isOpen, searchErogameScape]);
-
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       validation.resetTouchedFields();
