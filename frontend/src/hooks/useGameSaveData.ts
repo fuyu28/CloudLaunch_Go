@@ -23,6 +23,7 @@
 
 import { useState, useCallback } from "react";
 
+import { createRemotePath } from "@renderer/utils";
 import { handleApiError, withLoadingToast } from "@renderer/utils/errorHandler";
 
 import type { GameType } from "src/types/game";
