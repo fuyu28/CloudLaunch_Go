@@ -754,8 +754,14 @@ export const createWailsBridge = (): WindowApi => {
           const result = await FetchFromErogameScape(url);
           return { success: true, data: result as GameImport };
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "批評空間からの取得に失敗しました";
+          let message = "批評空間からの取得に失敗しました";
+          if (error instanceof Error) {
+            message = error.message;
+          } else if (typeof error === "string") {
+            message = error;
+          } else if (error) {
+            message = JSON.stringify(error);
+          }
           return { success: false, message };
         }
       },

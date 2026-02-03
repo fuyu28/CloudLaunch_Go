@@ -119,6 +119,27 @@ func extractErogameScapeID(gamePageURL string) (string, error) {
 }
 
 func (service *ErogameScapeService) fetchHTML(ctx context.Context, gamePageURL string) (string, error) {
+	html, error := service.fetchHTMLOnce(ctx, gamePageURL)
+	if error == nil {
+		return html, nil
+	}
+
+	parsed, parseErr := url.Parse(gamePageURL)
+	if parseErr != nil {
+		return "", error
+	}
+	if strings.EqualFold(parsed.Scheme, "https") {
+		parsed.Scheme = "http"
+		fallbackURL := parsed.String()
+		fallbackHTML, fallbackErr := service.fetchHTMLOnce(ctx, fallbackURL)
+		if fallbackErr == nil {
+			return fallbackHTML, nil
+		}
+	}
+	return "", error
+}
+
+func (service *ErogameScapeService) fetchHTMLOnce(ctx context.Context, gamePageURL string) (string, error) {
 	request, error := http.NewRequestWithContext(ctx, http.MethodGet, gamePageURL, nil)
 	if error != nil {
 		return "", FetchError{URL: gamePageURL, Err: error}
