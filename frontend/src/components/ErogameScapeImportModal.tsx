@@ -243,6 +243,12 @@ export default function ErogameScapeImportModal({
               id="erogamescape-id"
               value={erogameId}
               onChange={(e) => setErogameId(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void fetchFromErogameScape(erogameId.trim());
+                }
+              }}
               placeholder="例: 13050"
               className={`input input-bordered w-full ${fetchError ? "input-error" : ""}`}
               disabled={fetching || submitting}

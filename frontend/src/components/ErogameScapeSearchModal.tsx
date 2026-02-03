@@ -147,6 +147,12 @@ export default function ErogameScapeSearchModal({
               id="erogamescape-search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void searchErogameScape(searchQuery);
+                }
+              }}
               placeholder="タイトル名で検索"
               className={`input input-bordered w-full ${searchError ? "input-error" : ""}`}
               disabled={searching || loadingMore}
