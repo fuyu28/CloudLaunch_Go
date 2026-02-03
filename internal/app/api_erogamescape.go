@@ -14,3 +14,11 @@ func (app *App) FetchFromErogameScape(gamePageURL string) (models.GameImport, er
 	}
 	return app.ErogameScapeService.FetchFromErogameScape(app.context(), gamePageURL)
 }
+
+// SearchErogameScape は批評空間の検索結果を取得する。
+func (app *App) SearchErogameScape(query string, pageURL string) (models.ErogameScapeSearchResult, error) {
+	if app.ErogameScapeService == nil {
+		return models.ErogameScapeSearchResult{}, errors.New("ErogameScapeService is not initialized")
+	}
+	return app.ErogameScapeService.SearchErogameScape(app.context(), query, pageURL)
+}

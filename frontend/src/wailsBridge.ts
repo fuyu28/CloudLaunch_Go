@@ -11,6 +11,7 @@ import type {
   MonitoringGameStatus,
   GameImport,
 } from "src/types/game";
+import type { ErogameScapeSearchResult } from "src/types/erogamescape";
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu";
 import type {
   MemoType,
@@ -226,6 +227,10 @@ export type WindowApi = {
   };
   erogameScape: {
     fetchById: (id: string) => Promise<ApiResult<GameImport>>;
+    searchByTitle: (
+      query: string,
+      pageUrl?: string,
+    ) => Promise<ApiResult<ErogameScapeSearchResult>>;
   };
   errorReport: {
     reportError: (payload: {
@@ -755,6 +760,29 @@ export const createWailsBridge = (): WindowApi => {
           return { success: true, data: result as GameImport };
         } catch (error) {
           let message = "批評空間からの取得に失敗しました";
+          if (error instanceof Error) {
+            message = error.message;
+          } else if (typeof error === "string") {
+            message = error;
+          } else if (error) {
+            message = JSON.stringify(error);
+          }
+          return { success: false, message };
+        }
+      },
+      searchByTitle: async (query, pageUrl) => {
+        const trimmed = query.trim();
+        if (!trimmed && !pageUrl) {
+          return { success: false, message: "検索ワードを入力してください" };
+        }
+        try {
+          const result = await (window as any)["go"]["app"]["App"]["SearchErogameScape"](
+            trimmed,
+            pageUrl ?? "",
+          );
+          return { success: true, data: result as ErogameScapeSearchResult };
+        } catch (error) {
+          let message = "批評空間の検索に失敗しました";
           if (error instanceof Error) {
             message = error.message;
           } else if (typeof error === "string") {
