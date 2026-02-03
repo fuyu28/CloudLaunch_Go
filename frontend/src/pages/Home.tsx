@@ -126,19 +126,6 @@ export default function Home(): React.ReactElement {
         onFilterChange={setFilter}
       />
 
-      <div className="mx-4 mb-4 flex flex-wrap items-center gap-3">
-        <button type="button" className="btn btn-outline" onClick={() => setIsImportOpen(true)}>
-          既存ゲームを登録
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline"
-          onClick={() => setIsErogameScapeImportOpen(true)}
-        >
-          批評空間から登録
-        </button>
-      </div>
-
       {/* ゲーム一覧 */}
       <GameGrid games={visibleGames} onLaunchGame={handleLaunchGame} />
 
@@ -157,6 +144,8 @@ export default function Home(): React.ReactElement {
         isOpen={isGameFormOpen}
         onClose={() => setIsGameFormOpen(false)}
         onSubmit={handleAddGame}
+        onOpenCloudImport={() => setIsImportOpen(true)}
+        onOpenErogameScapeImport={() => setIsErogameScapeImportOpen(true)}
       />
 
       <ErogameScapeImportModal

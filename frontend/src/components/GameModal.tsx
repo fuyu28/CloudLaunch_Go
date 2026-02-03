@@ -31,6 +31,8 @@ type GameFormModalProps = {
   onClose: () => void;
   onClosed?: () => void;
   onSubmit: (gameData: InputGameData) => Promise<ApiResult>;
+  onOpenCloudImport?: () => void;
+  onOpenErogameScapeImport?: () => void;
 };
 
 const initialValues: InputGameData = {
@@ -54,6 +56,8 @@ export default function GameFormModal({
   onClose,
   onClosed,
   onSubmit,
+  onOpenCloudImport,
+  onOpenErogameScapeImport,
 }: GameFormModalProps): React.JSX.Element {
   const [gameData, setGameData] = useState<InputGameData>(
     mode === "edit" && initialData ? initialData : initialValues,
@@ -189,6 +193,37 @@ export default function GameFormModal({
       footer={footer}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {mode === "add" && (onOpenCloudImport || onOpenErogameScapeImport) && (
+          <div className="rounded-lg border border-base-300 bg-base-100 p-4">
+            <div className="text-sm font-semibold mb-3">他の登録方法</div>
+            <div className="flex flex-wrap gap-2">
+              {onOpenCloudImport && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    onClose();
+                    onOpenCloudImport();
+                  }}
+                >
+                  既存ゲームを登録
+                </button>
+              )}
+              {onOpenErogameScapeImport && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    onClose();
+                    onOpenErogameScapeImport();
+                  }}
+                >
+                  批評空間から登録
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <GameFormFields
           gameData={gameData}
           onChange={handleChange}
