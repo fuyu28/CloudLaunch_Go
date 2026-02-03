@@ -4,6 +4,8 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image"
@@ -194,12 +196,19 @@ func (service *ErogameScapeService) downloadAndSaveImage(ctx context.Context, im
 		ext = ".jpg"
 	}
 
+	var encoded bytes.Buffer
+	if error := encodeImage(&encoded, resized, ext); error != nil {
+		return "", ImageError{URL: imageURL, Err: error}
+	}
+	hash := sha256.Sum256(encoded.Bytes())
+	hashHex := hex.EncodeToString(hash[:])
+
 	targetDir := filepath.Join(service.appDataDir, "thumbnails")
 	if error := os.MkdirAll(targetDir, 0o700); error != nil {
 		return "", ImageError{URL: imageURL, Err: error}
 	}
 
-	filename := fmt.Sprintf("erogamescape_%s%s", gameID, ext)
+	filename := fmt.Sprintf("%s_%s%s", hashHex, gameID, ext)
 	fullPath := filepath.Join(targetDir, filename)
 
 	file, error := os.Create(fullPath)
@@ -212,7 +221,7 @@ func (service *ErogameScapeService) downloadAndSaveImage(ctx context.Context, im
 		}
 	}()
 
-	if error := encodeImage(file, resized, ext); error != nil {
+	if _, error := encoded.WriteTo(file); error != nil {
 		return "", ImageError{URL: imageURL, Err: error}
 	}
 

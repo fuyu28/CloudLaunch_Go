@@ -445,11 +445,16 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 	if baseName == "" {
 		return "", false, errors.New("image key is empty")
 	}
-	targetDir := filepath.Join(service.config.AppDataDir, "images", gameID)
+	ext := filepath.Ext(baseName)
+	hash := strings.TrimSuffix(baseName, ext)
+	if hash == "" {
+		return "", false, errors.New("image hash is empty")
+	}
+	targetDir := filepath.Join(service.config.AppDataDir, "thumbnails")
 	if err := os.MkdirAll(targetDir, 0o700); err != nil {
 		return "", false, err
 	}
-	targetPath := filepath.Join(targetDir, baseName)
+	targetPath := filepath.Join(targetDir, fmt.Sprintf("%s_%s%s", hash, gameID, ext))
 	if _, err := os.Stat(targetPath); err == nil {
 		return targetPath, false, nil
 	}
