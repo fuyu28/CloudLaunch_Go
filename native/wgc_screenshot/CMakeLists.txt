@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(wgc_screenshot LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_executable(wgc_screenshot WgcScreenshot.cpp)
 
 target_compile_features(wgc_screenshot PRIVATE cxx_std_17)
