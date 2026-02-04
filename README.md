@@ -14,7 +14,7 @@
 
 > [!IMPORTANT]
 > **Cloud Launch (Go/Wails) は現在ベータ版として開発されています。**
-> テストリリース版をリリースしました。配布版は GitHub Releases からダウンロードできます。
+> テストリリース版をリリースしました。配布版は [Releases](https://github.com/fuyu28/CloudLaunch_Go/releases) からダウンロードできます。
 > 開発環境から起動する場合は、下記の手順をご参照ください。
 
 > [!WARNING]

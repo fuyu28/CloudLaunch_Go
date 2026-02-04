@@ -227,6 +227,7 @@ export type WindowApi = {
   };
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>;
+    captureWindow: (gameId: string) => Promise<ApiResult<string>>;
   };
   erogameScape: {
     fetchById: (id: string) => Promise<ApiResult<GameImport>>;
@@ -764,6 +765,18 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      captureWindow: async (gameId) => {
+        try {
+          const result = await (window as any)["go"]["app"]["App"]["CaptureGameWindow"](gameId);
+          return result && result.success
+            ? { success: true, data: result.data as string }
+            : { success: false, message: result?.error?.message ?? "エラー" };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "スクリーンショットに失敗しました";
+          return { success: false, message };
+        }
       },
     },
     erogameScape: {

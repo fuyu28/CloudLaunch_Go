@@ -32,6 +32,7 @@ type App struct {
 	CloudSyncService    *services.CloudSyncService
 	ErogameScapeService *services.ErogameScapeService
 	ProcessMonitor      *services.ProcessMonitorService
+	ScreenshotService   *services.ScreenshotService
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
@@ -70,6 +71,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
 	erogameScapeService := services.NewErogameScapeService(cfg, logger)
 	processMonitor := services.NewProcessMonitorService(repository, logger, cloudSync)
+	screenshotService := services.NewScreenshotService(cfg, repository, processMonitor, logger)
 
 	app := &App{
 		Config:              cfg,
@@ -86,6 +88,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		CloudSyncService:    cloudSync,
 		ErogameScapeService: erogameScapeService,
 		ProcessMonitor:      processMonitor,
+		ScreenshotService:   screenshotService,
 		dbConnection:        connection,
 		autoTracking:        true,
 		isMonitoring:        false,
