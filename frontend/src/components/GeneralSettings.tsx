@@ -34,6 +34,9 @@ import {
   autoTrackingAtom,
   transferConcurrencyAtom,
   transferRetryCountAtom,
+  screenshotSyncEnabledAtom,
+  screenshotUploadJpegAtom,
+  screenshotJpegQualityAtom,
   sortOptionLabels,
   filterStateLabels,
 } from "../state/settings";
@@ -57,6 +60,9 @@ export default function GeneralSettings(): React.JSX.Element {
   const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom);
   const [transferConcurrency, setTransferConcurrency] = useAtom(transferConcurrencyAtom);
   const [transferRetryCount, setTransferRetryCount] = useAtom(transferRetryCountAtom);
+  const [screenshotSyncEnabled, setScreenshotSyncEnabled] = useAtom(screenshotSyncEnabledAtom);
+  const [screenshotUploadJpeg, setScreenshotUploadJpeg] = useAtom(screenshotUploadJpegAtom);
+  const [screenshotJpegQuality, setScreenshotJpegQuality] = useAtom(screenshotJpegQualityAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // ソート変更ハンドラー
@@ -177,6 +183,36 @@ export default function GeneralSettings(): React.JSX.Element {
     await applyTransferRetryCount(nextValue, true);
   };
 
+  const handleScreenshotSyncEnabledChange = async (enabled: boolean): Promise<void> => {
+    setScreenshotSyncEnabled(enabled);
+    const result = await window.api.settings.updateScreenshotSyncEnabled(enabled);
+    if (!result.success) {
+      toast.error("スクリーンショット同期の更新に失敗しました");
+      return;
+    }
+    toast.success(`スクリーンショット同期を${enabled ? "有効" : "無効"}にしました`);
+  };
+
+  const handleScreenshotUploadJpegChange = async (enabled: boolean): Promise<void> => {
+    setScreenshotUploadJpeg(enabled);
+    const result = await window.api.settings.updateScreenshotUploadJpeg(enabled);
+    if (!result.success) {
+      toast.error("スクリーンショット形式の更新に失敗しました");
+      return;
+    }
+    toast.success(`スクリーンショットを${enabled ? "JPEG" : "PNG"}でアップロードします`);
+  };
+
+  const handleScreenshotJpegQualityChange = async (value: number): Promise<void> => {
+    const nextValue = Math.min(100, Math.max(1, value));
+    setScreenshotJpegQuality(nextValue);
+    const result = await window.api.settings.updateScreenshotJpegQuality(nextValue);
+    if (!result.success) {
+      toast.error("スクリーンショット品質の更新に失敗しました");
+      return;
+    }
+  };
+
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
@@ -236,6 +272,18 @@ export default function GeneralSettings(): React.JSX.Element {
     void window.api.settings.updateOfflineMode(offlineMode);
   }, []);
 
+  useEffect(() => {
+    void window.api.settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
+  }, []);
+
+  useEffect(() => {
+    void window.api.settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
+  }, []);
+
+  useEffect(() => {
+    void window.api.settings.updateScreenshotJpegQuality(screenshotJpegQuality);
+  }, []);
+
   return (
     <div className="w-full">
       <h2 className="text-xl font-semibold mb-6">一般設定</h2>
@@ -273,6 +321,68 @@ export default function GeneralSettings(): React.JSX.Element {
                 </select>
                 {isChangingTheme && <span className="loading loading-spinner loading-sm"></span>}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* スクリーンショット設定グループ */}
+        <div className="space-y-6">
+          <div className="border-l-4 border-primary pl-4">
+            <h3 className="text-lg font-semibold text-primary mb-1">スクリーンショット</h3>
+            <p className="text-sm text-base-content/60">撮影データの同期と形式</p>
+          </div>
+
+          <div className="bg-base-200 p-4 rounded-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">クラウド同期</h4>
+                <p className="text-sm text-base-content/70">
+                  スクリーンショットをクラウドにアップロードします
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={screenshotSyncEnabled}
+                onChange={(event) => void handleScreenshotSyncEnabledChange(event.target.checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">JPEGでアップロード</h4>
+                <p className="text-sm text-base-content/70">PNGより容量を抑えられます</p>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={screenshotUploadJpeg}
+                onChange={(event) => void handleScreenshotUploadJpegChange(event.target.checked)}
+                disabled={!screenshotSyncEnabled}
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h4 className="font-medium">JPEG品質</h4>
+                  <p className="text-sm text-base-content/70">
+                    数値が高いほど画質は向上します（1-100）
+                  </p>
+                </div>
+                <span className="text-sm font-mono">{screenshotJpegQuality}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={screenshotJpegQuality}
+                onChange={(event) =>
+                  void handleScreenshotJpegQualityChange(Number(event.target.value))
+                }
+                className="range range-primary"
+                disabled={!screenshotSyncEnabled || !screenshotUploadJpeg}
+              />
             </div>
           </div>
         </div>

@@ -18,7 +18,8 @@ import { autoTrackingAtom } from "@renderer/state/settings";
 import { isValidCredsAtom } from "@renderer/state/credentials";
 import { visibleGamesAtom } from "@renderer/state/home";
 import { useAtom, useAtomValue } from "jotai";
-import { FaClock, FaGamepad } from "react-icons/fa";
+import { useState } from "react";
+import { FaCamera, FaClock, FaGamepad } from "react-icons/fa";
 
 import ConfirmModal from "@renderer/components/ConfirmModal";
 import BaseModal from "@renderer/components/BaseModal";
@@ -46,6 +47,8 @@ export function PlayStatusBar(): React.JSX.Element {
   const { formatShort } = useTimeFormat();
   const { isOfflineMode } = useOfflineMode();
   const toastHandler = useToastHandler();
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isCaptureSelectOpen, setIsCaptureSelectOpen] = useState(false);
   const {
     activeGames,
     pendingConfirmationGame,
@@ -148,6 +151,36 @@ export function PlayStatusBar(): React.JSX.Element {
     await updateMonitoringStatus();
   };
 
+  const handleCaptureWindow = async (gameId: string, gameTitle: string): Promise<void> => {
+    if (isCapturing) {
+      return;
+    }
+    setIsCapturing(true);
+    const toastId = toastHandler.showLoading("スクリーンショットを取得中...");
+    try {
+      const result = await window.api.game.captureWindow(gameId);
+      if (!result.success) {
+        toastHandler.showError(result.message ?? "スクリーンショットに失敗しました", toastId);
+        return;
+      }
+      toastHandler.showSuccess(`「${gameTitle}」のスクリーンショットを保存しました`, toastId);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleCaptureButtonClick = (): void => {
+    if (!hasActiveGames || isCapturing) {
+      return;
+    }
+    if (activeGames.length === 1) {
+      const target = activeGames[0];
+      void handleCaptureWindow(target.gameId, target.gameTitle);
+      return;
+    }
+    setIsCaptureSelectOpen(true);
+  };
+
   return (
     <>
       <div className="bg-base-300 border-t border-base-content/10 px-4 py-1 h-12">
@@ -210,6 +243,20 @@ export function PlayStatusBar(): React.JSX.Element {
                 <div className="text-sm text-base-content/70">プレイ中のゲームはありません</div>
               </>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={handleCaptureButtonClick}
+              disabled={!hasActiveGames || isCapturing}
+              aria-label="ゲームのスクリーンショットを撮影"
+            >
+              {isCapturing ? (
+                <span className="loading loading-spinner loading-xs"></span>
+              ) : (
+                <FaCamera className="text-base-content/70" />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -277,6 +324,32 @@ export function PlayStatusBar(): React.JSX.Element {
         onConfirm={() => pendingResumeGame && handleResumeConfirm(pendingResumeGame.gameId)}
         onCancel={() => pendingResumeGame && handleKeepPausedConfirm(pendingResumeGame.gameId)}
       />
+      <BaseModal
+        isOpen={isCaptureSelectOpen}
+        onClose={() => setIsCaptureSelectOpen(false)}
+        title="スクリーンショット対象を選択"
+        size="md"
+        footer={
+          <button className="btn btn-ghost" onClick={() => setIsCaptureSelectOpen(false)}>
+            閉じる
+          </button>
+        }
+      >
+        <div className="space-y-2">
+          {activeGames.map((game) => (
+            <button
+              key={game.gameId}
+              className="btn btn-outline w-full justify-start"
+              onClick={() => {
+                setIsCaptureSelectOpen(false);
+                void handleCaptureWindow(game.gameId, game.gameTitle);
+              }}
+            >
+              {game.gameTitle}
+            </button>
+          ))}
+        </div>
+      </BaseModal>
     </>
   );
 }

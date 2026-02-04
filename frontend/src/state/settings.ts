@@ -69,6 +69,24 @@ export const transferConcurrencyAtom = atomWithStorage<number>("transferConcurre
 export const transferRetryCountAtom = atomWithStorage<number>("transferRetryCount", 3);
 
 /**
+ * スクリーンショット同期設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotSyncEnabledAtom = atomWithStorage<boolean>("screenshotSyncEnabled", false);
+
+/**
+ * スクリーンショットのJPEG変換設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotUploadJpegAtom = atomWithStorage<boolean>("screenshotUploadJpeg", true);
+
+/**
+ * スクリーンショットJPEG品質設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotJpegQualityAtom = atomWithStorage<number>("screenshotJpegQuality", 85);
+
+/**
  * テーマ変更中の状態atom
  * 一時的な状態なのでLocalStorageには保存しない
  */
