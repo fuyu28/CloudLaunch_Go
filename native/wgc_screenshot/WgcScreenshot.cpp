@@ -249,21 +249,26 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
     return E_INVALIDARG;
   }
 
+  HRESULT coInit = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  bool coInitialized = (coInit == S_OK || coInit == S_FALSE);
+  struct CoScope {
+    bool initialized = false;
+    ~CoScope() {
+      if (initialized) {
+        CoUninitialize();
+      }
+    }
+  } coScope{coInitialized};
+
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   struct ApartmentScope {
     ~ApartmentScope() { winrt::uninit_apartment(); }
   } apartmentScope;
 
-  HRESULT coInit = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  bool coInitialized = (coInit == S_OK || coInit == S_FALSE);
-
   com_ptr<ID3D11Device> d3dDevice;
   com_ptr<ID3D11DeviceContext> d3dContext;
   HRESULT hr = CreateD3DDevice(d3dDevice, d3dContext);
   if (FAILED(hr)) {
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return hr;
   }
 
@@ -271,9 +276,6 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
       nullptr};
   hr = CreateDirect3DDeviceFromDXGI(d3dDevice, winrtDevice);
   if (FAILED(hr)) {
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return hr;
   }
 
@@ -288,17 +290,11 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
       winrt::guid_of<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>(),
       reinterpret_cast<void **>(winrt::put_abi(item)));
   if (FAILED(hr)) {
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return hr;
   }
 
   auto size = item.Size();
   if (size.Width <= 0 || size.Height <= 0) {
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return E_FAIL;
   }
 
@@ -310,12 +306,21 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
                              1, size);
 
   auto session = framePool.CreateCaptureSession(item);
+  struct CaptureScope {
+    winrt::Windows::Graphics::Capture::GraphicsCaptureSession session;
+    winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool framePool;
+    ~CaptureScope() {
+      if (session) {
+        session.Close();
+      }
+      if (framePool) {
+        framePool.Close();
+      }
+    }
+  } captureScope{session, framePool};
 
   handle frameEvent{CreateEvent(nullptr, FALSE, FALSE, nullptr)};
   if (!frameEvent) {
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return HRESULT_FROM_WIN32(GetLastError());
   }
 
@@ -332,20 +337,10 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
 
   DWORD waitResult = WaitForSingleObject(frameEvent.get(), 2000);
   if (waitResult != WAIT_OBJECT_0) {
-    session.Close();
-    framePool.Close();
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
   }
 
   if (!captured) {
-    session.Close();
-    framePool.Close();
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return E_FAIL;
   }
 
@@ -356,20 +351,10 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
       access;
   hr = winrt::get_unknown(surface)->QueryInterface(IID_PPV_ARGS(access.put()));
   if (FAILED(hr)) {
-    session.Close();
-    framePool.Close();
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return hr;
   }
   hr = access->GetInterface(IID_PPV_ARGS(texture.put()));
   if (FAILED(hr)) {
-    session.Close();
-    framePool.Close();
-    if (coInitialized) {
-      CoUninitialize();
-    }
     return hr;
   }
 
@@ -383,13 +368,7 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
     }
   }
 
-  hr = SavePngFromTexture(d3dDevice, d3dContext, texture, path, cropPtr);
-  session.Close();
-  framePool.Close();
-  if (coInitialized) {
-    CoUninitialize();
-  }
-  return hr;
+  return SavePngFromTexture(d3dDevice, d3dContext, texture, path, cropPtr);
 }
 
 static int PrintUsage() {
