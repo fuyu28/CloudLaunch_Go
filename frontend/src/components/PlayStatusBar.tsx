@@ -245,18 +245,20 @@ export function PlayStatusBar(): React.JSX.Element {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={handleCaptureButtonClick}
-              disabled={!hasActiveGames || isCapturing}
-              aria-label="ゲームのスクリーンショットを撮影"
-            >
-              {isCapturing ? (
-                <span className="loading loading-spinner loading-xs"></span>
-              ) : (
-                <FaCamera className="text-base-content/70" />
-              )}
-            </button>
+            {hasActiveGames && (
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={handleCaptureButtonClick}
+                disabled={isCapturing}
+                aria-label="ゲームのスクリーンショットを撮影"
+              >
+                {isCapturing ? (
+                  <span className="loading loading-spinner loading-xs"></span>
+                ) : (
+                  <FaCamera className="text-base-content/70" />
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
