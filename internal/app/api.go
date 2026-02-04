@@ -2,7 +2,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"image"
+	"image/jpeg"
+	_ "image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -222,6 +227,27 @@ func (app *App) UpdateTransferRetryCount(value int) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateScreenshotSyncEnabled はスクリーンショット同期の有効/無効を更新する。
+func (app *App) UpdateScreenshotSyncEnabled(enabled bool) result.ApiResult[bool] {
+	app.Config.ScreenshotSyncEnabled = enabled
+	return result.OkResult(true)
+}
+
+// UpdateScreenshotUploadJpeg はスクリーンショットをJPEG変換してアップロードするか更新する。
+func (app *App) UpdateScreenshotUploadJpeg(enabled bool) result.ApiResult[bool] {
+	app.Config.ScreenshotUploadJpeg = enabled
+	return result.OkResult(true)
+}
+
+// UpdateScreenshotJpegQuality はスクリーンショットJPEGの品質を更新する。
+func (app *App) UpdateScreenshotJpegQuality(value int) result.ApiResult[bool] {
+	if value < 1 || value > 100 {
+		return result.ErrorResult[bool]("JPEG品質が不正です", "value must be 1-100")
+	}
+	app.Config.ScreenshotJpegQuality = value
+	return result.OkResult(true)
+}
+
 // GetMonitoringStatus は監視状態を取得する。
 func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {
@@ -432,7 +458,69 @@ func (app *App) CaptureGameWindow(gameID string) result.ApiResult[string] {
 		app.Logger.Error("スクリーンショット取得に失敗", "error", err)
 		return result.ErrorResult[string]("スクリーンショットの取得に失敗しました", err.Error())
 	}
+	if app.Config.ScreenshotSyncEnabled {
+		if syncErr := app.uploadScreenshot(app.context(), strings.TrimSpace(gameID), path); syncErr != nil {
+			app.Logger.Error("スクリーンショット同期に失敗", "error", syncErr)
+			return result.ErrorResult[string]("スクリーンショットの同期に失敗しました", syncErr.Error())
+		}
+	}
 	return result.OkResult(path)
+}
+
+func (app *App) uploadScreenshot(ctx context.Context, gameID string, filePath string) error {
+	if gameID == "" {
+		return errors.New("gameID is empty")
+	}
+	if strings.TrimSpace(filePath) == "" {
+		return errors.New("filePath is empty")
+	}
+
+	client, bucket, err := app.getDefaultS3Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	baseName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+	key := filepath.ToSlash(filepath.Join("screenshots", gameID, baseName))
+
+	if app.Config.ScreenshotUploadJpeg {
+		quality := app.Config.ScreenshotJpegQuality
+		if quality < 1 || quality > 100 {
+			quality = 85
+		}
+		payload, err := convertImageToJpeg(filePath, quality)
+		if err != nil {
+			return err
+		}
+		return storage.UploadBytes(ctx, client, bucket, key+".jpg", payload, "image/jpeg")
+	}
+
+	payload, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	return storage.UploadBytes(ctx, client, bucket, key+".png", payload, "image/png")
+}
+
+func convertImageToJpeg(filePath string, quality int) ([]byte, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return nil, err
+	}
+
+	buffer := bytes.NewBuffer(nil)
+	if err := jpeg.Encode(buffer, img, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
 }
 
 func (app *App) runtimeContext() context.Context {
