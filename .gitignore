@@ -12,6 +12,7 @@
 /build/bin/
 frontend/dist/
 frontend/wailsjs/
+native/wgc_screenshot/build/
 
 # Frontend
 frontend/node_modules/
