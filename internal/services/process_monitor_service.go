@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
@@ -737,8 +738,10 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 		}
 	}
 
-	if records, err := parse(output); err == nil {
-		return records, nil
+	if utf8.Valid(output) {
+		if records, err := parse(output); err == nil {
+			return records, nil
+		}
 	}
 
 	if decoded, err := decodeProcessOutput(output); err == nil {
