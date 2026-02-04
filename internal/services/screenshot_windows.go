@@ -22,6 +22,8 @@ const (
 	srccopy                = 0x00CC0020
 	pwClientOnly           = 0x00000001
 	dwmExtendedFrameBounds = 9
+	dwmCloaked             = 14
+	gaRoot                 = 2
 )
 
 var (
@@ -35,6 +37,7 @@ var (
 	procGetWindowRect       = user32.NewProc("GetWindowRect")
 	procGetClientRect       = user32.NewProc("GetClientRect")
 	procClientToScreen      = user32.NewProc("ClientToScreen")
+	procGetAncestor         = user32.NewProc("GetAncestor")
 	procGetDC               = user32.NewProc("GetDC")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
 	procGetWindowDC         = user32.NewProc("GetWindowDC")
@@ -162,6 +165,10 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if err != nil {
 		return false, err
 	}
+	hwnd = normalizeRootWindow(hwnd)
+	if isWindowCloaked(hwnd) {
+		return false, errors.New("window is cloaked")
+	}
 	helperPath, err := wgcHelperPath()
 	if err != nil || helperPath == "" {
 		return false, nil
@@ -196,6 +203,40 @@ func wgcHelperPath() (string, error) {
 	}
 	exeDir := filepath.Dir(exePath)
 	return filepath.Join(exeDir, "wgc_screenshot.exe"), nil
+}
+
+func normalizeRootWindow(hwnd windows.Handle) windows.Handle {
+	if hwnd == 0 {
+		return hwnd
+	}
+	root, _, _ := procGetAncestor.Call(uintptr(hwnd), uintptr(gaRoot))
+	if root == 0 {
+		return hwnd
+	}
+	var rootPID uint32
+	procGetWindowThreadPID.Call(root, uintptr(unsafe.Pointer(&rootPID)))
+	var hwndPID uint32
+	procGetWindowThreadPID.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&hwndPID)))
+	if rootPID == hwndPID {
+		return windows.Handle(root)
+	}
+	return hwnd
+}
+
+func isWindowCloaked(hwnd windows.Handle) bool {
+	if hwnd == 0 {
+		return false
+	}
+	var cloaked uint32
+	if ret, _, _ := procDwmGetWindowAttr.Call(
+		uintptr(hwnd),
+		uintptr(dwmCloaked),
+		uintptr(unsafe.Pointer(&cloaked)),
+		unsafe.Sizeof(cloaked),
+	); ret == 0 {
+		return cloaked != 0
+	}
+	return false
 }
 
 func captureWindowWithPrintWindow(hwnd windows.Handle, clientOnly bool) (image.Image, error) {
