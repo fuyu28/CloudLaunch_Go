@@ -38,6 +38,7 @@ import {
   screenshotUploadJpegAtom,
   screenshotJpegQualityAtom,
   screenshotClientOnlyAtom,
+  screenshotLocalJpegAtom,
   sortOptionLabels,
   filterStateLabels,
 } from "../state/settings";
@@ -65,6 +66,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotUploadJpeg, setScreenshotUploadJpeg] = useAtom(screenshotUploadJpegAtom);
   const [screenshotJpegQuality, setScreenshotJpegQuality] = useAtom(screenshotJpegQualityAtom);
   const [screenshotClientOnly, setScreenshotClientOnly] = useAtom(screenshotClientOnlyAtom);
+  const [screenshotLocalJpeg, setScreenshotLocalJpeg] = useAtom(screenshotLocalJpegAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // ソート変更ハンドラー
@@ -225,6 +227,16 @@ export default function GeneralSettings(): React.JSX.Element {
     toast.success(enabled ? "タイトルバーを除外して撮影します" : "タイトルバーを含めて撮影します");
   };
 
+  const handleScreenshotLocalJpegChange = async (enabled: boolean): Promise<void> => {
+    setScreenshotLocalJpeg(enabled);
+    const result = await window.api.settings.updateScreenshotLocalJpeg(enabled);
+    if (!result.success) {
+      toast.error("スクリーンショット設定の更新に失敗しました");
+      return;
+    }
+    toast.success(enabled ? "ローカル保存をJPEGにします" : "ローカル保存をPNGにします");
+  };
+
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
@@ -298,6 +310,10 @@ export default function GeneralSettings(): React.JSX.Element {
 
   useEffect(() => {
     void window.api.settings.updateScreenshotClientOnly(screenshotClientOnly);
+  }, []);
+
+  useEffect(() => {
+    void window.api.settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
   }, []);
 
   return (
@@ -376,6 +392,19 @@ export default function GeneralSettings(): React.JSX.Element {
                 className="toggle toggle-primary"
                 checked={screenshotClientOnly}
                 onChange={(event) => void handleScreenshotClientOnlyChange(event.target.checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">ローカル保存をJPEGにする</h4>
+                <p className="text-sm text-base-content/70">オンでPNGより容量を抑えて保存します</p>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={screenshotLocalJpeg}
+                onChange={(event) => void handleScreenshotLocalJpegChange(event.target.checked)}
               />
             </div>
 

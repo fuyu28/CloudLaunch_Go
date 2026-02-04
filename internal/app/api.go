@@ -245,6 +245,9 @@ func (app *App) UpdateScreenshotJpegQuality(value int) result.ApiResult[bool] {
 		return result.ErrorResult[bool]("JPEG品質が不正です", "value must be 1-100")
 	}
 	app.Config.ScreenshotJpegQuality = value
+	if app.ScreenshotService != nil {
+		app.ScreenshotService.SetJpegQuality(value)
+	}
 	return result.OkResult(true)
 }
 
@@ -253,6 +256,15 @@ func (app *App) UpdateScreenshotClientOnly(enabled bool) result.ApiResult[bool] 
 	app.Config.ScreenshotClientOnly = enabled
 	if app.ScreenshotService != nil {
 		app.ScreenshotService.SetClientOnly(enabled)
+	}
+	return result.OkResult(true)
+}
+
+// UpdateScreenshotLocalJpeg はローカル保存形式をJPEGにするか更新する。
+func (app *App) UpdateScreenshotLocalJpeg(enabled bool) result.ApiResult[bool] {
+	app.Config.ScreenshotLocalJpeg = enabled
+	if app.ScreenshotService != nil {
+		app.ScreenshotService.SetLocalJpeg(enabled)
 	}
 	return result.OkResult(true)
 }
@@ -508,7 +520,21 @@ func (app *App) uploadScreenshot(ctx context.Context, gameID string, filePath st
 	if err != nil {
 		return err
 	}
-	return storage.UploadBytes(ctx, client, bucket, key+".png", payload, "image/png")
+
+	ext := strings.ToLower(filepath.Ext(filePath))
+	contentType := "application/octet-stream"
+	switch ext {
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+		key += ".jpg"
+	case ".png":
+		contentType = "image/png"
+		key += ".png"
+	default:
+		key += ext
+	}
+
+	return storage.UploadBytes(ctx, client, bucket, key, payload, contentType)
 }
 
 func convertImageToJpeg(filePath string, quality int) ([]byte, error) {

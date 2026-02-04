@@ -93,6 +93,12 @@ export const screenshotJpegQualityAtom = atomWithStorage<number>("screenshotJpeg
 export const screenshotClientOnlyAtom = atomWithStorage<boolean>("screenshotClientOnly", true);
 
 /**
+ * スクリーンショットのローカル保存をJPEGにする設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotLocalJpegAtom = atomWithStorage<boolean>("screenshotLocalJpeg", false);
+
+/**
  * テーマ変更中の状態atom
  * 一時的な状態なのでLocalStorageには保存しない
  */

@@ -102,6 +102,7 @@ export type WindowApi = {
     updateScreenshotUploadJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotJpegQuality: (value: number) => Promise<ApiResult<void>>;
     updateScreenshotClientOnly: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateScreenshotLocalJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
   };
   file: {
     selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<ApiResult<string>>;
@@ -318,6 +319,14 @@ export const createWailsBridge = (): WindowApi => {
       },
       updateScreenshotClientOnly: async (enabled) => {
         const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotClientOnly"](
+          enabled,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotLocalJpeg: async (enabled) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotLocalJpeg"](
           enabled,
         );
         return result && result.success

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"log/slog"
 	"os"
@@ -24,6 +25,8 @@ type ScreenshotService struct {
 	logger         *slog.Logger
 	appDataDir     string
 	clientOnly     bool
+	localJpeg      bool
+	jpegQuality    int
 }
 
 // NewScreenshotService は ScreenshotService を生成する。
@@ -39,12 +42,24 @@ func NewScreenshotService(
 		logger:         logger,
 		appDataDir:     cfg.AppDataDir,
 		clientOnly:     cfg.ScreenshotClientOnly,
+		localJpeg:      cfg.ScreenshotLocalJpeg,
+		jpegQuality:    cfg.ScreenshotJpegQuality,
 	}
 }
 
 // SetClientOnly はキャプチャ対象をクライアント領域のみにするか更新する。
 func (service *ScreenshotService) SetClientOnly(enabled bool) {
 	service.clientOnly = enabled
+}
+
+// SetLocalJpeg はローカル保存をJPEG形式にするか更新する。
+func (service *ScreenshotService) SetLocalJpeg(enabled bool) {
+	service.localJpeg = enabled
+}
+
+// SetJpegQuality はスクリーンショットJPEG品質を更新する。
+func (service *ScreenshotService) SetJpegQuality(value int) {
+	service.jpegQuality = value
 }
 
 // CaptureGameWindow は指定ゲームのウィンドウを撮影して保存し、保存先パスを返す。
@@ -85,13 +100,34 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		return "", err
 	}
 
-	fileName := fmt.Sprintf("%s_%s.png", time.Now().Format("20060102_150405"), game.ID)
+	ext := ".png"
+	if service.localJpeg {
+		ext = ".jpg"
+	}
+	fileName := fmt.Sprintf("%s_%s%s", time.Now().Format("20060102_150405"), game.ID, ext)
 	fullPath := filepath.Join(saveDir, fileName)
 
 	for _, pid := range pids {
-		ok, err := captureWindowWithWGC(pid, fullPath, service.clientOnly)
+		outputPath := fullPath
+		tmpPath := ""
+		if service.localJpeg {
+			outputPath = filepath.Join(saveDir, fmt.Sprintf("%s_%s.tmp.png", time.Now().Format("20060102_150405"), game.ID))
+			tmpPath = outputPath
+		}
+
+		ok, err := captureWindowWithWGC(pid, outputPath, service.clientOnly)
 		if err == nil && ok {
+			if tmpPath != "" {
+				if convertErr := service.convertFileToJpeg(tmpPath, fullPath); convertErr != nil {
+					_ = os.Remove(tmpPath)
+					return "", convertErr
+				}
+				_ = os.Remove(tmpPath)
+			}
 			return fullPath, nil
+		}
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath)
 		}
 	}
 
@@ -110,9 +146,17 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		return "", errors.New("failed to capture window")
 	}
 
-	file, err := os.Create(fullPath)
-	if err != nil {
+	if err := service.saveImage(fullPath, captured); err != nil {
 		return "", err
+	}
+
+	return fullPath, nil
+}
+
+func (service *ScreenshotService) saveImage(path string, img image.Image) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
@@ -120,9 +164,44 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		}
 	}()
 
-	if err := png.Encode(file, captured); err != nil {
-		return "", err
+	if service.localJpeg {
+		quality := normalizeJpegQuality(service.jpegQuality)
+		return jpeg.Encode(file, img, &jpeg.Options{Quality: quality})
+	}
+	return png.Encode(file, img)
+}
+
+func (service *ScreenshotService) convertFileToJpeg(sourcePath string, destPath string) error {
+	file, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return err
 	}
 
-	return fullPath, nil
+	out, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := out.Close(); closeErr != nil {
+			service.logger.Warn("スクリーンショットの保存に失敗", "error", closeErr)
+		}
+	}()
+
+	quality := normalizeJpegQuality(service.jpegQuality)
+	return jpeg.Encode(out, img, &jpeg.Options{Quality: quality})
+}
+
+func normalizeJpegQuality(value int) int {
+	if value < 1 || value > 100 {
+		return 85
+	}
+	return value
 }
