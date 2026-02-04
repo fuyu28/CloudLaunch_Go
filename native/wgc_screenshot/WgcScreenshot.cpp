@@ -26,6 +26,10 @@ struct CropRect {
   UINT height;
 };
 
+static void LogHresult(const wchar_t* stage, HRESULT hr) {
+  fwprintf(stderr, L"%ls failed: 0x%08X\n", stage, static_cast<unsigned int>(hr));
+}
+
 static HRESULT CreateD3DDevice(com_ptr<ID3D11Device>& device,
                                com_ptr<ID3D11DeviceContext>& context) {
   UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -263,12 +267,14 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t* path, int clie
   com_ptr<ID3D11DeviceContext> d3dContext;
   HRESULT hr = CreateD3DDevice(d3dDevice, d3dContext);
   if (FAILED(hr)) {
+    LogHresult(L"CreateD3DDevice", hr);
     return hr;
   }
 
   winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice winrtDevice{nullptr};
   hr = CreateDirect3DDeviceFromDXGI(d3dDevice, winrtDevice);
   if (FAILED(hr)) {
+    LogHresult(L"CreateDirect3DDeviceFromDXGI", hr);
     return hr;
   }
 
@@ -281,11 +287,13 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t* path, int clie
       hwnd, winrt::guid_of<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>(),
       reinterpret_cast<void**>(winrt::put_abi(item)));
   if (FAILED(hr)) {
+    LogHresult(L"CreateForWindow", hr);
     return hr;
   }
 
   auto size = item.Size();
   if (size.Width <= 0 || size.Height <= 0) {
+    fwprintf(stderr, L"Capture item size invalid: %dx%d\n", size.Width, size.Height);
     return E_FAIL;
   }
 
@@ -326,10 +334,12 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t* path, int clie
 
   DWORD waitResult = WaitForSingleObject(frameEvent.get(), 2000);
   if (waitResult != WAIT_OBJECT_0) {
+    fwprintf(stderr, L"Frame wait timeout\n");
     return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
   }
 
   if (!captured) {
+    fwprintf(stderr, L"Captured frame is empty\n");
     return E_FAIL;
   }
 
@@ -338,10 +348,12 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t* path, int clie
   com_ptr<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess> access;
   hr = winrt::get_unknown(surface)->QueryInterface(IID_PPV_ARGS(access.put()));
   if (FAILED(hr)) {
+    LogHresult(L"QueryInterface(IDirect3DDxgiInterfaceAccess)", hr);
     return hr;
   }
   hr = access->GetInterface(IID_PPV_ARGS(texture.put()));
   if (FAILED(hr)) {
+    LogHresult(L"GetInterface(ID3D11Texture2D)", hr);
     return hr;
   }
 
