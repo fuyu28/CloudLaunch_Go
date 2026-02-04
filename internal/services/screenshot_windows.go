@@ -19,28 +19,29 @@ const (
 )
 
 var (
-	user32                 = windows.NewLazySystemDLL("user32.dll")
-	gdi32                  = windows.NewLazySystemDLL("gdi32.dll")
-	dwmapi                 = windows.NewLazySystemDLL("dwmapi.dll")
-	procEnumWindows        = user32.NewProc("EnumWindows")
-	procGetWindowThreadPID = user32.NewProc("GetWindowThreadProcessId")
-	procIsWindowVisible    = user32.NewProc("IsWindowVisible")
-	procIsIconic           = user32.NewProc("IsIconic")
-	procGetWindowRect      = user32.NewProc("GetWindowRect")
-	procGetClientRect      = user32.NewProc("GetClientRect")
-	procClientToScreen     = user32.NewProc("ClientToScreen")
-	procGetDC              = user32.NewProc("GetDC")
-	procGetWindowDC        = user32.NewProc("GetWindowDC")
-	procReleaseDC          = user32.NewProc("ReleaseDC")
-	procPrintWindow        = user32.NewProc("PrintWindow")
-	procDwmGetWindowAttr   = dwmapi.NewProc("DwmGetWindowAttribute")
-	procCreateCompatibleDC = gdi32.NewProc("CreateCompatibleDC")
-	procCreateBitmap       = gdi32.NewProc("CreateCompatibleBitmap")
-	procSelectObject       = gdi32.NewProc("SelectObject")
-	procDeleteObject       = gdi32.NewProc("DeleteObject")
-	procDeleteDC           = gdi32.NewProc("DeleteDC")
-	procBitBlt             = gdi32.NewProc("BitBlt")
-	procGetDIBits          = gdi32.NewProc("GetDIBits")
+	user32                  = windows.NewLazySystemDLL("user32.dll")
+	gdi32                   = windows.NewLazySystemDLL("gdi32.dll")
+	dwmapi                  = windows.NewLazySystemDLL("dwmapi.dll")
+	procEnumWindows         = user32.NewProc("EnumWindows")
+	procGetWindowThreadPID  = user32.NewProc("GetWindowThreadProcessId")
+	procIsWindowVisible     = user32.NewProc("IsWindowVisible")
+	procIsIconic            = user32.NewProc("IsIconic")
+	procGetWindowRect       = user32.NewProc("GetWindowRect")
+	procGetClientRect       = user32.NewProc("GetClientRect")
+	procClientToScreen      = user32.NewProc("ClientToScreen")
+	procGetDC               = user32.NewProc("GetDC")
+	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
+	procGetWindowDC         = user32.NewProc("GetWindowDC")
+	procReleaseDC           = user32.NewProc("ReleaseDC")
+	procPrintWindow         = user32.NewProc("PrintWindow")
+	procDwmGetWindowAttr    = dwmapi.NewProc("DwmGetWindowAttribute")
+	procCreateCompatibleDC  = gdi32.NewProc("CreateCompatibleDC")
+	procCreateBitmap        = gdi32.NewProc("CreateCompatibleBitmap")
+	procSelectObject        = gdi32.NewProc("SelectObject")
+	procDeleteObject        = gdi32.NewProc("DeleteObject")
+	procDeleteDC            = gdi32.NewProc("DeleteDC")
+	procBitBlt              = gdi32.NewProc("BitBlt")
+	procGetDIBits           = gdi32.NewProc("GetDIBits")
 )
 
 type windowRect struct {
@@ -280,40 +281,60 @@ func findBestWindowForPID(pid uint32) (windows.Handle, error) {
 	var best windows.Handle
 	var bestArea int32
 
-	callback := windows.NewCallback(func(hwnd uintptr, lparam uintptr) uintptr {
-		var windowPID uint32
-		procGetWindowThreadPID.Call(hwnd, uintptr(unsafe.Pointer(&windowPID)))
-		if windowPID != pid {
+	selectBest := func(requireVisible bool) windows.Handle {
+		best = 0
+		bestArea = 0
+		callback := windows.NewCallback(func(hwnd uintptr, lparam uintptr) uintptr {
+			var windowPID uint32
+			procGetWindowThreadPID.Call(hwnd, uintptr(unsafe.Pointer(&windowPID)))
+			if windowPID != pid {
+				return 1
+			}
+			if requireVisible {
+				visible, _, _ := procIsWindowVisible.Call(hwnd)
+				if visible == 0 {
+					return 1
+				}
+				iconic, _, _ := procIsIconic.Call(hwnd)
+				if iconic != 0 {
+					return 1
+				}
+			}
+			var rect windowRect
+			if ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect))); ret == 0 {
+				return 1
+			}
+			width := rect.Right - rect.Left
+			height := rect.Bottom - rect.Top
+			if width <= 0 || height <= 0 {
+				return 1
+			}
+			area := width * height
+			if area > bestArea {
+				bestArea = area
+				best = windows.Handle(hwnd)
+			}
 			return 1
-		}
-		visible, _, _ := procIsWindowVisible.Call(hwnd)
-		if visible == 0 {
-			return 1
-		}
-		iconic, _, _ := procIsIconic.Call(hwnd)
-		if iconic != 0 {
-			return 1
-		}
-		var rect windowRect
-		if ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect))); ret == 0 {
-			return 1
-		}
-		width := rect.Right - rect.Left
-		height := rect.Bottom - rect.Top
-		if width <= 0 || height <= 0 {
-			return 1
-		}
-		area := width * height
-		if area > bestArea {
-			bestArea = area
-			best = windows.Handle(hwnd)
-		}
-		return 1
-	})
-
-	procEnumWindows.Call(callback, 0)
-	if best == 0 {
-		return 0, errors.New("window not found")
+		})
+		procEnumWindows.Call(callback, 0)
+		return best
 	}
-	return best, nil
+
+	if handle := selectBest(true); handle != 0 {
+		return handle, nil
+	}
+	if handle := selectBest(false); handle != 0 {
+		return handle, nil
+	}
+
+	fg, _, _ := procGetForegroundWindow.Call()
+	if fg != 0 {
+		var windowPID uint32
+		procGetWindowThreadPID.Call(fg, uintptr(unsafe.Pointer(&windowPID)))
+		if windowPID == pid {
+			return windows.Handle(fg), nil
+		}
+	}
+
+	return 0, errors.New("window not found")
 }
