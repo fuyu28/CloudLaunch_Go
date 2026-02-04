@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
