@@ -1,8 +1,8 @@
 #include <windows.h>
 
 #include <d3d11.h>
-#include <dxgi1_2.h>
 #include <dwmapi.h>
+#include <dxgi1_2.h>
 #include <wincodec.h>
 
 #include <cstring>
@@ -26,19 +26,19 @@ struct CropRect {
   UINT height;
 };
 
-static HRESULT CreateD3DDevice(com_ptr<ID3D11Device> &device,
-                               com_ptr<ID3D11DeviceContext> &context) {
+static HRESULT CreateD3DDevice(com_ptr<ID3D11Device>& device,
+                               com_ptr<ID3D11DeviceContext>& context) {
   UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
   D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
   D3D_FEATURE_LEVEL level;
-  return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
-                           levels, ARRAYSIZE(levels), D3D11_SDK_VERSION,
-                           device.put(), &level, context.put());
+  return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, levels,
+                           ARRAYSIZE(levels), D3D11_SDK_VERSION, device.put(), &level,
+                           context.put());
 }
 
 static HRESULT CreateDirect3DDeviceFromDXGI(
-    const com_ptr<ID3D11Device> &device,
-    winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice &outDevice) {
+    const com_ptr<ID3D11Device>& device,
+    winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice& outDevice) {
   com_ptr<IDXGIDevice> dxgiDevice;
   try {
     dxgiDevice = device.as<IDXGIDevice>();
@@ -46,22 +46,18 @@ static HRESULT CreateDirect3DDeviceFromDXGI(
     return E_NOINTERFACE;
   }
   com_ptr<IInspectable> inspectable;
-  HRESULT hr =
-      CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.get(), inspectable.put());
+  HRESULT hr = CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.get(), inspectable.put());
   if (FAILED(hr)) {
     return hr;
   }
-  outDevice =
-      inspectable
-          .as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
+  outDevice = inspectable.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
   return S_OK;
 }
 
-static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
-                                  const com_ptr<ID3D11DeviceContext> &context,
-                                  const com_ptr<ID3D11Texture2D> &texture,
-                                  const wchar_t *filePath,
-                                  const CropRect *cropRect) {
+static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device>& device,
+                                  const com_ptr<ID3D11DeviceContext>& context,
+                                  const com_ptr<ID3D11Texture2D>& texture, const wchar_t* filePath,
+                                  const CropRect* cropRect) {
   if (!filePath || !*filePath) {
     return E_INVALIDARG;
   }
@@ -139,7 +135,7 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
   UINT outputWidth = desc.Width;
   UINT outputHeight = desc.Height;
   UINT outputStride = mapped.RowPitch;
-  const BYTE *outputBytes = reinterpret_cast<BYTE *>(mapped.pData);
+  const BYTE* outputBytes = reinterpret_cast<BYTE*>(mapped.pData);
   std::vector<BYTE> cropped;
 
   if (cropRect && cropRect->width > 0 && cropRect->height > 0) {
@@ -150,11 +146,10 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
     cropped.resize(bufferSize);
 
     for (UINT y = 0; y < outputHeight; ++y) {
-      const BYTE *source =
-          reinterpret_cast<BYTE *>(mapped.pData) +
-          (static_cast<size_t>(cropRect->y) + y) * mapped.RowPitch +
-          static_cast<size_t>(cropRect->x) * 4;
-      BYTE *dest = cropped.data() + static_cast<size_t>(y) * outputStride;
+      const BYTE* source = reinterpret_cast<BYTE*>(mapped.pData) +
+                           (static_cast<size_t>(cropRect->y) + y) * mapped.RowPitch +
+                           static_cast<size_t>(cropRect->x) * 4;
+      BYTE* dest = cropped.data() + static_cast<size_t>(y) * outputStride;
       std::memcpy(dest, source, outputStride);
     }
     outputBytes = cropped.data();
@@ -173,9 +168,8 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
     return hr;
   }
 
-  hr = frame->WritePixels(outputHeight, outputStride,
-                          outputStride * outputHeight,
-                          const_cast<BYTE *>(outputBytes));
+  hr = frame->WritePixels(outputHeight, outputStride, outputStride * outputHeight,
+                          const_cast<BYTE*>(outputBytes));
 
   context->Unmap(staging.get(), 0);
   if (FAILED(hr)) {
@@ -190,11 +184,9 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
   return encoder->Commit();
 }
 
-static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC &desc,
-                                 CropRect &crop) {
+static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC& desc, CropRect& crop) {
   RECT frame = {};
-  HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame,
-                                     sizeof(frame));
+  HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame));
   if (FAILED(hr)) {
     return false;
   }
@@ -238,13 +230,12 @@ static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC &desc,
     return false;
   }
 
-  crop = CropRect{static_cast<UINT>(cropX), static_cast<UINT>(cropY),
-                  static_cast<UINT>(cropW), static_cast<UINT>(cropH)};
+  crop = CropRect{static_cast<UINT>(cropX), static_cast<UINT>(cropY), static_cast<UINT>(cropW),
+                  static_cast<UINT>(cropH)};
   return true;
 }
 
-static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
-                                        int clientOnly) {
+static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t* path, int clientOnly) {
   if (!hwnd || !path) {
     return E_INVALIDARG;
   }
@@ -262,7 +253,9 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
 
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
   struct ApartmentScope {
-    ~ApartmentScope() { winrt::uninit_apartment(); }
+    ~ApartmentScope() {
+      winrt::uninit_apartment();
+    }
   } apartmentScope;
 
   com_ptr<ID3D11Device> d3dDevice;
@@ -272,23 +265,20 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
     return hr;
   }
 
-  winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice winrtDevice{
-      nullptr};
+  winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice winrtDevice{nullptr};
   hr = CreateDirect3DDeviceFromDXGI(d3dDevice, winrtDevice);
   if (FAILED(hr)) {
     return hr;
   }
 
   com_ptr<IGraphicsCaptureItemInterop> interop =
-      winrt::get_activation_factory<
-          winrt::Windows::Graphics::Capture::GraphicsCaptureItem>()
+      winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>()
           .as<IGraphicsCaptureItemInterop>();
 
   winrt::Windows::Graphics::Capture::GraphicsCaptureItem item{nullptr};
   hr = interop->CreateForWindow(
-      hwnd,
-      winrt::guid_of<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>(),
-      reinterpret_cast<void **>(winrt::put_abi(item)));
+      hwnd, winrt::guid_of<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>(),
+      reinterpret_cast<void**>(winrt::put_abi(item)));
   if (FAILED(hr)) {
     return hr;
   }
@@ -299,11 +289,9 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
   }
 
   auto framePool =
-      winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::
-          CreateFreeThreaded(winrtDevice,
-                             winrt::Windows::Graphics::DirectX::
-                                 DirectXPixelFormat::B8G8R8A8UIntNormalized,
-                             1, size);
+      winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::CreateFreeThreaded(
+          winrtDevice,
+          winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized, 1, size);
 
   auto session = framePool.CreateCaptureSession(item);
   struct CaptureScope {
@@ -325,7 +313,7 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
   }
 
   winrt::Windows::Graphics::Capture::Direct3D11CaptureFrame captured{nullptr};
-  auto revoker = framePool.FrameArrived(auto_revoke, [&](auto &, auto &) {
+  auto revoker = framePool.FrameArrived(auto_revoke, [&](auto&, auto&) {
     auto frame = framePool.TryGetNextFrame();
     if (frame) {
       captured = frame;
@@ -346,9 +334,7 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
 
   auto surface = captured.Surface();
   com_ptr<ID3D11Texture2D> texture;
-  com_ptr<
-      ::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>
-      access;
+  com_ptr<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess> access;
   hr = winrt::get_unknown(surface)->QueryInterface(IID_PPV_ARGS(access.put()));
   if (FAILED(hr)) {
     return hr;
@@ -359,7 +345,7 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
   }
 
   CropRect crop = {};
-  CropRect *cropPtr = nullptr;
+  CropRect* cropPtr = nullptr;
   if (clientOnly != 0) {
     D3D11_TEXTURE2D_DESC desc = {};
     texture->GetDesc(&desc);
@@ -372,7 +358,7 @@ static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
 }
 
 static int PrintUsage() {
-  const wchar_t *message =
+  const wchar_t* message =
       L"Usage: wgc_screenshot.exe --hwnd <value> --out <path> [--client-only]\n";
   DWORD written = 0;
   HANDLE errHandle = GetStdHandle(STD_ERROR_HANDLE);
@@ -382,9 +368,9 @@ static int PrintUsage() {
   return 2;
 }
 
-int wmain(int argc, wchar_t **argv) {
+int wmain(int argc, wchar_t** argv) {
   HWND hwnd = nullptr;
-  const wchar_t *outPath = nullptr;
+  const wchar_t* outPath = nullptr;
   int clientOnly = 0;
 
   for (int i = 1; i < argc; ++i) {
