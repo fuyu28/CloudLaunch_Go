@@ -5,10 +5,12 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -85,11 +87,15 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 		return nil, err
 	}
 
+	var failures []error
 	if clientOnly {
 		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
 			if !isMostlyBlack(img) {
 				return img, nil
 			}
+			failures = append(failures, errors.New("PrintWindow(client) produced black image"))
+		} else if err != nil {
+			failures = append(failures, fmt.Errorf("PrintWindow(client) failed: %w", err))
 		}
 
 		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
@@ -97,20 +103,33 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 				if !isMostlyBlack(trimmed) {
 					return trimmed, nil
 				}
+				failures = append(failures, errors.New("PrintWindow(window) trimmed image is black"))
 			} else if !isMostlyBlack(img) {
 				return img, nil
+			} else if trimErr != nil {
+				failures = append(failures, fmt.Errorf("PrintWindow(window) trim failed: %w", trimErr))
+			} else {
+				failures = append(failures, errors.New("PrintWindow(window) produced black image"))
 			}
+		} else if err != nil {
+			failures = append(failures, fmt.Errorf("PrintWindow(window) failed: %w", err))
 		}
 	} else {
 		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
 			if !isMostlyBlack(img) {
 				return img, nil
 			}
+			failures = append(failures, errors.New("PrintWindow(window) produced black image"))
+		} else if err != nil {
+			failures = append(failures, fmt.Errorf("PrintWindow(window) failed: %w", err))
 		}
 		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
 			if !isMostlyBlack(img) {
 				return img, nil
 			}
+			failures = append(failures, errors.New("PrintWindow(client) produced black image"))
+		} else if err != nil {
+			failures = append(failures, fmt.Errorf("PrintWindow(client) failed: %w", err))
 		}
 	}
 
@@ -118,9 +137,24 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 		if !isMostlyBlack(img) {
 			return img, nil
 		}
+		failures = append(failures, errors.New("BitBlt(client) produced black image"))
+	} else if err != nil {
+		failures = append(failures, fmt.Errorf("BitBlt(client) failed: %w", err))
 	}
 
-	return captureWindowClientFromScreen(hwnd)
+	if img, err := captureWindowClientFromScreen(hwnd); err == nil && img != nil {
+		if !isMostlyBlack(img) {
+			return img, nil
+		}
+		failures = append(failures, errors.New("Screen capture produced black image"))
+	} else if err != nil {
+		failures = append(failures, fmt.Errorf("Screen capture failed: %w", err))
+	}
+
+	if len(failures) == 0 {
+		return nil, errors.New("failed to capture window")
+	}
+	return nil, errors.Join(failures...)
 }
 
 func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, error) {
@@ -144,8 +178,13 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	}
 
 	command := execCommandHidden(context.Background(), helperPath, args...)
-	if err := command.Run(); err != nil {
-		return false, errors.New("WGC capture failed")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message != "" {
+			return false, fmt.Errorf("WGC capture failed: %w: %s", err, message)
+		}
+		return false, fmt.Errorf("WGC capture failed: %w", err)
 	}
 	return true, nil
 }
