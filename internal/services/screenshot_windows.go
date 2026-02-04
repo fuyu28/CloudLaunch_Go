@@ -161,39 +161,55 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 }
 
 func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, error) {
-	hwnd, err := findBestWindowForPID(uint32(pid))
-	if err != nil {
-		return false, err
-	}
-	hwnd = normalizeRootWindow(hwnd)
-	if isWindowCloaked(hwnd) {
-		return false, errors.New("window is cloaked")
-	}
 	helperPath, err := wgcHelperPath()
 	if err != nil || helperPath == "" {
 		return false, nil
 	}
 
-	args := []string{
-		"--hwnd",
-		strconv.FormatUint(uint64(hwnd), 10),
-		"--out",
-		outputPath,
+	candidates := listWindowCandidates(uint32(pid), true)
+	if len(candidates) == 0 {
+		candidates = listWindowCandidates(uint32(pid), false)
 	}
-	if clientOnly {
-		args = append(args, "--client-only")
+	if len(candidates) == 0 {
+		return false, errors.New("window not found")
 	}
 
-	command := execCommandHidden(context.Background(), helperPath, args...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		message := strings.TrimSpace(string(output))
-		if message != "" {
-			return false, fmt.Errorf("WGC capture failed: %w: %s", err, message)
+	var failures []error
+	for _, hwnd := range candidates {
+		hwnd = normalizeRootWindow(hwnd)
+		if isWindowCloaked(hwnd) {
+			failures = append(failures, fmt.Errorf("hwnd=%d is cloaked", hwnd))
+			continue
 		}
-		return false, fmt.Errorf("WGC capture failed: %w", err)
+
+		args := []string{
+			"--hwnd",
+			strconv.FormatUint(uint64(hwnd), 10),
+			"--out",
+			outputPath,
+		}
+		if clientOnly {
+			args = append(args, "--client-only")
+		}
+
+		command := execCommandHidden(context.Background(), helperPath, args...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			message := strings.TrimSpace(string(output))
+			if message != "" {
+				failures = append(failures, fmt.Errorf("hwnd=%d: %w: %s", hwnd, err, message))
+			} else {
+				failures = append(failures, fmt.Errorf("hwnd=%d: %w", hwnd, err))
+			}
+			continue
+		}
+		return true, nil
 	}
-	return true, nil
+
+	if len(failures) == 0 {
+		return false, errors.New("WGC capture failed")
+	}
+	return false, errors.Join(failures...)
 }
 
 func wgcHelperPath() (string, error) {
@@ -596,4 +612,44 @@ func findBestWindowForPID(pid uint32) (windows.Handle, error) {
 	}
 
 	return 0, errors.New("window not found")
+}
+
+func listWindowCandidates(pid uint32, requireVisible bool) []windows.Handle {
+	handles := make([]windows.Handle, 0, 4)
+	seen := map[windows.Handle]bool{}
+
+	callback := windows.NewCallback(func(hwnd uintptr, lparam uintptr) uintptr {
+		var windowPID uint32
+		procGetWindowThreadPID.Call(hwnd, uintptr(unsafe.Pointer(&windowPID)))
+		if windowPID != pid {
+			return 1
+		}
+		if requireVisible {
+			visible, _, _ := procIsWindowVisible.Call(hwnd)
+			if visible == 0 {
+				return 1
+			}
+			iconic, _, _ := procIsIconic.Call(hwnd)
+			if iconic != 0 {
+				return 1
+			}
+		}
+		var rect windowRect
+		if ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect))); ret == 0 {
+			return 1
+		}
+		width := rect.Right - rect.Left
+		height := rect.Bottom - rect.Top
+		if width <= 0 || height <= 0 {
+			return 1
+		}
+		handle := windows.Handle(hwnd)
+		if !seen[handle] {
+			seen[handle] = true
+			handles = append(handles, handle)
+		}
+		return 1
+	})
+	procEnumWindows.Call(callback, 0)
+	return handles
 }
