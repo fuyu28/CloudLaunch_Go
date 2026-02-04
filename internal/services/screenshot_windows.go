@@ -3,11 +3,12 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"image"
 	"os"
 	"path/filepath"
-	"unsafe"
+	"strconv"
 
 	"golang.org/x/sys/windows"
 )
@@ -126,57 +127,35 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if err != nil {
 		return false, err
 	}
-	dllPath, err := wgcDllPath()
-	if err != nil || dllPath == "" {
+	helperPath, err := wgcHelperPath()
+	if err != nil || helperPath == "" {
 		return false, nil
 	}
-	dll, err := windows.LoadDLL(dllPath)
-	if err != nil {
-		return false, nil
-	}
-	defer func() {
-		_ = dll.Release()
-	}()
 
-	pathPtr, err := windows.UTF16PtrFromString(outputPath)
-	if err != nil {
-		return false, err
+	args := []string{
+		"--hwnd",
+		strconv.FormatUint(uint64(hwnd), 10),
+		"--out",
+		outputPath,
 	}
-	clientOnlyFlag := uintptr(0)
 	if clientOnly {
-		clientOnlyFlag = 1
+		args = append(args, "--client-only")
 	}
 
-	if proc, procErr := dll.FindProc("CaptureWindowToPngFileEx"); procErr == nil {
-		ret, _, _ := proc.Call(
-			uintptr(hwnd),
-			uintptr(unsafe.Pointer(pathPtr)),
-			clientOnlyFlag,
-		)
-		if ret != 0 {
-			return false, errors.New("WGC capture failed")
-		}
-		return true, nil
-	}
-
-	proc, err := dll.FindProc("CaptureWindowToPngFile")
-	if err != nil {
-		return false, nil
-	}
-	ret, _, _ := proc.Call(uintptr(hwnd), uintptr(unsafe.Pointer(pathPtr)))
-	if ret != 0 {
+	command := execCommandHidden(context.Background(), helperPath, args...)
+	if err := command.Run(); err != nil {
 		return false, errors.New("WGC capture failed")
 	}
 	return true, nil
 }
 
-func wgcDllPath() (string, error) {
+func wgcHelperPath() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
 	exeDir := filepath.Dir(exePath)
-	return filepath.Join(exeDir, "wgc_screenshot.dll"), nil
+	return filepath.Join(exeDir, "wgc_screenshot.exe"), nil
 }
 
 func captureWindowWithPrintWindow(hwnd windows.Handle, clientOnly bool) (image.Image, error) {

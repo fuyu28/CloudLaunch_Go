@@ -243,18 +243,27 @@ static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC &desc,
   return true;
 }
 
-extern "C" __declspec(dllexport) HRESULT
-CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
+static HRESULT CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path,
+                                        int clientOnly) {
   if (!hwnd || !path) {
     return E_INVALIDARG;
   }
 
   winrt::init_apartment(winrt::apartment_type::multi_threaded);
+  struct ApartmentScope {
+    ~ApartmentScope() { winrt::uninit_apartment(); }
+  } apartmentScope;
+
+  HRESULT coInit = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  bool coInitialized = (coInit == S_OK || coInit == S_FALSE);
 
   com_ptr<ID3D11Device> d3dDevice;
   com_ptr<ID3D11DeviceContext> d3dContext;
   HRESULT hr = CreateD3DDevice(d3dDevice, d3dContext);
   if (FAILED(hr)) {
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return hr;
   }
 
@@ -262,6 +271,9 @@ CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
       nullptr};
   hr = CreateDirect3DDeviceFromDXGI(d3dDevice, winrtDevice);
   if (FAILED(hr)) {
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return hr;
   }
 
@@ -276,11 +288,17 @@ CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
       winrt::guid_of<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>(),
       reinterpret_cast<void **>(winrt::put_abi(item)));
   if (FAILED(hr)) {
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return hr;
   }
 
   auto size = item.Size();
   if (size.Width <= 0 || size.Height <= 0) {
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return E_FAIL;
   }
 
@@ -295,6 +313,9 @@ CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
 
   handle frameEvent{CreateEvent(nullptr, FALSE, FALSE, nullptr)};
   if (!frameEvent) {
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return HRESULT_FROM_WIN32(GetLastError());
   }
 
@@ -311,10 +332,20 @@ CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
 
   DWORD waitResult = WaitForSingleObject(frameEvent.get(), 2000);
   if (waitResult != WAIT_OBJECT_0) {
+    session.Close();
+    framePool.Close();
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
   }
 
   if (!captured) {
+    session.Close();
+    framePool.Close();
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return E_FAIL;
   }
 
@@ -325,10 +356,20 @@ CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
       access;
   hr = winrt::get_unknown(surface)->QueryInterface(IID_PPV_ARGS(access.put()));
   if (FAILED(hr)) {
+    session.Close();
+    framePool.Close();
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return hr;
   }
   hr = access->GetInterface(IID_PPV_ARGS(texture.put()));
   if (FAILED(hr)) {
+    session.Close();
+    framePool.Close();
+    if (coInitialized) {
+      CoUninitialize();
+    }
     return hr;
   }
 
@@ -342,17 +383,50 @@ CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
     }
   }
 
-  return SavePngFromTexture(d3dDevice, d3dContext, texture, path, cropPtr);
-}
-
-extern "C" __declspec(dllexport) HRESULT
-CaptureWindowToPngFile(HWND hwnd, const wchar_t *path) {
-  return CaptureWindowToPngFileEx(hwnd, path, 0);
-}
-
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
-  if (reason == DLL_PROCESS_DETACH) {
-    winrt::uninit_apartment();
+  hr = SavePngFromTexture(d3dDevice, d3dContext, texture, path, cropPtr);
+  session.Close();
+  framePool.Close();
+  if (coInitialized) {
+    CoUninitialize();
   }
-  return TRUE;
+  return hr;
+}
+
+static int PrintUsage() {
+  const wchar_t *message =
+      L"Usage: wgc_screenshot.exe --hwnd <value> --out <path> [--client-only]\n";
+  DWORD written = 0;
+  HANDLE errHandle = GetStdHandle(STD_ERROR_HANDLE);
+  if (errHandle != INVALID_HANDLE_VALUE) {
+    WriteConsoleW(errHandle, message, lstrlenW(message), &written, nullptr);
+  }
+  return 2;
+}
+
+int wmain(int argc, wchar_t **argv) {
+  HWND hwnd = nullptr;
+  const wchar_t *outPath = nullptr;
+  int clientOnly = 0;
+
+  for (int i = 1; i < argc; ++i) {
+    if (wcscmp(argv[i], L"--hwnd") == 0 && i + 1 < argc) {
+      hwnd = reinterpret_cast<HWND>(static_cast<uintptr_t>(_wcstoui64(argv[++i], nullptr, 10)));
+      continue;
+    }
+    if (wcscmp(argv[i], L"--out") == 0 && i + 1 < argc) {
+      outPath = argv[++i];
+      continue;
+    }
+    if (wcscmp(argv[i], L"--client-only") == 0) {
+      clientOnly = 1;
+      continue;
+    }
+  }
+
+  if (!hwnd || !outPath) {
+    return PrintUsage();
+  }
+
+  HRESULT hr = CaptureWindowToPngFileEx(hwnd, outPath, clientOnly);
+  return FAILED(hr) ? static_cast<int>(hr) : 0;
 }

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(wgc_screenshot LANGUAGES CXX)
 
-add_library(wgc_screenshot SHARED WgcScreenshot.cpp)
+add_executable(wgc_screenshot WgcScreenshot.cpp)
 
 target_compile_features(wgc_screenshot PRIVATE cxx_std_17)
 
