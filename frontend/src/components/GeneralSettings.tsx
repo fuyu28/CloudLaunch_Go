@@ -37,6 +37,7 @@ import {
   screenshotSyncEnabledAtom,
   screenshotUploadJpegAtom,
   screenshotJpegQualityAtom,
+  screenshotClientOnlyAtom,
   sortOptionLabels,
   filterStateLabels,
 } from "../state/settings";
@@ -63,6 +64,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotSyncEnabled, setScreenshotSyncEnabled] = useAtom(screenshotSyncEnabledAtom);
   const [screenshotUploadJpeg, setScreenshotUploadJpeg] = useAtom(screenshotUploadJpegAtom);
   const [screenshotJpegQuality, setScreenshotJpegQuality] = useAtom(screenshotJpegQualityAtom);
+  const [screenshotClientOnly, setScreenshotClientOnly] = useAtom(screenshotClientOnlyAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // ソート変更ハンドラー
@@ -213,6 +215,16 @@ export default function GeneralSettings(): React.JSX.Element {
     }
   };
 
+  const handleScreenshotClientOnlyChange = async (enabled: boolean): Promise<void> => {
+    setScreenshotClientOnly(enabled);
+    const result = await window.api.settings.updateScreenshotClientOnly(enabled);
+    if (!result.success) {
+      toast.error("スクリーンショット設定の更新に失敗しました");
+      return;
+    }
+    toast.success(enabled ? "タイトルバーを除外して撮影します" : "タイトルバーを含めて撮影します");
+  };
+
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
@@ -284,6 +296,10 @@ export default function GeneralSettings(): React.JSX.Element {
     void window.api.settings.updateScreenshotJpegQuality(screenshotJpegQuality);
   }, []);
 
+  useEffect(() => {
+    void window.api.settings.updateScreenshotClientOnly(screenshotClientOnly);
+  }, []);
+
   return (
     <div className="w-full">
       <h2 className="text-xl font-semibold mb-6">一般設定</h2>
@@ -345,6 +361,21 @@ export default function GeneralSettings(): React.JSX.Element {
                 className="toggle toggle-primary"
                 checked={screenshotSyncEnabled}
                 onChange={(event) => void handleScreenshotSyncEnabledChange(event.target.checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">タイトルバーを除外</h4>
+                <p className="text-sm text-base-content/70">
+                  オンでクライアント領域のみを撮影します
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={screenshotClientOnly}
+                onChange={(event) => void handleScreenshotClientOnlyChange(event.target.checked)}
               />
             </div>
 

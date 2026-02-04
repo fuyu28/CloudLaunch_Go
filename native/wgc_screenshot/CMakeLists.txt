@@ -11,7 +11,7 @@ endif()
 
 target_compile_definitions(wgc_screenshot PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 
-target_link_libraries(wgc_screenshot PRIVATE d3d11 dxgi windowsapp)
+target_link_libraries(wgc_screenshot PRIVATE d3d11 dxgi windowsapp dwmapi user32)
 
 set_target_properties(wgc_screenshot PROPERTIES
   OUTPUT_NAME "wgc_screenshot"

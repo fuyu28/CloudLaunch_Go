@@ -16,6 +16,7 @@ type Config struct {
 	ScreenshotSyncEnabled bool
 	ScreenshotUploadJpeg  bool
 	ScreenshotJpegQuality int
+	ScreenshotClientOnly  bool
 	S3Endpoint            string
 	S3Region              string
 	S3Bucket              string
@@ -40,6 +41,7 @@ func LoadFromEnv() Config {
 		ScreenshotSyncEnabled: getEnvBool("CLOUDLAUNCH_SCREENSHOT_SYNC", false),
 		ScreenshotUploadJpeg:  getEnvBool("CLOUDLAUNCH_SCREENSHOT_UPLOAD_JPEG", true),
 		ScreenshotJpegQuality: getEnvInt("CLOUDLAUNCH_SCREENSHOT_JPEG_QUALITY", 85),
+		ScreenshotClientOnly:  getEnvBool("CLOUDLAUNCH_SCREENSHOT_CLIENT_ONLY", true),
 		S3Endpoint:            getEnv("CLOUDLAUNCH_S3_ENDPOINT", ""),
 		S3Region:              getEnv("CLOUDLAUNCH_S3_REGION", "auto"),
 		S3Bucket:              getEnv("CLOUDLAUNCH_S3_BUCKET", ""),

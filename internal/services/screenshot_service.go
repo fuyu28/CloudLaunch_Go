@@ -23,6 +23,7 @@ type ScreenshotService struct {
 	processMonitor *ProcessMonitorService
 	logger         *slog.Logger
 	appDataDir     string
+	clientOnly     bool
 }
 
 // NewScreenshotService は ScreenshotService を生成する。
@@ -37,7 +38,13 @@ func NewScreenshotService(
 		processMonitor: processMonitor,
 		logger:         logger,
 		appDataDir:     cfg.AppDataDir,
+		clientOnly:     cfg.ScreenshotClientOnly,
 	}
+}
+
+// SetClientOnly はキャプチャ対象をクライアント領域のみにするか更新する。
+func (service *ScreenshotService) SetClientOnly(enabled bool) {
+	service.clientOnly = enabled
 }
 
 // CaptureGameWindow は指定ゲームのウィンドウを撮影して保存し、保存先パスを返す。
@@ -82,7 +89,7 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 	fullPath := filepath.Join(saveDir, fileName)
 
 	for _, pid := range pids {
-		ok, err := captureWindowWithWGC(pid, fullPath)
+		ok, err := captureWindowWithWGC(pid, fullPath, service.clientOnly)
 		if err == nil && ok {
 			return fullPath, nil
 		}
@@ -91,7 +98,7 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 	var captured image.Image
 	var captureErr error
 	for _, pid := range pids {
-		captured, captureErr = captureWindowImageByPID(pid)
+		captured, captureErr = captureWindowImageByPID(pid, service.clientOnly)
 		if captureErr == nil && captured != nil {
 			break
 		}

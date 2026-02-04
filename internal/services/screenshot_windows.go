@@ -77,25 +77,38 @@ type bitmapInfo struct {
 	Colors [1]uint32
 }
 
-func captureWindowImageByPID(pid int) (image.Image, error) {
+func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 	hwnd, err := findBestWindowForPID(uint32(pid))
 	if err != nil {
 		return nil, err
 	}
 
-	if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
-		if !isMostlyBlack(img) {
-			return img, nil
-		}
-	}
-
-	if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
-		if trimmed, trimErr := trimWithDwmBounds(hwnd, img); trimErr == nil && trimmed != nil {
-			if !isMostlyBlack(trimmed) {
-				return trimmed, nil
+	if clientOnly {
+		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
+			if !isMostlyBlack(img) {
+				return img, nil
 			}
-		} else if !isMostlyBlack(img) {
-			return img, nil
+		}
+
+		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
+			if trimmed, trimErr := trimWithDwmBounds(hwnd, img); trimErr == nil && trimmed != nil {
+				if !isMostlyBlack(trimmed) {
+					return trimmed, nil
+				}
+			} else if !isMostlyBlack(img) {
+				return img, nil
+			}
+		}
+	} else {
+		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
+			if !isMostlyBlack(img) {
+				return img, nil
+			}
+		}
+		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
+			if !isMostlyBlack(img) {
+				return img, nil
+			}
 		}
 	}
 
@@ -108,7 +121,7 @@ func captureWindowImageByPID(pid int) (image.Image, error) {
 	return captureWindowClientFromScreen(hwnd)
 }
 
-func captureWindowWithWGC(pid int, outputPath string) (bool, error) {
+func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, error) {
 	hwnd, err := findBestWindowForPID(uint32(pid))
 	if err != nil {
 		return false, err
@@ -125,14 +138,30 @@ func captureWindowWithWGC(pid int, outputPath string) (bool, error) {
 		_ = dll.Release()
 	}()
 
-	proc, err := dll.FindProc("CaptureWindowToPngFile")
-	if err != nil {
-		return false, nil
-	}
-
 	pathPtr, err := windows.UTF16PtrFromString(outputPath)
 	if err != nil {
 		return false, err
+	}
+	clientOnlyFlag := uintptr(0)
+	if clientOnly {
+		clientOnlyFlag = 1
+	}
+
+	if proc, procErr := dll.FindProc("CaptureWindowToPngFileEx"); procErr == nil {
+		ret, _, _ := proc.Call(
+			uintptr(hwnd),
+			uintptr(unsafe.Pointer(pathPtr)),
+			clientOnlyFlag,
+		)
+		if ret != 0 {
+			return false, errors.New("WGC capture failed")
+		}
+		return true, nil
+	}
+
+	proc, err := dll.FindProc("CaptureWindowToPngFile")
+	if err != nil {
+		return false, nil
 	}
 	ret, _, _ := proc.Call(uintptr(hwnd), uintptr(unsafe.Pointer(pathPtr)))
 	if ret != 0 {

@@ -2,7 +2,11 @@
 
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <dwmapi.h>
 #include <wincodec.h>
+
+#include <cstring>
+#include <vector>
 
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Graphics.Capture.h>
@@ -14,6 +18,13 @@
 #include <windows.graphics.directx.direct3d11.interop.h>
 
 using namespace winrt;
+
+struct CropRect {
+  UINT x;
+  UINT y;
+  UINT width;
+  UINT height;
+};
 
 static HRESULT CreateD3DDevice(com_ptr<ID3D11Device> &device,
                                com_ptr<ID3D11DeviceContext> &context) {
@@ -49,7 +60,8 @@ static HRESULT CreateDirect3DDeviceFromDXGI(
 static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
                                   const com_ptr<ID3D11DeviceContext> &context,
                                   const com_ptr<ID3D11Texture2D> &texture,
-                                  const wchar_t *filePath) {
+                                  const wchar_t *filePath,
+                                  const CropRect *cropRect) {
   if (!filePath || !*filePath) {
     return E_INVALIDARG;
   }
@@ -124,7 +136,31 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
     return hr;
   }
 
-  hr = frame->SetSize(desc.Width, desc.Height);
+  UINT outputWidth = desc.Width;
+  UINT outputHeight = desc.Height;
+  UINT outputStride = mapped.RowPitch;
+  const BYTE *outputBytes = reinterpret_cast<BYTE *>(mapped.pData);
+  std::vector<BYTE> cropped;
+
+  if (cropRect && cropRect->width > 0 && cropRect->height > 0) {
+    outputWidth = cropRect->width;
+    outputHeight = cropRect->height;
+    outputStride = outputWidth * 4;
+    size_t bufferSize = static_cast<size_t>(outputStride) * outputHeight;
+    cropped.resize(bufferSize);
+
+    for (UINT y = 0; y < outputHeight; ++y) {
+      const BYTE *source =
+          reinterpret_cast<BYTE *>(mapped.pData) +
+          (static_cast<size_t>(cropRect->y) + y) * mapped.RowPitch +
+          static_cast<size_t>(cropRect->x) * 4;
+      BYTE *dest = cropped.data() + static_cast<size_t>(y) * outputStride;
+      std::memcpy(dest, source, outputStride);
+    }
+    outputBytes = cropped.data();
+  }
+
+  hr = frame->SetSize(outputWidth, outputHeight);
   if (FAILED(hr)) {
     context->Unmap(staging.get(), 0);
     return hr;
@@ -137,9 +173,9 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
     return hr;
   }
 
-  hr = frame->WritePixels(desc.Height, mapped.RowPitch,
-                          mapped.RowPitch * desc.Height,
-                          reinterpret_cast<BYTE *>(mapped.pData));
+  hr = frame->WritePixels(outputHeight, outputStride,
+                          outputStride * outputHeight,
+                          const_cast<BYTE *>(outputBytes));
 
   context->Unmap(staging.get(), 0);
   if (FAILED(hr)) {
@@ -154,8 +190,61 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device> &device,
   return encoder->Commit();
 }
 
+static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC &desc,
+                                 CropRect &crop) {
+  RECT frame = {};
+  HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame,
+                                     sizeof(frame));
+  if (FAILED(hr)) {
+    return false;
+  }
+
+  RECT client = {};
+  if (!GetClientRect(hwnd, &client)) {
+    return false;
+  }
+
+  POINT topLeft{client.left, client.top};
+  POINT bottomRight{client.right, client.bottom};
+  if (!ClientToScreen(hwnd, &topLeft) || !ClientToScreen(hwnd, &bottomRight)) {
+    return false;
+  }
+
+  int cropX = topLeft.x - frame.left;
+  int cropY = topLeft.y - frame.top;
+  int cropW = bottomRight.x - topLeft.x;
+  int cropH = bottomRight.y - topLeft.y;
+  if (cropW <= 0 || cropH <= 0) {
+    return false;
+  }
+
+  int maxW = static_cast<int>(desc.Width);
+  int maxH = static_cast<int>(desc.Height);
+  if (cropX < 0) {
+    cropW += cropX;
+    cropX = 0;
+  }
+  if (cropY < 0) {
+    cropH += cropY;
+    cropY = 0;
+  }
+  if (cropX + cropW > maxW) {
+    cropW = maxW - cropX;
+  }
+  if (cropY + cropH > maxH) {
+    cropH = maxH - cropY;
+  }
+  if (cropW <= 0 || cropH <= 0) {
+    return false;
+  }
+
+  crop = CropRect{static_cast<UINT>(cropX), static_cast<UINT>(cropY),
+                  static_cast<UINT>(cropW), static_cast<UINT>(cropH)};
+  return true;
+}
+
 extern "C" __declspec(dllexport) HRESULT
-CaptureWindowToPngFile(HWND hwnd, const wchar_t *path) {
+CaptureWindowToPngFileEx(HWND hwnd, const wchar_t *path, int clientOnly) {
   if (!hwnd || !path) {
     return E_INVALIDARG;
   }
@@ -243,7 +332,22 @@ CaptureWindowToPngFile(HWND hwnd, const wchar_t *path) {
     return hr;
   }
 
-  return SavePngFromTexture(d3dDevice, d3dContext, texture, path);
+  CropRect crop = {};
+  CropRect *cropPtr = nullptr;
+  if (clientOnly != 0) {
+    D3D11_TEXTURE2D_DESC desc = {};
+    texture->GetDesc(&desc);
+    if (TryGetClientCropRect(hwnd, desc, crop)) {
+      cropPtr = &crop;
+    }
+  }
+
+  return SavePngFromTexture(d3dDevice, d3dContext, texture, path, cropPtr);
+}
+
+extern "C" __declspec(dllexport) HRESULT
+CaptureWindowToPngFile(HWND hwnd, const wchar_t *path) {
+  return CaptureWindowToPngFileEx(hwnd, path, 0);
 }
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {

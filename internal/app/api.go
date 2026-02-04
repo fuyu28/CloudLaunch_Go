@@ -248,6 +248,15 @@ func (app *App) UpdateScreenshotJpegQuality(value int) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateScreenshotClientOnly はスクリーンショットをクライアント領域のみ取得するか更新する。
+func (app *App) UpdateScreenshotClientOnly(enabled bool) result.ApiResult[bool] {
+	app.Config.ScreenshotClientOnly = enabled
+	if app.ScreenshotService != nil {
+		app.ScreenshotService.SetClientOnly(enabled)
+	}
+	return result.OkResult(true)
+}
+
 // GetMonitoringStatus は監視状態を取得する。
 func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {
