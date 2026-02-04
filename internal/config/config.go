@@ -48,6 +48,17 @@ func LoadFromEnv() Config {
 }
 
 func defaultAppDataDir() string {
+	exePath, err := os.Executable()
+	if err == nil {
+		if resolved, resolveErr := filepath.EvalSymlinks(exePath); resolveErr == nil {
+			exePath = resolved
+		}
+		dir := filepath.Dir(exePath)
+		if strings.TrimSpace(dir) != "" {
+			return dir
+		}
+	}
+
 	base := os.Getenv("APPDATA")
 	if base == "" {
 		base = os.TempDir()
