@@ -199,15 +199,14 @@ static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC& desc, Cr
   }
 
   POINT topLeft{client.left, client.top};
-  POINT bottomRight{client.right, client.bottom};
-  if (!ClientToScreen(hwnd, &topLeft) || !ClientToScreen(hwnd, &bottomRight)) {
+  if (!ClientToScreen(hwnd, &topLeft)) {
     return false;
   }
 
   int cropX = topLeft.x - frame.left;
   int cropY = topLeft.y - frame.top;
-  int cropW = bottomRight.x - topLeft.x;
-  int cropH = bottomRight.y - topLeft.y;
+  int cropW = client.right - client.left;
+  int cropH = client.bottom - client.top;
   if (cropW <= 0 || cropH <= 0) {
     return false;
   }
