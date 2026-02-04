@@ -69,6 +69,25 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		return "", errors.New("game process not found")
 	}
 
+	baseDir := strings.TrimSpace(service.appDataDir)
+	if baseDir == "" {
+		baseDir = os.TempDir()
+	}
+	saveDir := filepath.Join(baseDir, "screenshots", game.ID)
+	if err := os.MkdirAll(saveDir, 0o700); err != nil {
+		return "", err
+	}
+
+	fileName := fmt.Sprintf("%s_%s.png", time.Now().Format("20060102_150405"), game.ID)
+	fullPath := filepath.Join(saveDir, fileName)
+
+	for _, pid := range pids {
+		ok, err := captureWindowWithWGC(pid, fullPath)
+		if err == nil && ok {
+			return fullPath, nil
+		}
+	}
+
 	var captured image.Image
 	var captureErr error
 	for _, pid := range pids {
@@ -84,17 +103,6 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		return "", errors.New("failed to capture window")
 	}
 
-	baseDir := strings.TrimSpace(service.appDataDir)
-	if baseDir == "" {
-		baseDir = os.TempDir()
-	}
-	saveDir := filepath.Join(baseDir, "screenshots", game.ID)
-	if err := os.MkdirAll(saveDir, 0o700); err != nil {
-		return "", err
-	}
-
-	fileName := fmt.Sprintf("%s_%s.png", time.Now().Format("20060102_150405"), game.ID)
-	fullPath := filepath.Join(saveDir, fileName)
 	file, err := os.Create(fullPath)
 	if err != nil {
 		return "", err

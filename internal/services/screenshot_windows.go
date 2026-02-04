@@ -5,6 +5,8 @@ package services
 import (
 	"errors"
 	"image"
+	"os"
+	"path/filepath"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -51,6 +53,11 @@ type windowRect struct {
 	Bottom int32
 }
 
+type point struct {
+	X int32
+	Y int32
+}
+
 type bitmapInfoHeader struct {
 	Size          uint32
 	Width         int32
@@ -77,17 +84,70 @@ func captureWindowImageByPID(pid int) (image.Image, error) {
 	}
 
 	if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
-		return img, nil
+		if !isMostlyBlack(img) {
+			return img, nil
+		}
 	}
 
 	if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
 		if trimmed, trimErr := trimWithDwmBounds(hwnd, img); trimErr == nil && trimmed != nil {
-			return trimmed, nil
+			if !isMostlyBlack(trimmed) {
+				return trimmed, nil
+			}
+		} else if !isMostlyBlack(img) {
+			return img, nil
 		}
-		return img, nil
 	}
 
-	return captureWindowClientWithBitBlt(hwnd)
+	if img, err := captureWindowClientWithBitBlt(hwnd); err == nil && img != nil {
+		if !isMostlyBlack(img) {
+			return img, nil
+		}
+	}
+
+	return captureWindowClientFromScreen(hwnd)
+}
+
+func captureWindowWithWGC(pid int, outputPath string) (bool, error) {
+	hwnd, err := findBestWindowForPID(uint32(pid))
+	if err != nil {
+		return false, err
+	}
+	dllPath, err := wgcDllPath()
+	if err != nil || dllPath == "" {
+		return false, nil
+	}
+	dll, err := windows.LoadDLL(dllPath)
+	if err != nil {
+		return false, nil
+	}
+	defer func() {
+		_ = dll.Release()
+	}()
+
+	proc, err := dll.FindProc("CaptureWindowToPngFile")
+	if err != nil {
+		return false, nil
+	}
+
+	pathPtr, err := windows.UTF16PtrFromString(outputPath)
+	if err != nil {
+		return false, err
+	}
+	ret, _, _ := proc.Call(uintptr(hwnd), uintptr(unsafe.Pointer(pathPtr)))
+	if ret != 0 {
+		return false, errors.New("WGC capture failed")
+	}
+	return true, nil
+}
+
+func wgcDllPath() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	exeDir := filepath.Dir(exePath)
+	return filepath.Join(exeDir, "wgc_screenshot.dll"), nil
 }
 
 func captureWindowWithPrintWindow(hwnd windows.Handle, clientOnly bool) (image.Image, error) {
@@ -191,6 +251,56 @@ func captureWindowClientWithBitBlt(hwnd windows.Handle) (image.Image, error) {
 	return bitmapToImage(hdcMem, hBitmap, width, height)
 }
 
+func captureWindowClientFromScreen(hwnd windows.Handle) (image.Image, error) {
+	screenRect, err := getClientRectOnScreen(hwnd)
+	if err != nil {
+		return nil, err
+	}
+	width := int(screenRect.Right - screenRect.Left)
+	height := int(screenRect.Bottom - screenRect.Top)
+	if width <= 0 || height <= 0 {
+		return nil, errors.New("invalid screen rect")
+	}
+
+	hdcScreen, _, _ := procGetDC.Call(0)
+	if hdcScreen == 0 {
+		return nil, errors.New("failed to get screen DC")
+	}
+	defer procReleaseDC.Call(0, hdcScreen)
+
+	hdcMem, _, _ := procCreateCompatibleDC.Call(hdcScreen)
+	if hdcMem == 0 {
+		return nil, errors.New("failed to create compatible DC")
+	}
+	defer procDeleteDC.Call(hdcMem)
+
+	hBitmap, _, _ := procCreateBitmap.Call(hdcScreen, uintptr(width), uintptr(height))
+	if hBitmap == 0 {
+		return nil, errors.New("failed to create bitmap")
+	}
+	defer procDeleteObject.Call(hBitmap)
+
+	oldObj, _, _ := procSelectObject.Call(hdcMem, hBitmap)
+	defer procSelectObject.Call(hdcMem, oldObj)
+
+	bitbltResult, _, _ := procBitBlt.Call(
+		hdcMem,
+		0,
+		0,
+		uintptr(width),
+		uintptr(height),
+		hdcScreen,
+		uintptr(screenRect.Left),
+		uintptr(screenRect.Top),
+		srccopy,
+	)
+	if bitbltResult == 0 {
+		return nil, errors.New("failed to capture screen")
+	}
+
+	return bitmapToImage(hdcMem, hBitmap, width, height)
+}
+
 func bitmapToImage(hdcMem uintptr, hBitmap uintptr, width int, height int) (image.Image, error) {
 	bmi := bitmapInfo{}
 	bmi.Header.Size = uint32(unsafe.Sizeof(bmi.Header))
@@ -275,6 +385,66 @@ func trimWithDwmBounds(hwnd windows.Handle, img image.Image) (image.Image, error
 		}
 	}
 	return out, nil
+}
+
+func getClientRectOnScreen(hwnd windows.Handle) (windowRect, error) {
+	var client windowRect
+	if ret, _, _ := procGetClientRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&client))); ret == 0 {
+		return windowRect{}, errors.New("failed to get client rect")
+	}
+	topLeft := point{X: 0, Y: 0}
+	bottomRight := point{X: client.Right, Y: client.Bottom}
+	if ret, _, _ := procClientToScreen.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&topLeft))); ret == 0 {
+		return windowRect{}, errors.New("failed to translate client top-left")
+	}
+	if ret, _, _ := procClientToScreen.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&bottomRight))); ret == 0 {
+		return windowRect{}, errors.New("failed to translate client bottom-right")
+	}
+	return windowRect{
+		Left:   topLeft.X,
+		Top:    topLeft.Y,
+		Right:  bottomRight.X,
+		Bottom: bottomRight.Y,
+	}, nil
+}
+
+func isMostlyBlack(img image.Image) bool {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width == 0 || height == 0 {
+		return true
+	}
+
+	samplesX := 10
+	samplesY := 10
+	if width < samplesX {
+		samplesX = width
+	}
+	if height < samplesY {
+		samplesY = height
+	}
+
+	blackCount := 0
+	total := samplesX * samplesY
+	for y := 0; y < samplesY; y++ {
+		for x := 0; x < samplesX; x++ {
+			px := bounds.Min.X + x*(width-1)/max(1, samplesX-1)
+			py := bounds.Min.Y + y*(height-1)/max(1, samplesY-1)
+			r, g, b, a := img.At(px, py).RGBA()
+			if a > 0 && r < 0x0100 && g < 0x0100 && b < 0x0100 {
+				blackCount++
+			}
+		}
+	}
+	return blackCount*100/total >= 95
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func findBestWindowForPID(pid uint32) (windows.Handle, error) {
