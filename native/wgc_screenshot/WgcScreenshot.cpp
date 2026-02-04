@@ -186,9 +186,11 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device>& device,
 
 static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC& desc, CropRect& crop) {
   RECT frame = {};
-  HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame));
-  if (FAILED(hr)) {
-    return false;
+  if (!GetWindowRect(hwnd, &frame)) {
+    HRESULT hr = DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame));
+    if (FAILED(hr)) {
+      return false;
+    }
   }
 
   RECT client = {};
@@ -228,6 +230,14 @@ static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC& desc, Cr
   }
   if (cropW <= 0 || cropH <= 0) {
     return false;
+  }
+
+  constexpr int kFrameTrim = 2;
+  if (cropW > kFrameTrim * 2 && cropH > kFrameTrim * 2) {
+    cropX += kFrameTrim;
+    cropY += kFrameTrim;
+    cropW -= kFrameTrim * 2;
+    cropH -= kFrameTrim * 2;
   }
 
   crop = CropRect{static_cast<UINT>(cropX), static_cast<UINT>(cropY), static_cast<UINT>(cropW),
