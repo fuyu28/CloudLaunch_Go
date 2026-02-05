@@ -24,6 +24,11 @@ const (
 	dwmExtendedFrameBounds = 9
 	dwmCloaked             = 14
 	gaRoot                 = 2
+	gaRootOwner            = 3
+	gwlStyle               = -16
+	gwlExStyle             = -20
+	wsChild                = 0x40000000
+	wsExToolWindow         = 0x00000080
 )
 
 var (
@@ -38,6 +43,7 @@ var (
 	procGetClientRect       = user32.NewProc("GetClientRect")
 	procClientToScreen      = user32.NewProc("ClientToScreen")
 	procGetAncestor         = user32.NewProc("GetAncestor")
+	procGetWindowLongPtr    = user32.NewProc("GetWindowLongPtrW")
 	procGetDC               = user32.NewProc("GetDC")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
 	procGetWindowDC         = user32.NewProc("GetWindowDC")
@@ -173,6 +179,7 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if len(candidates) == 0 {
 		return false, errors.New("window not found")
 	}
+	candidates = rankWindowCandidates(candidates)
 
 	var failures []error
 	for _, hwnd := range candidates {
@@ -224,6 +231,10 @@ func wgcHelperPath() (string, error) {
 func normalizeRootWindow(hwnd windows.Handle) windows.Handle {
 	if hwnd == 0 {
 		return hwnd
+	}
+	rootOwner, _, _ := procGetAncestor.Call(uintptr(hwnd), uintptr(gaRootOwner))
+	if rootOwner != 0 {
+		hwnd = windows.Handle(rootOwner)
 	}
 	root, _, _ := procGetAncestor.Call(uintptr(hwnd), uintptr(gaRoot))
 	if root == 0 {
@@ -634,6 +645,14 @@ func listWindowCandidates(pid uint32, requireVisible bool) []windows.Handle {
 				return 1
 			}
 		}
+		style, _, _ := procGetWindowLongPtr.Call(hwnd, uintptr(gwlStyle))
+		if style&wsChild != 0 {
+			return 1
+		}
+		exStyle, _, _ := procGetWindowLongPtr.Call(hwnd, uintptr(gwlExStyle))
+		if exStyle&wsExToolWindow != 0 {
+			return 1
+		}
 		var rect windowRect
 		if ret, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect))); ret == 0 {
 			return 1
@@ -652,4 +671,164 @@ func listWindowCandidates(pid uint32, requireVisible bool) []windows.Handle {
 	})
 	procEnumWindows.Call(callback, 0)
 	return handles
+}
+
+type candidateMetrics struct {
+	hwnd      windows.Handle
+	visible   bool
+	iconic    bool
+	isRoot    bool
+	isCloaked bool
+	area      int32
+}
+
+func rankWindowCandidates(handles []windows.Handle) []windows.Handle {
+	if len(handles) <= 1 {
+		return handles
+	}
+
+	metrics := make([]candidateMetrics, 0, len(handles))
+	for _, hwnd := range handles {
+		if hwnd == 0 {
+			continue
+		}
+		visible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+		iconic, _, _ := procIsIconic.Call(uintptr(hwnd))
+		root, _, _ := procGetAncestor.Call(uintptr(hwnd), uintptr(gaRoot))
+		isRoot := root != 0 && root == uintptr(hwnd)
+		isCloaked := isWindowCloaked(hwnd)
+		var rect windowRect
+		var area int32
+		if ret, _, _ := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect))); ret != 0 {
+			width := rect.Right - rect.Left
+			height := rect.Bottom - rect.Top
+			if width > 0 && height > 0 {
+				area = width * height
+			}
+		}
+		metrics = append(metrics, candidateMetrics{
+			hwnd:      hwnd,
+			visible:   visible != 0,
+			iconic:    iconic != 0,
+			isRoot:    isRoot,
+			isCloaked: isCloaked,
+			area:      area,
+		})
+	}
+
+	if len(metrics) == 0 {
+		return handles
+	}
+
+	rankValue := func(m candidateMetrics) int64 {
+		var score int64
+		if m.visible {
+			score += 1_000_000
+		}
+		if m.isRoot {
+			score += 100_000
+		}
+		if !m.iconic {
+			score += 10_000
+		}
+		if !m.isCloaked {
+			score += 1_000
+		}
+		if m.area >= 200*200 {
+			score += 100
+		}
+		score += int64(m.area)
+		return score
+	}
+
+	for i := 0; i < len(metrics); i++ {
+		for j := i + 1; j < len(metrics); j++ {
+			if rankValue(metrics[j]) > rankValue(metrics[i]) {
+				metrics[i], metrics[j] = metrics[j], metrics[i]
+			}
+		}
+	}
+
+	ordered := make([]windows.Handle, 0, len(metrics))
+	for _, m := range metrics {
+		ordered = append(ordered, m.hwnd)
+	}
+	return ordered
+}
+
+func rankPidsForCapture(pids []int) []int {
+	if len(pids) <= 1 {
+		return pids
+	}
+
+	type pidMetrics struct {
+		pid         int
+		visibleRoot bool
+		notIconic   bool
+		notCloaked  bool
+		area        int32
+	}
+
+	metrics := make([]pidMetrics, 0, len(pids))
+	for _, pid := range pids {
+		candidates := listWindowCandidates(uint32(pid), true)
+		if len(candidates) == 0 {
+			candidates = listWindowCandidates(uint32(pid), false)
+		}
+		ordered := rankWindowCandidates(candidates)
+		best := windows.Handle(0)
+		if len(ordered) > 0 {
+			best = ordered[0]
+		}
+		m := pidMetrics{pid: pid}
+		if best != 0 {
+			visible, _, _ := procIsWindowVisible.Call(uintptr(best))
+			iconic, _, _ := procIsIconic.Call(uintptr(best))
+			root, _, _ := procGetAncestor.Call(uintptr(best), uintptr(gaRoot))
+			m.visibleRoot = visible != 0 && root != 0 && root == uintptr(best)
+			m.notIconic = iconic == 0
+			m.notCloaked = !isWindowCloaked(best)
+			var rect windowRect
+			if ret, _, _ := procGetWindowRect.Call(uintptr(best), uintptr(unsafe.Pointer(&rect))); ret != 0 {
+				width := rect.Right - rect.Left
+				height := rect.Bottom - rect.Top
+				if width > 0 && height > 0 {
+					m.area = width * height
+				}
+			}
+		}
+		metrics = append(metrics, m)
+	}
+
+	rankValue := func(m pidMetrics) int64 {
+		var score int64
+		if m.visibleRoot {
+			score += 1_000_000
+		}
+		if m.notIconic {
+			score += 10_000
+		}
+		if m.notCloaked {
+			score += 1_000
+		}
+		if m.area >= 200*200 {
+			score += 100
+		}
+		score += int64(m.area)
+		return score
+	}
+
+	for i := 0; i < len(metrics); i++ {
+		for j := i + 1; j < len(metrics); j++ {
+			if rankValue(metrics[j]) > rankValue(metrics[i]) {
+				metrics[i], metrics[j] = metrics[j], metrics[i]
+			}
+		}
+	}
+
+	ordered := make([]int, 0, len(metrics))
+	for _, m := range metrics {
+		ordered = append(ordered, m.pid)
+	}
+	return ordered
 }

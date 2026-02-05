@@ -14,3 +14,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, error) {
 	return false, nil
 }
+
+func rankPidsForCapture(pids []int) []int {
+	return pids
+}

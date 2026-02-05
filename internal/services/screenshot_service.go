@@ -94,6 +94,7 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		service.logCapture(slog.LevelInfo, "ゲームプロセスが見つかりません", "gameId", trimmed, "exePath", exePath)
 		return "", errors.New("game process not found")
 	}
+	pids = rankPidsForCapture(pids)
 
 	baseDir := strings.TrimSpace(service.appDataDir)
 	if baseDir == "" {
