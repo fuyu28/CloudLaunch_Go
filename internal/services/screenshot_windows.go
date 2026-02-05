@@ -230,6 +230,10 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	}
 
 	if len(failures) == 0 {
+		extra := strings.TrimSpace(strings.Join([]string{foregroundInfo, candidateInfos, childInfos}, " | "))
+		if extra != "" {
+			return false, fmt.Errorf("WGC capture failed; %s", extra)
+		}
 		return false, errors.New("WGC capture failed")
 	}
 	joined := errors.Join(failures...)
