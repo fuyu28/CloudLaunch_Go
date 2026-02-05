@@ -116,6 +116,71 @@ func ensureDpiAwareness() {
 	})
 }
 
+func isUsableImage(img image.Image) bool {
+	return img != nil && !isMostlyBlack(img) && !isMostlyTransparent(img)
+}
+
+func tryCapture(
+	failures *[]error,
+	label string,
+	fn func() (image.Image, error),
+) (image.Image, bool) {
+	img, err := fn()
+	if err != nil {
+		*failures = append(*failures, fmt.Errorf("%s failed: %w", label, err))
+		return nil, false
+	}
+	if img == nil {
+		return nil, false
+	}
+	if isUsableImage(img) {
+		return img, true
+	}
+	*failures = append(*failures, fmt.Errorf("%s produced black image", label))
+	return nil, false
+}
+
+func tryCaptureWithTrim(
+	failures *[]error,
+	label string,
+	fn func() (image.Image, error),
+	trim func(image.Image) (image.Image, error),
+) (image.Image, bool) {
+	img, err := fn()
+	if err != nil {
+		*failures = append(*failures, fmt.Errorf("%s failed: %w", label, err))
+		return nil, false
+	}
+	if img == nil {
+		return nil, false
+	}
+	if trim != nil {
+		trimmed, trimErr := trim(img)
+		if trimErr == nil && trimmed != nil {
+			if isUsableImage(trimmed) {
+				return trimmed, true
+			}
+			*failures = append(*failures, fmt.Errorf("%s trimmed image is black", label))
+			return nil, false
+		}
+		if isUsableImage(img) {
+			return img, true
+		}
+		if trimErr != nil {
+			*failures = append(*failures, fmt.Errorf("%s trim failed: %w", label, trimErr))
+			return nil, false
+		}
+		*failures = append(*failures, fmt.Errorf("%s produced black image", label))
+		return nil, false
+	}
+
+	if isUsableImage(img) {
+		return img, true
+	}
+	*failures = append(*failures, fmt.Errorf("%s produced black image", label))
+	return nil, false
+}
+
 func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 	ensureDpiAwareness()
 	hwnd, err := findBestWindowForPID(uint32(pid))
@@ -125,75 +190,47 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 
 	var failures []error
 	if clientOnly {
-		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
-			if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-				return img, nil
-			}
-			failures = append(failures, errors.New("PrintWindow(client) produced black image"))
-		} else if err != nil {
-			failures = append(failures, fmt.Errorf("PrintWindow(client) failed: %w", err))
+		if img, ok := tryCapture(&failures, "PrintWindow(client)", func() (image.Image, error) {
+			return captureWindowWithPrintWindow(hwnd, true)
+		}); ok {
+			return img, nil
 		}
-
-		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
-			if trimmed, trimErr := trimWithDwmBounds(hwnd, img); trimErr == nil && trimmed != nil {
-				if !isMostlyBlack(trimmed) && !isMostlyTransparent(trimmed) {
-					return trimmed, nil
-				}
-				failures = append(failures, errors.New("PrintWindow(window) trimmed image is black"))
-			} else if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-				return img, nil
-			} else if trimErr != nil {
-				failures = append(failures, fmt.Errorf("PrintWindow(window) trim failed: %w", trimErr))
-			} else {
-				failures = append(failures, errors.New("PrintWindow(window) produced black image"))
-			}
-		} else if err != nil {
-			failures = append(failures, fmt.Errorf("PrintWindow(window) failed: %w", err))
+		if img, ok := tryCaptureWithTrim(&failures, "PrintWindow(window)", func() (image.Image, error) {
+			return captureWindowWithPrintWindow(hwnd, false)
+		}, func(img image.Image) (image.Image, error) {
+			return trimWithDwmBounds(hwnd, img)
+		}); ok {
+			return img, nil
 		}
 	} else {
-		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
-			if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-				return img, nil
-			}
-			failures = append(failures, errors.New("PrintWindow(window) produced black image"))
-		} else if err != nil {
-			failures = append(failures, fmt.Errorf("PrintWindow(window) failed: %w", err))
+		if img, ok := tryCapture(&failures, "PrintWindow(window)", func() (image.Image, error) {
+			return captureWindowWithPrintWindow(hwnd, false)
+		}); ok {
+			return img, nil
 		}
-		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
-			if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-				return img, nil
-			}
-			failures = append(failures, errors.New("PrintWindow(client) produced black image"))
-		} else if err != nil {
-			failures = append(failures, fmt.Errorf("PrintWindow(client) failed: %w", err))
+		if img, ok := tryCapture(&failures, "PrintWindow(client)", func() (image.Image, error) {
+			return captureWindowWithPrintWindow(hwnd, true)
+		}); ok {
+			return img, nil
 		}
 	}
 
-	if img, err := captureWindowClientWithBitBlt(hwnd); err == nil && img != nil {
-		if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-			return img, nil
-		}
-		failures = append(failures, errors.New("BitBlt(client) produced black image"))
-	} else if err != nil {
-		failures = append(failures, fmt.Errorf("BitBlt(client) failed: %w", err))
+	if img, ok := tryCapture(&failures, "BitBlt(client)", func() (image.Image, error) {
+		return captureWindowClientWithBitBlt(hwnd)
+	}); ok {
+		return img, nil
 	}
 
-	if img, err := captureWindowClientFromScreen(hwnd); err == nil && img != nil {
-		if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-			return img, nil
-		}
-		failures = append(failures, errors.New("Screen capture produced black image"))
-	} else if err != nil {
-		failures = append(failures, fmt.Errorf("Screen capture failed: %w", err))
+	if img, ok := tryCapture(&failures, "Screen capture", func() (image.Image, error) {
+		return captureWindowClientFromScreen(hwnd)
+	}); ok {
+		return img, nil
 	}
 
-	if img, err := captureDesktopScreen(); err == nil && img != nil {
-		if !isMostlyBlack(img) && !isMostlyTransparent(img) {
-			return img, nil
-		}
-		failures = append(failures, errors.New("Desktop capture produced black image"))
-	} else if err != nil {
-		failures = append(failures, fmt.Errorf("Desktop capture failed: %w", err))
+	if img, ok := tryCapture(&failures, "Desktop capture", func() (image.Image, error) {
+		return captureDesktopScreen()
+	}); ok {
+		return img, nil
 	}
 
 	if len(failures) == 0 {
