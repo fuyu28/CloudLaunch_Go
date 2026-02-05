@@ -182,14 +182,17 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if len(candidates) == 0 {
 		return false, errors.New("window not found")
 	}
-	candidates = rankWindowCandidates(candidates)
-	candidateInfos := describeCandidates(candidates)
+	metrics := rankWindowMetrics(buildCandidateMetrics(candidates))
+	candidateInfos := describeMetrics(metrics)
 
 	var failures []error
-	for _, hwnd := range candidates {
-		hwnd = normalizeRootWindow(hwnd)
-		if isWindowCloaked(hwnd) {
-			failures = append(failures, fmt.Errorf("hwnd=%d is cloaked", hwnd))
+	for _, m := range metrics {
+		hwnd := normalizeRootWindow(m.hwnd)
+		if m.isCloaked || !m.visible || m.iconic || m.area <= 0 {
+			continue
+		}
+		if m.isToolWindow {
+			// WGCが拒否することが多いのでスキップし、候補情報はログに残す
 			continue
 		}
 
@@ -694,15 +697,9 @@ type candidateMetrics struct {
 	height       int32
 }
 
-func rankWindowCandidates(handles []windows.Handle) []windows.Handle {
-	if len(handles) <= 1 {
-		return handles
-	}
-
-	metrics := buildCandidateMetrics(handles)
-
-	if len(metrics) == 0 {
-		return handles
+func rankWindowMetrics(metrics []candidateMetrics) []candidateMetrics {
+	if len(metrics) <= 1 {
+		return metrics
 	}
 
 	rankValue := func(m candidateMetrics) int64 {
@@ -739,6 +736,20 @@ func rankWindowCandidates(handles []windows.Handle) []windows.Handle {
 			}
 		}
 	}
+
+	return metrics
+}
+
+func rankWindowCandidates(handles []windows.Handle) []windows.Handle {
+	if len(handles) <= 1 {
+		return handles
+	}
+
+	metrics := buildCandidateMetrics(handles)
+	if len(metrics) == 0 {
+		return handles
+	}
+	metrics = rankWindowMetrics(metrics)
 
 	ordered := make([]windows.Handle, 0, len(metrics))
 	for _, m := range metrics {
