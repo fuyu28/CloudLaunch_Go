@@ -6,6 +6,7 @@
 #include <wincodec.h>
 
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include <winrt/Windows.Foundation.h>
@@ -29,6 +30,32 @@ struct CropRect {
 static void LogHresult(const wchar_t* stage, HRESULT hr) {
   fwprintf(stderr, L"%ls failed: 0x%08X\n", stage, static_cast<unsigned int>(hr));
 }
+
+class TempFileGuard {
+public:
+  explicit TempFileGuard(std::wstring path) : path_(std::move(path)) {}
+  const wchar_t* Path() const {
+    return path_.c_str();
+  }
+  void CommitTo(const wchar_t* target) {
+    if (committed_) {
+      return;
+    }
+    if (!MoveFileExW(path_.c_str(), target, MOVEFILE_REPLACE_EXISTING)) {
+      throw HRESULT_FROM_WIN32(GetLastError());
+    }
+    committed_ = true;
+  }
+  ~TempFileGuard() {
+    if (!committed_) {
+      DeleteFileW(path_.c_str());
+    }
+  }
+
+private:
+  std::wstring path_;
+  bool committed_ = false;
+};
 
 static HRESULT CreateD3DDevice(com_ptr<ID3D11Device>& device,
                                com_ptr<ID3D11DeviceContext>& context) {
@@ -88,51 +115,54 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device>& device,
   if (FAILED(hr)) {
     return hr;
   }
+  struct MapScope {
+    com_ptr<ID3D11DeviceContext> context;
+    com_ptr<ID3D11Texture2D> texture;
+    ~MapScope() {
+      if (context && texture) {
+        context->Unmap(texture.get(), 0);
+      }
+    }
+  } mapScope{context, staging};
 
   com_ptr<IWICImagingFactory> factory;
   hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
                         IID_PPV_ARGS(factory.put()));
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   com_ptr<IWICBitmapEncoder> encoder;
   hr = factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, encoder.put());
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   com_ptr<IWICStream> stream;
   hr = factory->CreateStream(stream.put());
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
-  hr = stream->InitializeFromFilename(filePath, GENERIC_WRITE);
+  TempFileGuard tempFile(std::wstring(filePath) + L".tmp");
+  hr = stream->InitializeFromFilename(tempFile.Path(), GENERIC_WRITE);
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   hr = encoder->Initialize(stream.get(), WICBitmapEncoderNoCache);
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   com_ptr<IWICBitmapFrameEncode> frame;
   hr = encoder->CreateNewFrame(frame.put(), nullptr);
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   hr = frame->Initialize(nullptr);
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
@@ -161,21 +191,17 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device>& device,
 
   hr = frame->SetSize(outputWidth, outputHeight);
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   WICPixelFormatGUID format = GUID_WICPixelFormat32bppBGRA;
   hr = frame->SetPixelFormat(&format);
   if (FAILED(hr)) {
-    context->Unmap(staging.get(), 0);
     return hr;
   }
 
   hr = frame->WritePixels(outputHeight, outputStride, outputStride * outputHeight,
                           const_cast<BYTE*>(outputBytes));
-
-  context->Unmap(staging.get(), 0);
   if (FAILED(hr)) {
     return hr;
   }
@@ -185,7 +211,17 @@ static HRESULT SavePngFromTexture(const com_ptr<ID3D11Device>& device,
     return hr;
   }
 
-  return encoder->Commit();
+  hr = encoder->Commit();
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  try {
+    tempFile.CommitTo(filePath);
+  } catch (HRESULT moveErr) {
+    return moveErr;
+  }
+  return S_OK;
 }
 
 static bool TryGetClientCropRect(HWND hwnd, const D3D11_TEXTURE2D_DESC& desc, CropRect& crop) {
