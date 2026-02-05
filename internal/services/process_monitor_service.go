@@ -645,7 +645,7 @@ func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, e
 		}
 		name := strings.TrimSpace(record[0])
 		pidStr := strings.TrimSpace(record[1])
-		fullPath := strings.TrimSpace(record[2])
+		fullPath := trimQuotes(strings.TrimSpace(record[2]))
 		pid, err := strconv.Atoi(pidStr)
 		if err != nil || pid <= 0 || name == "" {
 			continue
@@ -693,7 +693,7 @@ func (service *ProcessMonitorService) getProcessesWmic() ([]ProcessInfo, error) 
 		}
 		name := strings.TrimSpace(record[1])
 		pidStr := strings.TrimSpace(record[2])
-		fullPath := strings.TrimSpace(record[3])
+		fullPath := trimQuotes(strings.TrimSpace(record[3]))
 		if name == "" || pidStr == "" {
 			continue
 		}
@@ -773,4 +773,14 @@ func normalizeProcessToken(value string) string {
 		return ""
 	}
 	return norm.NFC.String(strings.ToLower(value))
+}
+
+// trimQuotes removes surrounding double quotes from a string if present.
+// This handles cases where PowerShell/WMIC CSV output includes extra quotes
+// around paths with spaces.
+func trimQuotes(value string) string {
+	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+		return value[1 : len(value)-1]
+	}
+	return value
 }
