@@ -192,6 +192,11 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	metrics := rankWindowMetrics(buildCandidateMetrics(candidates))
 	candidateInfos := describeMetrics(metrics)
 	childInfos := describeChildWindows(metrics)
+	childCandidates := collectChildCandidates(metrics)
+	if len(childCandidates) > 0 {
+		candidates = prependUniqueWindows(candidates, childCandidates)
+		metrics = rankWindowMetrics(buildCandidateMetrics(candidates))
+	}
 	foregroundInfo := describeForegroundCandidate(uint32(pid))
 
 	var failures []error
@@ -909,7 +914,7 @@ func describeChildWindows(metrics []candidateMetrics) string {
 	}
 	parts := make([]string, 0, len(metrics))
 	for _, m := range metrics {
-		children := listChildCandidates(m.hwnd)
+		children := listChildCandidates(m.hwnd, true)
 		if len(children) == 0 {
 			continue
 		}
@@ -969,7 +974,7 @@ func getWindowTitle(hwnd windows.Handle) string {
 	return windows.UTF16ToString(buf[:ret])
 }
 
-func listChildCandidates(hwnd windows.Handle) []windows.Handle {
+func listChildCandidates(hwnd windows.Handle, includeHidden bool) []windows.Handle {
 	if hwnd == 0 {
 		return nil
 	}
@@ -977,7 +982,7 @@ func listChildCandidates(hwnd windows.Handle) []windows.Handle {
 	seen := map[windows.Handle]bool{}
 	callback := windows.NewCallback(func(child uintptr, lparam uintptr) uintptr {
 		visible, _, _ := procIsWindowVisible.Call(child)
-		if visible == 0 {
+		if !includeHidden && visible == 0 {
 			return 1
 		}
 		var rect windowRect
@@ -998,6 +1003,36 @@ func listChildCandidates(hwnd windows.Handle) []windows.Handle {
 	})
 	procEnumChildWindows.Call(uintptr(hwnd), callback, 0)
 	return children
+}
+
+func collectChildCandidates(metrics []candidateMetrics) []windows.Handle {
+	children := make([]windows.Handle, 0, 8)
+	for _, m := range metrics {
+		for _, child := range listChildCandidates(m.hwnd, false) {
+			children = append(children, child)
+		}
+	}
+	return children
+}
+
+func prependUniqueWindows(handles []windows.Handle, extras []windows.Handle) []windows.Handle {
+	if len(extras) == 0 {
+		return handles
+	}
+	seen := map[windows.Handle]bool{}
+	for _, h := range handles {
+		seen[h] = true
+	}
+	ordered := make([]windows.Handle, 0, len(extras)+len(handles))
+	for _, h := range extras {
+		if h == 0 || seen[h] {
+			continue
+		}
+		seen[h] = true
+		ordered = append(ordered, h)
+	}
+	ordered = append(ordered, handles...)
+	return ordered
 }
 
 func prependUniqueWindow(handles []windows.Handle, hwnd windows.Handle) []windows.Handle {
