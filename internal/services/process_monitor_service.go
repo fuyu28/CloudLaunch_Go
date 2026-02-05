@@ -656,6 +656,9 @@ func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, e
 		if fullPath == "" {
 			fullPath = name
 		}
+		if ext := strings.ToLower(filepath.Ext(fullPath)); ext != ".exe" {
+			continue
+		}
 		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
 	}
 	return processes, nil
@@ -706,6 +709,9 @@ func (service *ProcessMonitorService) getProcessesWmic() ([]ProcessInfo, error) 
 		}
 		if fullPath == "" {
 			fullPath = name
+		}
+		if ext := strings.ToLower(filepath.Ext(fullPath)); ext != ".exe" {
+			continue
 		}
 		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
 	}
