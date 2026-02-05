@@ -25,10 +25,13 @@ const (
 	dwmCloaked             = 14
 	gaRoot                 = 2
 	gaRootOwner            = 3
-	gwlStyle               = -16
-	gwlExStyle             = -20
 	wsChild                = 0x40000000
 	wsExToolWindow         = 0x00000080
+)
+
+var (
+	gwlStyle   int32 = -16
+	gwlExStyle int32 = -20
 )
 
 var (
