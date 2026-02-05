@@ -47,6 +47,9 @@ var (
 	procClientToScreen      = user32.NewProc("ClientToScreen")
 	procGetAncestor         = user32.NewProc("GetAncestor")
 	procGetWindowLongPtr    = user32.NewProc("GetWindowLongPtrW")
+	procGetClassNameW       = user32.NewProc("GetClassNameW")
+	procGetWindowTextW      = user32.NewProc("GetWindowTextW")
+	procEnumChildWindows    = user32.NewProc("EnumChildWindows")
 	procGetDC               = user32.NewProc("GetDC")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
 	procGetWindowDC         = user32.NewProc("GetWindowDC")
@@ -182,8 +185,14 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if len(candidates) == 0 {
 		return false, errors.New("window not found")
 	}
+	fgCandidate := foregroundWindowCandidate(uint32(pid))
+	if fgCandidate != 0 {
+		candidates = prependUniqueWindow(candidates, fgCandidate)
+	}
 	metrics := rankWindowMetrics(buildCandidateMetrics(candidates))
 	candidateInfos := describeMetrics(metrics)
+	childInfos := describeChildWindows(metrics)
+	foregroundInfo := describeForegroundCandidate(uint32(pid))
 
 	var failures []error
 	for _, m := range metrics {
@@ -224,8 +233,9 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 		return false, errors.New("WGC capture failed")
 	}
 	joined := errors.Join(failures...)
-	if candidateInfos != "" {
-		return false, fmt.Errorf("%w; candidates: %s", joined, candidateInfos)
+	extra := strings.TrimSpace(strings.Join([]string{foregroundInfo, candidateInfos, childInfos}, " | "))
+	if extra != "" {
+		return false, fmt.Errorf("%w; %s", joined, extra)
 	}
 	return false, joined
 }
@@ -873,17 +883,140 @@ func buildCandidateMetrics(handles []windows.Handle) []candidateMetrics {
 	return metrics
 }
 
-func describeCandidates(handles []windows.Handle) string {
-	metrics := buildCandidateMetrics(handles)
+func describeMetrics(metrics []candidateMetrics) string {
 	if len(metrics) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(metrics))
 	for _, m := range metrics {
+		className := getWindowClassName(m.hwnd)
+		title := getWindowTitle(m.hwnd)
 		parts = append(parts, fmt.Sprintf(
-			"hwnd=%d vis=%t root=%t iconic=%t cloaked=%t tool=%t child=%t area=%d (%dx%d)",
-			m.hwnd, m.visible, m.isRoot, m.iconic, m.isCloaked, m.isToolWindow, m.isChild, m.area, m.width, m.height,
+			"hwnd=%d cls=%q title=%q vis=%t root=%t iconic=%t cloaked=%t tool=%t child=%t area=%d (%dx%d)",
+			m.hwnd, className, title, m.visible, m.isRoot, m.iconic, m.isCloaked, m.isToolWindow, m.isChild, m.area, m.width, m.height,
 		))
 	}
+	return "candidates: " + strings.Join(parts, " | ")
+}
+
+func describeChildWindows(metrics []candidateMetrics) string {
+	if len(metrics) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(metrics))
+	for _, m := range metrics {
+		children := listChildCandidates(m.hwnd)
+		if len(children) == 0 {
+			continue
+		}
+		childParts := make([]string, 0, len(children))
+		for _, c := range children {
+			childParts = append(childParts, describeWindowSummary(c))
+		}
+		parts = append(parts, fmt.Sprintf("children(hwnd=%d): %s", m.hwnd, strings.Join(childParts, " | ")))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
 	return strings.Join(parts, " | ")
+}
+
+func describeForegroundCandidate(pid uint32) string {
+	hwnd := foregroundWindowCandidate(pid)
+	if hwnd == 0 {
+		return ""
+	}
+	return "foreground: " + describeWindowSummary(hwnd)
+}
+
+func describeWindowSummary(hwnd windows.Handle) string {
+	if hwnd == 0 {
+		return "hwnd=0"
+	}
+	className := getWindowClassName(hwnd)
+	title := getWindowTitle(hwnd)
+	visible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+	iconic, _, _ := procIsIconic.Call(uintptr(hwnd))
+	var rect windowRect
+	var width, height int32
+	if ret, _, _ := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect))); ret != 0 {
+		width = rect.Right - rect.Left
+		height = rect.Bottom - rect.Top
+	}
+	return fmt.Sprintf("hwnd=%d cls=%q title=%q vis=%t iconic=%t size=%dx%d",
+		hwnd, className, title, visible != 0, iconic != 0, width, height)
+}
+
+func getWindowClassName(hwnd windows.Handle) string {
+	buf := make([]uint16, 256)
+	ret, _, _ := procGetClassNameW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if ret == 0 {
+		return ""
+	}
+	return windows.UTF16ToString(buf[:ret])
+}
+
+func getWindowTitle(hwnd windows.Handle) string {
+	buf := make([]uint16, 512)
+	ret, _, _ := procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if ret == 0 {
+		return ""
+	}
+	return windows.UTF16ToString(buf[:ret])
+}
+
+func listChildCandidates(hwnd windows.Handle) []windows.Handle {
+	if hwnd == 0 {
+		return nil
+	}
+	children := make([]windows.Handle, 0, 6)
+	seen := map[windows.Handle]bool{}
+	callback := windows.NewCallback(func(child uintptr, lparam uintptr) uintptr {
+		visible, _, _ := procIsWindowVisible.Call(child)
+		if visible == 0 {
+			return 1
+		}
+		var rect windowRect
+		if ret, _, _ := procGetWindowRect.Call(child, uintptr(unsafe.Pointer(&rect))); ret == 0 {
+			return 1
+		}
+		width := rect.Right - rect.Left
+		height := rect.Bottom - rect.Top
+		if width < 200 || height < 200 {
+			return 1
+		}
+		handle := windows.Handle(child)
+		if !seen[handle] {
+			seen[handle] = true
+			children = append(children, handle)
+		}
+		return 1
+	})
+	procEnumChildWindows.Call(uintptr(hwnd), callback, 0)
+	return children
+}
+
+func prependUniqueWindow(handles []windows.Handle, hwnd windows.Handle) []windows.Handle {
+	if hwnd == 0 {
+		return handles
+	}
+	for _, h := range handles {
+		if h == hwnd {
+			return handles
+		}
+	}
+	return append([]windows.Handle{hwnd}, handles...)
+}
+
+func foregroundWindowCandidate(pid uint32) windows.Handle {
+	fg, _, _ := procGetForegroundWindow.Call()
+	if fg == 0 {
+		return 0
+	}
+	var fgPID uint32
+	procGetWindowThreadPID.Call(fg, uintptr(unsafe.Pointer(&fgPID)))
+	if fgPID != pid {
+		return 0
+	}
+	return windows.Handle(fg)
 }
