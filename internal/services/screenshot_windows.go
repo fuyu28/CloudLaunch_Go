@@ -645,11 +645,11 @@ func listWindowCandidates(pid uint32, requireVisible bool) []windows.Handle {
 				return 1
 			}
 		}
-		style, _, _ := procGetWindowLongPtr.Call(hwnd, uintptr(gwlStyle))
+		style, _, _ := procGetWindowLongPtr.Call(hwnd, uintptr(int64(gwlStyle)))
 		if style&wsChild != 0 {
 			return 1
 		}
-		exStyle, _, _ := procGetWindowLongPtr.Call(hwnd, uintptr(gwlExStyle))
+		exStyle, _, _ := procGetWindowLongPtr.Call(hwnd, uintptr(int64(gwlExStyle)))
 		if exStyle&wsExToolWindow != 0 {
 			return 1
 		}
