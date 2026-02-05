@@ -11,22 +11,28 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 const (
-	biRGB                  = 0
-	dibRGBColors           = 0
-	srccopy                = 0x00CC0020
-	pwClientOnly           = 0x00000001
-	dwmExtendedFrameBounds = 9
-	dwmCloaked             = 14
-	gaRoot                 = 2
-	gaRootOwner            = 3
-	wsChild                = 0x40000000
-	wsExToolWindow         = 0x00000080
+	biRGB                           = 0
+	dibRGBColors                    = 0
+	srccopy                         = 0x00CC0020
+	pwClientOnly                    = 0x00000001
+	dwmExtendedFrameBounds          = 9
+	dwmCloaked                      = 14
+	gaRoot                          = 2
+	gaRootOwner                     = 3
+	wsChild                         = 0x40000000
+	wsExToolWindow                  = 0x00000080
+	dpiAwarenessContextPerMonitorV2 = ^uintptr(3) // -4
+	smXVIRTUALSCREEN                = 76
+	smYVIRTUALSCREEN                = 77
+	smCXVIRTUALSCREEN               = 78
+	smCYVIRTUALSCREEN               = 79
 )
 
 var (
@@ -50,6 +56,8 @@ var (
 	procGetClassNameW       = user32.NewProc("GetClassNameW")
 	procGetWindowTextW      = user32.NewProc("GetWindowTextW")
 	procEnumChildWindows    = user32.NewProc("EnumChildWindows")
+	procSetDpiAwarenessCtx  = user32.NewProc("SetProcessDpiAwarenessContext")
+	procGetSystemMetrics    = user32.NewProc("GetSystemMetrics")
 	procGetDC               = user32.NewProc("GetDC")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
 	procGetWindowDC         = user32.NewProc("GetWindowDC")
@@ -96,7 +104,16 @@ type bitmapInfo struct {
 	Colors [1]uint32
 }
 
+var dpiOnce = sync.Once{}
+
+func ensureDpiAwareness() {
+	dpiOnce.Do(func() {
+		procSetDpiAwarenessCtx.Call(dpiAwarenessContextPerMonitorV2)
+	})
+}
+
 func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
+	ensureDpiAwareness()
 	hwnd, err := findBestWindowForPID(uint32(pid))
 	if err != nil {
 		return nil, err
@@ -166,6 +183,15 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 		failures = append(failures, fmt.Errorf("Screen capture failed: %w", err))
 	}
 
+	if img, err := captureDesktopScreen(); err == nil && img != nil {
+		if !isMostlyBlack(img) {
+			return img, nil
+		}
+		failures = append(failures, errors.New("Desktop capture produced black image"))
+	} else if err != nil {
+		failures = append(failures, fmt.Errorf("Desktop capture failed: %w", err))
+	}
+
 	if len(failures) == 0 {
 		return nil, errors.New("failed to capture window")
 	}
@@ -173,9 +199,18 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 }
 
 func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, error) {
+	ensureDpiAwareness()
 	helperPath, err := wgcHelperPath()
 	if err != nil || helperPath == "" {
 		return false, nil
+	}
+
+	if fg := foregroundWindowCandidate(uint32(pid)); fg != 0 {
+		if ok, err := captureWGCByHWND(fg, outputPath, clientOnly, helperPath); ok {
+			return true, nil
+		} else if err != nil {
+			// fall through with diagnostics below
+		}
 	}
 
 	candidates := listWindowCandidates(uint32(pid), true, true, true)
@@ -210,28 +245,11 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 			continue
 		}
 
-		args := []string{
-			"--hwnd",
-			strconv.FormatUint(uint64(hwnd), 10),
-			"--out",
-			outputPath,
+		if ok, err := captureWGCByHWND(hwnd, outputPath, clientOnly, helperPath); ok {
+			return true, nil
+		} else if err != nil {
+			failures = append(failures, fmt.Errorf("hwnd=%d: %w", hwnd, err))
 		}
-		if clientOnly {
-			args = append(args, "--client-only")
-		}
-
-		command := execCommandHidden(context.Background(), helperPath, args...)
-		output, err := command.CombinedOutput()
-		if err != nil {
-			message := strings.TrimSpace(string(output))
-			if message != "" {
-				failures = append(failures, fmt.Errorf("hwnd=%d: %w: %s", hwnd, err, message))
-			} else {
-				failures = append(failures, fmt.Errorf("hwnd=%d: %w", hwnd, err))
-			}
-			continue
-		}
-		return true, nil
 	}
 
 	if len(failures) == 0 {
@@ -256,6 +274,32 @@ func wgcHelperPath() (string, error) {
 	}
 	exeDir := filepath.Dir(exePath)
 	return filepath.Join(exeDir, "wgc_screenshot.exe"), nil
+}
+
+func captureWGCByHWND(hwnd windows.Handle, outputPath string, clientOnly bool, helperPath string) (bool, error) {
+	if hwnd == 0 {
+		return false, errors.New("hwnd is zero")
+	}
+	args := []string{
+		"--hwnd",
+		strconv.FormatUint(uint64(hwnd), 10),
+		"--out",
+		outputPath,
+	}
+	if clientOnly {
+		args = append(args, "--client-only")
+	}
+
+	command := execCommandHidden(context.Background(), helperPath, args...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message != "" {
+			return false, fmt.Errorf("%w: %s", err, message)
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func normalizeRootWindow(hwnd windows.Handle) windows.Handle {
@@ -445,6 +489,59 @@ func captureWindowClientFromScreen(hwnd windows.Handle) (image.Image, error) {
 	}
 
 	return bitmapToImage(hdcMem, hBitmap, width, height)
+}
+
+func captureDesktopScreen() (image.Image, error) {
+	left := int32(getSystemMetrics(smXVIRTUALSCREEN))
+	top := int32(getSystemMetrics(smYVIRTUALSCREEN))
+	width := int32(getSystemMetrics(smCXVIRTUALSCREEN))
+	height := int32(getSystemMetrics(smCYVIRTUALSCREEN))
+	if width <= 0 || height <= 0 {
+		return nil, errors.New("invalid desktop size")
+	}
+
+	hdcScreen, _, _ := procGetDC.Call(0)
+	if hdcScreen == 0 {
+		return nil, errors.New("failed to get screen DC")
+	}
+	defer procReleaseDC.Call(0, hdcScreen)
+
+	hdcMem, _, _ := procCreateCompatibleDC.Call(hdcScreen)
+	if hdcMem == 0 {
+		return nil, errors.New("failed to create compatible DC")
+	}
+	defer procDeleteDC.Call(hdcMem)
+
+	hBitmap, _, _ := procCreateBitmap.Call(hdcScreen, uintptr(width), uintptr(height))
+	if hBitmap == 0 {
+		return nil, errors.New("failed to create bitmap")
+	}
+	defer procDeleteObject.Call(hBitmap)
+
+	oldObj, _, _ := procSelectObject.Call(hdcMem, hBitmap)
+	defer procSelectObject.Call(hdcMem, oldObj)
+
+	bitbltResult, _, _ := procBitBlt.Call(
+		hdcMem,
+		0,
+		0,
+		uintptr(width),
+		uintptr(height),
+		hdcScreen,
+		uintptr(left),
+		uintptr(top),
+		srccopy,
+	)
+	if bitbltResult == 0 {
+		return nil, errors.New("failed to capture desktop")
+	}
+
+	return bitmapToImage(hdcMem, hBitmap, int(width), int(height))
+}
+
+func getSystemMetrics(index int32) int32 {
+	ret, _, _ := procGetSystemMetrics.Call(uintptr(index))
+	return int32(ret)
 }
 
 func bitmapToImage(hdcMem uintptr, hBitmap uintptr, width int, height int) (image.Image, error) {

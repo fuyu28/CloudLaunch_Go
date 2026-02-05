@@ -418,6 +418,7 @@ static int PrintUsage() {
 }
 
 int wmain(int argc, wchar_t** argv) {
+  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   HWND hwnd = nullptr;
   const wchar_t* outPath = nullptr;
   int clientOnly = 0;
