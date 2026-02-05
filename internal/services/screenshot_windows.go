@@ -33,6 +33,9 @@ const (
 	smYVIRTUALSCREEN                = 77
 	smCXVIRTUALSCREEN               = 78
 	smCYVIRTUALSCREEN               = 79
+	wdaNone                         = 0x0
+	wdaMonitor                      = 0x1
+	wdaExcludeFromCapture           = 0x11
 )
 
 var (
@@ -56,6 +59,7 @@ var (
 	procGetClassNameW       = user32.NewProc("GetClassNameW")
 	procGetWindowTextW      = user32.NewProc("GetWindowTextW")
 	procEnumChildWindows    = user32.NewProc("EnumChildWindows")
+	procGetWindowAffinity   = user32.NewProc("GetWindowDisplayAffinity")
 	procSetDpiAwarenessCtx  = user32.NewProc("SetProcessDpiAwarenessContext")
 	procGetSystemMetrics    = user32.NewProc("GetSystemMetrics")
 	procGetDC               = user32.NewProc("GetDC")
@@ -122,7 +126,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 	var failures []error
 	if clientOnly {
 		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
-			if !isMostlyBlack(img) {
+			if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 				return img, nil
 			}
 			failures = append(failures, errors.New("PrintWindow(client) produced black image"))
@@ -132,11 +136,11 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 
 		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
 			if trimmed, trimErr := trimWithDwmBounds(hwnd, img); trimErr == nil && trimmed != nil {
-				if !isMostlyBlack(trimmed) {
+				if !isMostlyBlack(trimmed) && !isMostlyTransparent(trimmed) {
 					return trimmed, nil
 				}
 				failures = append(failures, errors.New("PrintWindow(window) trimmed image is black"))
-			} else if !isMostlyBlack(img) {
+			} else if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 				return img, nil
 			} else if trimErr != nil {
 				failures = append(failures, fmt.Errorf("PrintWindow(window) trim failed: %w", trimErr))
@@ -148,7 +152,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 		}
 	} else {
 		if img, err := captureWindowWithPrintWindow(hwnd, false); err == nil && img != nil {
-			if !isMostlyBlack(img) {
+			if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 				return img, nil
 			}
 			failures = append(failures, errors.New("PrintWindow(window) produced black image"))
@@ -156,7 +160,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 			failures = append(failures, fmt.Errorf("PrintWindow(window) failed: %w", err))
 		}
 		if img, err := captureWindowWithPrintWindow(hwnd, true); err == nil && img != nil {
-			if !isMostlyBlack(img) {
+			if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 				return img, nil
 			}
 			failures = append(failures, errors.New("PrintWindow(client) produced black image"))
@@ -166,7 +170,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 	}
 
 	if img, err := captureWindowClientWithBitBlt(hwnd); err == nil && img != nil {
-		if !isMostlyBlack(img) {
+		if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 			return img, nil
 		}
 		failures = append(failures, errors.New("BitBlt(client) produced black image"))
@@ -175,7 +179,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 	}
 
 	if img, err := captureWindowClientFromScreen(hwnd); err == nil && img != nil {
-		if !isMostlyBlack(img) {
+		if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 			return img, nil
 		}
 		failures = append(failures, errors.New("Screen capture produced black image"))
@@ -184,7 +188,7 @@ func captureWindowImageByPID(pid int, clientOnly bool) (image.Image, error) {
 	}
 
 	if img, err := captureDesktopScreen(); err == nil && img != nil {
-		if !isMostlyBlack(img) {
+		if !isMostlyBlack(img) && !isMostlyTransparent(img) {
 			return img, nil
 		}
 		failures = append(failures, errors.New("Desktop capture produced black image"))
@@ -205,8 +209,9 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 		return false, nil
 	}
 
-	if fg := foregroundWindowCandidate(uint32(pid)); fg != 0 {
-		if ok, err := captureWGCByHWND(fg, outputPath, clientOnly, helperPath); ok {
+	fgAny := foregroundWindowAny()
+	if fgAny != 0 {
+		if ok, err := captureWGCByHWND(fgAny, outputPath, clientOnly, helperPath); ok {
 			return true, nil
 		} else if err != nil {
 			// fall through with diagnostics below
@@ -217,12 +222,14 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if len(candidates) == 0 {
 		candidates = listWindowCandidates(uint32(pid), false, true, true)
 	}
+	if len(candidates) == 0 && fgAny != 0 {
+		candidates = []windows.Handle{fgAny}
+	}
 	if len(candidates) == 0 {
 		return false, errors.New("window not found")
 	}
-	fgCandidate := foregroundWindowCandidate(uint32(pid))
-	if fgCandidate != 0 {
-		candidates = prependUniqueWindow(candidates, fgCandidate)
+	if fgAny != 0 {
+		candidates = prependUniqueWindow(candidates, fgAny)
 	}
 	metrics := rankWindowMetrics(buildCandidateMetrics(candidates))
 	candidateInfos := describeMetrics(metrics)
@@ -232,7 +239,7 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 		candidates = prependUniqueWindows(candidates, childCandidates)
 		metrics = rankWindowMetrics(buildCandidateMetrics(candidates))
 	}
-	foregroundInfo := describeForegroundCandidate(uint32(pid))
+	foregroundInfo := describeForegroundCandidate()
 
 	var failures []error
 	for _, m := range metrics {
@@ -572,11 +579,10 @@ func bitmapToImage(hdcMem uintptr, hBitmap uintptr, width int, height int) (imag
 		b := buf[i]
 		g := buf[i+1]
 		r := buf[i+2]
-		a := buf[i+3]
 		img.Pix[i] = r
 		img.Pix[i+1] = g
 		img.Pix[i+2] = b
-		img.Pix[i+3] = a
+		img.Pix[i+3] = 0xFF
 	}
 	return img, nil
 }
@@ -674,13 +680,45 @@ func isMostlyBlack(img image.Image) bool {
 		for x := 0; x < samplesX; x++ {
 			px := bounds.Min.X + x*(width-1)/max(1, samplesX-1)
 			py := bounds.Min.Y + y*(height-1)/max(1, samplesY-1)
-			r, g, b, a := img.At(px, py).RGBA()
-			if a > 0 && r < 0x0100 && g < 0x0100 && b < 0x0100 {
+			r, g, b, _ := img.At(px, py).RGBA()
+			if r < 0x0100 && g < 0x0100 && b < 0x0100 {
 				blackCount++
 			}
 		}
 	}
 	return blackCount*100/total >= 95
+}
+
+func isMostlyTransparent(img image.Image) bool {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width == 0 || height == 0 {
+		return true
+	}
+
+	samplesX := 10
+	samplesY := 10
+	if width < samplesX {
+		samplesX = width
+	}
+	if height < samplesY {
+		samplesY = height
+	}
+
+	transparent := 0
+	total := samplesX * samplesY
+	for y := 0; y < samplesY; y++ {
+		for x := 0; x < samplesX; x++ {
+			px := bounds.Min.X + x*(width-1)/max(1, samplesX-1)
+			py := bounds.Min.Y + y*(height-1)/max(1, samplesY-1)
+			_, _, _, a := img.At(px, py).RGBA()
+			if a < 0x0100 {
+				transparent++
+			}
+		}
+	}
+	return transparent*100/total >= 95
 }
 
 func max(a, b int) int {
@@ -997,9 +1035,10 @@ func describeMetrics(metrics []candidateMetrics) string {
 	for _, m := range metrics {
 		className := getWindowClassName(m.hwnd)
 		title := getWindowTitle(m.hwnd)
+		affinity := getWindowDisplayAffinity(m.hwnd)
 		parts = append(parts, fmt.Sprintf(
-			"hwnd=%d cls=%q title=%q vis=%t root=%t iconic=%t cloaked=%t tool=%t child=%t area=%d (%dx%d)",
-			m.hwnd, className, title, m.visible, m.isRoot, m.iconic, m.isCloaked, m.isToolWindow, m.isChild, m.area, m.width, m.height,
+			"hwnd=%d cls=%q title=%q vis=%t root=%t iconic=%t cloaked=%t tool=%t child=%t affinity=%s area=%d (%dx%d)",
+			m.hwnd, className, title, m.visible, m.isRoot, m.iconic, m.isCloaked, m.isToolWindow, m.isChild, affinity, m.area, m.width, m.height,
 		))
 	}
 	return "candidates: " + strings.Join(parts, " | ")
@@ -1027,8 +1066,8 @@ func describeChildWindows(metrics []candidateMetrics) string {
 	return strings.Join(parts, " | ")
 }
 
-func describeForegroundCandidate(pid uint32) string {
-	hwnd := foregroundWindowCandidate(pid)
+func describeForegroundCandidate() string {
+	hwnd := foregroundWindowAny()
 	if hwnd == 0 {
 		return ""
 	}
@@ -1041,6 +1080,7 @@ func describeWindowSummary(hwnd windows.Handle) string {
 	}
 	className := getWindowClassName(hwnd)
 	title := getWindowTitle(hwnd)
+	affinity := getWindowDisplayAffinity(hwnd)
 	visible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
 	iconic, _, _ := procIsIconic.Call(uintptr(hwnd))
 	var rect windowRect
@@ -1050,7 +1090,7 @@ func describeWindowSummary(hwnd windows.Handle) string {
 		height = rect.Bottom - rect.Top
 	}
 	return fmt.Sprintf("hwnd=%d cls=%q title=%q vis=%t iconic=%t size=%dx%d",
-		hwnd, className, title, visible != 0, iconic != 0, width, height)
+		hwnd, className, title, visible != 0, iconic != 0, width, height) + " affinity=" + affinity
 }
 
 func getWindowClassName(hwnd windows.Handle) string {
@@ -1069,6 +1109,30 @@ func getWindowTitle(hwnd windows.Handle) string {
 		return ""
 	}
 	return windows.UTF16ToString(buf[:ret])
+}
+
+func getWindowDisplayAffinity(hwnd windows.Handle) string {
+	if hwnd == 0 {
+		return "unknown"
+	}
+	var affinity uint32
+	ret, _, _ := procGetWindowAffinity.Call(
+		uintptr(hwnd),
+		uintptr(unsafe.Pointer(&affinity)),
+	)
+	if ret == 0 {
+		return "unknown"
+	}
+	switch affinity {
+	case wdaNone:
+		return "none"
+	case wdaMonitor:
+		return "monitor"
+	case wdaExcludeFromCapture:
+		return "exclude"
+	default:
+		return fmt.Sprintf("0x%X", affinity)
+	}
 }
 
 func listChildCandidates(hwnd windows.Handle, includeHidden bool) []windows.Handle {
@@ -1144,14 +1208,9 @@ func prependUniqueWindow(handles []windows.Handle, hwnd windows.Handle) []window
 	return append([]windows.Handle{hwnd}, handles...)
 }
 
-func foregroundWindowCandidate(pid uint32) windows.Handle {
+func foregroundWindowAny() windows.Handle {
 	fg, _, _ := procGetForegroundWindow.Call()
 	if fg == 0 {
-		return 0
-	}
-	var fgPID uint32
-	procGetWindowThreadPID.Call(fg, uintptr(unsafe.Pointer(&fgPID)))
-	if fgPID != pid {
 		return 0
 	}
 	return windows.Handle(fg)
