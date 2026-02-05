@@ -183,6 +183,7 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 		return false, errors.New("window not found")
 	}
 	candidates = rankWindowCandidates(candidates)
+	candidateInfos := describeCandidates(candidates)
 
 	var failures []error
 	for _, hwnd := range candidates {
@@ -219,7 +220,11 @@ func captureWindowWithWGC(pid int, outputPath string, clientOnly bool) (bool, er
 	if len(failures) == 0 {
 		return false, errors.New("WGC capture failed")
 	}
-	return false, errors.Join(failures...)
+	joined := errors.Join(failures...)
+	if candidateInfos != "" {
+		return false, fmt.Errorf("%w; candidates: %s", joined, candidateInfos)
+	}
+	return false, joined
 }
 
 func wgcHelperPath() (string, error) {
@@ -685,6 +690,8 @@ type candidateMetrics struct {
 	isToolWindow bool
 	isChild      bool
 	area         int32
+	width        int32
+	height       int32
 }
 
 func rankWindowCandidates(handles []windows.Handle) []windows.Handle {
@@ -692,38 +699,7 @@ func rankWindowCandidates(handles []windows.Handle) []windows.Handle {
 		return handles
 	}
 
-	metrics := make([]candidateMetrics, 0, len(handles))
-	for _, hwnd := range handles {
-		if hwnd == 0 {
-			continue
-		}
-		visible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
-		iconic, _, _ := procIsIconic.Call(uintptr(hwnd))
-		root, _, _ := procGetAncestor.Call(uintptr(hwnd), uintptr(gaRoot))
-		isRoot := root != 0 && root == uintptr(hwnd)
-		isCloaked := isWindowCloaked(hwnd)
-		style, _, _ := procGetWindowLongPtr.Call(uintptr(hwnd), uintptr(int64(gwlStyle)))
-		exStyle, _, _ := procGetWindowLongPtr.Call(uintptr(hwnd), uintptr(int64(gwlExStyle)))
-		var rect windowRect
-		var area int32
-		if ret, _, _ := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect))); ret != 0 {
-			width := rect.Right - rect.Left
-			height := rect.Bottom - rect.Top
-			if width > 0 && height > 0 {
-				area = width * height
-			}
-		}
-		metrics = append(metrics, candidateMetrics{
-			hwnd:         hwnd,
-			visible:      visible != 0,
-			iconic:       iconic != 0,
-			isRoot:       isRoot,
-			isCloaked:    isCloaked,
-			isToolWindow: exStyle&wsExToolWindow != 0,
-			isChild:      style&wsChild != 0,
-			area:         area,
-		})
-	}
+	metrics := buildCandidateMetrics(handles)
 
 	if len(metrics) == 0 {
 		return handles
@@ -846,4 +822,57 @@ func rankPidsForCapture(pids []int) []int {
 		ordered = append(ordered, m.pid)
 	}
 	return ordered
+}
+
+func buildCandidateMetrics(handles []windows.Handle) []candidateMetrics {
+	metrics := make([]candidateMetrics, 0, len(handles))
+	for _, hwnd := range handles {
+		if hwnd == 0 {
+			continue
+		}
+		visible, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+		iconic, _, _ := procIsIconic.Call(uintptr(hwnd))
+		root, _, _ := procGetAncestor.Call(uintptr(hwnd), uintptr(gaRoot))
+		isRoot := root != 0 && root == uintptr(hwnd)
+		isCloaked := isWindowCloaked(hwnd)
+		style, _, _ := procGetWindowLongPtr.Call(uintptr(hwnd), uintptr(int64(gwlStyle)))
+		exStyle, _, _ := procGetWindowLongPtr.Call(uintptr(hwnd), uintptr(int64(gwlExStyle)))
+		var rect windowRect
+		var area int32
+		if ret, _, _ := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect))); ret != 0 {
+			width := rect.Right - rect.Left
+			height := rect.Bottom - rect.Top
+			if width > 0 && height > 0 {
+				area = width * height
+			}
+		}
+		metrics = append(metrics, candidateMetrics{
+			hwnd:         hwnd,
+			visible:      visible != 0,
+			iconic:       iconic != 0,
+			isRoot:       isRoot,
+			isCloaked:    isCloaked,
+			isToolWindow: exStyle&wsExToolWindow != 0,
+			isChild:      style&wsChild != 0,
+			area:         area,
+			width:        rect.Right - rect.Left,
+			height:       rect.Bottom - rect.Top,
+		})
+	}
+	return metrics
+}
+
+func describeCandidates(handles []windows.Handle) string {
+	metrics := buildCandidateMetrics(handles)
+	if len(metrics) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(metrics))
+	for _, m := range metrics {
+		parts = append(parts, fmt.Sprintf(
+			"hwnd=%d vis=%t root=%t iconic=%t cloaked=%t tool=%t child=%t area=%d (%dx%d)",
+			m.hwnd, m.visible, m.isRoot, m.iconic, m.isCloaked, m.isToolWindow, m.isChild, m.area, m.width, m.height,
+		))
+	}
+	return strings.Join(parts, " | ")
 }
