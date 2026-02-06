@@ -19,15 +19,15 @@ import (
 )
 
 const (
-	hotkeyID   = 0x201
-	wmHotkey   = 0x0312
-	wmQuit     = 0x0012
-	modAlt     = 0x0001
-	modControl = 0x0002
-	modShift   = 0x0004
-	modWin     = 0x0008
+	hotkeyID    = 0x201
+	wmHotkey    = 0x0312
+	wmQuit      = 0x0012
+	modAlt      = 0x0001
+	modControl  = 0x0002
+	modShift    = 0x0004
+	modWin      = 0x0008
 	modNoRepeat = 0x4000
-	vkF1       = 0x70
+	vkF1        = 0x70
 )
 
 var (

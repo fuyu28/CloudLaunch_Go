@@ -29,5 +29,17 @@ func (app *App) stopHotkey() {
 }
 
 func (app *App) handleHotkeyCapture(target services.CaptureTarget) {
-	app.Logger.Info("ホットキーを検知しました", "hwnd", target.HWND, "fallback", target.FromFallback)
+	if app.ScreenshotService == nil {
+		return
+	}
+	gameID, path, err := app.ScreenshotService.CaptureForegroundWindow(app.context(), target)
+	if err != nil {
+		app.Logger.Error("ホットキーキャプチャに失敗", "error", err)
+		return
+	}
+	if app.Config.ScreenshotSyncEnabled {
+		if syncErr := app.uploadScreenshot(app.context(), gameID, path); syncErr != nil {
+			app.Logger.Error("スクリーンショット同期に失敗", "error", syncErr)
+		}
+	}
 }

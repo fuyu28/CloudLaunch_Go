@@ -612,6 +612,20 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 	return ids, nil
 }
 
+// FindProcessByPID はPIDに一致するプロセス情報を返す。
+func (service *ProcessMonitorService) FindProcessByPID(pid int) (*ProcessInfo, error) {
+	if pid <= 0 {
+		return nil, errors.New("pid is invalid")
+	}
+	processes, _ := service.getProcesses()
+	for _, proc := range processes {
+		if proc.Pid == pid {
+			return &proc, nil
+		}
+	}
+	return nil, nil
+}
+
 func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error) {
 	return service.getProcessesPowerShell()
 }

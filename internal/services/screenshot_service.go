@@ -16,6 +16,7 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/db"
+	"CloudLaunch_Go/internal/models"
 )
 
 // ScreenshotService はゲームウィンドウのスクリーンショット取得を提供する。
@@ -64,6 +65,47 @@ func (service *ScreenshotService) SetJpegQuality(value int) {
 	service.jpegQuality = value
 }
 
+func (service *ScreenshotService) findGameByPID(ctx context.Context, pid int) (*models.Game, *ProcessInfo, error) {
+	if service.processMonitor == nil {
+		return nil, nil, errors.New("process monitor is nil")
+	}
+	if pid <= 0 {
+		return nil, nil, errors.New("pid is invalid")
+	}
+	proc, err := service.processMonitor.FindProcessByPID(pid)
+	if err != nil {
+		return nil, nil, err
+	}
+	if proc == nil {
+		return nil, nil, errors.New("process not found")
+	}
+	exePath := strings.TrimSpace(proc.Cmd)
+	if exePath == "" {
+		exePath = proc.Name
+	}
+	game, err := service.repository.GetGameByExePath(ctx, exePath)
+	if err != nil {
+		return nil, proc, err
+	}
+	if game != nil {
+		return game, proc, nil
+	}
+
+	games, err := service.repository.ListGames(ctx, "", "", "", "")
+	if err != nil {
+		return nil, proc, err
+	}
+	exeName := strings.ToLower(filepath.Base(exePath))
+	for _, g := range games {
+		if strings.ToLower(filepath.Base(g.ExePath)) == exeName {
+			game := g
+			return &game, proc, nil
+		}
+	}
+
+	return nil, proc, errors.New("game not found for process")
+}
+
 // CaptureGameWindow は指定ゲームのウィンドウを撮影して保存し、保存先パスを返す。
 func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID string) (string, error) {
 	if service.processMonitor == nil {
@@ -105,12 +147,10 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		return "", err
 	}
 
-	ext := ".png"
-	if service.localJpeg {
-		ext = ".jpg"
+	fullPath, tmpPath, err := service.buildScreenshotPaths(game.ID, saveDir)
+	if err != nil {
+		return "", err
 	}
-	fileName := fmt.Sprintf("%s_%s%s", time.Now().Format("20060102_150405"), game.ID, ext)
-	fullPath := filepath.Join(saveDir, fileName)
 	service.logCapture(
 		slog.LevelInfo,
 		"スクリーンショット開始",
@@ -125,10 +165,8 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 
 	for _, pid := range pids {
 		outputPath := fullPath
-		tmpPath := ""
 		if service.localJpeg {
-			outputPath = filepath.Join(saveDir, fmt.Sprintf("%s_%s.tmp.png", time.Now().Format("20060102_150405"), game.ID))
-			tmpPath = outputPath
+			outputPath = tmpPath
 		}
 
 		service.logCapture(slog.LevelDebug, "WGCキャプチャ開始", "pid", pid, "output", outputPath)
@@ -179,6 +217,29 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 	}
 
 	return fullPath, nil
+}
+
+func (service *ScreenshotService) buildScreenshotPaths(gameID string, saveDir string) (string, string, error) {
+	if strings.TrimSpace(gameID) == "" {
+		return "", "", errors.New("gameID is empty")
+	}
+	if strings.TrimSpace(saveDir) == "" {
+		return "", "", errors.New("saveDir is empty")
+	}
+	if err := os.MkdirAll(saveDir, 0o700); err != nil {
+		return "", "", err
+	}
+	timestamp := time.Now().Format("20060102_150405")
+	ext := ".png"
+	if service.localJpeg {
+		ext = ".jpg"
+	}
+	fullPath := filepath.Join(saveDir, fmt.Sprintf("%s_%s%s", timestamp, gameID, ext))
+	tmpPath := ""
+	if service.localJpeg {
+		tmpPath = filepath.Join(saveDir, fmt.Sprintf("%s_%s.tmp.png", timestamp, gameID))
+	}
+	return fullPath, tmpPath, nil
 }
 
 func (service *ScreenshotService) saveImage(path string, img image.Image) error {
