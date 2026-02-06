@@ -5,9 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
 	"image/jpeg"
-	"image/png"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -16,7 +14,6 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/db"
-	"CloudLaunch_Go/internal/models"
 )
 
 // ScreenshotService はゲームウィンドウのスクリーンショット取得を提供する。
@@ -63,47 +60,6 @@ func (service *ScreenshotService) SetLocalJpeg(enabled bool) {
 // SetJpegQuality はスクリーンショットJPEG品質を更新する。
 func (service *ScreenshotService) SetJpegQuality(value int) {
 	service.jpegQuality = value
-}
-
-func (service *ScreenshotService) findGameByPID(ctx context.Context, pid int) (*models.Game, *ProcessInfo, error) {
-	if service.processMonitor == nil {
-		return nil, nil, errors.New("process monitor is nil")
-	}
-	if pid <= 0 {
-		return nil, nil, errors.New("pid is invalid")
-	}
-	proc, err := service.processMonitor.FindProcessByPID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	if proc == nil {
-		return nil, nil, errors.New("process not found")
-	}
-	exePath := strings.TrimSpace(proc.Cmd)
-	if exePath == "" {
-		exePath = proc.Name
-	}
-	game, err := service.repository.GetGameByExePath(ctx, exePath)
-	if err != nil {
-		return nil, proc, err
-	}
-	if game != nil {
-		return game, proc, nil
-	}
-
-	games, err := service.repository.ListGames(ctx, "", "", "", "")
-	if err != nil {
-		return nil, proc, err
-	}
-	exeName := strings.ToLower(filepath.Base(exePath))
-	for _, g := range games {
-		if strings.ToLower(filepath.Base(g.ExePath)) == exeName {
-			game := g
-			return &game, proc, nil
-		}
-	}
-
-	return nil, proc, errors.New("game not found for process")
 }
 
 // CaptureGameWindow は指定ゲームのウィンドウを撮影して保存し、保存先パスを返す。
@@ -234,24 +190,6 @@ func (service *ScreenshotService) buildScreenshotPaths(gameID string, saveDir st
 		tmpPath = filepath.Join(saveDir, fmt.Sprintf("%s_%s.tmp.png", timestamp, gameID))
 	}
 	return fullPath, tmpPath, nil
-}
-
-func (service *ScreenshotService) saveImage(path string, img image.Image) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			service.logger.Warn("スクリーンショットの保存に失敗", "error", closeErr)
-		}
-	}()
-
-	if service.localJpeg {
-		quality := normalizeJpegQuality(service.jpegQuality)
-		return jpeg.Encode(file, img, &jpeg.Options{Quality: quality})
-	}
-	return png.Encode(file, img)
 }
 
 func (service *ScreenshotService) convertFileToJpeg(sourcePath string, destPath string) error {
