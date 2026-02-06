@@ -4,7 +4,7 @@
   "outputfilename": "CloudLaunch",
   "frontend:install": "bun install",
   "frontend:build": "bun run build",
-  "build:pre": "./scripts/copy-wgc-dll.sh",
+  "build:pre": "./scripts/copy-dxgi-exe.sh",
   "frontend:dev:watcher": "bun run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {

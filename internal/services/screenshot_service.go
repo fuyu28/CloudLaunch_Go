@@ -159,64 +159,58 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		"exePath", exePath,
 		"pids", pids,
 		"output", fullPath,
-		"clientOnly", service.clientOnly,
+		"clientOnly", true,
 		"localJpeg", service.localJpeg,
 	)
 
+	var captureErr error
 	for _, pid := range pids {
 		outputPath := fullPath
 		if service.localJpeg {
 			outputPath = tmpPath
 		}
 
-		service.logCapture(slog.LevelDebug, "WGCキャプチャ開始", "pid", pid, "output", outputPath)
-		ok, err := captureWindowWithWGC(pid, outputPath, service.clientOnly)
-		if err == nil && ok {
+		service.logCapture(slog.LevelDebug, "DXGIキャプチャ開始", "pid", pid, "output", outputPath)
+		meta, err := captureWindowByPID(pid, outputPath)
+		if err == nil {
 			if tmpPath != "" {
 				if convertErr := service.convertFileToJpeg(tmpPath, fullPath); convertErr != nil {
 					_ = os.Remove(tmpPath)
-					service.logCapture(slog.LevelWarn, "WGC JPEG変換に失敗", "pid", pid, "error", convertErr)
+					service.logCapture(slog.LevelWarn, "DXGI JPEG変換に失敗", "pid", pid, "error", convertErr)
 					return "", convertErr
 				}
 				_ = os.Remove(tmpPath)
 			}
-			service.logCapture(slog.LevelInfo, "WGCキャプチャ成功", "pid", pid, "output", fullPath)
+			service.logCapture(
+				slog.LevelInfo,
+				"DXGIキャプチャ成功",
+				"pid", pid,
+				"hwnd", meta.HWND,
+				"crop", fmt.Sprintf("%d,%d %dx%d", meta.CropX, meta.CropY, meta.CropW, meta.CropH),
+				"monitor", meta.Monitor,
+				"output", fullPath,
+			)
 			return fullPath, nil
 		}
-		if err != nil {
-			service.logCapture(slog.LevelWarn, "WGCキャプチャに失敗", "pid", pid, "error", err)
-		}
+		captureErr = err
+		service.logCapture(
+			slog.LevelWarn,
+			"DXGIキャプチャに失敗",
+			"pid", pid,
+			"hwnd", meta.HWND,
+			"crop", fmt.Sprintf("%d,%d %dx%d", meta.CropX, meta.CropY, meta.CropW, meta.CropH),
+			"monitor", meta.Monitor,
+			"stderr", meta.DXGIStderr,
+			"error", err,
+		)
 		if tmpPath != "" {
 			_ = os.Remove(tmpPath)
-		}
-	}
-
-	var captured image.Image
-	var captureErr error
-	for _, pid := range pids {
-		service.logCapture(slog.LevelDebug, "フォールバックキャプチャ開始", "pid", pid)
-		captured, captureErr = captureWindowImageByPID(pid, service.clientOnly)
-		if captureErr == nil && captured != nil {
-			service.logCapture(slog.LevelInfo, "フォールバックキャプチャ成功", "pid", pid, "output", fullPath)
-			break
-		}
-		if captureErr != nil {
-			service.logCapture(slog.LevelWarn, "フォールバックキャプチャに失敗", "pid", pid, "error", captureErr)
 		}
 	}
 	if captureErr != nil {
 		return "", captureErr
 	}
-	if captured == nil {
-		return "", errors.New("failed to capture window")
-	}
-
-	if err := service.saveImage(fullPath, captured); err != nil {
-		service.logCapture(slog.LevelWarn, "スクリーンショット保存に失敗", "output", fullPath, "error", err)
-		return "", err
-	}
-
-	return fullPath, nil
+	return "", errors.New("failed to capture window")
 }
 
 func (service *ScreenshotService) buildScreenshotPaths(gameID string, saveDir string) (string, string, error) {
