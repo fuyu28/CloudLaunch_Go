@@ -39,6 +39,8 @@ import {
   screenshotJpegQualityAtom,
   screenshotClientOnlyAtom,
   screenshotLocalJpegAtom,
+  screenshotHotkeyAtom,
+  screenshotHotkeyNotifyAtom,
   sortOptionLabels,
   filterStateLabels,
 } from "../state/settings";
@@ -67,6 +69,8 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotJpegQuality, setScreenshotJpegQuality] = useAtom(screenshotJpegQualityAtom);
   const [screenshotClientOnly, setScreenshotClientOnly] = useAtom(screenshotClientOnlyAtom);
   const [screenshotLocalJpeg, setScreenshotLocalJpeg] = useAtom(screenshotLocalJpegAtom);
+  const [screenshotHotkey, setScreenshotHotkey] = useAtom(screenshotHotkeyAtom);
+  const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // ソート変更ハンドラー
@@ -237,6 +241,41 @@ export default function GeneralSettings(): React.JSX.Element {
     toast.success(enabled ? "ローカル保存をJPEGにします" : "ローカル保存をPNGにします");
   };
 
+  const applyScreenshotHotkey = async (value: string, showToast: boolean): Promise<void> => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      if (showToast) {
+        toast.error("ホットキーを入力してください");
+      }
+      return;
+    }
+    const result = await window.api.settings.updateScreenshotHotkey(trimmed);
+    if (!result.success) {
+      if (showToast) {
+        toast.error("ホットキーの更新に失敗しました");
+      }
+      return;
+    }
+    if (showToast) {
+      toast.success(`ホットキーを「${trimmed}」に更新しました`);
+    }
+  };
+
+  const handleScreenshotHotkeyChange = async (value: string): Promise<void> => {
+    setScreenshotHotkey(value);
+    await applyScreenshotHotkey(value, true);
+  };
+
+  const handleScreenshotHotkeyNotifyChange = async (enabled: boolean): Promise<void> => {
+    setScreenshotHotkeyNotify(enabled);
+    const result = await window.api.settings.updateScreenshotHotkeyNotify(enabled);
+    if (!result.success) {
+      toast.error("ホットキー通知の更新に失敗しました");
+      return;
+    }
+    toast.success(enabled ? "ホットキー通知を有効にしました" : "ホットキー通知を無効にしました");
+  };
+
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
@@ -314,6 +353,14 @@ export default function GeneralSettings(): React.JSX.Element {
 
   useEffect(() => {
     void window.api.settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
+  }, []);
+
+  useEffect(() => {
+    void applyScreenshotHotkey(screenshotHotkey, false);
+  }, []);
+
+  useEffect(() => {
+    void window.api.settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
   }, []);
 
   return (
@@ -442,6 +489,43 @@ export default function GeneralSettings(): React.JSX.Element {
                 }
                 className="range range-primary"
                 disabled={!screenshotSyncEnabled || !screenshotUploadJpeg}
+              />
+            </div>
+
+            <div>
+              <div className="mb-2">
+                <h4 className="font-medium">ホットキー</h4>
+                <p className="text-sm text-base-content/70">
+                  例: Ctrl+Alt+S（Ctrl/Alt/Shift/Win と英数字・F1-F12）
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  className="input input-bordered input-sm flex-1"
+                  value={screenshotHotkey}
+                  onChange={(event) => setScreenshotHotkey(event.target.value)}
+                  onBlur={(event) => void applyScreenshotHotkey(event.target.value, false)}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => void handleScreenshotHotkeyChange(screenshotHotkey)}
+                >
+                  適用
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">ホットキー通知</h4>
+                <p className="text-sm text-base-content/70">押下時にWindows通知を表示します</p>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={screenshotHotkeyNotify}
+                onChange={(event) => void handleScreenshotHotkeyNotifyChange(event.target.checked)}
               />
             </div>
           </div>

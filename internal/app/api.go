@@ -269,6 +269,26 @@ func (app *App) UpdateScreenshotLocalJpeg(enabled bool) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateScreenshotHotkey はスクリーンショットのホットキーを更新する。
+func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
+	trimmed := strings.TrimSpace(combo)
+	if trimmed == "" {
+		return result.ErrorResult[bool]("ホットキーが不正です", "combo is empty")
+	}
+	app.Config.ScreenshotHotkey = trimmed
+	app.stopHotkey()
+	app.startHotkey()
+	return result.OkResult(true)
+}
+
+// UpdateScreenshotHotkeyNotify はホットキー通知の有効/無効を更新する。
+func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool] {
+	app.Config.ScreenshotHotkeyNotify = enabled
+	app.stopHotkey()
+	app.startHotkey()
+	return result.OkResult(true)
+}
+
 // GetMonitoringStatus は監視状態を取得する。
 func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {

@@ -99,6 +99,18 @@ export const screenshotClientOnlyAtom = atomWithStorage<boolean>("screenshotClie
 export const screenshotLocalJpegAtom = atomWithStorage<boolean>("screenshotLocalJpeg", false);
 
 /**
+ * スクリーンショットのホットキー設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotHotkeyAtom = atomWithStorage<string>("screenshotHotkey", "Ctrl+Alt+S");
+
+/**
+ * ホットキー通知の有効設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotHotkeyNotifyAtom = atomWithStorage<boolean>("screenshotHotkeyNotify", true);
+
+/**
  * テーマ変更中の状態atom
  * 一時的な状態なのでLocalStorageには保存しない
  */
