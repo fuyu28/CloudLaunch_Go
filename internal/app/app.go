@@ -33,6 +33,7 @@ type App struct {
 	ErogameScapeService *services.ErogameScapeService
 	ProcessMonitor      *services.ProcessMonitorService
 	ScreenshotService   *services.ScreenshotService
+	HotkeyService       services.HotkeyService
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
@@ -105,6 +106,7 @@ func (app *App) Startup(ctx context.Context) {
 		app.ProcessMonitor.StartMonitoring()
 		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
 	}
+	app.startHotkey()
 }
 
 func (app *App) context() context.Context {
@@ -120,6 +122,7 @@ func (app *App) Shutdown(ctx context.Context) error {
 	if app.ProcessMonitor != nil {
 		app.ProcessMonitor.StopMonitoring()
 	}
+	app.stopHotkey()
 	if app.dbConnection != nil {
 		return app.dbConnection.Close()
 	}

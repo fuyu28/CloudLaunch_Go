@@ -18,6 +18,7 @@ type Config struct {
 	ScreenshotJpegQuality int
 	ScreenshotClientOnly  bool
 	ScreenshotLocalJpeg   bool
+	ScreenshotHotkey      string
 	S3Endpoint            string
 	S3Region              string
 	S3Bucket              string
@@ -44,6 +45,7 @@ func LoadFromEnv() Config {
 		ScreenshotJpegQuality: getEnvInt("CLOUDLAUNCH_SCREENSHOT_JPEG_QUALITY", 85),
 		ScreenshotClientOnly:  getEnvBool("CLOUDLAUNCH_SCREENSHOT_CLIENT_ONLY", true),
 		ScreenshotLocalJpeg:   getEnvBool("CLOUDLAUNCH_SCREENSHOT_LOCAL_JPEG", false),
+		ScreenshotHotkey:      getEnv("CLOUDLAUNCH_SCREENSHOT_HOTKEY", "Ctrl+Alt+S"),
 		S3Endpoint:            getEnv("CLOUDLAUNCH_S3_ENDPOINT", ""),
 		S3Region:              getEnv("CLOUDLAUNCH_S3_REGION", "auto"),
 		S3Bucket:              getEnv("CLOUDLAUNCH_S3_BUCKET", ""),
