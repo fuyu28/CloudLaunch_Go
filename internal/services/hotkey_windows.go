@@ -55,6 +55,20 @@ type hotkeyServiceWindows struct {
 	mu         sync.Mutex
 }
 
+type hotkeyPoint struct {
+	X int32
+	Y int32
+}
+
+type hotkeyMsg struct {
+	HWnd    windows.Handle
+	Message uint32
+	WParam  uintptr
+	LParam  uintptr
+	Time    uint32
+	Pt      hotkeyPoint
+}
+
 func newHotkeyService(logger *slog.Logger, config HotkeyConfig, handler HotkeyHandler) HotkeyService {
 	modifiers, key, err := parseHotkeyCombo(config.Combo)
 	if err != nil {
@@ -139,7 +153,7 @@ func (service *hotkeyServiceWindows) run() {
 
 	go service.trackForeground()
 
-	var msg windows.MSG
+	var msg hotkeyMsg
 	for {
 		ret, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 		if int32(ret) <= 0 {
