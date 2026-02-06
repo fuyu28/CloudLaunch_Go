@@ -1,7 +1,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
-#include <windows.h>
 #include <wincodec.h>
+#include <windows.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -34,14 +34,14 @@ std::wstring ToWide(const std::string& value) {
   if (value.empty()) {
     return L"";
   }
-  int needed = MultiByteToWideChar(CP_UTF8, 0, value.c_str(),
-                                   static_cast<int>(value.size()), nullptr, 0);
+  int needed =
+      MultiByteToWideChar(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), nullptr, 0);
   if (needed <= 0) {
     return L"";
   }
   std::wstring out(needed, L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, value.c_str(),
-                      static_cast<int>(value.size()), out.data(), needed);
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), out.data(),
+                      needed);
   return out;
 }
 
@@ -69,10 +69,8 @@ bool ParseArgs(int argc, char** argv, Options* options) {
       continue;
     }
     if (arg == "--crop" && i + 4 < argc) {
-      if (!ParseInt(argv[++i], &options->cropX) ||
-          !ParseInt(argv[++i], &options->cropY) ||
-          !ParseInt(argv[++i], &options->cropW) ||
-          !ParseInt(argv[++i], &options->cropH)) {
+      if (!ParseInt(argv[++i], &options->cropX) || !ParseInt(argv[++i], &options->cropY) ||
+          !ParseInt(argv[++i], &options->cropW) || !ParseInt(argv[++i], &options->cropH)) {
         return false;
       }
       continue;
@@ -110,10 +108,10 @@ bool SetDpiAwareness() {
     return false;
   }
   using SetDpiAwarenessFn = BOOL(WINAPI*)(HANDLE);
-  auto setDpi = reinterpret_cast<SetDpiAwarenessFn>(
-      GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+  auto setDpi =
+      reinterpret_cast<SetDpiAwarenessFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
   if (setDpi) {
-    setDpi(reinterpret_cast<HANDLE>(-4));  // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+    setDpi(reinterpret_cast<HANDLE>(-4)); // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
   }
   FreeLibrary(user32);
   return true;
@@ -124,8 +122,7 @@ struct OutputItem {
   DXGI_OUTPUT_DESC desc{};
 };
 
-bool EnumerateOutputs(const ComPtr<IDXGIAdapter>& adapter,
-                      std::vector<OutputItem>* outputs) {
+bool EnumerateOutputs(const ComPtr<IDXGIAdapter>& adapter, std::vector<OutputItem>* outputs) {
   if (!adapter || !outputs) {
     return false;
   }
@@ -237,7 +234,7 @@ bool SavePng(const std::wstring& path, const std::vector<uint8_t>& pixels, int w
   return true;
 }
 
-}  // namespace
+} // namespace
 
 int main(int argc, char** argv) {
   Options options;
@@ -276,8 +273,8 @@ int main(int argc, char** argv) {
 
   int outputIndex = options.monitorIndex;
   if (outputIndex < 0 || outputIndex >= static_cast<int>(outputs.size())) {
-    outputIndex = FindOutputIndex(outputs, options.cropX, options.cropY, options.cropW,
-                                  options.cropH);
+    outputIndex =
+        FindOutputIndex(outputs, options.cropX, options.cropY, options.cropW, options.cropH);
   }
   if (outputIndex < 0 || outputIndex >= static_cast<int>(outputs.size())) {
     std::wcerr << L"Monitor index is out of range\n";
@@ -300,8 +297,8 @@ int main(int argc, char** argv) {
   HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0,
                                  D3D11_SDK_VERSION, &device, &featureLevel, &context);
   if (FAILED(hr)) {
-    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0,
-                           D3D11_SDK_VERSION, &device, &featureLevel, &context);
+    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
+                           &device, &featureLevel, &context);
   }
   if (FAILED(hr)) {
     std::wcerr << L"Failed to create D3D11 device\n";
