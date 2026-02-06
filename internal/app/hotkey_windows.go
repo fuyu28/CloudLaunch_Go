@@ -8,7 +8,10 @@ func (app *App) startHotkey() {
 	if app.ScreenshotService == nil {
 		return
 	}
-	config := services.HotkeyConfig{Combo: app.Config.ScreenshotHotkey}
+	config := services.HotkeyConfig{
+		Combo:  app.Config.ScreenshotHotkey,
+		Notify: app.Config.ScreenshotHotkeyNotify,
+	}
 	service := services.NewHotkeyService(app.Logger, config, app.handleHotkeyCapture)
 	if service == nil {
 		return

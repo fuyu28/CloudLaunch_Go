@@ -28,10 +28,25 @@ const (
 	modWin      = 0x0008
 	modNoRepeat = 0x4000
 	vkF1        = 0x70
+	wmApp       = 0x8000
+)
+
+const (
+	notifyCallbackMessage = wmApp + 1
+	nimAdd                = 0x0
+	nimModify             = 0x1
+	nimDelete             = 0x2
+	nifMessage            = 0x1
+	nifIcon               = 0x2
+	nifTip                = 0x4
+	nifInfo               = 0x10
+	niifInfo              = 0x1
+	idiApplication        = 32512
 )
 
 var (
 	kernel32dll           = windows.NewLazySystemDLL("kernel32.dll")
+	shell32dll            = windows.NewLazySystemDLL("shell32.dll")
 	procRegisterHotKey    = user32.NewProc("RegisterHotKey")
 	procUnregisterHotKey  = user32.NewProc("UnregisterHotKey")
 	procGetMessage        = user32.NewProc("GetMessageW")
@@ -39,6 +54,13 @@ var (
 	procDispatchMessage   = user32.NewProc("DispatchMessageW")
 	procPostThreadMessage = user32.NewProc("PostThreadMessageW")
 	procGetThreadID       = kernel32dll.NewProc("GetCurrentThreadId")
+	procGetModuleHandleW  = kernel32dll.NewProc("GetModuleHandleW")
+	procRegisterClassExW  = user32.NewProc("RegisterClassExW")
+	procCreateWindowExW   = user32.NewProc("CreateWindowExW")
+	procDestroyWindow     = user32.NewProc("DestroyWindow")
+	procDefWindowProcW    = user32.NewProc("DefWindowProcW")
+	procLoadIconW         = user32.NewProc("LoadIconW")
+	procShellNotifyIconW  = shell32dll.NewProc("Shell_NotifyIconW")
 )
 
 type hotkeyServiceWindows struct {
@@ -46,6 +68,8 @@ type hotkeyServiceWindows struct {
 	handler    HotkeyHandler
 	modifiers  uint32
 	key        uint32
+	notify     bool
+	notifyHWND windows.Handle
 	appPID     uint32
 	started    atomic.Bool
 	threadID   uint32
@@ -69,6 +93,44 @@ type hotkeyMsg struct {
 	Pt      hotkeyPoint
 }
 
+type wndClassEx struct {
+	Size       uint32
+	Style      uint32
+	WndProc    uintptr
+	ClsExtra   int32
+	WndExtra   int32
+	Instance   windows.Handle
+	Icon       windows.Handle
+	Cursor     windows.Handle
+	Background windows.Handle
+	MenuName   *uint16
+	ClassName  *uint16
+	IconSm     windows.Handle
+}
+
+type notifyIconData struct {
+	Size             uint32
+	Wnd              windows.Handle
+	ID               uint32
+	Flags            uint32
+	CallbackMessage  uint32
+	Icon             windows.Handle
+	Tip              [128]uint16
+	State            uint32
+	StateMask        uint32
+	Info             [256]uint16
+	TimeoutOrVersion uint32
+	InfoTitle        [64]uint16
+	InfoFlags        uint32
+	GuidItem         windows.GUID
+	BalloonIcon      windows.Handle
+}
+
+var (
+	notifyClassName = windows.StringToUTF16Ptr("CloudLaunchHotkeyNotify")
+	notifyOnce      sync.Once
+)
+
 func newHotkeyService(logger *slog.Logger, config HotkeyConfig, handler HotkeyHandler) HotkeyService {
 	modifiers, key, err := parseHotkeyCombo(config.Combo)
 	if err != nil {
@@ -82,6 +144,7 @@ func newHotkeyService(logger *slog.Logger, config HotkeyConfig, handler HotkeyHa
 		handler:   handler,
 		modifiers: modifiers,
 		key:       key,
+		notify:    config.Notify,
 		appPID:    uint32(os.Getpid()),
 	}
 }
@@ -143,10 +206,12 @@ func (service *hotkeyServiceWindows) run() {
 		close(service.stoppedCh)
 		return
 	}
+	service.initNotifyIcon()
 	if service.logger != nil {
 		service.logger.Info("ホットキーを登録しました", "combo", formatHotkey(service.modifiers, service.key))
 	}
 	defer func() {
+		service.cleanupNotifyIcon()
 		procUnregisterHotKey.Call(0, hotkeyID)
 		close(service.stoppedCh)
 	}()
@@ -160,6 +225,7 @@ func (service *hotkeyServiceWindows) run() {
 			return
 		}
 		if msg.Message == wmHotkey {
+			service.showHotkeyNotification()
 			target := service.resolveCaptureTarget()
 			if target.HWND != 0 {
 				go service.handler(target)
@@ -299,3 +365,134 @@ func hotkeyKeyName(key uint32) string {
 	}
 	return fmt.Sprintf("0x%X", key)
 }
+
+func (service *hotkeyServiceWindows) initNotifyIcon() {
+	if !service.notify {
+		return
+	}
+	if err := ensureNotifyClass(); err != nil {
+		if service.logger != nil {
+			service.logger.Warn("通知ウィンドウの登録に失敗しました", "error", err)
+		}
+		return
+	}
+	instance, _, _ := procGetModuleHandleW.Call(0)
+	hwnd, _, err := procCreateWindowExW.Call(
+		0,
+		uintptr(unsafe.Pointer(notifyClassName)),
+		uintptr(unsafe.Pointer(notifyClassName)),
+		0,
+		0,
+		0,
+		0,
+		0,
+		uintptr(hwndMessage),
+		0,
+		instance,
+		0,
+	)
+	if hwnd == 0 {
+		if service.logger != nil {
+			service.logger.Warn("通知ウィンドウの作成に失敗しました", "error", err)
+		}
+		return
+	}
+	service.notifyHWND = windows.Handle(hwnd)
+	if err := service.addNotifyIcon(); err != nil && service.logger != nil {
+		service.logger.Warn("通知アイコンの登録に失敗しました", "error", err)
+	}
+}
+
+func (service *hotkeyServiceWindows) cleanupNotifyIcon() {
+	if service.notifyHWND == 0 {
+		return
+	}
+	_ = service.deleteNotifyIcon()
+	procDestroyWindow.Call(uintptr(service.notifyHWND))
+	service.notifyHWND = 0
+}
+
+func (service *hotkeyServiceWindows) addNotifyIcon() error {
+	if service.notifyHWND == 0 {
+		return errors.New("notify window is not initialized")
+	}
+	icon, _, _ := procLoadIconW.Call(0, uintptr(idiApplication))
+	data := notifyIconData{
+		Size:            uint32(unsafe.Sizeof(notifyIconData{})),
+		Wnd:             service.notifyHWND,
+		ID:              hotkeyID,
+		Flags:           nifMessage | nifIcon | nifTip,
+		CallbackMessage: notifyCallbackMessage,
+		Icon:            windows.Handle(icon),
+	}
+	copyUTF16(data.Tip[:], "CloudLaunch")
+	ok, _, err := procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&data)))
+	if ok == 0 {
+		return err
+	}
+	return nil
+}
+
+func (service *hotkeyServiceWindows) deleteNotifyIcon() error {
+	data := notifyIconData{
+		Size: uint32(unsafe.Sizeof(notifyIconData{})),
+		Wnd:  service.notifyHWND,
+		ID:   hotkeyID,
+	}
+	ok, _, err := procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&data)))
+	if ok == 0 {
+		return err
+	}
+	return nil
+}
+
+func (service *hotkeyServiceWindows) showHotkeyNotification() {
+	if !service.notify || service.notifyHWND == 0 {
+		return
+	}
+	data := notifyIconData{
+		Size:      uint32(unsafe.Sizeof(notifyIconData{})),
+		Wnd:       service.notifyHWND,
+		ID:        hotkeyID,
+		Flags:     nifInfo,
+		InfoFlags: niifInfo,
+	}
+	copyUTF16(data.InfoTitle[:], "CloudLaunch")
+	copyUTF16(data.Info[:], "ホットキーを受信しました")
+	ok, _, err := procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&data)))
+	if ok == 0 && service.logger != nil {
+		service.logger.Warn("通知表示に失敗しました", "error", err)
+	}
+}
+
+func ensureNotifyClass() error {
+	var err error
+	notifyOnce.Do(func() {
+		instance, _, _ := procGetModuleHandleW.Call(0)
+		class := wndClassEx{
+			Size:      uint32(unsafe.Sizeof(wndClassEx{})),
+			WndProc:   windows.NewCallback(notifyWindowProc),
+			Instance:  windows.Handle(instance),
+			ClassName: notifyClassName,
+		}
+		atom, _, registerErr := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&class)))
+		if atom == 0 {
+			err = registerErr
+		}
+	})
+	return err
+}
+
+func notifyWindowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
+	ret, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wParam, lParam)
+	return ret
+}
+
+func copyUTF16(dst []uint16, value string) {
+	encoded := windows.StringToUTF16(value)
+	for i := 0; i < len(dst) && i < len(encoded); i++ {
+		dst[i] = encoded[i]
+	}
+}
+
+var hwndMessage = windows.Handle(^uintptr(2))

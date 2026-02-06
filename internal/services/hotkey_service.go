@@ -14,7 +14,8 @@ type HotkeyHandler func(CaptureTarget)
 
 // HotkeyConfig はホットキー設定を保持する。
 type HotkeyConfig struct {
-	Combo string
+	Combo  string
+	Notify bool
 }
 
 // HotkeyService はグローバルホットキーを管理する。
