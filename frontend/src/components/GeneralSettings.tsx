@@ -72,6 +72,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotHotkey, setScreenshotHotkey] = useAtom(screenshotHotkeyAtom);
   const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [isHotkeyCaptureActive, setIsHotkeyCaptureActive] = useState(false);
 
   // ソート変更ハンドラー
   const handleSortChange = (newSortOption: SortOption): void => {
@@ -276,6 +277,36 @@ export default function GeneralSettings(): React.JSX.Element {
     toast.success(enabled ? "ホットキー通知を有効にしました" : "ホットキー通知を無効にしました");
   };
 
+  const normalizeHotkeyFromEvent = (event: KeyboardEvent): string | null => {
+    if (event.key === "Escape") {
+      setIsHotkeyCaptureActive(false);
+      return null;
+    }
+    const modifiers: string[] = [];
+    if (event.ctrlKey) modifiers.push("Ctrl");
+    if (event.altKey) modifiers.push("Alt");
+    if (event.shiftKey) modifiers.push("Shift");
+    if (event.metaKey) modifiers.push("Win");
+
+    const key = event.key;
+    if (key === "Control" || key === "Alt" || key === "Shift" || key === "Meta") {
+      return null;
+    }
+    let mainKey = "";
+    if (/^F(1[0-2]|[1-9])$/.test(key)) {
+      mainKey = key.toUpperCase();
+    } else if (key.length === 1) {
+      mainKey = key.toUpperCase();
+    } else {
+      return null;
+    }
+
+    if (modifiers.length === 0) {
+      return null;
+    }
+    return [...modifiers, mainKey].join("+");
+  };
+
   // ログフォルダを開くハンドラー
   const handleOpenLogsDirectory = async (): Promise<void> => {
     try {
@@ -362,6 +393,26 @@ export default function GeneralSettings(): React.JSX.Element {
   useEffect(() => {
     void window.api.settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
   }, []);
+
+  useEffect(() => {
+    if (!isHotkeyCaptureActive) {
+      return;
+    }
+    const handler = (event: KeyboardEvent): void => {
+      event.preventDefault();
+      const hotkey = normalizeHotkeyFromEvent(event);
+      if (!hotkey) {
+        return;
+      }
+      setIsHotkeyCaptureActive(false);
+      setScreenshotHotkey(hotkey);
+      void applyScreenshotHotkey(hotkey, true);
+    };
+    window.addEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+    };
+  }, [isHotkeyCaptureActive, screenshotHotkey]);
 
   return (
     <div className="w-full">
@@ -506,14 +557,27 @@ export default function GeneralSettings(): React.JSX.Element {
                   value={screenshotHotkey}
                   onChange={(event) => setScreenshotHotkey(event.target.value)}
                   onBlur={(event) => void applyScreenshotHotkey(event.target.value, false)}
+                  readOnly={isHotkeyCaptureActive}
                 />
                 <button
                   className="btn btn-primary btn-sm"
+                  onClick={() => setIsHotkeyCaptureActive(true)}
+                >
+                  入力開始
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
                   onClick={() => void handleScreenshotHotkeyChange(screenshotHotkey)}
+                  disabled={isHotkeyCaptureActive}
                 >
                   適用
                 </button>
               </div>
+              {isHotkeyCaptureActive && (
+                <p className="text-xs text-base-content/60 mt-2">
+                  ホットキーを押してください（Escでキャンセル）
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
