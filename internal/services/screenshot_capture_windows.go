@@ -16,12 +16,13 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/windows"
+	"CloudLaunch_Go/internal/models"
 )
 
 const (
 	screenClipTimeout  = 30 * time.Second
 	screenClipPollWait = 250 * time.Millisecond
+	hotkeyDefaultDirID = "default"
 )
 
 var (
@@ -29,39 +30,27 @@ var (
 	procClipboardSeqNumber    = user32.NewProc("GetClipboardSequenceNumber")
 )
 
-// CaptureForegroundWindow はホットキー経由で前面ウィンドウを撮影する。
-func (service *ScreenshotService) CaptureForegroundWindow(ctx context.Context, target CaptureTarget) (string, string, error) {
-	return service.captureForegroundWindowWithMode(ctx, target, true)
-}
-
-// CaptureForegroundWindowFull はホットキー経由で前面ウィンドウ全体を撮影する。
-func (service *ScreenshotService) CaptureForegroundWindowFull(ctx context.Context, target CaptureTarget) (string, string, error) {
-	return service.captureForegroundWindowWithMode(ctx, target, false)
-}
-
-func (service *ScreenshotService) captureForegroundWindowWithMode(ctx context.Context, target CaptureTarget, clientOnly bool) (string, string, error) {
-	if target.HWND == 0 {
-		return "", "", errors.New("hwnd is empty")
-	}
-	hwnd := windows.Handle(target.HWND)
-	pid := int(windowProcessID(hwnd))
-	if pid <= 0 {
-		return "", "", errors.New("failed to resolve pid")
-	}
-	game, proc, err := service.findGameByPID(ctx, pid)
+// CaptureHotkey はホットキー経由でSnipping Toolを起動し、画像を保存する。
+func (service *ScreenshotService) CaptureHotkey(ctx context.Context) (string, string, error) {
+	game, err := service.findCurrentPlayingGame(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	if game == nil {
-		return "", "", errors.New("game not found")
+	gameID := hotkeyDefaultDirID
+	gameTitle := "default"
+	gameExePath := ""
+	if game != nil {
+		gameID = game.ID
+		gameTitle = game.Title
+		gameExePath = game.ExePath
 	}
 
 	baseDir := strings.TrimSpace(service.appDataDir)
 	if baseDir == "" {
 		baseDir = os.TempDir()
 	}
-	saveDir := filepath.Join(baseDir, "screenshots", game.ID)
-	fullPath, tmpPath, err := service.buildScreenshotPaths(game.ID, saveDir)
+	saveDir := filepath.Join(baseDir, "screenshots", gameID)
+	fullPath, tmpPath, err := service.buildScreenshotPaths(gameID, saveDir)
 	if err != nil {
 		return "", "", err
 	}
@@ -69,27 +58,37 @@ func (service *ScreenshotService) captureForegroundWindowWithMode(ctx context.Co
 	service.logCapture(
 		slog.LevelInfo,
 		"ホットキーキャプチャ開始",
-		"gameId", game.ID,
-		"title", game.Title,
-		"exePath", game.ExePath,
-		"pid", pid,
-		"hwnd", target.HWND,
-		"fallback", target.FromFallback,
-		"clientOnly", clientOnly,
-		"procPath", proc.Cmd,
+		"gameId", gameID,
+		"title", gameTitle,
+		"exePath", gameExePath,
 		"output", fullPath,
 	)
 
 	if err := service.captureWithScreenClip(ctx, fullPath, tmpPath); err != nil {
 		if errors.Is(err, ErrNoNewScreenshot) {
-			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", game.ID)
+			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", gameID)
 			return "", "", err
 		}
 		service.logCapture(slog.LevelWarn, "スクリーンショット取得に失敗", "error", err)
 		return "", "", err
 	}
 
+	if game == nil {
+		return "", fullPath, nil
+	}
 	return game.ID, fullPath, nil
+}
+
+func (service *ScreenshotService) findCurrentPlayingGame(ctx context.Context) (*models.Game, error) {
+	games, err := service.repository.ListGames(ctx, "", models.PlayStatusPlaying, "lastPlayed", "desc")
+	if err != nil {
+		return nil, err
+	}
+	if len(games) == 0 {
+		return nil, nil
+	}
+	game := games[0]
+	return &game, nil
 }
 
 func (service *ScreenshotService) captureWithScreenClip(ctx context.Context, fullPath string, tmpPath string) error {

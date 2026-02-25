@@ -6,13 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -39,6 +37,7 @@ const (
 )
 
 var (
+	user32                = windows.NewLazySystemDLL("user32.dll")
 	kernel32dll           = windows.NewLazySystemDLL("kernel32.dll")
 	shell32dll            = windows.NewLazySystemDLL("shell32.dll")
 	procRegisterHotKey    = user32.NewProc("RegisterHotKey")
@@ -64,12 +63,9 @@ type hotkeyServiceWindows struct {
 	key        uint32
 	notify     bool
 	notifyHWND windows.Handle
-	appPID     uint32
 	started    atomic.Bool
 	threadID   uint32
-	stopCh     chan struct{}
 	stoppedCh  chan struct{}
-	lastNonApp atomic.Uintptr
 	mu         sync.Mutex
 }
 
@@ -139,7 +135,6 @@ func newHotkeyService(logger *slog.Logger, config HotkeyConfig, handler HotkeyHa
 		modifiers: modifiers,
 		key:       key,
 		notify:    config.Notify,
-		appPID:    uint32(os.Getpid()),
 	}
 }
 
@@ -157,7 +152,6 @@ func (service *hotkeyServiceWindows) Start() error {
 		return nil
 	}
 
-	service.stopCh = make(chan struct{})
 	service.stoppedCh = make(chan struct{})
 
 	go service.run()
@@ -173,9 +167,6 @@ func (service *hotkeyServiceWindows) Stop() {
 	service.mu.Unlock()
 	if threadID != 0 {
 		procPostThreadMessage.Call(uintptr(threadID), wmQuit, 0, 0)
-	}
-	if service.stopCh != nil {
-		close(service.stopCh)
 	}
 	if service.stoppedCh != nil {
 		<-service.stoppedCh
@@ -210,8 +201,6 @@ func (service *hotkeyServiceWindows) run() {
 		close(service.stoppedCh)
 	}()
 
-	go service.trackForeground()
-
 	var msg hotkeyMsg
 	for {
 		ret, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -220,66 +209,15 @@ func (service *hotkeyServiceWindows) run() {
 		}
 		if msg.Message == wmHotkey {
 			service.showHotkeyNotification()
-			target := service.resolveCaptureTarget()
-			if target.HWND != 0 {
-				if service.logger != nil {
-					service.logger.Debug(
-						"ホットキー撮影対象を解決しました",
-						"hwnd", target.HWND,
-						"fallback", target.FromFallback,
-					)
-				}
-				go service.handler(target)
-			} else if service.logger != nil {
-				service.logger.Warn("撮影対象ウィンドウが見つかりませんでした", "lastNonApp", service.lastNonApp.Load())
+			if service.logger != nil {
+				service.logger.Debug("ホットキーを受信しました")
 			}
+			go service.handler()
 			continue
 		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
-}
-
-func (service *hotkeyServiceWindows) trackForeground() {
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-service.stopCh:
-			return
-		case <-ticker.C:
-			hwnd := foregroundWindowAny()
-			if hwnd == 0 {
-				continue
-			}
-			pid := windowProcessID(hwnd)
-			if pid == 0 || pid != service.appPID {
-				service.lastNonApp.Store(uintptr(hwnd))
-			}
-		}
-	}
-}
-
-func (service *hotkeyServiceWindows) resolveCaptureTarget() CaptureTarget {
-	hwnd := foregroundWindowAny()
-	if hwnd == 0 {
-		previous := service.lastNonApp.Load()
-		if previous == 0 {
-			return CaptureTarget{}
-		}
-		return CaptureTarget{HWND: previous, FromFallback: true}
-	}
-	pid := windowProcessID(hwnd)
-	if pid == 0 || pid != service.appPID {
-		service.lastNonApp.Store(uintptr(hwnd))
-		return CaptureTarget{HWND: uintptr(hwnd)}
-	}
-	previous := service.lastNonApp.Load()
-	if previous == 0 {
-		// 最低限ハンドラに流して失敗理由を記録できるようにする。
-		return CaptureTarget{HWND: uintptr(hwnd), FromFallback: true}
-	}
-	return CaptureTarget{HWND: previous, FromFallback: true}
 }
 
 func formatHotkey(modifiers uint32, key uint32) string {

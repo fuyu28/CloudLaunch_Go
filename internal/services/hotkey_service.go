@@ -3,14 +3,8 @@ package services
 
 import "log/slog"
 
-// CaptureTarget はホットキー押下時に撮影対象となるウィンドウ情報を保持する。
-type CaptureTarget struct {
-	HWND         uintptr
-	FromFallback bool
-}
-
 // HotkeyHandler はホットキー押下時の処理を受け取る。
-type HotkeyHandler func(CaptureTarget)
+type HotkeyHandler func()
 
 // HotkeyConfig はホットキー設定を保持する。
 type HotkeyConfig struct {
