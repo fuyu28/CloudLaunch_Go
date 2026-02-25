@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -29,6 +30,29 @@ func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*
 		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
 		FROM "Game" WHERE id = ?
 	`, gameID)
+
+	game, error := scanGame(row)
+	if error == sql.ErrNoRows {
+		return nil, nil
+	}
+	if error != nil {
+		return nil, error
+	}
+	return game, nil
+}
+
+// GetGameByExePath は実行ファイルパスに一致するゲームを取得する。
+func (repository *Repository) GetGameByExePath(ctx context.Context, exePath string) (*models.Game, error) {
+	trimmed := strings.TrimSpace(exePath)
+	if trimmed == "" {
+		return nil, errors.New("exePath is empty")
+	}
+	row := repository.connection.QueryRowContext(ctx, `
+		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+		       localSaveHash, localSaveHashUpdatedAt,
+		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
+		FROM "Game" WHERE lower(exePath) = lower(?)
+	`, trimmed)
 
 	game, error := scanGame(row)
 	if error == sql.ErrNoRows {

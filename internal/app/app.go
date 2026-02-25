@@ -32,6 +32,9 @@ type App struct {
 	CloudSyncService    *services.CloudSyncService
 	ErogameScapeService *services.ErogameScapeService
 	ProcessMonitor      *services.ProcessMonitorService
+	ScreenshotService   *services.ScreenshotService
+	HotkeyService       services.HotkeyService
+	WindowHotkeyService services.HotkeyService
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
@@ -70,6 +73,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
 	erogameScapeService := services.NewErogameScapeService(cfg, logger)
 	processMonitor := services.NewProcessMonitorService(repository, logger, cloudSync)
+	screenshotService := services.NewScreenshotService(cfg, repository, processMonitor, logger)
 
 	app := &App{
 		Config:              cfg,
@@ -86,6 +90,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		CloudSyncService:    cloudSync,
 		ErogameScapeService: erogameScapeService,
 		ProcessMonitor:      processMonitor,
+		ScreenshotService:   screenshotService,
 		dbConnection:        connection,
 		autoTracking:        true,
 		isMonitoring:        false,
@@ -102,6 +107,7 @@ func (app *App) Startup(ctx context.Context) {
 		app.ProcessMonitor.StartMonitoring()
 		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
 	}
+	app.startHotkey()
 }
 
 func (app *App) context() context.Context {
@@ -117,6 +123,7 @@ func (app *App) Shutdown(ctx context.Context) error {
 	if app.ProcessMonitor != nil {
 		app.ProcessMonitor.StopMonitoring()
 	}
+	app.stopHotkey()
 	if app.dbConnection != nil {
 		return app.dbConnection.Close()
 	}
