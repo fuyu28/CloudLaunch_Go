@@ -284,21 +284,6 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// UpdateScreenshotWindowHotkey はウィンドウ全体キャプチャ用ホットキーを更新する。
-func (app *App) UpdateScreenshotWindowHotkey(combo string) result.ApiResult[bool] {
-	trimmed := strings.TrimSpace(combo)
-	if trimmed == "" {
-		return result.ErrorResult[bool]("ホットキーが不正です", "combo is empty")
-	}
-	if err := services.ValidateHotkeyCombo(trimmed); err != nil {
-		return result.ErrorResult[bool]("ホットキーが不正です", err.Error())
-	}
-	app.Config.ScreenshotWindowHotkey = trimmed
-	app.stopHotkey()
-	app.startHotkey()
-	return result.OkResult(true)
-}
-
 // UpdateScreenshotHotkeyNotify はホットキー通知の有効/無効を更新する。
 func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool] {
 	app.Config.ScreenshotHotkeyNotify = enabled

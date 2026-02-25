@@ -19,7 +19,6 @@ type Config struct {
 	ScreenshotClientOnly   bool
 	ScreenshotLocalJpeg    bool
 	ScreenshotHotkey       string
-	ScreenshotWindowHotkey string
 	ScreenshotHotkeyNotify bool
 	S3Endpoint             string
 	S3Region               string
@@ -48,7 +47,6 @@ func LoadFromEnv() Config {
 		ScreenshotClientOnly:   getEnvBool("CLOUDLAUNCH_SCREENSHOT_CLIENT_ONLY", true),
 		ScreenshotLocalJpeg:    getEnvBool("CLOUDLAUNCH_SCREENSHOT_LOCAL_JPEG", false),
 		ScreenshotHotkey:       getEnv("CLOUDLAUNCH_SCREENSHOT_HOTKEY", "Ctrl+Alt+S"),
-		ScreenshotWindowHotkey: getEnv("CLOUDLAUNCH_SCREENSHOT_WINDOW_HOTKEY", "Ctrl+Alt+W"),
 		ScreenshotHotkeyNotify: getEnvBool("CLOUDLAUNCH_SCREENSHOT_HOTKEY_NOTIFY", true),
 		S3Endpoint:             getEnv("CLOUDLAUNCH_S3_ENDPOINT", ""),
 		S3Region:               getEnv("CLOUDLAUNCH_S3_REGION", "auto"),

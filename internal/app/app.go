@@ -34,7 +34,6 @@ type App struct {
 	ProcessMonitor      *services.ProcessMonitorService
 	ScreenshotService   *services.ScreenshotService
 	HotkeyService       services.HotkeyService
-	WindowHotkeyService services.HotkeyService
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool

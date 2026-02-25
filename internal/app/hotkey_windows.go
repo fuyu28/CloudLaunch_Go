@@ -13,20 +13,14 @@ func (app *App) startHotkey() {
 		return
 	}
 	app.HotkeyService = app.startHotkeyService(app.Config.ScreenshotHotkey, app.handleHotkeyCaptureClient)
-	app.WindowHotkeyService = app.startHotkeyService(app.Config.ScreenshotWindowHotkey, app.handleHotkeyCaptureWindow)
 }
 
 func (app *App) stopHotkey() {
 	if app.HotkeyService == nil {
-	} else {
-		app.HotkeyService.Stop()
-		app.HotkeyService = nil
-	}
-	if app.WindowHotkeyService == nil {
 		return
 	}
-	app.WindowHotkeyService.Stop()
-	app.WindowHotkeyService = nil
+	app.HotkeyService.Stop()
+	app.HotkeyService = nil
 }
 
 func (app *App) startHotkeyService(combo string, handler services.HotkeyHandler) services.HotkeyService {
@@ -59,21 +53,6 @@ func (app *App) handleHotkeyCaptureClient(target services.CaptureTarget) {
 			return
 		}
 		app.Logger.Error("ホットキーキャプチャに失敗", "mode", "client", "error", err)
-		return
-	}
-	app.syncScreenshotAfterHotkey(gameID, path)
-}
-
-func (app *App) handleHotkeyCaptureWindow(target services.CaptureTarget) {
-	if app.ScreenshotService == nil {
-		return
-	}
-	gameID, path, err := app.ScreenshotService.CaptureForegroundWindowFull(app.context(), target)
-	if err != nil {
-		if err == services.ErrNoNewScreenshot {
-			return
-		}
-		app.Logger.Error("ホットキーキャプチャに失敗", "mode", "window", "error", err)
 		return
 	}
 	app.syncScreenshotAfterHotkey(gameID, path)

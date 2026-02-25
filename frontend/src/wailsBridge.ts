@@ -104,7 +104,6 @@ export type WindowApi = {
     updateScreenshotClientOnly: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotLocalJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotHotkey: (combo: string) => Promise<ApiResult<void>>;
-    updateScreenshotWindowHotkey: (combo: string) => Promise<ApiResult<void>>;
     updateScreenshotHotkeyNotify: (enabled: boolean) => Promise<ApiResult<void>>;
   };
   file: {
@@ -338,14 +337,6 @@ export const createWailsBridge = (): WindowApi => {
       },
       updateScreenshotHotkey: async (combo) => {
         const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotHotkey"](combo);
-        return result && result.success
-          ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
-      },
-      updateScreenshotWindowHotkey: async (combo) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotWindowHotkey"](
-          combo,
-        );
         return result && result.success
           ? { success: true }
           : { success: false, message: result?.error?.message ?? "エラー" };

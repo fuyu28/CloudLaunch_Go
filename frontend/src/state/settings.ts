@@ -105,15 +105,6 @@ export const screenshotLocalJpegAtom = atomWithStorage<boolean>("screenshotLocal
 export const screenshotHotkeyAtom = atomWithStorage<string>("screenshotHotkey", "Ctrl+Alt+S");
 
 /**
- * スクリーンショットのウィンドウ全体キャプチャ用ホットキー設定atom
- * LocalStorageに自動保存される
- */
-export const screenshotWindowHotkeyAtom = atomWithStorage<string>(
-  "screenshotWindowHotkey",
-  "Ctrl+Alt+W",
-);
-
-/**
  * ホットキー通知の有効設定atom
  * LocalStorageに自動保存される
  */

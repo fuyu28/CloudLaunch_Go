@@ -40,7 +40,6 @@ import {
   screenshotClientOnlyAtom,
   screenshotLocalJpegAtom,
   screenshotHotkeyAtom,
-  screenshotWindowHotkeyAtom,
   screenshotHotkeyNotifyAtom,
   sortOptionLabels,
   filterStateLabels,
@@ -71,10 +70,9 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotClientOnly, setScreenshotClientOnly] = useAtom(screenshotClientOnlyAtom);
   const [screenshotLocalJpeg, setScreenshotLocalJpeg] = useAtom(screenshotLocalJpegAtom);
   const [screenshotHotkey, setScreenshotHotkey] = useAtom(screenshotHotkeyAtom);
-  const [screenshotWindowHotkey, setScreenshotWindowHotkey] = useAtom(screenshotWindowHotkeyAtom);
   const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
-  const [hotkeyCaptureTarget, setHotkeyCaptureTarget] = useState<"client" | "window" | null>(null);
+  const [isCapturingHotkey, setIsCapturingHotkey] = useState(false);
 
   // ソート変更ハンドラー
   const handleSortChange = (newSortOption: SortOption): void => {
@@ -269,31 +267,6 @@ export default function GeneralSettings(): React.JSX.Element {
     await applyScreenshotHotkey(value, true);
   };
 
-  const applyScreenshotWindowHotkey = async (value: string, showToast: boolean): Promise<void> => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      if (showToast) {
-        toast.error("ウィンドウ全体キャプチャ用ホットキーを入力してください");
-      }
-      return;
-    }
-    const result = await window.api.settings.updateScreenshotWindowHotkey(trimmed);
-    if (!result.success) {
-      if (showToast) {
-        toast.error(result.message || "ウィンドウ全体キャプチャ用ホットキーの更新に失敗しました");
-      }
-      return;
-    }
-    if (showToast) {
-      toast.success(`全体キャプチャ用ホットキーを「${trimmed}」に更新しました`);
-    }
-  };
-
-  const handleScreenshotWindowHotkeyChange = async (value: string): Promise<void> => {
-    setScreenshotWindowHotkey(value);
-    await applyScreenshotWindowHotkey(value, true);
-  };
-
   const handleScreenshotHotkeyNotifyChange = async (enabled: boolean): Promise<void> => {
     setScreenshotHotkeyNotify(enabled);
     const result = await window.api.settings.updateScreenshotHotkeyNotify(enabled);
@@ -306,7 +279,7 @@ export default function GeneralSettings(): React.JSX.Element {
 
   const normalizeHotkeyFromEvent = (event: KeyboardEvent): string | null => {
     if (event.key === "Escape") {
-      setHotkeyCaptureTarget(null);
+      setIsCapturingHotkey(false);
       return null;
     }
     const modifiers: string[] = [];
@@ -418,15 +391,11 @@ export default function GeneralSettings(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    void applyScreenshotWindowHotkey(screenshotWindowHotkey, false);
-  }, []);
-
-  useEffect(() => {
     void window.api.settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
   }, []);
 
   useEffect(() => {
-    if (!hotkeyCaptureTarget) {
+    if (!isCapturingHotkey) {
       return;
     }
     const handler = (event: KeyboardEvent): void => {
@@ -435,21 +404,15 @@ export default function GeneralSettings(): React.JSX.Element {
       if (!hotkey) {
         return;
       }
-      const target = hotkeyCaptureTarget;
-      setHotkeyCaptureTarget(null);
-      if (target === "client") {
-        setScreenshotHotkey(hotkey);
-        void applyScreenshotHotkey(hotkey, true);
-        return;
-      }
-      setScreenshotWindowHotkey(hotkey);
-      void applyScreenshotWindowHotkey(hotkey, true);
+      setIsCapturingHotkey(false);
+      setScreenshotHotkey(hotkey);
+      void applyScreenshotHotkey(hotkey, true);
     };
     window.addEventListener("keydown", handler);
     return () => {
       window.removeEventListener("keydown", handler);
     };
-  }, [hotkeyCaptureTarget]);
+  }, [isCapturingHotkey]);
 
   return (
     <div className="w-full">
@@ -582,9 +545,9 @@ export default function GeneralSettings(): React.JSX.Element {
 
             <div>
               <div className="mb-2">
-                <h4 className="font-medium">ホットキー（クライアント領域）</h4>
+                <h4 className="font-medium">ホットキー</h4>
                 <p className="text-sm text-base-content/70">
-                  例: Ctrl+Alt+S（Ctrl/Alt/Shift/Win と英数字・F1-F12）
+                  例: Ctrl+Alt+S（押すとSnipping Toolが起動します）
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -594,60 +557,23 @@ export default function GeneralSettings(): React.JSX.Element {
                   value={screenshotHotkey}
                   onChange={(event) => setScreenshotHotkey(event.target.value)}
                   onBlur={(event) => void applyScreenshotHotkey(event.target.value, false)}
-                  readOnly={hotkeyCaptureTarget === "client"}
+                  readOnly={isCapturingHotkey}
                 />
                 <button
                   className="btn btn-primary btn-sm"
-                  onClick={() => setHotkeyCaptureTarget("client")}
+                  onClick={() => setIsCapturingHotkey(true)}
                 >
                   入力開始
                 </button>
                 <button
                   className="btn btn-outline btn-sm"
                   onClick={() => void handleScreenshotHotkeyChange(screenshotHotkey)}
-                  disabled={hotkeyCaptureTarget === "client"}
+                  disabled={isCapturingHotkey}
                 >
                   適用
                 </button>
               </div>
-              {hotkeyCaptureTarget === "client" && (
-                <p className="text-xs text-base-content/60 mt-2">
-                  ホットキーを押してください（Escでキャンセル）
-                </p>
-              )}
-            </div>
-
-            <div>
-              <div className="mb-2">
-                <h4 className="font-medium">ホットキー（ウィンドウ全体）</h4>
-                <p className="text-sm text-base-content/70">
-                  タイトルバーを含む全体キャプチャ専用キーです
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  className="input input-bordered input-sm flex-1"
-                  value={screenshotWindowHotkey}
-                  onChange={(event) => setScreenshotWindowHotkey(event.target.value)}
-                  onBlur={(event) => void applyScreenshotWindowHotkey(event.target.value, false)}
-                  readOnly={hotkeyCaptureTarget === "window"}
-                />
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setHotkeyCaptureTarget("window")}
-                >
-                  入力開始
-                </button>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() => void handleScreenshotWindowHotkeyChange(screenshotWindowHotkey)}
-                  disabled={hotkeyCaptureTarget === "window"}
-                >
-                  適用
-                </button>
-              </div>
-              {hotkeyCaptureTarget === "window" && (
+              {isCapturingHotkey && (
                 <p className="text-xs text-base-content/60 mt-2">
                   ホットキーを押してください（Escでキャンセル）
                 </p>
