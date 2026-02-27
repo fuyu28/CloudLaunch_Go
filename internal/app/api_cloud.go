@@ -64,12 +64,12 @@ func (app *App) ListCloudData() result.ApiResult[[]CloudDataItem] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return result.ErrorResult[[]CloudDataItem]("クラウドデータ取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudDataItem](app, "クラウドデータ取得に失敗しました", error, "operation", "ListCloudData.getDefaultS3Client")
 	}
 
 	objects, error := storage.ListObjects(ctx, client, bucket, "")
 	if error != nil {
-		return result.ErrorResult[[]CloudDataItem]("クラウドデータ取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudDataItem](app, "クラウドデータ取得に失敗しました", error, "operation", "ListCloudData.listObjects", "bucket", bucket)
 	}
 
 	grouped := map[string]*CloudDataItem{}
@@ -106,11 +106,11 @@ func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return result.ErrorResult[[]CloudDirectoryNode]("ディレクトリツリー取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", error, "operation", "GetDirectoryTree.getDefaultS3Client")
 	}
 	objects, error := storage.ListObjects(ctx, client, bucket, "")
 	if error != nil {
-		return result.ErrorResult[[]CloudDirectoryNode]("ディレクトリツリー取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", error, "operation", "GetDirectoryTree.listObjects", "bucket", bucket)
 	}
 
 	root := map[string]*directoryNodeBuilder{}
@@ -165,7 +165,7 @@ func (app *App) DeleteCloudData(path string) result.ApiResult[bool] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[bool]("削除に失敗しました", error)
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.getDefaultS3Client")
 	}
 
 	prefix := strings.TrimSpace(path)
@@ -173,7 +173,7 @@ func (app *App) DeleteCloudData(path string) result.ApiResult[bool] {
 		prefix = ""
 	}
 	if error := storage.DeleteObjectsByPrefix(ctx, client, bucket, prefix); error != nil {
-		return errorResult[bool]("削除に失敗しました", error)
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteByPrefix", "prefix", prefix)
 	}
 	return result.OkResult(true)
 }
@@ -183,10 +183,10 @@ func (app *App) DeleteFile(key string) result.ApiResult[bool] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[bool]("削除に失敗しました", error)
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.getDefaultS3Client")
 	}
 	if error := storage.DeleteObject(ctx, client, bucket, key); error != nil {
-		return errorResult[bool]("削除に失敗しました", error)
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.deleteObject", "key", key)
 	}
 	return result.OkResult(true)
 }
@@ -196,11 +196,11 @@ func (app *App) GetCloudFileDetails(prefix string) result.ApiResult[[]CloudFileD
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return result.ErrorResult[[]CloudFileDetail]("詳細取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudFileDetail](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetails.getDefaultS3Client")
 	}
 	objects, error := storage.ListObjects(ctx, client, bucket, prefix)
 	if error != nil {
-		return result.ErrorResult[[]CloudFileDetail]("詳細取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudFileDetail](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetails.listObjects", "prefix", prefix)
 	}
 	files := make([]CloudFileDetail, 0, len(objects))
 	for _, obj := range objects {
@@ -222,7 +222,7 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 	ctx := app.context()
 	game, error := app.Database.GetGameByID(ctx, gameID)
 	if error != nil {
-		return errorResult[CloudFileDetailsResult]("ゲーム取得に失敗しました", error)
+		return errorResultWithLog[CloudFileDetailsResult](app, "ゲーム取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.getGameByID", "gameId", gameID)
 	}
 	if game == nil {
 		return result.OkResult(CloudFileDetailsResult{Exists: false, Files: []CloudFileDetail{}})
@@ -230,11 +230,11 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 	prefix := createGamePrefix(game.ID)
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[CloudFileDetailsResult]("詳細取得に失敗しました", error)
+		return errorResultWithLog[CloudFileDetailsResult](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.getDefaultS3Client", "gameId", gameID)
 	}
 	objects, error := storage.ListObjects(ctx, client, bucket, prefix)
 	if error != nil {
-		return errorResult[CloudFileDetailsResult]("詳細取得に失敗しました", error)
+		return errorResultWithLog[CloudFileDetailsResult](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.listObjects", "prefix", prefix)
 	}
 	files := make([]CloudFileDetail, 0, len(objects))
 	var total int64
@@ -255,12 +255,13 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHashMetadata] {
 	trimmed := strings.TrimSpace(gameID)
 	if trimmed == "" {
+		app.Logger.Warn("ゲームIDが不正です", "operation", "GetCloudSaveHash", "gameId", gameID)
 		return result.ErrorResult[*storage.SaveHashMetadata]("ゲームIDが不正です", "gameID is empty")
 	}
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[*storage.SaveHashMetadata]("取得に失敗しました", error)
+		return errorResultWithLog[*storage.SaveHashMetadata](app, "取得に失敗しました", error, "operation", "GetCloudSaveHash.getDefaultS3Client", "gameId", trimmed)
 	}
 	key := createSaveHashPath(trimmed)
 	metadata, error := storage.LoadSaveHash(ctx, client, bucket, key)
@@ -268,7 +269,7 @@ func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHa
 		if storage.IsNotFoundError(error) {
 			return result.OkResult[*storage.SaveHashMetadata](nil)
 		}
-		return errorResult[*storage.SaveHashMetadata]("取得に失敗しました", error)
+		return errorResultWithLog[*storage.SaveHashMetadata](app, "取得に失敗しました", error, "operation", "GetCloudSaveHash.loadSaveHash", "key", key)
 	}
 	return result.OkResult(metadata)
 }
@@ -278,12 +279,13 @@ func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[b
 	trimmed := strings.TrimSpace(gameID)
 	trimmedHash := strings.TrimSpace(hash)
 	if trimmed == "" || trimmedHash == "" {
+		app.Logger.Warn("入力が不正です", "operation", "SaveCloudSaveHash", "gameId", gameID)
 		return result.ErrorResult[bool]("入力が不正です", "gameID or hash is empty")
 	}
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[bool]("保存に失敗しました", error)
+		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.getDefaultS3Client", "gameId", trimmed)
 	}
 	key := createSaveHashPath(trimmed)
 	metadata := storage.SaveHashMetadata{
@@ -291,7 +293,7 @@ func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[b
 		UpdatedAt: time.Now(),
 	}
 	if error := storage.SaveSaveHash(ctx, client, bucket, key, metadata); error != nil {
-		return errorResult[bool]("保存に失敗しました", error)
+		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.saveSaveHash", "key", key)
 	}
 	return result.OkResult(true)
 }
@@ -301,7 +303,7 @@ func (app *App) DownloadSaveData(localPath string, remotePath string) result.Api
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[bool]("ダウンロードに失敗しました", error)
+		return errorResultWithLog[bool](app, "ダウンロードに失敗しました", error, "operation", "DownloadSaveData.getDefaultS3Client", "remotePath", remotePath)
 	}
 	if error := storage.DownloadPrefix(
 		ctx,
@@ -312,7 +314,7 @@ func (app *App) DownloadSaveData(localPath string, remotePath string) result.Api
 		app.Config.S3UploadConcurrency,
 		app.Config.S3TransferRetryCount,
 	); error != nil {
-		return errorResult[bool]("ダウンロードに失敗しました", error)
+		return errorResultWithLog[bool](app, "ダウンロードに失敗しました", error, "operation", "DownloadSaveData.downloadPrefix", "remotePath", remotePath, "localPath", localPath)
 	}
 	return result.OkResult(true)
 }
@@ -321,7 +323,7 @@ func (app *App) DownloadSaveData(localPath string, remotePath string) result.Api
 func (app *App) LoadImageFromLocal(filePath string) result.ApiResult[string] {
 	content, error := os.ReadFile(filePath)
 	if error != nil {
-		return errorResult[string]("画像読み込みに失敗しました", error)
+		return errorResultWithLog[string](app, "画像読み込みに失敗しました", error, "operation", "LoadImageFromLocal.readFile", "path", filePath)
 	}
 	encoded := base64.StdEncoding.EncodeToString(content)
 	mime := detectImageMime(filePath)
@@ -343,11 +345,11 @@ func (app *App) ValidateCredential(input CredentialValidationInput) result.ApiRe
 		SecretAccessKey: input.SecretAccessKey,
 	})
 	if error != nil {
-		return errorResult[bool]("認証情報検証に失敗しました", error)
+		return errorResultWithLog[bool](app, "認証情報検証に失敗しました", error, "operation", "ValidateCredential.newClient", "bucket", cfg.Bucket)
 	}
 	_, error = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &cfg.Bucket})
 	if error != nil {
-		return errorResult[bool]("認証情報検証に失敗しました", error)
+		return errorResultWithLog[bool](app, "認証情報検証に失敗しました", error, "operation", "ValidateCredential.headBucket", "bucket", cfg.Bucket)
 	}
 	return result.OkResult(true)
 }
@@ -357,15 +359,15 @@ func (app *App) ValidateSavedCredential(key string) result.ApiResult[bool] {
 	ctx := app.context()
 	cfg, credential, error := app.resolveS3Config(ctx)
 	if error != nil {
-		return errorResult[bool]("認証情報検証に失敗しました", error)
+		return errorResultWithLog[bool](app, "認証情報検証に失敗しました", error, "operation", "ValidateSavedCredential.resolveS3Config")
 	}
 	client, error := storage.NewClient(ctx, cfg, credential)
 	if error != nil {
-		return errorResult[bool]("認証情報検証に失敗しました", error)
+		return errorResultWithLog[bool](app, "認証情報検証に失敗しました", error, "operation", "ValidateSavedCredential.newClient", "bucket", cfg.Bucket)
 	}
 	_, error = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &cfg.Bucket})
 	if error != nil {
-		return errorResult[bool]("認証情報検証に失敗しました", error)
+		return errorResultWithLog[bool](app, "認証情報検証に失敗しました", error, "operation", "ValidateSavedCredential.headBucket", "bucket", cfg.Bucket)
 	}
 	return result.OkResult(true)
 }

@@ -3,6 +3,12 @@ package app
 
 import "CloudLaunch_Go/internal/result"
 
-func errorResult[T any](message string, err error) result.ApiResult[T] {
+func errorResultWithLog[T any](app *App, message string, err error, attrs ...any) result.ApiResult[T] {
+	if app != nil && app.Logger != nil {
+		logAttrs := make([]any, 0, len(attrs)+2)
+		logAttrs = append(logAttrs, "error", err)
+		logAttrs = append(logAttrs, attrs...)
+		app.Logger.Error(message, logAttrs...)
+	}
 	return result.ErrorResult[T](message, err.Error())
 }

@@ -45,11 +45,11 @@ func (app *App) GetCloudMemos() result.ApiResult[[]CloudMemoInfo] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return result.ErrorResult[[]CloudMemoInfo]("クラウドメモ取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudMemoInfo](app, "クラウドメモ取得に失敗しました", error, "operation", "GetCloudMemos.getDefaultS3Client")
 	}
 	objects, error := storage.ListObjects(ctx, client, bucket, "games/")
 	if error != nil {
-		return result.ErrorResult[[]CloudMemoInfo]("クラウドメモ取得に失敗しました", error.Error())
+		return errorResultWithLog[[]CloudMemoInfo](app, "クラウドメモ取得に失敗しました", error, "operation", "GetCloudMemos.listObjects", "bucket", bucket)
 	}
 
 	memos := make([]CloudMemoInfo, 0)
@@ -81,15 +81,16 @@ func (app *App) DownloadMemoFromCloud(gameID string, memoFileName string) result
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[string]("メモのダウンロードに失敗しました", error)
+		return errorResultWithLog[string](app, "メモのダウンロードに失敗しました", error, "operation", "DownloadMemoFromCloud.getDefaultS3Client")
 	}
 	if strings.TrimSpace(gameID) == "" || strings.TrimSpace(memoFileName) == "" {
+		app.Logger.Warn("メモのダウンロード入力が不正です", "operation", "DownloadMemoFromCloud", "gameId", gameID, "memoFileName", memoFileName)
 		return result.ErrorResult[string]("メモのダウンロードに失敗しました", "入力が不正です")
 	}
 	key := fmt.Sprintf("games/%s/memo/%s", strings.TrimSpace(gameID), memoFileName)
 	payload, error := storage.DownloadObject(ctx, client, bucket, key)
 	if error != nil {
-		return errorResult[string]("メモのダウンロードに失敗しました", error)
+		return errorResultWithLog[string](app, "メモのダウンロードに失敗しました", error, "operation", "DownloadMemoFromCloud.downloadObject", "key", key)
 	}
 	return result.OkResult(string(payload))
 }
@@ -99,27 +100,29 @@ func (app *App) UploadMemoToCloud(memoID string) result.ApiResult[bool] {
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[bool]("メモのアップロードに失敗しました", error)
+		return errorResultWithLog[bool](app, "メモのアップロードに失敗しました", error, "operation", "UploadMemoToCloud.getDefaultS3Client")
 	}
 	memoData, error := app.Database.GetMemoByID(ctx, strings.TrimSpace(memoID))
 	if error != nil {
-		return errorResult[bool]("メモの取得に失敗しました", error)
+		return errorResultWithLog[bool](app, "メモの取得に失敗しました", error, "operation", "UploadMemoToCloud.getMemoByID", "memoId", memoID)
 	}
 	if memoData == nil {
+		app.Logger.Warn("メモが見つかりません", "operation", "UploadMemoToCloud", "memoId", memoID)
 		return result.ErrorResult[bool]("メモが見つかりません", "指定されたIDが存在しません")
 	}
 	game, error := app.Database.GetGameByID(ctx, memoData.GameID)
 	if error != nil {
-		return errorResult[bool]("ゲームの取得に失敗しました", error)
+		return errorResultWithLog[bool](app, "ゲームの取得に失敗しました", error, "operation", "UploadMemoToCloud.getGameByID", "gameId", memoData.GameID)
 	}
 	if game == nil {
+		app.Logger.Warn("ゲームが見つかりません", "operation", "UploadMemoToCloud", "gameId", memoData.GameID)
 		return result.ErrorResult[bool]("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
 	key := memo.BuildMemoPath(game.ID, memoData.Title, memoData.ID)
 	payload := memo.GenerateCloudMemoFileContent(memoData.Title, memoData.Content, game.Title)
 	if error := storage.UploadBytes(ctx, client, bucket, key, []byte(payload), "text/markdown"); error != nil {
-		return errorResult[bool]("メモのアップロードに失敗しました", error)
+		return errorResultWithLog[bool](app, "メモのアップロードに失敗しました", error, "operation", "UploadMemoToCloud.uploadBytes", "key", key)
 	}
 	return result.OkResult(true)
 }
@@ -129,7 +132,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
-		return errorResult[MemoSyncResult]("メモ同期に失敗しました", error)
+		return errorResultWithLog[MemoSyncResult](app, "メモ同期に失敗しました", error, "operation", "SyncMemosFromCloud.getDefaultS3Client")
 	}
 
 	resultData := MemoSyncResult{
@@ -139,6 +142,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 
 	cloudMemosResult := app.GetCloudMemos()
 	if !cloudMemosResult.Success {
+		app.Logger.Warn("クラウドメモ取得に失敗しました", "operation", "SyncMemosFromCloud", "detail", cloudMemosResult.Error)
 		if cloudMemosResult.Error == nil {
 			return result.ErrorResult[MemoSyncResult]("メモ同期に失敗しました", "クラウドメモ取得に失敗しました")
 		}
@@ -153,9 +157,10 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 	if strings.TrimSpace(gameID) != "" {
 		game, error := app.Database.GetGameByID(ctx, strings.TrimSpace(gameID))
 		if error != nil {
-			return errorResult[MemoSyncResult]("メモ同期に失敗しました", error)
+			return errorResultWithLog[MemoSyncResult](app, "メモ同期に失敗しました", error, "operation", "SyncMemosFromCloud.getTargetGame", "gameId", gameID)
 		}
 		if game == nil {
+			app.Logger.Warn("指定されたゲームが見つかりません", "operation", "SyncMemosFromCloud", "gameId", gameID)
 			return result.ErrorResult[MemoSyncResult]("メモ同期に失敗しました", "指定されたゲームが見つかりません")
 		}
 		targetGame = game
@@ -168,7 +173,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 
 	games, error := app.Database.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
 	if error != nil {
-		return errorResult[MemoSyncResult]("メモ同期に失敗しました", error)
+		return errorResultWithLog[MemoSyncResult](app, "メモ同期に失敗しました", error, "operation", "SyncMemosFromCloud.listGames")
 	}
 	gameByID := map[string]models.Game{}
 	for _, game := range games {
@@ -177,7 +182,7 @@ func (app *App) SyncMemosFromCloud(gameID string) result.ApiResult[MemoSyncResul
 
 	localMemos, error := fetchLocalMemos(ctx, app.Database, gameID)
 	if error != nil {
-		return errorResult[MemoSyncResult]("メモ同期に失敗しました", error)
+		return errorResultWithLog[MemoSyncResult](app, "メモ同期に失敗しました", error, "operation", "SyncMemosFromCloud.fetchLocalMemos", "gameId", gameID)
 	}
 
 	processed := map[string]bool{}
