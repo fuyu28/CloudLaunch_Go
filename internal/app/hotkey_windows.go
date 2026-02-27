@@ -54,7 +54,11 @@ func (app *App) handleHotkeyCapture() bool {
 	if app.ScreenshotService == nil {
 		return false
 	}
-	gameID, path, err := app.ScreenshotService.CaptureHotkey(app.context())
+	hotkeyTargetGameID := ""
+	if app.ProcessMonitor != nil {
+		hotkeyTargetGameID = app.ProcessMonitor.GetHotkeyTargetGameID()
+	}
+	gameID, path, err := app.ScreenshotService.CaptureHotkey(app.context(), hotkeyTargetGameID)
 	if err != nil {
 		if err == services.ErrNoNewScreenshot {
 			return false

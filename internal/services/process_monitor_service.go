@@ -172,6 +172,74 @@ func (service *ProcessMonitorService) GetMonitoringStatus() []models.MonitoringG
 	return status
 }
 
+// GetHotkeyTargetGameID はホットキー撮影時に保存先とするゲームIDを返す。
+// 監視中ゲームのうち「現在プレイ中」を優先し、なければ「中断中」を返す。
+func (service *ProcessMonitorService) GetHotkeyTargetGameID() string {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+
+	var bestPlaying *MonitoringGame
+	var bestPaused *MonitoringGame
+	for _, game := range service.monitoredGames {
+		if game == nil {
+			continue
+		}
+		if game.PendingEnd {
+			continue
+		}
+
+		isPlaying := game.PlayStartTime != nil && !game.IsPaused
+		if isPlaying {
+			if bestPlaying == nil || isLaterGameActivity(game, bestPlaying) {
+				bestPlaying = game
+			}
+			continue
+		}
+
+		if game.IsPaused {
+			if bestPaused == nil || isLaterGameActivity(game, bestPaused) {
+				bestPaused = game
+			}
+		}
+	}
+
+	if bestPlaying != nil {
+		return bestPlaying.GameID
+	}
+	if bestPaused != nil {
+		return bestPaused.GameID
+	}
+	return ""
+}
+
+func isLaterGameActivity(left *MonitoringGame, right *MonitoringGame) bool {
+	leftTime := latestGameActivityAt(left)
+	rightTime := latestGameActivityAt(right)
+	if leftTime == nil {
+		return false
+	}
+	if rightTime == nil {
+		return true
+	}
+	return leftTime.After(*rightTime)
+}
+
+func latestGameActivityAt(game *MonitoringGame) *time.Time {
+	if game == nil {
+		return nil
+	}
+	if game.LastDetected != nil {
+		return game.LastDetected
+	}
+	if game.PlayStartTime != nil {
+		return game.PlayStartTime
+	}
+	if game.PausedAt != nil {
+		return game.PausedAt
+	}
+	return nil
+}
+
 // GetProcessSnapshot は現在のプロセス一覧と正規化後の値を取得する。
 func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapshot {
 	processes, source := service.getProcesses()

@@ -33,8 +33,8 @@ var (
 )
 
 // CaptureHotkey はホットキー経由でSnipping Toolを起動し、画像を保存する。
-func (service *ScreenshotService) CaptureHotkey(ctx context.Context) (string, string, error) {
-	game, err := service.findCurrentPlayingGame(ctx)
+func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGameID string) (string, string, error) {
+	game, err := service.resolveHotkeyGame(ctx, preferredGameID)
 	if err != nil {
 		return "", "", err
 	}
@@ -81,16 +81,19 @@ func (service *ScreenshotService) CaptureHotkey(ctx context.Context) (string, st
 	return game.ID, fullPath, nil
 }
 
-func (service *ScreenshotService) findCurrentPlayingGame(ctx context.Context) (*models.Game, error) {
-	games, err := service.repository.ListGames(ctx, "", models.PlayStatusPlaying, "lastPlayed", "desc")
+func (service *ScreenshotService) resolveHotkeyGame(
+	ctx context.Context,
+	preferredGameID string,
+) (*models.Game, error) {
+	trimmed := strings.TrimSpace(preferredGameID)
+	if trimmed == "" {
+		return nil, nil
+	}
+	game, err := service.repository.GetGameByID(ctx, trimmed)
 	if err != nil {
 		return nil, err
 	}
-	if len(games) == 0 {
-		return nil, nil
-	}
-	game := games[0]
-	return &game, nil
+	return game, nil
 }
 
 func (service *ScreenshotService) captureWithScreenClip(ctx context.Context, fullPath string, tmpPath string) error {
