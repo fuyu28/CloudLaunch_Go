@@ -20,6 +20,7 @@
 import { useAtom } from "jotai";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { Link } from "react-router-dom";
 
 import { logger } from "@renderer/utils/logger";
 
@@ -55,6 +56,8 @@ import type { SortOption, FilterOption } from "src/types/menu";
  * @returns 一般設定コンポーネント要素
  */
 export default function GeneralSettings(): React.JSX.Element {
+  type GeneralTab = "appearance" | "screenshot" | "behavior" | "defaults" | "maintenance";
+
   const [currentTheme] = useAtom(themeAtom);
   const [isChangingTheme] = useAtom(isChangingThemeAtom);
   const [, changeTheme] = useAtom(changeThemeAtom);
@@ -73,6 +76,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [isCapturingHotkey, setIsCapturingHotkey] = useState(false);
+  const [activeTab, setActiveTab] = useState<GeneralTab>("appearance");
 
   // ソート変更ハンドラー
   const handleSortChange = (newSortOption: SortOption): void => {
@@ -419,15 +423,45 @@ export default function GeneralSettings(): React.JSX.Element {
     <div className="w-full">
       <h2 className="text-xl font-semibold mb-6">一般設定</h2>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* 外観設定グループ */}
+      <div role="tablist" className="tabs tabs-boxed mb-6 overflow-x-auto">
+        <button
+          className={`tab ${activeTab === "appearance" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("appearance")}
+        >
+          外観
+        </button>
+        <button
+          className={`tab ${activeTab === "screenshot" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("screenshot")}
+        >
+          スクリーンショット
+        </button>
+        <button
+          className={`tab ${activeTab === "behavior" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("behavior")}
+        >
+          動作
+        </button>
+        <button
+          className={`tab ${activeTab === "defaults" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("defaults")}
+        >
+          初期表示
+        </button>
+        <button
+          className={`tab ${activeTab === "maintenance" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("maintenance")}
+        >
+          同期・ログ
+        </button>
+      </div>
+
+      {activeTab === "appearance" && (
         <div className="space-y-6">
           <div className="border-l-4 border-primary pl-4">
             <h3 className="text-lg font-semibold text-primary mb-1">外観設定</h3>
             <p className="text-sm text-base-content/60">アプリケーションの見た目を設定</p>
           </div>
-
-          {/* テーマ選択 */}
           <div className="bg-base-200 p-4 rounded-lg">
             <div className="mb-3">
               <h4 className="font-medium">テーマ</h4>
@@ -455,14 +489,14 @@ export default function GeneralSettings(): React.JSX.Element {
             </div>
           </div>
         </div>
+      )}
 
-        {/* スクリーンショット設定グループ */}
+      {activeTab === "screenshot" && (
         <div className="space-y-6">
           <div className="border-l-4 border-primary pl-4">
             <h3 className="text-lg font-semibold text-primary mb-1">スクリーンショット</h3>
             <p className="text-sm text-base-content/60">撮影データの同期と形式</p>
           </div>
-
           <div className="bg-base-200 p-4 rounded-lg space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -595,20 +629,17 @@ export default function GeneralSettings(): React.JSX.Element {
             </div>
           </div>
         </div>
+      )}
 
-        {/* 動作設定グループ */}
+      {activeTab === "behavior" && (
         <div className="space-y-6">
           <div className="border-l-4 border-secondary pl-4">
             <h3 className="text-lg font-semibold text-secondary mb-1">動作設定</h3>
             <p className="text-sm text-base-content/60">アプリケーションの動作を設定</p>
           </div>
-
-          {/* オフラインモード & 自動計測 */}
           <div className="bg-base-200 p-4 rounded-lg space-y-4">
             <div>
               <h4 className="font-medium mb-3">機能設定</h4>
-
-              {/* オフラインモード */}
               <div className="form-control mb-4">
                 <label className="label cursor-pointer justify-start p-0">
                   <input
@@ -626,7 +657,6 @@ export default function GeneralSettings(): React.JSX.Element {
                 </label>
               </div>
 
-              {/* 自動ゲーム検出 */}
               <div className="form-control">
                 <label className="label cursor-pointer justify-start p-0">
                   <input
@@ -646,7 +676,6 @@ export default function GeneralSettings(): React.JSX.Element {
                 </label>
               </div>
 
-              {/* リトライ回数 */}
               <div className="form-control mt-4">
                 <label className="label p-0 mb-2">
                   <span className="label-text font-medium">リトライ回数</span>
@@ -669,7 +698,6 @@ export default function GeneralSettings(): React.JSX.Element {
                 </p>
               </div>
 
-              {/* 同時アップロード数 */}
               <div className="form-control mt-4">
                 <label className="label p-0 mb-2">
                   <span className="label-text font-medium">同時転送数</span>
@@ -693,62 +721,17 @@ export default function GeneralSettings(): React.JSX.Element {
               </div>
             </div>
           </div>
-
-          {/* ログ・デバッグ */}
-          <div className="bg-base-200 p-4 rounded-lg">
-            <div className="mb-3">
-              <h4 className="font-medium">ログ・デバッグ</h4>
-              <p className="text-sm text-base-content/70">トラブルシューティング用</p>
-            </div>
-            <div className="form-control">
-              <button className="btn btn-outline btn-sm w-fit" onClick={handleOpenLogsDirectory}>
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-                  />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 1v6" />
-                </svg>
-                ログフォルダを開く
-              </button>
-              <p className="text-xs text-base-content/50 mt-2">
-                アプリケーションのログファイルが保存されているフォルダを開きます
-              </p>
-            </div>
-          </div>
         </div>
+      )}
 
-        {/* クラウド同期 */}
-        <div className="bg-base-200 p-4 rounded-lg lg:col-span-2">
-          <div className="mb-3">
-            <h4 className="font-medium">クラウド同期</h4>
-            <p className="text-sm text-base-content/70">ゲーム情報とセッションを同期します</p>
-          </div>
-          <div className="form-control">
-            <button
-              className="btn btn-outline btn-sm w-fit"
-              onClick={handleSyncAllGames}
-              disabled={isSyncingAll || offlineMode}
-            >
-              {isSyncingAll ? "同期中..." : "全ゲームを同期"}
-            </button>
-            <p className="text-xs text-base-content/50 mt-2">
-              変更があったゲームのみクラウドと同期します
-            </p>
-          </div>
-        </div>
-
-        {/* デフォルト設定グループ */}
-        <div className="lg:col-span-2 space-y-6">
+      {activeTab === "defaults" && (
+        <div className="space-y-6">
           <div className="border-l-4 border-accent pl-4">
             <h3 className="text-lg font-semibold text-accent mb-1">デフォルト設定</h3>
             <p className="text-sm text-base-content/60">ホーム画面の初期表示設定</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            {/* デフォルトソート */}
             <div className="bg-base-200 p-4 rounded-lg">
               <div className="mb-3">
                 <h4 className="font-medium">ソート順</h4>
@@ -774,7 +757,6 @@ export default function GeneralSettings(): React.JSX.Element {
               </div>
             </div>
 
-            {/* デフォルトフィルター */}
             <div className="bg-base-200 p-4 rounded-lg">
               <div className="mb-3">
                 <h4 className="font-medium">フィルター</h4>
@@ -801,7 +783,64 @@ export default function GeneralSettings(): React.JSX.Element {
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === "maintenance" && (
+        <div className="space-y-6">
+          <div className="border-l-4 border-info pl-4">
+            <h3 className="text-lg font-semibold text-info mb-1">同期・ログ</h3>
+            <p className="text-sm text-base-content/60">クラウド同期とトラブルシューティング</p>
+          </div>
+
+          <div className="bg-base-200 p-4 rounded-lg">
+            <div className="mb-3">
+              <h4 className="font-medium">クラウド同期</h4>
+              <p className="text-sm text-base-content/70">ゲーム情報とセッションを同期します</p>
+            </div>
+            <div className="form-control">
+              <button
+                className="btn btn-outline btn-sm w-fit"
+                onClick={handleSyncAllGames}
+                disabled={isSyncingAll || offlineMode}
+              >
+                {isSyncingAll ? "同期中..." : "全ゲームを同期"}
+              </button>
+              <p className="text-xs text-base-content/50 mt-2">
+                変更があったゲームのみクラウドと同期します
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-base-200 p-4 rounded-lg">
+            <div className="mb-3">
+              <h4 className="font-medium">ログ・デバッグ</h4>
+              <p className="text-sm text-base-content/70">トラブルシューティング用</p>
+            </div>
+            <div className="form-control gap-3">
+              <button className="btn btn-outline btn-sm w-fit" onClick={handleOpenLogsDirectory}>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 1v6" />
+                </svg>
+                ログフォルダを開く
+              </button>
+              <p className="text-xs text-base-content/50 mt-2">
+                アプリケーションのログファイルが保存されているフォルダを開きます
+              </p>
+
+              <Link to="/debug/process" className="btn btn-outline btn-sm w-fit mt-4">
+                プロセス監視デバッグを開く
+              </Link>
+              <p className="text-xs text-base-content/50 mt-2">プロセス監視の取得結果を確認します</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
