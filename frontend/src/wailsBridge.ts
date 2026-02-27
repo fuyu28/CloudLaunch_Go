@@ -106,6 +106,13 @@ export type WindowApi = {
     updateScreenshotHotkey: (combo: string) => Promise<ApiResult<void>>;
     updateScreenshotHotkeyNotify: (enabled: boolean) => Promise<ApiResult<void>>;
   };
+  maintenance: {
+    exportGameData: (
+      outputDir: string,
+    ) => Promise<ApiResult<{ jsonPath: string; csvPath: string }>>;
+    createFullBackup: (outputDir: string) => Promise<ApiResult<string>>;
+    restoreFullBackup: (backupPath: string) => Promise<ApiResult<void>>;
+  };
   file: {
     selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<ApiResult<string>>;
     selectFolder: () => Promise<ApiResult<string>>;
@@ -357,6 +364,26 @@ export const createWailsBridge = (): WindowApi => {
         const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotHotkeyNotify"](
           enabled,
         );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+    },
+    maintenance: {
+      exportGameData: async (outputDir) => {
+        const result = await (window as any)["go"]["app"]["App"]["ExportGameData"](outputDir);
+        return result && result.success
+          ? { success: true, data: result.data as { jsonPath: string; csvPath: string } }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      createFullBackup: async (outputDir) => {
+        const result = await (window as any)["go"]["app"]["App"]["CreateFullBackup"](outputDir);
+        return result && result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      restoreFullBackup: async (backupPath) => {
+        const result = await (window as any)["go"]["app"]["App"]["RestoreFullBackup"](backupPath);
         return result && result.success
           ? { success: true }
           : { success: false, message: result?.error?.message ?? "エラー" };

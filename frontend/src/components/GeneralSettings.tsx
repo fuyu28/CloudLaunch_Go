@@ -75,6 +75,9 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotHotkey, setScreenshotHotkey] = useAtom(screenshotHotkeyAtom);
   const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [isCapturingHotkey, setIsCapturingHotkey] = useState(false);
   const [activeTab, setActiveTab] = useState<GeneralTab>("appearance");
 
@@ -355,6 +358,95 @@ export default function GeneralSettings(): React.JSX.Element {
       toast.error("クラウド同期に失敗しました");
     } finally {
       setIsSyncingAll(false);
+    }
+  };
+
+  const handleExportGameData = async (): Promise<void> => {
+    const selected = await window.api.file.selectFolder();
+    if (!selected.success || !selected.data) {
+      return;
+    }
+    setIsExportingData(true);
+    try {
+      const result = await window.api.maintenance.exportGameData(selected.data);
+      if (!result.success || !result.data) {
+        toast.error(result.message || "データエクスポートに失敗しました");
+        return;
+      }
+      toast.success("CSV/JSONのエクスポートが完了しました");
+      await window.api.window.openFolder(selected.data);
+    } catch (error) {
+      logger.error("データエクスポートエラー:", {
+        component: "GeneralSettings",
+        function: "handleExportGameData",
+        data: error,
+      });
+      toast.error("データエクスポートに失敗しました");
+    } finally {
+      setIsExportingData(false);
+    }
+  };
+
+  const handleCreateBackup = async (): Promise<void> => {
+    const selected = await window.api.file.selectFolder();
+    if (!selected.success || !selected.data) {
+      return;
+    }
+    setIsCreatingBackup(true);
+    try {
+      const result = await window.api.maintenance.createFullBackup(selected.data);
+      if (!result.success || !result.data) {
+        toast.error(result.message || "バックアップ作成に失敗しました");
+        return;
+      }
+      toast.success("バックアップを作成しました");
+      await window.api.window.openFolder(selected.data);
+    } catch (error) {
+      logger.error("バックアップ作成エラー:", {
+        component: "GeneralSettings",
+        function: "handleCreateBackup",
+        data: error,
+      });
+      toast.error("バックアップ作成に失敗しました");
+    } finally {
+      setIsCreatingBackup(false);
+    }
+  };
+
+  const handleRestoreBackup = async (): Promise<void> => {
+    const selected = await window.api.file.selectFile([
+      { name: "CloudLaunch backup", extensions: ["zip"] },
+    ]);
+    if (!selected.success || !selected.data) {
+      return;
+    }
+    const accepted = window.confirm(
+      "バックアップ復元を実行します。現在のローカルデータは上書きされます。続行しますか？",
+    );
+    if (!accepted) {
+      return;
+    }
+
+    setIsRestoringBackup(true);
+    try {
+      const result = await window.api.maintenance.restoreFullBackup(selected.data);
+      if (!result.success) {
+        toast.error(result.message || "バックアップ復元に失敗しました");
+        return;
+      }
+      toast.success("バックアップを復元しました");
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 300);
+    } catch (error) {
+      logger.error("バックアップ復元エラー:", {
+        component: "GeneralSettings",
+        function: "handleRestoreBackup",
+        data: error,
+      });
+      toast.error("バックアップ復元に失敗しました");
+    } finally {
+      setIsRestoringBackup(false);
     }
   };
 
@@ -807,6 +899,53 @@ export default function GeneralSettings(): React.JSX.Element {
               </button>
               <p className="text-xs text-base-content/50 mt-2">
                 変更があったゲームのみクラウドと同期します
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-base-200 p-4 rounded-lg">
+            <div className="mb-3">
+              <h4 className="font-medium">データエクスポート</h4>
+              <p className="text-sm text-base-content/70">ゲーム情報と統計をCSV/JSONで保存します</p>
+            </div>
+            <div className="form-control">
+              <button
+                className="btn btn-outline btn-sm w-fit"
+                onClick={handleExportGameData}
+                disabled={isExportingData}
+              >
+                {isExportingData ? "エクスポート中..." : "CSV/JSONを出力"}
+              </button>
+              <p className="text-xs text-base-content/50 mt-2">
+                出力先フォルダにタイムスタンプ付きファイルを生成します
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-base-200 p-4 rounded-lg">
+            <div className="mb-3">
+              <h4 className="font-medium">バックアップ・復元</h4>
+              <p className="text-sm text-base-content/70">
+                全データをZIPで保存し、後で復元できます
+              </p>
+            </div>
+            <div className="form-control gap-3">
+              <button
+                className="btn btn-outline btn-sm w-fit"
+                onClick={handleCreateBackup}
+                disabled={isCreatingBackup}
+              >
+                {isCreatingBackup ? "バックアップ作成中..." : "バックアップを作成"}
+              </button>
+              <button
+                className="btn btn-warning btn-sm w-fit"
+                onClick={handleRestoreBackup}
+                disabled={isRestoringBackup}
+              >
+                {isRestoringBackup ? "復元中..." : "バックアップを復元"}
+              </button>
+              <p className="text-xs text-base-content/50 mt-1">
+                復元時は現在のローカルデータを上書きします（認証情報はOS管理のため対象外）
               </p>
             </div>
           </div>
