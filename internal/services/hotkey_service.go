@@ -4,7 +4,7 @@ package services
 import "log/slog"
 
 // HotkeyHandler はホットキー押下時の処理を受け取る。
-type HotkeyHandler func()
+type HotkeyHandler func() bool
 
 // HotkeyConfig はホットキー設定を保持する。
 type HotkeyConfig struct {

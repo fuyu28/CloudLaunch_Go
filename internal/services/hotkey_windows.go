@@ -208,11 +208,14 @@ func (service *hotkeyServiceWindows) run() {
 			return
 		}
 		if msg.Message == wmHotkey {
-			service.showHotkeyNotification()
 			if service.logger != nil {
 				service.logger.Debug("ホットキーを受信しました")
 			}
-			go service.handler()
+			go func() {
+				if service.handler() {
+					service.showHotkeyNotification("スクリーンショットを保存しました")
+				}
+			}()
 			continue
 		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
@@ -331,8 +334,12 @@ func (service *hotkeyServiceWindows) deleteNotifyIcon() error {
 	return nil
 }
 
-func (service *hotkeyServiceWindows) showHotkeyNotification() {
+func (service *hotkeyServiceWindows) showHotkeyNotification(message string) {
 	if !service.notify || service.notifyHWND == 0 {
+		return
+	}
+	trimmedMessage := strings.TrimSpace(message)
+	if trimmedMessage == "" {
 		return
 	}
 	data := notifyIconData{
@@ -343,7 +350,7 @@ func (service *hotkeyServiceWindows) showHotkeyNotification() {
 		InfoFlags: niifInfo,
 	}
 	copyUTF16(data.InfoTitle[:], "CloudLaunch")
-	copyUTF16(data.Info[:], "ホットキーを受信しました")
+	copyUTF16(data.Info[:], trimmedMessage)
 	ok, _, err := procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&data)))
 	if ok == 0 && service.logger != nil {
 		service.logger.Warn("通知表示に失敗しました", "error", err)

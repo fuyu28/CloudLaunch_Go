@@ -43,19 +43,20 @@ func (app *App) startHotkeyService(combo string, handler services.HotkeyHandler)
 	return service
 }
 
-func (app *App) handleHotkeyCapture() {
+func (app *App) handleHotkeyCapture() bool {
 	if app.ScreenshotService == nil {
-		return
+		return false
 	}
 	gameID, path, err := app.ScreenshotService.CaptureHotkey(app.context())
 	if err != nil {
 		if err == services.ErrNoNewScreenshot {
-			return
+			return false
 		}
 		app.Logger.Error("ホットキーキャプチャに失敗", "error", err)
-		return
+		return false
 	}
 	app.syncScreenshotAfterHotkey(gameID, path)
+	return true
 }
 
 func (app *App) syncScreenshotAfterHotkey(gameID string, path string) {
