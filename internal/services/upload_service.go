@@ -26,6 +26,7 @@ func NewUploadService(repository *db.Repository, logger *slog.Logger) *UploadSer
 // CreateUpload はアップロード履歴を作成する。
 func (service *UploadService) CreateUpload(ctx context.Context, input UploadInput) result.ApiResult[*models.Upload] {
 	if error := validateUploadInput(input); error != nil {
+		service.logger.Warn("アップロード入力が不正です", "error", error)
 		return result.ErrorResult[*models.Upload]("アップロード入力が不正です", error.Error())
 	}
 

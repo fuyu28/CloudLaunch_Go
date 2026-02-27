@@ -53,6 +53,7 @@ func (service *GameService) GetGameByID(ctx context.Context, gameID string) resu
 // CreateGame はゲームを新規作成する。
 func (service *GameService) CreateGame(ctx context.Context, input GameInput) result.ApiResult[*models.Game] {
 	if error := validateGameInput(input); error != nil {
+		service.logger.Warn("ゲーム入力が不正です", "error", error)
 		return result.ErrorResult[*models.Game]("ゲーム入力が不正です", error.Error())
 	}
 
@@ -88,6 +89,7 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) res
 func (service *GameService) UpdateGame(ctx context.Context, gameID string, input GameUpdateInput) result.ApiResult[*models.Game] {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[*models.Game]("ゲームIDが不正です", detail)
 	}
 
@@ -97,6 +99,7 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
 	}
 	if current == nil {
+		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedID)
 		return result.ErrorResult[*models.Game]("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
@@ -123,6 +126,7 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[*models.Game]("ゲームIDが不正です", detail)
 	}
 
@@ -132,6 +136,7 @@ func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, t
 		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
 	}
 	if current == nil {
+		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedID)
 		return result.ErrorResult[*models.Game]("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
@@ -150,6 +155,7 @@ func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, t
 func (service *GameService) DeleteGame(ctx context.Context, gameID string) result.ApiResult[bool] {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
 

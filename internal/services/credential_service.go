@@ -25,6 +25,7 @@ func NewCredentialService(store credentials.Store, logger *slog.Logger) *Credent
 // SaveCredential は認証情報を保存する。
 func (service *CredentialService) SaveCredential(ctx context.Context, key string, input CredentialInput) result.ApiResult[bool] {
 	if error := validateCredentialInput(input); error != nil {
+		service.logger.Warn("認証情報が不正です", "error", error)
 		return result.ErrorResult[bool]("認証情報が不正です", error.Error())
 	}
 
@@ -57,6 +58,7 @@ func (service *CredentialService) LoadCredential(ctx context.Context, key string
 func (service *CredentialService) DeleteCredential(ctx context.Context, key string) result.ApiResult[bool] {
 	trimmedKey, detail, ok := requireNonEmpty(key, "key")
 	if !ok {
+		service.logger.Warn("キーが不正です", "detail", detail)
 		return result.ErrorResult[bool]("キーが不正です", detail)
 	}
 	if error := service.store.Delete(ctx, trimmedKey); error != nil {

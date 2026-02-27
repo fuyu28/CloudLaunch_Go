@@ -27,6 +27,7 @@ func NewSessionService(repository *db.Repository, logger *slog.Logger) *SessionS
 // CreateSession は新しいセッションを作成する。
 func (service *SessionService) CreateSession(ctx context.Context, input SessionInput) result.ApiResult[*models.PlaySession] {
 	if error := validateSessionInput(input); error != nil {
+		service.logger.Warn("セッション入力が不正です", "error", error)
 		return result.ErrorResult[*models.PlaySession]("セッション入力が不正です", error.Error())
 	}
 
@@ -64,6 +65,7 @@ func (service *SessionService) ListSessionsByGame(ctx context.Context, gameID st
 func (service *SessionService) DeleteSession(ctx context.Context, sessionID string) result.ApiResult[bool] {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
+		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
 		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
 
@@ -86,6 +88,7 @@ func (service *SessionService) DeleteSession(ctx context.Context, sessionID stri
 func (service *SessionService) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[bool] {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
+		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
 		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
@@ -107,10 +110,12 @@ func (service *SessionService) UpdateSessionChapter(ctx context.Context, session
 func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[bool] {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
+		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
 		return result.ErrorResult[bool]("セッションIDが不正です", detail)
 	}
 	trimmedName, detail, ok := requireNonEmpty(sessionName, "sessionName")
 	if !ok {
+		service.logger.Warn("セッション名が不正です", "detail", detail, "sessionId", sessionID)
 		return result.ErrorResult[bool]("セッション名が不正です", detail)
 	}
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)

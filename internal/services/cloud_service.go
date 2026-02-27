@@ -35,11 +35,13 @@ func (service *CloudService) UploadFolder(
 	prefix string,
 ) result.ApiResult[storage.UploadSummary] {
 	if error := validateCloudInput(credentialKey, folderPath); error != nil {
+		service.logger.Warn("アップロード入力が不正です", "error", error)
 		return result.ErrorResult[storage.UploadSummary]("アップロード入力が不正です", error.Error())
 	}
 
 	client, cfg, message, detail, ok := service.newClient(ctx, credentialKey)
 	if !ok {
+		service.logger.Warn("S3クライアント初期化に失敗", "operation", "UploadFolder", "message", message, "detail", detail)
 		return result.ErrorResult[storage.UploadSummary](message, detail)
 	}
 
@@ -67,6 +69,7 @@ func (service *CloudService) SaveCloudMetadata(
 ) result.ApiResult[bool] {
 	client, cfg, message, detail, ok := service.newClient(ctx, credentialKey)
 	if !ok {
+		service.logger.Warn("S3クライアント初期化に失敗", "operation", "SaveCloudMetadata", "message", message, "detail", detail)
 		return result.ErrorResult[bool](message, detail)
 	}
 
@@ -84,6 +87,7 @@ func (service *CloudService) LoadCloudMetadata(
 ) result.ApiResult[*storage.CloudMetadata] {
 	client, cfg, message, detail, ok := service.newClient(ctx, credentialKey)
 	if !ok {
+		service.logger.Warn("S3クライアント初期化に失敗", "operation", "LoadCloudMetadata", "message", message, "detail", detail)
 		return result.ErrorResult[*storage.CloudMetadata](message, detail)
 	}
 
@@ -142,6 +146,7 @@ func (service *CloudService) newClient(
 		return nil, storage.S3Config{}, "認証情報取得に失敗しました", error.Error(), false
 	}
 	if credential == nil {
+		service.logger.Warn("認証情報が見つかりません", "credentialKey", credentialKey)
 		return nil, storage.S3Config{}, "認証情報が見つかりません", "credentialが空です", false
 	}
 

@@ -28,6 +28,7 @@ func NewMemoService(repository *db.Repository, fileManager *memo.FileManager, lo
 // CreateMemo はメモを作成する。
 func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) result.ApiResult[*models.Memo] {
 	if error := validateMemoInput(input); error != nil {
+		service.logger.Warn("メモ入力が不正です", "error", error)
 		return result.ErrorResult[*models.Memo]("メモ入力が不正です", error.Error())
 	}
 
@@ -57,6 +58,7 @@ func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) res
 func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input MemoUpdateInput) result.ApiResult[*models.Memo] {
 	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
 	if !ok {
+		service.logger.Warn("メモIDが不正です", "detail", detail, "memoId", memoID)
 		return result.ErrorResult[*models.Memo]("メモIDが不正です", detail)
 	}
 
@@ -66,6 +68,7 @@ func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input
 		return result.ErrorResult[*models.Memo]("メモ取得に失敗しました", error.Error())
 	}
 	if memo == nil {
+		service.logger.Warn("メモが見つかりません", "memoId", trimmedID)
 		return result.ErrorResult[*models.Memo]("メモが見つかりません", "指定されたIDが存在しません")
 	}
 
@@ -96,6 +99,7 @@ func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input
 func (service *MemoService) GetMemoByID(ctx context.Context, memoID string) result.ApiResult[*models.Memo] {
 	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
 	if !ok {
+		service.logger.Warn("メモIDが不正です", "detail", detail, "memoId", memoID)
 		return result.ErrorResult[*models.Memo]("メモIDが不正です", detail)
 	}
 
@@ -131,6 +135,7 @@ func (service *MemoService) ListAllMemos(ctx context.Context) result.ApiResult[[
 func (service *MemoService) DeleteMemo(ctx context.Context, memoID string) result.ApiResult[bool] {
 	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
 	if !ok {
+		service.logger.Warn("メモIDが不正です", "detail", detail, "memoId", memoID)
 		return result.ErrorResult[bool]("メモIDが不正です", detail)
 	}
 
@@ -140,6 +145,7 @@ func (service *MemoService) DeleteMemo(ctx context.Context, memoID string) resul
 		return result.ErrorResult[bool]("メモ取得に失敗しました", error.Error())
 	}
 	if memo == nil {
+		service.logger.Warn("メモが見つかりません", "memoId", trimmedID)
 		return result.ErrorResult[bool]("メモが見つかりません", "指定されたIDが存在しません")
 	}
 
