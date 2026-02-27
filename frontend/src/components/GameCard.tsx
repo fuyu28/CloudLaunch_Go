@@ -8,9 +8,14 @@ import type { GameType } from "src/types/game";
 type GameCardProps = {
   game: GameType;
   onLaunchGame: (game: GameType) => void;
+  hasLaunchWarning?: boolean;
 };
 
-const GameCard = memo(function GameCard({ game, onLaunchGame }: GameCardProps): React.JSX.Element {
+const GameCard = memo(function GameCard({
+  game,
+  onLaunchGame,
+  hasLaunchWarning = false,
+}: GameCardProps): React.JSX.Element {
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -47,14 +52,22 @@ const GameCard = memo(function GameCard({ game, onLaunchGame }: GameCardProps): 
               type="button"
               onClick={handleLaunchClick}
               aria-label="ゲームを起動"
+              title={
+                hasLaunchWarning ? "実行ファイルまたはセーブ保存先に問題があります" : "ゲームを起動"
+              }
               className="bg-base-100/80
               rounded-full p-2 shadow-md
               flex items-center justify-center
               hover:bg-base-100/90 focus:outline-none
               focus:ring-2 focus:ring-primary
-              transition"
+              transition relative"
             >
               <IoIosPlay size={32} className="pl-1 text-base-content" />
+              {hasLaunchWarning && (
+                <span className="absolute -top-1 -right-1 h-5 min-w-5 rounded-full bg-error text-error-content text-xs font-bold leading-5 text-center px-1">
+                  !
+                </span>
+              )}
             </button>
           </div>
         </div>

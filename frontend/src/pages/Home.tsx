@@ -20,6 +20,7 @@ import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { isValidCredsAtom } from "@renderer/state/credentials";
+import { checkDirectoryExists, checkFileExists } from "@renderer/utils/fileValidation";
 import {
   searchWordAtom,
   filterAtom,
@@ -43,6 +44,7 @@ export default function Home(): React.ReactElement {
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const [pendingLaunchGame, setPendingLaunchGame] = useState<GameType | null>(null);
   const [saveSyncMessage, setSaveSyncMessage] = useState("");
+  const [warningGameIds, setWarningGameIds] = useState<Set<string>>(new Set());
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
   const { isOfflineMode } = useOfflineMode();
@@ -110,6 +112,39 @@ export default function Home(): React.ReactElement {
     }
   }, [validateCreds, isOfflineMode]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveWarnings = async (): Promise<void> => {
+      const entries = await Promise.all(
+        visibleGames.map(async (game) => {
+          const hasUnconfiguredExe = !game.exePath || game.exePath === UNCONFIGURED_EXE_PATH;
+          const exeMissing = hasUnconfiguredExe ? true : !(await checkFileExists(game.exePath));
+          const savePath = (game.saveFolderPath || "").trim();
+          const saveMissing = savePath !== "" ? !(await checkDirectoryExists(savePath)) : false;
+          return [game.id, exeMissing || saveMissing] as const;
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const next = new Set<string>();
+      for (const [gameID, hasWarning] of entries) {
+        if (hasWarning) {
+          next.add(gameID);
+        }
+      }
+      setWarningGameIds(next);
+    };
+
+    void resolveWarnings();
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleGames]);
+
   const toValidDate = useCallback(
     (value: Date | string | number | null | undefined): Date | null => {
       if (!value) return null;
@@ -161,6 +196,21 @@ export default function Home(): React.ReactElement {
         await gameActionLoading.executeWithLoading(
           async () => {
             throw new Error("実行ファイルのパスが未設定です");
+          },
+          {
+            loadingMessage: MESSAGES.GAME.LAUNCHING,
+            errorMessage: MESSAGES.GAME.LAUNCH_FAILED,
+            showToast: true,
+          },
+        );
+        return;
+      }
+
+      const exeExists = await checkFileExists(game.exePath);
+      if (!exeExists) {
+        await gameActionLoading.executeWithLoading(
+          async () => {
+            throw new Error("実行ファイルが見つかりません");
           },
           {
             loadingMessage: MESSAGES.GAME.LAUNCHING,
@@ -241,7 +291,11 @@ export default function Home(): React.ReactElement {
       />
 
       {/* ゲーム一覧 */}
-      <GameGrid games={visibleGames} onLaunchGame={handleLaunchGame} />
+      <GameGrid
+        games={visibleGames}
+        onLaunchGame={handleLaunchGame}
+        warningGameIds={warningGameIds}
+      />
 
       {/* ゲーム追加ボタン */}
       <FloatingButton

@@ -19,6 +19,8 @@ type GameGridProps = {
   games: GameType[];
   /** ゲーム起動ハンドラ */
   onLaunchGame: (game: GameType) => void;
+  /** 起動警告が必要なゲームID一覧 */
+  warningGameIds?: ReadonlySet<string>;
 };
 
 /**
@@ -27,7 +29,11 @@ type GameGridProps = {
  * @param props - コンポーネントのプロパティ
  * @returns ゲーム一覧グリッド要素
  */
-const GameGrid = memo(function GameGrid({ games, onLaunchGame }: GameGridProps): React.JSX.Element {
+const GameGrid = memo(function GameGrid({
+  games,
+  onLaunchGame,
+  warningGameIds,
+}: GameGridProps): React.JSX.Element {
   if (games.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-0">
@@ -47,7 +53,12 @@ const GameGrid = memo(function GameGrid({ games, onLaunchGame }: GameGridProps):
           style={{ gridTemplateColumns: "repeat(auto-fill, 220px)" }}
         >
           {games.map((game) => (
-            <GameCard key={game.id} game={game} onLaunchGame={onLaunchGame} />
+            <GameCard
+              key={game.id}
+              game={game}
+              onLaunchGame={onLaunchGame}
+              hasLaunchWarning={warningGameIds?.has(game.id) ?? false}
+            />
           ))}
         </div>
       </div>
