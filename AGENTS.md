@@ -3,7 +3,6 @@
 ## Project Structure & Module Organization
 
 - `main.go` is the Wails entry point; backend logic lives in `internal/` (e.g., `internal/app`, `internal/services`, `internal/db`, `internal/storage`).
-- `cmd/cloudlaunch` contains the CLI/app entry package layout used by the project.
 - `frontend/` is the Vite + React UI (TypeScript, Tailwind, DaisyUI); built assets go to `frontend/dist` and are embedded by Wails.
 - `build/` contains platform-specific packaging assets for Wails builds.
 - `docs/` holds project notes and planning artifacts.

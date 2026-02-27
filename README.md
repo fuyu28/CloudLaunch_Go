@@ -186,7 +186,6 @@ wails build
 
 ```
 CloudLaunch_Go/
-├── cmd/                 # CLI / app エントリ
 ├── internal/            # アプリの中核ロジック
 ├── frontend/            # Vite + React UI
 ├── build/               # Wails ビルド用アセット
