@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/db"
@@ -71,7 +72,12 @@ func NewApp(ctx context.Context) (*App, error) {
 	cloudService := services.NewCloudService(cfg, credentialStore, logger)
 	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
 	erogameScapeService := services.NewErogameScapeService(cfg, logger)
-	processMonitor := services.NewProcessMonitorService(repository, logger, cloudSync)
+	var processMonitor *services.ProcessMonitorService
+	if runtime.GOOS == "windows" {
+		processMonitor = services.NewProcessMonitorService(repository, logger, cloudSync)
+	} else {
+		logger.Info("非Windows環境のためプロセス監視を無効化します", "goos", runtime.GOOS)
+	}
 	screenshotService := services.NewScreenshotService(cfg, repository, logger)
 
 	app := &App{
