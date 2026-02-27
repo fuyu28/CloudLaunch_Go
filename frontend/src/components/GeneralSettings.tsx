@@ -836,7 +836,9 @@ export default function GeneralSettings(): React.JSX.Element {
               <Link to="/debug/process" className="btn btn-outline btn-sm w-fit mt-4">
                 プロセス監視デバッグを開く
               </Link>
-              <p className="text-xs text-base-content/50 mt-2">プロセス監視の取得結果を確認します</p>
+              <p className="text-xs text-base-content/50 mt-2">
+                プロセス監視の取得結果を確認します
+              </p>
             </div>
           </div>
         </div>
