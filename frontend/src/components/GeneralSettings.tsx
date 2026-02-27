@@ -387,6 +387,7 @@ export default function GeneralSettings(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
+    // 初回マウント時にLocalStorage設定をバックエンドへ同期する。
     void applyScreenshotHotkey(screenshotHotkey, false);
   }, []);
 

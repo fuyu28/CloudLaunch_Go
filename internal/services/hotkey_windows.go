@@ -64,6 +64,7 @@ type hotkeyServiceWindows struct {
 	notify     bool
 	notifyHWND windows.Handle
 	started    atomic.Bool
+	capturing  atomic.Bool
 	threadID   uint32
 	stoppedCh  chan struct{}
 	mu         sync.Mutex
@@ -211,7 +212,14 @@ func (service *hotkeyServiceWindows) run() {
 			if service.logger != nil {
 				service.logger.Debug("ホットキーを受信しました")
 			}
+			if !service.capturing.CompareAndSwap(false, true) {
+				if service.logger != nil {
+					service.logger.Debug("キャプチャ実行中のためホットキー入力をスキップ")
+				}
+				continue
+			}
 			go func() {
+				defer service.capturing.Store(false)
 				if service.handler() {
 					service.showHotkeyNotification("スクリーンショットを保存しました")
 				}

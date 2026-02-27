@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/models"
+	"golang.org/x/sys/windows"
 )
 
 const (
@@ -26,8 +27,9 @@ const (
 )
 
 var (
+	user32Screenshot          = windows.NewLazySystemDLL("user32.dll")
 	errClipboardImageNotFound = errors.New("clipboard image not found")
-	procClipboardSeqNumber    = user32.NewProc("GetClipboardSequenceNumber")
+	procClipboardSeqNumber    = user32Screenshot.NewProc("GetClipboardSequenceNumber")
 )
 
 // CaptureHotkey はホットキー経由でSnipping Toolを起動し、画像を保存する。

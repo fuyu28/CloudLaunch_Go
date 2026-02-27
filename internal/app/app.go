@@ -125,6 +125,11 @@ func (app *App) Shutdown(ctx context.Context) error {
 		app.ProcessMonitor.StopMonitoring()
 	}
 	app.stopHotkey()
+	if app.ScreenshotService != nil {
+		if err := app.ScreenshotService.Close(); err != nil {
+			app.Logger.Warn("スクリーンショットログのクローズに失敗しました", "error", err)
+		}
+	}
 	if app.dbConnection != nil {
 		return app.dbConnection.Close()
 	}

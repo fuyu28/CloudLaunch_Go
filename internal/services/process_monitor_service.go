@@ -744,6 +744,7 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 		}
 	}
 
+	// まずUTF-8の生データを優先して解釈し、失敗時のみShift-JISへフォールバックする。
 	if utf8.Valid(output) {
 		if records, err := parse(output); err == nil {
 			return records, nil

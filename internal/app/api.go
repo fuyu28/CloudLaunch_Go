@@ -278,9 +278,12 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 	if err := services.ValidateHotkeyCombo(trimmed); err != nil {
 		return result.ErrorResult[bool]("ホットキーが不正です", err.Error())
 	}
+	prevHotkey := app.Config.ScreenshotHotkey
 	app.Config.ScreenshotHotkey = trimmed
 	app.stopHotkey()
 	if err := app.startHotkey(); err != nil {
+		app.Config.ScreenshotHotkey = prevHotkey
+		_ = app.startHotkey()
 		return result.ErrorResult[bool]("ホットキーの更新に失敗しました", err.Error())
 	}
 	return result.OkResult(true)
@@ -288,9 +291,12 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 
 // UpdateScreenshotHotkeyNotify はホットキー通知の有効/無効を更新する。
 func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool] {
+	prevNotify := app.Config.ScreenshotHotkeyNotify
 	app.Config.ScreenshotHotkeyNotify = enabled
 	app.stopHotkey()
 	if err := app.startHotkey(); err != nil {
+		app.Config.ScreenshotHotkeyNotify = prevNotify
+		_ = app.startHotkey()
 		return result.ErrorResult[bool]("ホットキー通知の更新に失敗しました", err.Error())
 	}
 	return result.OkResult(true)

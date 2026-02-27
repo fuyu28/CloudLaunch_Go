@@ -17,13 +17,15 @@ import (
 
 // ScreenshotService はゲームウィンドウのスクリーンショット取得を提供する。
 type ScreenshotService struct {
-	repository  *db.Repository
-	logger      *slog.Logger
-	appDataDir  string
+	repository *db.Repository
+	logger     *slog.Logger
+	appDataDir string
+	// Snipping Tool運用では自動適用できないため、設定互換性のために保持する。
 	clientOnly  bool
 	localJpeg   bool
 	jpegQuality int
 	fileLogger  *slog.Logger
+	logFile     *os.File
 }
 
 // NewScreenshotService は ScreenshotService を生成する。
@@ -32,6 +34,7 @@ func NewScreenshotService(
 	repository *db.Repository,
 	logger *slog.Logger,
 ) *ScreenshotService {
+	fileLogger, logFile := newScreenshotFileLogger(cfg.AppDataDir, cfg.LogLevel)
 	return &ScreenshotService{
 		repository:  repository,
 		logger:      logger,
@@ -39,7 +42,8 @@ func NewScreenshotService(
 		clientOnly:  cfg.ScreenshotClientOnly,
 		localJpeg:   cfg.ScreenshotLocalJpeg,
 		jpegQuality: cfg.ScreenshotJpegQuality,
-		fileLogger:  newScreenshotFileLogger(cfg.AppDataDir, cfg.LogLevel),
+		fileLogger:  fileLogger,
+		logFile:     logFile,
 	}
 }
 
@@ -130,23 +134,32 @@ func (service *ScreenshotService) buildScreenshotPaths(gameID string, saveDir st
 	return fullPath, tmpPath, nil
 }
 
-func newScreenshotFileLogger(appDataDir string, level string) *slog.Logger {
+func (service *ScreenshotService) Close() error {
+	if service == nil || service.logFile == nil {
+		return nil
+	}
+	err := service.logFile.Close()
+	service.logFile = nil
+	return err
+}
+
+func newScreenshotFileLogger(appDataDir string, level string) (*slog.Logger, *os.File) {
 	baseDir := strings.TrimSpace(appDataDir)
 	if baseDir == "" {
 		baseDir = os.TempDir()
 	}
 	logDir := filepath.Join(baseDir, "logs")
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
-		return nil
+		return nil, nil
 	}
 	logPath := filepath.Join(logDir, "screenshot.log")
 	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	logLevel := parseLogLevel(level)
-	return slog.New(slog.NewJSONHandler(file, &slog.HandlerOptions{Level: logLevel}))
+	return slog.New(slog.NewJSONHandler(file, &slog.HandlerOptions{Level: logLevel})), file
 }
 
 func parseLogLevel(level string) slog.Level {
