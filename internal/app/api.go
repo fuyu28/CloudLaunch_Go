@@ -280,7 +280,9 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 	}
 	app.Config.ScreenshotHotkey = trimmed
 	app.stopHotkey()
-	app.startHotkey()
+	if err := app.startHotkey(); err != nil {
+		return result.ErrorResult[bool]("ホットキーの更新に失敗しました", err.Error())
+	}
 	return result.OkResult(true)
 }
 
@@ -288,7 +290,9 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool] {
 	app.Config.ScreenshotHotkeyNotify = enabled
 	app.stopHotkey()
-	app.startHotkey()
+	if err := app.startHotkey(); err != nil {
+		return result.ErrorResult[bool]("ホットキー通知の更新に失敗しました", err.Error())
+	}
 	return result.OkResult(true)
 }
 
@@ -492,12 +496,12 @@ func (app *App) LaunchGame(exePath string) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// CaptureGameWindow は指定されたゲームウィンドウのスクリーンショットを保存する。
-func (app *App) CaptureGameWindow(gameID string) result.ApiResult[string] {
+// CaptureGameScreenshot は指定されたゲームのスクリーンショットを保存する。
+func (app *App) CaptureGameScreenshot(gameID string) result.ApiResult[string] {
 	if app.ScreenshotService == nil {
 		return result.ErrorResult[string]("スクリーンショット機能が無効です", "screenshot service is nil")
 	}
-	path, err := app.ScreenshotService.CaptureGameWindow(app.context(), strings.TrimSpace(gameID))
+	path, err := app.ScreenshotService.CaptureGameScreenshot(app.context(), strings.TrimSpace(gameID))
 	if err != nil {
 		app.Logger.Error("スクリーンショット取得に失敗", "error", err)
 		return result.ErrorResult[string]("スクリーンショットの取得に失敗しました", err.Error())

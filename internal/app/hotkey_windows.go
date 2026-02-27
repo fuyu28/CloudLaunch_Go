@@ -3,16 +3,23 @@
 package app
 
 import (
+	"errors"
 	"strings"
 
 	"CloudLaunch_Go/internal/services"
 )
 
-func (app *App) startHotkey() {
+func (app *App) startHotkey() error {
 	if app.ScreenshotService == nil {
-		return
+		return nil
 	}
-	app.HotkeyService = app.startHotkeyService(app.Config.ScreenshotHotkey, app.handleHotkeyCapture)
+	service, err := app.startHotkeyService(app.Config.ScreenshotHotkey, app.handleHotkeyCapture)
+	if err != nil {
+		app.HotkeyService = nil
+		return err
+	}
+	app.HotkeyService = service
+	return nil
 }
 
 func (app *App) stopHotkey() {
@@ -23,10 +30,10 @@ func (app *App) stopHotkey() {
 	app.HotkeyService = nil
 }
 
-func (app *App) startHotkeyService(combo string, handler services.HotkeyHandler) services.HotkeyService {
+func (app *App) startHotkeyService(combo string, handler services.HotkeyHandler) (services.HotkeyService, error) {
 	trimmed := strings.TrimSpace(combo)
 	if trimmed == "" {
-		return nil
+		return nil, errors.New("hotkey is not configured")
 	}
 	config := services.HotkeyConfig{
 		Combo:  trimmed,
@@ -34,13 +41,13 @@ func (app *App) startHotkeyService(combo string, handler services.HotkeyHandler)
 	}
 	service := services.NewHotkeyService(app.Logger, config, handler)
 	if service == nil {
-		return nil
+		return nil, errors.New("failed to create hotkey service")
 	}
 	if err := service.Start(); err != nil {
 		app.Logger.Warn("ホットキーを開始できませんでした", "combo", trimmed, "error", err)
-		return nil
+		return nil, err
 	}
-	return service
+	return service, nil
 }
 
 func (app *App) handleHotkeyCapture() bool {

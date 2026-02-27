@@ -204,14 +204,3 @@ func readClipboardImageBytes(ctx context.Context) ([]byte, error) {
 	}
 	return decoded, nil
 }
-
-func captureWindowByPID(pid int, outputPath string) (CaptureMeta, error) {
-	if pid <= 0 {
-		return CaptureMeta{}, errors.New("pid is invalid")
-	}
-	service := ScreenshotService{}
-	if err := service.captureWithScreenClip(context.Background(), outputPath, ""); err != nil {
-		return CaptureMeta{}, err
-	}
-	return CaptureMeta{}, nil
-}

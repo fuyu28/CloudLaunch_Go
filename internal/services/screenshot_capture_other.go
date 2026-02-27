@@ -2,8 +2,11 @@
 
 package services
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
-func captureWindowByPID(pid int, outputPath string) (CaptureMeta, error) {
-	return CaptureMeta{}, errors.New("dxgi capture is not supported")
+func (service *ScreenshotService) captureWithScreenClip(_ context.Context, _ string, _ string) error {
+	return errors.New("screen clip is not supported")
 }

@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -19,32 +17,29 @@ import (
 
 // ScreenshotService はゲームウィンドウのスクリーンショット取得を提供する。
 type ScreenshotService struct {
-	repository     *db.Repository
-	processMonitor *ProcessMonitorService
-	logger         *slog.Logger
-	appDataDir     string
-	clientOnly     bool
-	localJpeg      bool
-	jpegQuality    int
-	fileLogger     *slog.Logger
+	repository  *db.Repository
+	logger      *slog.Logger
+	appDataDir  string
+	clientOnly  bool
+	localJpeg   bool
+	jpegQuality int
+	fileLogger  *slog.Logger
 }
 
 // NewScreenshotService は ScreenshotService を生成する。
 func NewScreenshotService(
 	cfg config.Config,
 	repository *db.Repository,
-	processMonitor *ProcessMonitorService,
 	logger *slog.Logger,
 ) *ScreenshotService {
 	return &ScreenshotService{
-		repository:     repository,
-		processMonitor: processMonitor,
-		logger:         logger,
-		appDataDir:     cfg.AppDataDir,
-		clientOnly:     cfg.ScreenshotClientOnly,
-		localJpeg:      cfg.ScreenshotLocalJpeg,
-		jpegQuality:    cfg.ScreenshotJpegQuality,
-		fileLogger:     newScreenshotFileLogger(cfg.AppDataDir, cfg.LogLevel),
+		repository:  repository,
+		logger:      logger,
+		appDataDir:  cfg.AppDataDir,
+		clientOnly:  cfg.ScreenshotClientOnly,
+		localJpeg:   cfg.ScreenshotLocalJpeg,
+		jpegQuality: cfg.ScreenshotJpegQuality,
+		fileLogger:  newScreenshotFileLogger(cfg.AppDataDir, cfg.LogLevel),
 	}
 }
 
@@ -63,11 +58,8 @@ func (service *ScreenshotService) SetJpegQuality(value int) {
 	service.jpegQuality = value
 }
 
-// CaptureGameWindow は指定ゲームのウィンドウを撮影して保存し、保存先パスを返す。
-func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID string) (string, error) {
-	if service.processMonitor == nil {
-		return "", errors.New("process monitor is nil")
-	}
+// CaptureGameScreenshot は指定ゲームのスクリーンショットを保存し、保存先パスを返す。
+func (service *ScreenshotService) CaptureGameScreenshot(ctx context.Context, gameID string) (string, error) {
 	trimmed := strings.TrimSpace(gameID)
 	if trimmed == "" {
 		return "", errors.New("gameID is empty")
@@ -79,21 +71,6 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 	if game == nil {
 		return "", errors.New("game not found")
 	}
-	exePath := strings.TrimSpace(game.ExePath)
-	if exePath == "" || exePath == UnconfiguredExePath {
-		return "", errors.New("exePath is invalid")
-	}
-
-	pids, err := service.processMonitor.FindProcessIDsByExe(exePath)
-	if err != nil {
-		service.logCapture(slog.LevelWarn, "プロセス検索に失敗", "gameId", trimmed, "error", err)
-		return "", err
-	}
-	if len(pids) == 0 {
-		service.logCapture(slog.LevelInfo, "ゲームプロセスが見つかりません", "gameId", trimmed, "exePath", exePath)
-		return "", errors.New("game process not found")
-	}
-	pids = rankPidsForCapture(pids)
 
 	baseDir := strings.TrimSpace(service.appDataDir)
 	if baseDir == "" {
@@ -113,61 +90,21 @@ func (service *ScreenshotService) CaptureGameWindow(ctx context.Context, gameID 
 		"スクリーンショット開始",
 		"gameId", game.ID,
 		"title", game.Title,
-		"exePath", exePath,
-		"pids", pids,
 		"output", fullPath,
-		"clientOnly", true,
+		"clientOnly", service.clientOnly,
 		"localJpeg", service.localJpeg,
 	)
 
-	var captureErr error
-	for _, pid := range pids {
-		outputPath := fullPath
-		if service.localJpeg {
-			outputPath = tmpPath
+	if err := service.captureWithScreenClip(ctx, fullPath, tmpPath); err != nil {
+		if errors.Is(err, ErrNoNewScreenshot) {
+			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", game.ID)
+			return "", err
 		}
-
-		service.logCapture(slog.LevelDebug, "DXGIキャプチャ開始", "pid", pid, "output", outputPath)
-		meta, err := captureWindowByPID(pid, outputPath)
-		if err == nil {
-			if tmpPath != "" {
-				if convertErr := service.convertFileToJpeg(tmpPath, fullPath); convertErr != nil {
-					_ = os.Remove(tmpPath)
-					service.logCapture(slog.LevelWarn, "DXGI JPEG変換に失敗", "pid", pid, "error", convertErr)
-					return "", convertErr
-				}
-				_ = os.Remove(tmpPath)
-			}
-			service.logCapture(
-				slog.LevelInfo,
-				"DXGIキャプチャ成功",
-				"pid", pid,
-				"hwnd", meta.HWND,
-				"crop", fmt.Sprintf("%d,%d %dx%d", meta.CropX, meta.CropY, meta.CropW, meta.CropH),
-				"monitor", meta.Monitor,
-				"output", fullPath,
-			)
-			return fullPath, nil
-		}
-		captureErr = err
-		service.logCapture(
-			slog.LevelWarn,
-			"DXGIキャプチャに失敗",
-			"pid", pid,
-			"hwnd", meta.HWND,
-			"crop", fmt.Sprintf("%d,%d %dx%d", meta.CropX, meta.CropY, meta.CropW, meta.CropH),
-			"monitor", meta.Monitor,
-			"stderr", meta.DXGIStderr,
-			"error", err,
-		)
-		if tmpPath != "" {
-			_ = os.Remove(tmpPath)
-		}
+		service.logCapture(slog.LevelWarn, "スクリーンショット取得に失敗", "gameId", game.ID, "error", err)
+		return "", err
 	}
-	if captureErr != nil {
-		return "", captureErr
-	}
-	return "", errors.New("failed to capture window")
+	service.logCapture(slog.LevelInfo, "スクリーンショット保存完了", "gameId", game.ID, "output", fullPath)
+	return fullPath, nil
 }
 
 func (service *ScreenshotService) buildScreenshotPaths(gameID string, saveDir string) (string, string, error) {
@@ -191,41 +128,6 @@ func (service *ScreenshotService) buildScreenshotPaths(gameID string, saveDir st
 		tmpPath = filepath.Join(saveDir, fmt.Sprintf("%s_%s.tmp.png", timestamp, gameID))
 	}
 	return fullPath, tmpPath, nil
-}
-
-func (service *ScreenshotService) convertFileToJpeg(sourcePath string, destPath string) error {
-	file, err := os.Open(sourcePath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	img, _, err := image.Decode(file)
-	if err != nil {
-		return err
-	}
-
-	out, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if closeErr := out.Close(); closeErr != nil {
-			service.logger.Warn("スクリーンショットの保存に失敗", "error", closeErr)
-		}
-	}()
-
-	quality := normalizeJpegQuality(service.jpegQuality)
-	return jpeg.Encode(out, img, &jpeg.Options{Quality: quality})
-}
-
-func normalizeJpegQuality(value int) int {
-	if value < 1 || value > 100 {
-		return 85
-	}
-	return value
 }
 
 func newScreenshotFileLogger(appDataDir string, level string) *slog.Logger {

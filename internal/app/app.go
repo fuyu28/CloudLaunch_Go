@@ -72,7 +72,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
 	erogameScapeService := services.NewErogameScapeService(cfg, logger)
 	processMonitor := services.NewProcessMonitorService(repository, logger, cloudSync)
-	screenshotService := services.NewScreenshotService(cfg, repository, processMonitor, logger)
+	screenshotService := services.NewScreenshotService(cfg, repository, logger)
 
 	app := &App{
 		Config:              cfg,
@@ -106,7 +106,9 @@ func (app *App) Startup(ctx context.Context) {
 		app.ProcessMonitor.StartMonitoring()
 		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
 	}
-	app.startHotkey()
+	if err := app.startHotkey(); err != nil {
+		app.Logger.Warn("ホットキーの開始に失敗しました", "error", err)
+	}
 }
 
 func (app *App) context() context.Context {

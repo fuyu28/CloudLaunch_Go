@@ -2,6 +2,6 @@
 
 package app
 
-func (app *App) startHotkey() {}
+func (app *App) startHotkey() error { return nil }
 
 func (app *App) stopHotkey() {}

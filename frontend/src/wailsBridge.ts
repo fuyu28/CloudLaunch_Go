@@ -829,7 +829,7 @@ export const createWailsBridge = (): WindowApi => {
       },
       captureWindow: async (gameId) => {
         try {
-          const result = await (window as any)["go"]["app"]["App"]["CaptureGameWindow"](gameId);
+          const result = await (window as any)["go"]["app"]["App"]["CaptureGameScreenshot"](gameId);
           return result && result.success
             ? { success: true, data: result.data as string }
             : { success: false, message: result?.error?.message ?? "エラー" };
