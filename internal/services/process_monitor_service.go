@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
@@ -536,30 +538,78 @@ func (service *ProcessMonitorService) isGameProcessRunning(
 	gameExePath string,
 	processes []normalizedProcess,
 ) bool {
-	normalizedExeName := normalizeProcessToken(gameExeName)
-	normalizedExePath := normalizeProcessToken(gameExePath)
-	normalizedExeDir := normalizeProcessToken(filepath.Dir(gameExePath))
-
 	for _, proc := range processes {
-		if proc.info.Name == "" || proc.info.Cmd == "" {
-			continue
-		}
-		if proc.normalized != normalizedExeName {
-			continue
-		}
-
-		procCmd := proc.normalizedCmd
-		if procCmd == normalizedExePath {
-			return true
-		}
-		if strings.Contains(procCmd, normalizedExePath) || strings.Contains(normalizedExePath, procCmd) {
-			return true
-		}
-		if strings.Contains(procCmd, normalizedExeDir) {
+		if service.matchGameProcess(gameExeName, gameExePath, proc) {
 			return true
 		}
 	}
 	return false
+}
+
+func (service *ProcessMonitorService) matchGameProcess(
+	gameExeName string,
+	gameExePath string,
+	proc normalizedProcess,
+) bool {
+	if proc.info.Name == "" || proc.info.Cmd == "" {
+		return false
+	}
+	normalizedExeName := normalizeProcessToken(gameExeName)
+	if proc.normalized != normalizedExeName {
+		return false
+	}
+
+	normalizedExePath := normalizeProcessToken(gameExePath)
+	normalizedExeDir := normalizeProcessToken(filepath.Dir(gameExePath))
+	procCmd := proc.normalizedCmd
+	if procCmd == normalizedExePath {
+		return true
+	}
+	if strings.Contains(procCmd, normalizedExePath) || strings.Contains(normalizedExePath, procCmd) {
+		return true
+	}
+	if strings.Contains(procCmd, normalizedExeDir) {
+		return true
+	}
+	return false
+}
+
+// FindProcessIDsByExe は実行ファイルパスに一致するプロセスIDを返す。
+func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int, error) {
+	trimmed := strings.TrimSpace(exePath)
+	if trimmed == "" {
+		return nil, errors.New("exePath is empty")
+	}
+
+	processes, _ := service.getProcesses()
+	if len(processes) == 0 {
+		return nil, nil
+	}
+
+	exeName := filepath.Base(trimmed)
+	if !strings.HasSuffix(strings.ToLower(exeName), ".exe") {
+		exeName += ".exe"
+	}
+
+	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
+	for _, proc := range processes {
+		if proc.Name == "" {
+			continue
+		}
+		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
+			info:          proc,
+			normalized:    normalizeProcessToken(proc.Name),
+			normalizedCmd: normalizeProcessToken(proc.Cmd),
+		})
+	}
+
+	ids := make([]int, 0, 2)
+	for _, proc := range normalizedProcesses {
+		if service.matchGameProcess(exeName, trimmed, proc) {
+			ids = append(ids, proc.info.Pid)
+		}
+	}
+	return ids, nil
 }
 
 func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error) {
@@ -605,6 +655,9 @@ func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, e
 		}
 		if fullPath == "" {
 			fullPath = name
+		}
+		if ext := strings.ToLower(filepath.Ext(fullPath)); ext != ".exe" {
+			continue
 		}
 		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
 	}
@@ -657,6 +710,9 @@ func (service *ProcessMonitorService) getProcessesWmic() ([]ProcessInfo, error) 
 		if fullPath == "" {
 			fullPath = name
 		}
+		if ext := strings.ToLower(filepath.Ext(fullPath)); ext != ".exe" {
+			continue
+		}
 		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
 	}
 	return processes, nil
@@ -688,8 +744,11 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 		}
 	}
 
-	if records, err := parse(output); err == nil {
-		return records, nil
+	// まずUTF-8の生データを優先して解釈し、失敗時のみShift-JISへフォールバックする。
+	if utf8.Valid(output) {
+		if records, err := parse(output); err == nil {
+			return records, nil
+		}
 	}
 
 	if decoded, err := decodeProcessOutput(output); err == nil {

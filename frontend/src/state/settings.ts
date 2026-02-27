@@ -69,6 +69,48 @@ export const transferConcurrencyAtom = atomWithStorage<number>("transferConcurre
 export const transferRetryCountAtom = atomWithStorage<number>("transferRetryCount", 3);
 
 /**
+ * スクリーンショット同期設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotSyncEnabledAtom = atomWithStorage<boolean>("screenshotSyncEnabled", false);
+
+/**
+ * スクリーンショットのJPEG変換設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotUploadJpegAtom = atomWithStorage<boolean>("screenshotUploadJpeg", true);
+
+/**
+ * スクリーンショットJPEG品質設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotJpegQualityAtom = atomWithStorage<number>("screenshotJpegQuality", 85);
+
+/**
+ * スクリーンショットをクライアント領域のみ取得する設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotClientOnlyAtom = atomWithStorage<boolean>("screenshotClientOnly", true);
+
+/**
+ * スクリーンショットのローカル保存をJPEGにする設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotLocalJpegAtom = atomWithStorage<boolean>("screenshotLocalJpeg", false);
+
+/**
+ * スクリーンショットのホットキー設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotHotkeyAtom = atomWithStorage<string>("screenshotHotkey", "Ctrl+Alt+S");
+
+/**
+ * ホットキー通知の有効設定atom
+ * LocalStorageに自動保存される
+ */
+export const screenshotHotkeyNotifyAtom = atomWithStorage<boolean>("screenshotHotkeyNotify", true);
+
+/**
  * テーマ変更中の状態atom
  * 一時的な状態なのでLocalStorageには保存しない
  */

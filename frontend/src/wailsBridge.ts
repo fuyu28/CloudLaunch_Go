@@ -98,6 +98,13 @@ export type WindowApi = {
     updateOfflineMode: (enabled: boolean) => Promise<ApiResult<void>>;
     updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>;
     updateTransferRetryCount: (value: number) => Promise<ApiResult<void>>;
+    updateScreenshotSyncEnabled: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateScreenshotUploadJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateScreenshotJpegQuality: (value: number) => Promise<ApiResult<void>>;
+    updateScreenshotClientOnly: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateScreenshotLocalJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateScreenshotHotkey: (combo: string) => Promise<ApiResult<void>>;
+    updateScreenshotHotkeyNotify: (enabled: boolean) => Promise<ApiResult<void>>;
   };
   file: {
     selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<ApiResult<string>>;
@@ -227,6 +234,7 @@ export type WindowApi = {
   };
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>;
+    captureWindow: (gameId: string) => Promise<ApiResult<string>>;
   };
   erogameScape: {
     fetchById: (id: string) => Promise<ApiResult<GameImport>>;
@@ -286,6 +294,60 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      updateScreenshotSyncEnabled: async (enabled) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotSyncEnabled"](
+          enabled,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotUploadJpeg: async (enabled) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotUploadJpeg"](
+          enabled,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotJpegQuality: async (value) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotJpegQuality"](
+          value,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotClientOnly: async (enabled) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotClientOnly"](
+          enabled,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotLocalJpeg: async (enabled) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotLocalJpeg"](
+          enabled,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotHotkey: async (combo) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotHotkey"](combo);
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
+      },
+      updateScreenshotHotkeyNotify: async (enabled) => {
+        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotHotkeyNotify"](
+          enabled,
+        );
+        return result && result.success
+          ? { success: true }
+          : { success: false, message: result?.error?.message ?? "エラー" };
       },
     },
     file: {
@@ -764,6 +826,18 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      captureWindow: async (gameId) => {
+        try {
+          const result = await (window as any)["go"]["app"]["App"]["CaptureGameScreenshot"](gameId);
+          return result && result.success
+            ? { success: true, data: result.data as string }
+            : { success: false, message: result?.error?.message ?? "エラー" };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "スクリーンショットに失敗しました";
+          return { success: false, message };
+        }
       },
     },
     erogameScape: {
