@@ -95,7 +95,11 @@ class RendererLogger {
       window.api.errorReport.reportError({
         message: metadata.error.message,
         stack: metadata.error.stack || "",
+        level: "error",
         context: `${metadata.component || "unknown"}:${metadata.function || "unknown"} - ${message}`,
+        component: metadata.component,
+        function: metadata.function,
+        data: metadata.data,
         timestamp: new Date().toISOString(),
       });
     }

@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/logging"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/services"
@@ -193,6 +195,102 @@ type FileFilterInput struct {
 	Extensions []string `json:"extensions"`
 }
 
+// FrontendLogPayload はレンダラープロセスから送信されるログ情報。
+type FrontendLogPayload struct {
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	Component string `json:"component"`
+	Function  string `json:"function"`
+	Context   string `json:"context"`
+	Data      any    `json:"data"`
+	Timestamp string `json:"timestamp"`
+}
+
+// FrontendErrorPayload はレンダラープロセスから送信されるエラー情報。
+type FrontendErrorPayload struct {
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	Stack     string `json:"stack"`
+	Context   string `json:"context"`
+	Component string `json:"component"`
+	Function  string `json:"function"`
+	Data      any    `json:"data"`
+	Timestamp string `json:"timestamp"`
+}
+
+// ReportLog はフロントエンドログをバックエンドログに統合する。
+func (app *App) ReportLog(payload FrontendLogPayload) {
+	if app == nil || app.Logger == nil {
+		return
+	}
+
+	message := strings.TrimSpace(payload.Message)
+	if message == "" {
+		message = "frontend log (empty message)"
+	}
+	level := logging.ParseLevel(payload.Level)
+
+	attrs := []any{"origin", "renderer"}
+	if component := strings.TrimSpace(payload.Component); component != "" {
+		attrs = append(attrs, "component", component)
+	}
+	if fn := strings.TrimSpace(payload.Function); fn != "" {
+		attrs = append(attrs, "function", fn)
+	}
+	if ctx := strings.TrimSpace(payload.Context); ctx != "" {
+		attrs = append(attrs, "context", ctx)
+	}
+	if sourceTime := strings.TrimSpace(payload.Timestamp); sourceTime != "" {
+		attrs = append(attrs, "sourceTimestamp", sourceTime)
+	}
+	if payload.Data != nil {
+		attrs = append(attrs, "data", payload.Data)
+	}
+
+	app.Logger.Log(app.context(), level, message, attrs...)
+}
+
+// ReportError はフロントエラーをバックエンド側へ送信する。
+func (app *App) ReportError(payload FrontendErrorPayload) {
+	if app == nil || app.Logger == nil {
+		return
+	}
+
+	message := strings.TrimSpace(payload.Message)
+	if message == "" {
+		message = "frontend error (empty message)"
+	}
+
+	attrs := []any{
+		"origin", "renderer",
+		"kind", "error",
+	}
+	if stack := strings.TrimSpace(payload.Stack); stack != "" {
+		attrs = append(attrs, "stack", stack)
+	}
+	if ctx := strings.TrimSpace(payload.Context); ctx != "" {
+		attrs = append(attrs, "context", ctx)
+	}
+	if component := strings.TrimSpace(payload.Component); component != "" {
+		attrs = append(attrs, "component", component)
+	}
+	if fn := strings.TrimSpace(payload.Function); fn != "" {
+		attrs = append(attrs, "function", fn)
+	}
+	if sourceTime := strings.TrimSpace(payload.Timestamp); sourceTime != "" {
+		attrs = append(attrs, "sourceTimestamp", sourceTime)
+	}
+	if payload.Data != nil {
+		attrs = append(attrs, "data", payload.Data)
+	}
+
+	level := logging.ParseLevel(payload.Level)
+	if level < slog.LevelError {
+		level = slog.LevelError
+	}
+	app.Logger.Log(app.context(), level, message, attrs...)
+}
+
 // UpdateAutoTracking は自動計測設定を更新する。
 func (app *App) UpdateAutoTracking(enabled bool) result.ApiResult[bool] {
 	app.autoTracking = enabled
@@ -206,6 +304,7 @@ func (app *App) UpdateAutoTracking(enabled bool) result.ApiResult[bool] {
 // UpdateUploadConcurrency はアップロード同時実行数を更新する。
 func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 	if value <= 0 {
+		app.Logger.Warn("同時実行数が不正です", "operation", "UpdateUploadConcurrency", "value", value)
 		return result.ErrorResult[bool]("同時実行数が不正です", "valueが不正です")
 	}
 	app.Config.S3UploadConcurrency = value
@@ -218,6 +317,7 @@ func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 // UpdateTransferRetryCount はアップロード/ダウンロードのリトライ回数を更新する。
 func (app *App) UpdateTransferRetryCount(value int) result.ApiResult[bool] {
 	if value < 0 {
+		app.Logger.Warn("リトライ回数が不正です", "operation", "UpdateTransferRetryCount", "value", value)
 		return result.ErrorResult[bool]("リトライ回数が不正です", "valueが不正です")
 	}
 	app.Config.S3TransferRetryCount = value
@@ -242,6 +342,7 @@ func (app *App) UpdateScreenshotUploadJpeg(enabled bool) result.ApiResult[bool] 
 // UpdateScreenshotJpegQuality はスクリーンショットJPEGの品質を更新する。
 func (app *App) UpdateScreenshotJpegQuality(value int) result.ApiResult[bool] {
 	if value < 1 || value > 100 {
+		app.Logger.Warn("JPEG品質が不正です", "operation", "UpdateScreenshotJpegQuality", "value", value)
 		return result.ErrorResult[bool]("JPEG品質が不正です", "value must be 1-100")
 	}
 	app.Config.ScreenshotJpegQuality = value
@@ -273,9 +374,11 @@ func (app *App) UpdateScreenshotLocalJpeg(enabled bool) result.ApiResult[bool] {
 func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 	trimmed := strings.TrimSpace(combo)
 	if trimmed == "" {
+		app.Logger.Warn("ホットキーが不正です", "operation", "UpdateScreenshotHotkey", "reason", "empty combo")
 		return result.ErrorResult[bool]("ホットキーが不正です", "combo is empty")
 	}
 	if err := services.ValidateHotkeyCombo(trimmed); err != nil {
+		app.Logger.Warn("ホットキーが不正です", "operation", "UpdateScreenshotHotkey", "combo", trimmed, "error", err)
 		return result.ErrorResult[bool]("ホットキーが不正です", err.Error())
 	}
 	prevHotkey := app.Config.ScreenshotHotkey
@@ -284,6 +387,7 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 	if err := app.startHotkey(); err != nil {
 		app.Config.ScreenshotHotkey = prevHotkey
 		_ = app.startHotkey()
+		app.Logger.Error("ホットキーの更新に失敗しました", "operation", "UpdateScreenshotHotkey", "combo", trimmed, "error", err)
 		return result.ErrorResult[bool]("ホットキーの更新に失敗しました", err.Error())
 	}
 	return result.OkResult(true)
@@ -297,6 +401,7 @@ func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool
 	if err := app.startHotkey(); err != nil {
 		app.Config.ScreenshotHotkeyNotify = prevNotify
 		_ = app.startHotkey()
+		app.Logger.Error("ホットキー通知の更新に失敗しました", "operation", "UpdateScreenshotHotkeyNotify", "enabled", enabled, "error", err)
 		return result.ErrorResult[bool]("ホットキー通知の更新に失敗しました", err.Error())
 	}
 	return result.OkResult(true)
@@ -324,11 +429,12 @@ func (app *App) GetProcessSnapshot() result.ApiResult[models.ProcessSnapshot] {
 func (app *App) ComputeLocalSaveHash(localPath string) result.ApiResult[string] {
 	trimmed := strings.TrimSpace(localPath)
 	if trimmed == "" {
+		app.Logger.Warn("パスが不正です", "operation", "ComputeLocalSaveHash", "localPath", localPath)
 		return result.ErrorResult[string]("パスが不正です", "localPath is empty")
 	}
 	hash, err := storage.HashDirectory(trimmed)
 	if err != nil {
-		return errorResult[string]("ハッシュ計算に失敗しました", err)
+		return errorResultWithLog[string](app, "ハッシュ計算に失敗しました", err, "operation", "ComputeLocalSaveHash.hashDirectory", "localPath", trimmed)
 	}
 	return result.OkResult(hash)
 }
@@ -336,9 +442,12 @@ func (app *App) ComputeLocalSaveHash(localPath string) result.ApiResult[string] 
 // PauseMonitoringSession はセッションを中断する。
 func (app *App) PauseMonitoringSession(gameID string) result.ApiResult[bool] {
 	if app.ProcessMonitor == nil {
+		app.Logger.Warn("監視が無効です", "operation", "PauseMonitoringSession", "reason", "process monitor is nil")
 		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
 	}
-	if ok := app.ProcessMonitor.PauseSession(strings.TrimSpace(gameID)); !ok {
+	trimmedGameID := strings.TrimSpace(gameID)
+	if ok := app.ProcessMonitor.PauseSession(trimmedGameID); !ok {
+		app.Logger.Warn("中断に失敗しました", "operation", "PauseMonitoringSession", "gameId", trimmedGameID)
 		return result.ErrorResult[bool]("中断に失敗しました", "session not found")
 	}
 	return result.OkResult(true)
@@ -347,9 +456,12 @@ func (app *App) PauseMonitoringSession(gameID string) result.ApiResult[bool] {
 // ResumeMonitoringSession は中断中セッションを再開する。
 func (app *App) ResumeMonitoringSession(gameID string) result.ApiResult[bool] {
 	if app.ProcessMonitor == nil {
+		app.Logger.Warn("監視が無効です", "operation", "ResumeMonitoringSession", "reason", "process monitor is nil")
 		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
 	}
-	if ok := app.ProcessMonitor.ResumeSession(strings.TrimSpace(gameID)); !ok {
+	trimmedGameID := strings.TrimSpace(gameID)
+	if ok := app.ProcessMonitor.ResumeSession(trimmedGameID); !ok {
+		app.Logger.Warn("再開に失敗しました", "operation", "ResumeMonitoringSession", "gameId", trimmedGameID)
 		return result.ErrorResult[bool]("再開に失敗しました", "session not running")
 	}
 	return result.OkResult(true)
@@ -358,9 +470,12 @@ func (app *App) ResumeMonitoringSession(gameID string) result.ApiResult[bool] {
 // EndMonitoringSession はセッションを終了して保存する。
 func (app *App) EndMonitoringSession(gameID string) result.ApiResult[bool] {
 	if app.ProcessMonitor == nil {
+		app.Logger.Warn("監視が無効です", "operation", "EndMonitoringSession", "reason", "process monitor is nil")
 		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
 	}
-	if ok := app.ProcessMonitor.EndSession(strings.TrimSpace(gameID)); !ok {
+	trimmedGameID := strings.TrimSpace(gameID)
+	if ok := app.ProcessMonitor.EndSession(trimmedGameID); !ok {
+		app.Logger.Warn("終了に失敗しました", "operation", "EndMonitoringSession", "gameId", trimmedGameID)
 		return result.ErrorResult[bool]("終了に失敗しました", "session not found")
 	}
 	return result.OkResult(true)
@@ -378,6 +493,7 @@ func (app *App) SelectFile(filters []FileFilterInput) result.ApiResult[string] {
 		return result.ErrorResult[string]("ファイル選択に失敗しました", error.Error())
 	}
 	if path == "" {
+		app.Logger.Info("ファイル選択がキャンセルされました", "operation", "SelectFile")
 		return result.ErrorResult[string]("ファイルが選択されませんでした", "")
 	}
 	return result.OkResult(path)
@@ -392,6 +508,7 @@ func (app *App) SelectFolder() result.ApiResult[string] {
 		return result.ErrorResult[string]("フォルダ選択に失敗しました", error.Error())
 	}
 	if path == "" {
+		app.Logger.Info("フォルダ選択がキャンセルされました", "operation", "SelectFolder")
 		return result.ErrorResult[string]("フォルダが選択されませんでした", "")
 	}
 	return result.OkResult(path)
@@ -426,6 +543,7 @@ func (app *App) CheckDirectoryExists(dirPath string) result.ApiResult[bool] {
 // OpenFolder は指定パスをOSで開く。
 func (app *App) OpenFolder(path string) result.ApiResult[bool] {
 	if strings.TrimSpace(path) == "" {
+		app.Logger.Warn("パスが不正です", "operation", "OpenFolder", "path", path)
 		return result.ErrorResult[bool]("パスが不正です", "pathが空です")
 	}
 	if error := openPath(path); error != nil {
@@ -439,6 +557,7 @@ func (app *App) OpenFolder(path string) result.ApiResult[bool] {
 func (app *App) OpenLogsDirectory() result.ApiResult[string] {
 	path := app.Config.AppDataDir
 	if path == "" {
+		app.Logger.Warn("ログディレクトリが不明です", "operation", "OpenLogsDirectory", "reason", "AppDataDir is empty")
 		return result.ErrorResult[string]("ログディレクトリが不明です", "AppDataDirが空です")
 	}
 	if error := openPath(path); error != nil {
@@ -491,6 +610,7 @@ func (app *App) LoadCloudMetadata(credentialKey string) result.ApiResult[*storag
 // LaunchGame は指定された実行ファイルを起動する。
 func (app *App) LaunchGame(exePath string) result.ApiResult[bool] {
 	if strings.TrimSpace(exePath) == "" || exePath == services.UnconfiguredExePath {
+		app.Logger.Warn("実行ファイルが不正です", "operation", "LaunchGame", "exePath", exePath)
 		return result.ErrorResult[bool]("実行ファイルが不正です", "exePathが空です")
 	}
 	command := exec.Command(exePath)
@@ -505,6 +625,7 @@ func (app *App) LaunchGame(exePath string) result.ApiResult[bool] {
 // CaptureGameScreenshot は指定されたゲームのスクリーンショットを保存する。
 func (app *App) CaptureGameScreenshot(gameID string) result.ApiResult[string] {
 	if app.ScreenshotService == nil {
+		app.Logger.Warn("スクリーンショット機能が無効です", "operation", "CaptureGameScreenshot", "reason", "screenshot service is nil")
 		return result.ErrorResult[string]("スクリーンショット機能が無効です", "screenshot service is nil")
 	}
 	path, err := app.ScreenshotService.CaptureGameScreenshot(app.context(), strings.TrimSpace(gameID))
