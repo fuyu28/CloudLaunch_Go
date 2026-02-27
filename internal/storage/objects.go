@@ -4,8 +4,10 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -134,10 +136,18 @@ func DownloadPrefix(
 		targetPath string
 	}
 	tasks := make([]downloadTask, 0, len(objects))
+	baseDestination, err := filepath.Abs(destination)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(baseDestination, 0o700); err != nil {
+		return err
+	}
 	for _, obj := range objects {
-		relative := strings.TrimPrefix(obj.Key, prefix)
-		relative = strings.TrimPrefix(relative, "/")
-		targetPath := filepath.Join(destination, filepath.FromSlash(relative))
+		targetPath, err := resolveSafeDownloadPath(baseDestination, obj.Key, prefix)
+		if err != nil {
+			return err
+		}
 		if error := os.MkdirAll(filepath.Dir(targetPath), 0o700); error != nil {
 			return error
 		}
@@ -147,28 +157,35 @@ func DownloadPrefix(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	sem := make(chan struct{}, concurrency)
+	workerCount := concurrency
+	if workerCount > len(tasks) {
+		workerCount = len(tasks)
+	}
+	taskCh := make(chan downloadTask, len(tasks))
+	for _, task := range tasks {
+		taskCh <- task
+	}
+	close(taskCh)
+
 	var wg sync.WaitGroup
 	var errOnce sync.Once
 	var firstErr error
 
-	for _, task := range tasks {
+	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		task := task
 		go func() {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
-
-			if err := downloadObjectWithRetry(ctx, client, bucket, task.key, task.targetPath, retryCount); err != nil {
-				errOnce.Do(func() {
-					firstErr = err
-					cancel()
-				})
+			for task := range taskCh {
+				if ctx.Err() != nil {
+					return
+				}
+				if err := downloadObjectWithRetry(ctx, client, bucket, task.key, task.targetPath, retryCount); err != nil {
+					errOnce.Do(func() {
+						firstErr = err
+						cancel()
+					})
+					return
+				}
 			}
 		}()
 	}
@@ -247,16 +264,51 @@ func downloadObjectToPath(
 	if error != nil {
 		return error
 	}
-	content, readErr := io.ReadAll(response.Body)
-	closeErr := response.Body.Close()
-	if readErr != nil {
-		return readErr
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
 	}
-	if closeErr != nil {
-		return closeErr
+	if _, err := io.Copy(file, response.Body); err != nil {
+		_ = file.Close()
+		return err
 	}
-	if error := os.WriteFile(targetPath, content, 0o600); error != nil {
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if error := os.Chmod(targetPath, 0o600); error != nil {
 		return error
 	}
 	return nil
+}
+
+func resolveSafeDownloadPath(destination string, key string, prefix string) (string, error) {
+	relative := strings.TrimPrefix(key, prefix)
+	relative = strings.TrimPrefix(relative, "/")
+	relative = strings.TrimSpace(relative)
+	if relative == "" {
+		return "", fmt.Errorf("object key is invalid: %s", key)
+	}
+
+	cleaned := path.Clean(relative)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", fmt.Errorf("object key escapes destination: %s", key)
+	}
+
+	targetPath := filepath.Join(destination, filepath.FromSlash(cleaned))
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", err
+	}
+
+	relToBase, err := filepath.Rel(destination, absTarget)
+	if err != nil {
+		return "", err
+	}
+	if relToBase == ".." || strings.HasPrefix(relToBase, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key escapes destination: %s", key)
+	}
+	return absTarget, nil
 }

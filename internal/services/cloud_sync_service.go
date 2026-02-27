@@ -10,7 +10,9 @@ import (
 	"io"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -33,6 +35,9 @@ import (
 
 const cloudMetadataVersion = 2
 const cloudSessionsFileName = "sessions.json"
+const maxRemoteImageBytes = 10 << 20
+
+var remoteImageHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 // CloudSyncSummary は同期結果の要約を表す。
 type CloudSyncSummary struct {
@@ -544,7 +549,19 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 
 func loadImagePayload(path string) ([]byte, string, string, error) {
 	if isURL(path) {
-		response, err := http.Get(path)
+		parsed, err := url.Parse(path)
+		if err != nil {
+			return nil, "", "", err
+		}
+		if err := validateRemoteImageURL(parsed); err != nil {
+			return nil, "", "", err
+		}
+
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, parsed.String(), nil)
+		if err != nil {
+			return nil, "", "", err
+		}
+		response, err := remoteImageHTTPClient.Do(request)
 		if err != nil {
 			return nil, "", "", err
 		}
@@ -553,9 +570,19 @@ func loadImagePayload(path string) ([]byte, string, string, error) {
 				err = closeErr
 			}
 		}()
-		payload, err := io.ReadAll(response.Body)
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			return nil, "", "", fmt.Errorf("unexpected status code: %d", response.StatusCode)
+		}
+		if response.ContentLength > maxRemoteImageBytes {
+			return nil, "", "", fmt.Errorf("image is too large: %d", response.ContentLength)
+		}
+
+		payload, err := io.ReadAll(io.LimitReader(response.Body, maxRemoteImageBytes+1))
 		if err != nil {
 			return nil, "", "", err
+		}
+		if len(payload) > maxRemoteImageBytes {
+			return nil, "", "", fmt.Errorf("image is too large: %d", len(payload))
 		}
 		ext := filepath.Ext(response.Request.URL.Path)
 		contentType := strings.TrimSpace(response.Header.Get("Content-Type"))
@@ -602,6 +629,41 @@ func isURL(value string) bool {
 		return false
 	}
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
+}
+
+func validateRemoteImageURL(parsed *url.URL) error {
+	if parsed == nil {
+		return errors.New("url is nil")
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return errors.New("url hostname is empty")
+	}
+	if strings.EqualFold(host, "localhost") {
+		return errors.New("localhost is not allowed")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return err
+	}
+	for _, addr := range addrs {
+		if isPrivateOrLocalAddr(addr) {
+			return fmt.Errorf("private or local address is not allowed: %s", addr.String())
+		}
+	}
+	return nil
+}
+
+func isPrivateOrLocalAddr(addr netip.Addr) bool {
+	return addr.IsLoopback() ||
+		addr.IsPrivate() ||
+		addr.IsLinkLocalMulticast() ||
+		addr.IsLinkLocalUnicast() ||
+		addr.IsMulticast() ||
+		addr.IsUnspecified()
 }
 
 func isNotFoundError(err error) bool {

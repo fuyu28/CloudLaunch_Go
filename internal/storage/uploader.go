@@ -105,39 +105,45 @@ func UploadFolder(
 	if retryCount < 0 {
 		retryCount = defaultUploadRetryCount
 	}
-	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var errOnce sync.Once
 	var firstErr error
 	var summaryMu sync.Mutex
 	summary := UploadSummary{Keys: make([]string, 0, len(tasks))}
-
+	workerCount := concurrency
+	if workerCount > len(tasks) {
+		workerCount = len(tasks)
+	}
+	taskCh := make(chan uploadTask, len(tasks))
 	for _, task := range tasks {
+		taskCh <- task
+	}
+	close(taskCh)
+
+	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		task := task
 		go func() {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
+			for task := range taskCh {
+				if ctx.Err() != nil {
+					return
+				}
 
-			size, err := uploadFileWithRetry(ctx, client, bucket, task.key, task.path, retryCount)
-			if err != nil {
-				errOnce.Do(func() {
-					firstErr = err
-					cancel()
-				})
-				return
-			}
+				size, err := uploadFileWithRetry(ctx, client, bucket, task.key, task.path, retryCount)
+				if err != nil {
+					errOnce.Do(func() {
+						firstErr = err
+						cancel()
+					})
+					return
+				}
 
-			summaryMu.Lock()
-			summary.FileCount++
-			summary.TotalBytes += size
-			summary.Keys = append(summary.Keys, task.key)
-			summaryMu.Unlock()
+				summaryMu.Lock()
+				summary.FileCount++
+				summary.TotalBytes += size
+				summary.Keys = append(summary.Keys, task.key)
+				summaryMu.Unlock()
+			}
 		}()
 	}
 
