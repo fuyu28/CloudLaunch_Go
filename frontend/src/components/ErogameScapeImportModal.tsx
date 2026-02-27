@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BaseModal } from "./BaseModal";
 import { GameFormFields } from "./GameFormFields";
 import ErogameScapeSearchModal from "./ErogameScapeSearchModal";
-import { useFileSelection } from "@renderer/hooks/useFileSelection";
+import { useGameFormHandlers } from "@renderer/hooks/useGameFormHandlers";
 import { useGameFormValidationZod } from "@renderer/hooks/useGameFormValidationZod";
 import {
   handleApiError,
@@ -50,8 +50,12 @@ export default function ErogameScapeImportModal({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const lastFetchedIdRef = useRef<string | null>(null);
-  const { isBrowsing, selectFile, selectFolder } = useFileSelection();
   const validation = useGameFormValidationZod(gameData);
+  const { isBrowsing, browseImage, browseExe, browseSaveFolder, handleChange } =
+    useGameFormHandlers({
+      setGameData,
+      validation,
+    });
   const prevIsOpenRef = useRef(isOpen);
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
@@ -129,39 +133,6 @@ export default function ErogameScapeImportModal({
     },
     [fetchFromErogameScape],
   );
-
-  const browseImage = useCallback(async () => {
-    await selectFile([{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif"] }], (filePath) => {
-      setGameData((prev) => ({ ...prev, imagePath: filePath }));
-      validation.markFieldAsTouched("imagePath");
-      validation.validateFileField("imagePath");
-    });
-  }, [selectFile, validation]);
-
-  const browseExe = useCallback(async () => {
-    await selectFile([{ name: "Executable", extensions: ["exe", "app"] }], (filePath) => {
-      setGameData((prev) => ({ ...prev, exePath: filePath }));
-      validation.markFieldAsTouched("exePath");
-      validation.validateFileField("exePath");
-    });
-  }, [selectFile, validation]);
-
-  const browseSaveFolder = useCallback(async () => {
-    await selectFolder((folderPath) => {
-      setGameData((prev) => ({ ...prev, saveFolderPath: folderPath }));
-      validation.markFieldAsTouched("saveFolderPath");
-      validation.validateFileField("saveFolderPath");
-    });
-  }, [selectFolder, validation]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target;
-    setGameData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    validation.markFieldAsTouched(name as keyof InputGameData);
-  };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

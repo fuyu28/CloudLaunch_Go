@@ -14,13 +14,13 @@
  * - react-hot-toast エラー通知
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { BaseModal } from "./BaseModal";
 import { GameFormFields } from "./GameFormFields";
 import type { InputGameData } from "src/types/game";
 import type { ApiResult } from "src/types/result";
-import { useFileSelection } from "../hooks/useFileSelection";
+import { useGameFormHandlers } from "../hooks/useGameFormHandlers";
 import { useGameFormValidationZod } from "../hooks/useGameFormValidationZod";
 import { handleApiError, handleUnexpectedError } from "../utils/errorHandler";
 
@@ -63,8 +63,12 @@ export default function GameFormModal({
     mode === "edit" && initialData ? initialData : initialValues,
   );
   const [submitting, setSubmitting] = useState(false);
-  const { isBrowsing, selectFile, selectFolder } = useFileSelection();
   const validation = useGameFormValidationZod(gameData);
+  const { isBrowsing, browseImage, browseExe, browseSaveFolder, handleChange } =
+    useGameFormHandlers({
+      setGameData,
+      validation,
+    });
   const prevIsOpenRef = useRef(isOpen);
 
   useEffect(() => {
@@ -82,49 +86,6 @@ export default function GameFormModal({
     }
     prevIsOpenRef.current = isOpen;
   }, [isOpen, validation]);
-
-  const browseImage = useCallback(async () => {
-    await selectFile([{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif"] }], (filePath) => {
-      setGameData((prev) => ({ ...prev, imagePath: filePath }));
-      // ファイル選択後にリアルタイムバリデーションをトリガー
-      validation.markFieldAsTouched("imagePath");
-      // ファイル存在チェックを実行
-      validation.validateFileField("imagePath");
-    });
-  }, [selectFile, validation]);
-
-  const browseExe = useCallback(async () => {
-    await selectFile([{ name: "Executable", extensions: ["exe", "app"] }], (filePath) => {
-      setGameData((prev) => ({ ...prev, exePath: filePath }));
-      // ファイル選択後にリアルタイムバリデーションをトリガー
-      validation.markFieldAsTouched("exePath");
-      // ファイル存在チェックを実行
-      validation.validateFileField("exePath");
-    });
-  }, [selectFile, validation]);
-
-  const browseSaveFolder = useCallback(async () => {
-    await selectFolder((folderPath) => {
-      setGameData((prev) => ({ ...prev, saveFolderPath: folderPath }));
-      // フォルダ選択後にリアルタイムバリデーションをトリガー
-      validation.markFieldAsTouched("saveFolderPath");
-      // ファイル存在チェックを実行
-      validation.validateFileField("saveFolderPath");
-    });
-  }, [selectFolder, validation]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target;
-    setGameData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    // リアルタイムバリデーションのためフィールドをタッチ済みとしてマーク
-    validation.markFieldAsTouched(name as keyof InputGameData);
-
-    // ファイル存在チェックはuseGameFormValidationZodのuseEffectで自動実行される
-  };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

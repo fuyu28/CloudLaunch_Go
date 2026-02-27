@@ -14,6 +14,7 @@ import (
 	"CloudLaunch_Go/internal/credentials"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/storage"
+	"CloudLaunch_Go/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -400,22 +401,12 @@ func (app *App) resolveS3Config(ctx context.Context) (storage.S3Config, credenti
 	}
 	credential := *credResult.Data
 	return storage.S3Config{
-		Endpoint:       firstNonEmpty(credential.Endpoint, app.Config.S3Endpoint),
-		Region:         firstNonEmpty(credential.Region, app.Config.S3Region),
-		Bucket:         firstNonEmpty(credential.BucketName, app.Config.S3Bucket),
+		Endpoint:       util.FirstNonEmpty(credential.Endpoint, app.Config.S3Endpoint),
+		Region:         util.FirstNonEmpty(credential.Region, app.Config.S3Region),
+		Bucket:         util.FirstNonEmpty(credential.BucketName, app.Config.S3Bucket),
 		ForcePathStyle: app.Config.S3ForcePathStyle,
 		UseTLS:         app.Config.S3UseTLS,
 	}, credential, nil
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }
 
 func detectGamePrefix(key string) string {

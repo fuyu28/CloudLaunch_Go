@@ -11,6 +11,7 @@ import (
 	"CloudLaunch_Go/internal/credentials"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/storage"
+	"CloudLaunch_Go/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -128,9 +129,9 @@ func validateCloudInput(credentialKey string, folderPath string) error {
 
 func resolveS3Config(base config.Config, credential *credentials.Credential) storage.S3Config {
 	return storage.S3Config{
-		Endpoint:       firstNonEmpty(credential.Endpoint, base.S3Endpoint),
-		Region:         firstNonEmpty(credential.Region, base.S3Region),
-		Bucket:         firstNonEmpty(credential.BucketName, base.S3Bucket),
+		Endpoint:       util.FirstNonEmpty(credential.Endpoint, base.S3Endpoint),
+		Region:         util.FirstNonEmpty(credential.Region, base.S3Region),
+		Bucket:         util.FirstNonEmpty(credential.BucketName, base.S3Bucket),
 		ForcePathStyle: base.S3ForcePathStyle,
 		UseTLS:         base.S3UseTLS,
 	}
@@ -157,14 +158,4 @@ func (service *CloudService) newClient(
 		return nil, cfg, "S3クライアント作成に失敗しました", error.Error(), false
 	}
 	return client, cfg, "", "", true
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }
