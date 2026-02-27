@@ -36,6 +36,7 @@ func (service *ChapterService) ListChaptersByGame(ctx context.Context, gameID st
 // CreateChapter は章を作成する。
 func (service *ChapterService) CreateChapter(ctx context.Context, input ChapterInput) result.ApiResult[*models.Chapter] {
 	if error := validateChapterInput(input); error != nil {
+		service.logger.Warn("章入力が不正です", "error", error)
 		return result.ErrorResult[*models.Chapter]("章入力が不正です", error.Error())
 	}
 
@@ -57,6 +58,7 @@ func (service *ChapterService) CreateChapter(ctx context.Context, input ChapterI
 func (service *ChapterService) UpdateChapter(ctx context.Context, chapterID string, input ChapterUpdateInput) result.ApiResult[*models.Chapter] {
 	trimmedID, detail, ok := requireNonEmpty(chapterID, "chapterID")
 	if !ok {
+		service.logger.Warn("章IDが不正です", "detail", detail, "chapterId", chapterID)
 		return result.ErrorResult[*models.Chapter]("章IDが不正です", detail)
 	}
 
@@ -66,6 +68,7 @@ func (service *ChapterService) UpdateChapter(ctx context.Context, chapterID stri
 		return result.ErrorResult[*models.Chapter]("章取得に失敗しました", error.Error())
 	}
 	if chapter == nil {
+		service.logger.Warn("章が見つかりません", "chapterId", trimmedID)
 		return result.ErrorResult[*models.Chapter]("章が見つかりません", "指定されたIDが存在しません")
 	}
 
@@ -84,6 +87,7 @@ func (service *ChapterService) UpdateChapter(ctx context.Context, chapterID stri
 func (service *ChapterService) DeleteChapter(ctx context.Context, chapterID string) result.ApiResult[bool] {
 	trimmedID, detail, ok := requireNonEmpty(chapterID, "chapterID")
 	if !ok {
+		service.logger.Warn("章IDが不正です", "detail", detail, "chapterId", chapterID)
 		return result.ErrorResult[bool]("章IDが不正です", detail)
 	}
 
@@ -98,13 +102,16 @@ func (service *ChapterService) DeleteChapter(ctx context.Context, chapterID stri
 func (service *ChapterService) UpdateChapterOrders(ctx context.Context, gameID string, orders []ChapterOrderUpdate) result.ApiResult[bool] {
 	_, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
 	for _, order := range orders {
 		if _, detail, ok := requireNonEmpty(order.ID, "chapterID"); !ok {
+			service.logger.Warn("章IDが不正です", "detail", detail, "chapterId", order.ID)
 			return result.ErrorResult[bool]("章IDが不正です", detail)
 		}
 		if order.Order < 0 {
+			service.logger.Warn("章順序が不正です", "chapterId", order.ID, "order", order.Order)
 			return result.ErrorResult[bool]("章順序が不正です", "orderが不正です")
 		}
 		if error := service.repository.UpdateChapterOrder(ctx, order.ID, order.Order); error != nil {
@@ -119,6 +126,7 @@ func (service *ChapterService) UpdateChapterOrders(ctx context.Context, gameID s
 func (service *ChapterService) GetChapterStats(ctx context.Context, gameID string) result.ApiResult[[]models.ChapterStat] {
 	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[[]models.ChapterStat]("ゲームIDが不正です", detail)
 	}
 	stats, error := service.repository.GetChapterStats(ctx, trimmedGameID)
@@ -133,10 +141,12 @@ func (service *ChapterService) GetChapterStats(ctx context.Context, gameID strin
 func (service *ChapterService) SetCurrentChapter(ctx context.Context, gameID string, chapterID string) result.ApiResult[bool] {
 	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
 	trimmedChapterID, detail, ok := requireNonEmpty(chapterID, "chapterID")
 	if !ok {
+		service.logger.Warn("章IDが不正です", "detail", detail, "chapterId", chapterID)
 		return result.ErrorResult[bool]("章IDが不正です", detail)
 	}
 	game, error := service.repository.GetGameByID(ctx, trimmedGameID)
@@ -145,6 +155,7 @@ func (service *ChapterService) SetCurrentChapter(ctx context.Context, gameID str
 		return result.ErrorResult[bool]("ゲーム取得に失敗しました", error.Error())
 	}
 	if game == nil {
+		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedGameID)
 		return result.ErrorResult[bool]("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 	game.CurrentChapter = &trimmedChapterID

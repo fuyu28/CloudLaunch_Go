@@ -249,8 +249,20 @@ export type WindowApi = {
       stack?: string;
       level?: string;
       context?: string;
+      component?: string;
+      function?: string;
+      data?: unknown;
+      timestamp?: string;
     }) => void;
-    reportLog: (payload: { message: string; level?: string; context?: string }) => void;
+    reportLog: (payload: {
+      message: string;
+      level?: string;
+      context?: string;
+      component?: string;
+      function?: string;
+      data?: unknown;
+      timestamp?: string;
+    }) => void;
   };
 };
 
@@ -890,9 +902,23 @@ export const createWailsBridge = (): WindowApi => {
     },
     errorReport: {
       reportError: (payload) => {
+        const reportError = (window as any)?.go?.app?.App?.ReportError;
+        if (typeof reportError === "function") {
+          void reportError(payload).catch((error: unknown) => {
+            console.error("ReportError failed", error, payload);
+          });
+          return;
+        }
         console.error(payload);
       },
       reportLog: (payload) => {
+        const reportLog = (window as any)?.go?.app?.App?.ReportLog;
+        if (typeof reportLog === "function") {
+          void reportLog(payload).catch((error: unknown) => {
+            console.error("ReportLog failed", error, payload);
+          });
+          return;
+        }
         console.log(payload);
       },
     },

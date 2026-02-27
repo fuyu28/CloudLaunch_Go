@@ -86,6 +86,7 @@ func (service *CloudSyncService) SyncAllGames(ctx context.Context, credentialKey
 // SyncGame は指定ゲームのみ同期する。
 func (service *CloudSyncService) SyncGame(ctx context.Context, credentialKey string, gameID string) result.ApiResult[CloudSyncSummary] {
 	if _, detail, ok := requireNonEmpty(gameID, "gameID"); !ok {
+		service.logger.Warn("ゲームIDが不正です", "operation", "SyncGame", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[CloudSyncSummary]("ゲームIDが不正です", detail)
 	}
 	return service.sync(ctx, credentialKey, strings.TrimSpace(gameID))
@@ -94,19 +95,23 @@ func (service *CloudSyncService) SyncGame(ctx context.Context, credentialKey str
 // DeleteGameFromCloud は指定ゲームのクラウドデータを削除する。
 func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, credentialKey string, gameID string) result.ApiResult[bool] {
 	if service.isOffline() {
+		service.logger.Warn("オフラインモードのため削除できません", "operation", "DeleteGameFromCloud")
 		return result.ErrorResult[bool]("オフラインモードのため削除できません", "offline mode")
 	}
 	trimmedKey, detail, ok := requireNonEmpty(credentialKey, "credentialKey")
 	if !ok {
+		service.logger.Warn("認証情報が不正です", "operation", "DeleteGameFromCloud", "detail", detail)
 		return result.ErrorResult[bool]("認証情報が不正です", detail)
 	}
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "operation", "DeleteGameFromCloud", "detail", detail, "gameId", gameID)
 		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
 	}
 
 	client, cfg, message, detail, ok := service.newClient(ctx, trimmedKey)
 	if !ok {
+		service.logger.Warn("S3クライアント初期化に失敗", "operation", "DeleteGameFromCloud", "message", message, "detail", detail)
 		return result.ErrorResult[bool](message, detail)
 	}
 
@@ -148,15 +153,18 @@ func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, creden
 
 func (service *CloudSyncService) sync(ctx context.Context, credentialKey string, gameID string) result.ApiResult[CloudSyncSummary] {
 	if service.isOffline() {
+		service.logger.Warn("オフラインモードのため同期できません", "operation", "sync", "gameId", gameID)
 		return result.ErrorResult[CloudSyncSummary]("オフラインモードのため同期できません", "offline mode")
 	}
 	trimmedKey, detail, ok := requireNonEmpty(credentialKey, "credentialKey")
 	if !ok {
+		service.logger.Warn("認証情報が不正です", "operation", "sync", "detail", detail)
 		return result.ErrorResult[CloudSyncSummary]("認証情報が不正です", detail)
 	}
 
 	client, cfg, message, detail, ok := service.newClient(ctx, trimmedKey)
 	if !ok {
+		service.logger.Warn("S3クライアント初期化に失敗", "operation", "sync", "message", message, "detail", detail)
 		return result.ErrorResult[CloudSyncSummary](message, detail)
 	}
 
@@ -212,6 +220,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 			case local.Game.UpdatedAt.After(cloud.UpdatedAt):
 				cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, cfg.Bucket, local, &cloud)
 				if err != nil {
+					service.logger.Error("クラウド更新に失敗", "operation", "sync.buildCloudGame", "gameId", id, "error", err)
 					return result.ErrorResult[CloudSyncSummary]("クラウド更新に失敗しました", err.Error())
 				}
 				merged[id] = cloudGame
@@ -222,6 +231,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 			case cloud.UpdatedAt.After(local.Game.UpdatedAt):
 				downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, &local.Game)
 				if err != nil {
+					service.logger.Error("ローカル更新に失敗", "operation", "sync.applyCloudGame", "gameId", id, "error", err)
 					return result.ErrorResult[CloudSyncSummary]("ローカル更新に失敗しました", err.Error())
 				}
 				merged[id] = cloud
@@ -235,6 +245,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 		case hasLocal && !hasCloud:
 			cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, cfg.Bucket, local, nil)
 			if err != nil {
+				service.logger.Error("クラウド更新に失敗", "operation", "sync.createCloudGame", "gameId", id, "error", err)
 				return result.ErrorResult[CloudSyncSummary]("クラウド更新に失敗しました", err.Error())
 			}
 			merged[id] = cloudGame
@@ -245,6 +256,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 		case !hasLocal && hasCloud:
 			downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, nil)
 			if err != nil {
+				service.logger.Error("ローカル更新に失敗", "operation", "sync.createLocalGame", "gameId", id, "error", err)
 				return result.ErrorResult[CloudSyncSummary]("ローカル更新に失敗しました", err.Error())
 			}
 			merged[id] = cloud
@@ -631,6 +643,7 @@ func (service *CloudSyncService) newClient(
 		return nil, storage.S3Config{}, "認証情報取得に失敗しました", err.Error(), false
 	}
 	if credential == nil {
+		service.logger.Warn("認証情報が見つかりません", "credentialKey", credentialKey)
 		return nil, storage.S3Config{}, "認証情報が見つかりません", "credentialが空です", false
 	}
 
