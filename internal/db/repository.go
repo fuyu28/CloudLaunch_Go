@@ -98,7 +98,7 @@ func (repository *Repository) ListGames(
 
 	orderBy := normalizeSortColumn(sortBy)
 	direction := normalizeSortDirection(sortDirection)
-	queryBuilder.WriteString(fmt.Sprintf(" ORDER BY %s %s", orderBy, direction))
+	_, _ = fmt.Fprintf(&queryBuilder, " ORDER BY %s %s", orderBy, direction)
 
 	rows, err := repository.connection.QueryContext(ctx, queryBuilder.String(), args...)
 	if err != nil {
