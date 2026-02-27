@@ -41,12 +41,3 @@ export const visibleGamesAtom = atom<GameType[]>([]);
 
 // 現在選択中のゲームID
 export const currentGameIdAtom = atom<string | null>(null);
-
-// 現在選択中のゲームを取得する派生atom（メモ化対応）
-export const currentGameAtom = atom<GameType | null>((get) => {
-  const gameId = get(currentGameIdAtom);
-  if (!gameId) return null;
-
-  const games = get(visibleGamesAtom);
-  return games.find((g) => g.id === gameId) || null;
-});

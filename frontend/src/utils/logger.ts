@@ -182,35 +182,6 @@ class RendererLogger {
 // シングルトンインスタンスを作成
 export const logger = new RendererLogger();
 
-/**
- * 従来のconsole.*メソッドの代替
- * 既存コードの移行を簡単にするためのヘルパー関数
- */
-export const logHelpers = {
-  /**
-   * console.log の代替
-   */
-  log: (message: string, data?: unknown, component?: string): void => {
-    logger.debug(message, { component, data });
-  },
-
-  /**
-   * console.warn の代替
-   */
-  warn: (message: string, data?: unknown, component?: string): void => {
-    logger.warn(message, { component, data });
-  },
-
-  /**
-   * console.error の代替
-   */
-  error: (message: string, error?: Error | unknown, component?: string): void => {
-    const errorObj = error instanceof Error ? error : undefined;
-    const data = error instanceof Error ? undefined : error;
-    logger.error(message, { component, error: errorObj, data });
-  },
-};
-
 // 開発者向けのデバッグ用（本番では削除される）
 if (process.env.NODE_ENV === "development") {
   // グローバルに公開してブラウザのデベロッパーツールから使用可能にする

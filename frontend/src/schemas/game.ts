@@ -14,11 +14,6 @@ export const gameSchema = z.object({
 });
 
 /**
- * ゲームデータの型定義（zodスキーマから自動生成）
- */
-export type GameData = z.infer<typeof gameSchema>;
-
-/**
  * ゲームフォーム入力データの追加バリデーション
  * ファイルパスの存在チェックや拡張子チェックなど
  */
