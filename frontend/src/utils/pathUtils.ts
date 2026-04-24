@@ -8,7 +8,7 @@
  * @returns 親ディレクトリのパス
  */
 export function getParentDirectory(filePath: string): string {
-  const normalized = normalizePath(filePath, false);
+  const normalized = normalizeWindowsPath(filePath);
   if (normalized === "" || normalized === "/" || normalized.endsWith(":/")) {
     return normalized;
   }
@@ -20,11 +20,8 @@ export function getParentDirectory(filePath: string): string {
   return trimmed.slice(0, lastSlash);
 }
 
-function normalizePath(input: string, preserveUnix: boolean): string {
+function normalizeWindowsPath(input: string): string {
   let normalized = input.replace(/\\/g, "/");
   normalized = normalized.replace(/\/{2,}/g, "/");
-  if (preserveUnix && input.startsWith("/")) {
-    return normalized;
-  }
   return normalized;
 }

@@ -110,3 +110,71 @@ func TestCloudSyncServiceLoadLocalGamesReturnsRepositoryError(t *testing.T) {
 		t.Fatalf("expected repository error")
 	}
 }
+
+func TestCloudSyncServiceSyncGameRejectsInvalidGameID(t *testing.T) {
+	t.Parallel()
+
+	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.SyncGame(context.Background(), "default", "   ")
+	if result.Success {
+		t.Fatalf("expected invalid game id to fail")
+	}
+}
+
+func TestCloudSyncServiceSyncAllGamesFailsInOfflineMode(t *testing.T) {
+	t.Parallel()
+
+	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetOfflineMode(true)
+
+	result := service.SyncAllGames(context.Background(), "default")
+	if result.Success {
+		t.Fatalf("expected offline sync to fail")
+	}
+}
+
+func TestCloudSyncServiceDeleteGameFromCloudFailsInOfflineMode(t *testing.T) {
+	t.Parallel()
+
+	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.SetOfflineMode(true)
+
+	result := service.DeleteGameFromCloud(context.Background(), "default", "game-1")
+	if result.Success {
+		t.Fatalf("expected offline delete to fail")
+	}
+}

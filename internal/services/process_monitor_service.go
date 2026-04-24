@@ -250,7 +250,7 @@ func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapsho
 			Pid:            proc.Pid,
 			Cmd:            proc.Cmd,
 			NormalizedName: normalizeProcessToken(proc.Name),
-			NormalizedCmd:  normalizeProcessToken(proc.Cmd),
+			NormalizedCmd:  normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -261,7 +261,7 @@ func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapsho
 }
 
 func (service *ProcessMonitorService) addMonitoredGame(gameID string, title string, exePath string) {
-	exeName := filepath.Base(exePath)
+	exeName := windowsPathBase(exePath)
 	service.monitoredGames[gameID] = &MonitoringGame{
 		GameID:          gameID,
 		GameTitle:       title,
@@ -321,7 +321,7 @@ func (service *ProcessMonitorService) ResumeSession(gameID string) bool {
 		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
 			info:          proc,
 			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessToken(proc.Cmd),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -391,7 +391,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
 			info:          proc,
 			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessToken(proc.Cmd),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -583,7 +583,7 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 		if game.ExePath == "" || game.ExePath == UnconfiguredExePath {
 			continue
 		}
-		exeName := filepath.Base(game.ExePath)
+		exeName := windowsPathBase(game.ExePath)
 		normalizedExe := normalizeProcessToken(exeName)
 		if _, ok := processNames[normalizedExe]; !ok {
 			continue
@@ -626,8 +626,8 @@ func (service *ProcessMonitorService) matchGameProcess(
 		return false
 	}
 
-	normalizedExePath := normalizeProcessToken(gameExePath)
-	normalizedExeDir := normalizeProcessToken(filepath.Dir(gameExePath))
+	normalizedExePath := normalizeProcessToken(normalizeWindowsPathSeparators(gameExePath))
+	normalizedExeDir := normalizeProcessToken(windowsPathDir(gameExePath))
 	procCmd := proc.normalizedCmd
 	if procCmd == normalizedExePath {
 		return true
@@ -653,7 +653,7 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 		return nil, nil
 	}
 
-	exeName := filepath.Base(trimmed)
+	exeName := windowsPathBase(trimmed)
 	if !strings.HasSuffix(strings.ToLower(exeName), ".exe") {
 		exeName += ".exe"
 	}
@@ -666,7 +666,7 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
 			info:          proc,
 			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessToken(proc.Cmd),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -847,4 +847,8 @@ func normalizeProcessToken(value string) string {
 		return ""
 	}
 	return norm.NFC.String(strings.ToLower(value))
+}
+
+func normalizeProcessPathToken(value string) string {
+	return normalizeProcessToken(normalizeWindowsPathSeparators(value))
 }

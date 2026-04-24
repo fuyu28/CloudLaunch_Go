@@ -1,9 +1,13 @@
 package services
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
+	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/storage"
 )
@@ -152,5 +156,40 @@ func TestCloudSyncSummaryAddAggregatesFields(t *testing.T) {
 		summary.DownloadedImages != 10 ||
 		summary.SkippedGames != 14 {
 		t.Fatalf("unexpected aggregated summary: %#v", summary)
+	}
+}
+
+func TestCloudSyncServiceSyncSingleGameSkipKeepsCloudMetadata(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Game", UpdatedAt: now}
+	local := localGameBundle{Game: models.Game{ID: "game-1", Title: "Game", UpdatedAt: now}}
+
+	iteration, err := service.syncSingleGame(context.Background(), nil, "", "game-1", local, true, cloud, true)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if iteration.cloudGame == nil || iteration.cloudGame.ID != "game-1" {
+		t.Fatalf("expected cloud metadata to be kept")
+	}
+	if iteration.summary.SkippedGames != 1 {
+		t.Fatalf("expected skip summary")
+	}
+	if iteration.shouldSaveMetadata {
+		t.Fatalf("did not expect metadata save on skip")
 	}
 }
