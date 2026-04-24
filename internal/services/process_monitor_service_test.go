@@ -237,3 +237,69 @@ func TestProcessMonitorServiceIsGameProcessRunning(t *testing.T) {
 		t.Fatalf("expected missing game to not be detected")
 	}
 }
+
+func TestProcessMonitorServiceResumeSessionUsesInjectedProcesses(t *testing.T) {
+	t.Parallel()
+
+	service := NewProcessMonitorService(fakeProcessMonitorRepository{
+		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+			return &session, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{{Name: "game.exe", Pid: 100, Cmd: `C:\games\game.exe`}}, "test"
+	}
+	now := time.Now().Add(-time.Minute)
+	service.monitoredGames["game-1"] = &MonitoringGame{
+		GameID:    "game-1",
+		GameTitle: "Game",
+		ExeName:   "game.exe",
+		ExePath:   `C:\games\game.exe`,
+		IsPaused:  true,
+		PausedAt:  &now,
+	}
+
+	ok := service.ResumeSession("game-1")
+	if !ok {
+		t.Fatalf("expected resume to succeed")
+	}
+	game := service.monitoredGames["game-1"]
+	if game.IsPaused || game.PlayStartTime == nil || game.LastDetected == nil {
+		t.Fatalf("expected game to be resumed")
+	}
+}
+
+func TestProcessMonitorServiceFindProcessIDsByExeUsesInjectedProcesses(t *testing.T) {
+	t.Parallel()
+
+	service := NewProcessMonitorService(fakeProcessMonitorRepository{
+		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+			return &session, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{
+			{Name: "other.exe", Pid: 10, Cmd: `C:\games\other.exe`},
+			{Name: "game.exe", Pid: 20, Cmd: `C:\games\game.exe`},
+			{Name: "game.exe", Pid: 30, Cmd: `D:\games\game.exe`},
+		}, "test"
+	}
+
+	ids, err := service.FindProcessIDsByExe(`C:\games\game.exe`)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(ids) != 1 || ids[0] != 20 {
+		t.Fatalf("unexpected process ids: %#v", ids)
+	}
+}

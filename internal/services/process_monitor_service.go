@@ -59,6 +59,7 @@ type ProcessMonitorService struct {
 	repository         ProcessMonitorRepository
 	logger             *slog.Logger
 	cloudSync          *CloudSyncService
+	processProvider    func() ([]ProcessInfo, string)
 	monitoredGames     map[string]*MonitoringGame
 	autoTracking       bool
 	monitoringInterval *time.Ticker
@@ -828,6 +829,9 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 }
 
 func (service *ProcessMonitorService) getProcesses() ([]ProcessInfo, string) {
+	if service.processProvider != nil {
+		return service.processProvider()
+	}
 	processes, err := service.getProcessesNative()
 	if err == nil {
 		return processes, "native"
