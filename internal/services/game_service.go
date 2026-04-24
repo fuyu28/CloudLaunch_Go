@@ -8,19 +8,18 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 )
 
 // GameService はゲーム関連の操作を提供する。
 type GameService struct {
-	repository *db.Repository
+	repository GameRepository
 	logger     *slog.Logger
 }
 
 // NewGameService は GameService を生成する。
-func NewGameService(repository *db.Repository, logger *slog.Logger) *GameService {
+func NewGameService(repository GameRepository, logger *slog.Logger) *GameService {
 	return &GameService{repository: repository, logger: logger}
 }
 

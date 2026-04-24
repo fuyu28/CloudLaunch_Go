@@ -116,47 +116,41 @@ func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]models.Play
 
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
-	var gameID string
-	if app.Database != nil {
-		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
-			gameID = session.GameID
-		}
-	}
 	deleted := app.SessionService.DeleteSession(app.context(), sessionID)
-	if deleted.Success && gameID != "" {
-		app.syncGameAsync(gameID)
+	if deleted.Success && deleted.Data.GameID != "" {
+		app.syncGameAsync(deleted.Data.GameID)
+		return result.OkResult(true)
 	}
-	return deleted
+	if !deleted.Success {
+		return result.ApiResult[bool]{Success: false, Error: deleted.Error}
+	}
+	return result.OkResult(true)
 }
 
 // UpdateSessionChapter はセッション章を更新する。
 func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result.ApiResult[bool] {
-	var gameID string
-	if app.Database != nil {
-		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
-			gameID = session.GameID
-		}
-	}
 	updated := app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
-	if updated.Success && gameID != "" {
-		app.syncGameAsync(gameID)
+	if updated.Success && updated.Data.GameID != "" {
+		app.syncGameAsync(updated.Data.GameID)
+		return result.OkResult(true)
 	}
-	return updated
+	if !updated.Success {
+		return result.ApiResult[bool]{Success: false, Error: updated.Error}
+	}
+	return result.OkResult(true)
 }
 
 // UpdateSessionName はセッション名を更新する。
 func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	var gameID string
-	if app.Database != nil {
-		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
-			gameID = session.GameID
-		}
-	}
 	updated := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
-	if updated.Success && gameID != "" {
-		app.syncGameAsync(gameID)
+	if updated.Success && updated.Data.GameID != "" {
+		app.syncGameAsync(updated.Data.GameID)
+		return result.OkResult(true)
 	}
-	return updated
+	if !updated.Success {
+		return result.ApiResult[bool]{Success: false, Error: updated.Error}
+	}
+	return result.OkResult(true)
 }
 
 // CreateMemo はメモを作成する。

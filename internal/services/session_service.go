@@ -8,20 +8,24 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 )
 
 // SessionService はプレイセッション関連操作を提供する。
 type SessionService struct {
-	repository *db.Repository
+	repository SessionRepository
 	logger     *slog.Logger
 }
 
 // NewSessionService は SessionService を生成する。
-func NewSessionService(repository *db.Repository, logger *slog.Logger) *SessionService {
+func NewSessionService(repository SessionRepository, logger *slog.Logger) *SessionService {
 	return &SessionService{repository: repository, logger: logger}
+}
+
+// SessionMutationResult represents metadata that the Wails adapter can use after a session write.
+type SessionMutationResult struct {
+	GameID string `json:"gameId"`
 }
 
 // CreateSession は新しいセッションを作成する。
@@ -62,75 +66,81 @@ func (service *SessionService) ListSessionsByGame(ctx context.Context, gameID st
 }
 
 // DeleteSession はセッションを削除する。
-func (service *SessionService) DeleteSession(ctx context.Context, sessionID string) result.ApiResult[bool] {
+func (service *SessionService) DeleteSession(ctx context.Context, sessionID string) result.ApiResult[SessionMutationResult] {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return result.ErrorResult[bool]("セッションIDが不正です", detail)
+		return result.ErrorResult[SessionMutationResult]("セッションIDが不正です", detail)
 	}
 
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("セッション取得に失敗", "error", error)
-		return result.ErrorResult[bool]("セッション取得に失敗しました", error.Error())
+		return result.ErrorResult[SessionMutationResult]("セッション取得に失敗しました", error.Error())
 	}
 	if error := service.repository.DeletePlaySession(ctx, trimmedID); error != nil {
 		service.logger.Error("セッション削除に失敗", "error", error)
-		return result.ErrorResult[bool]("セッション削除に失敗しました", error.Error())
+		return result.ErrorResult[SessionMutationResult]("セッション削除に失敗しました", error.Error())
 	}
+	mutation := SessionMutationResult{}
 	if session != nil {
 		service.afterSessionChange(ctx, session.GameID, nil)
+		mutation.GameID = session.GameID
 	}
-	return result.OkResult(true)
+	return result.OkResult(mutation)
 }
 
 // UpdateSessionChapter はセッションの章を更新する。
-func (service *SessionService) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[bool] {
+func (service *SessionService) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) result.ApiResult[SessionMutationResult] {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return result.ErrorResult[bool]("セッションIDが不正です", detail)
+		return result.ErrorResult[SessionMutationResult]("セッションIDが不正です", detail)
 	}
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("セッション取得に失敗", "error", error)
-		return result.ErrorResult[bool]("セッション取得に失敗しました", error.Error())
+		return result.ErrorResult[SessionMutationResult]("セッション取得に失敗しました", error.Error())
 	}
 	if error := service.repository.UpdatePlaySessionChapter(ctx, trimmedID, chapterID); error != nil {
 		service.logger.Error("セッション章更新に失敗", "error", error)
-		return result.ErrorResult[bool]("セッション章更新に失敗しました", error.Error())
+		return result.ErrorResult[SessionMutationResult]("セッション章更新に失敗しました", error.Error())
 	}
+	mutation := SessionMutationResult{}
 	if session != nil {
 		service.afterSessionChange(ctx, session.GameID, nil)
+		mutation.GameID = session.GameID
 	}
-	return result.OkResult(true)
+	return result.OkResult(mutation)
 }
 
 // UpdateSessionName はセッション名を更新する。
-func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[bool] {
+func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) result.ApiResult[SessionMutationResult] {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return result.ErrorResult[bool]("セッションIDが不正です", detail)
+		return result.ErrorResult[SessionMutationResult]("セッションIDが不正です", detail)
 	}
 	trimmedName, detail, ok := requireNonEmpty(sessionName, "sessionName")
 	if !ok {
 		service.logger.Warn("セッション名が不正です", "detail", detail, "sessionId", sessionID)
-		return result.ErrorResult[bool]("セッション名が不正です", detail)
+		return result.ErrorResult[SessionMutationResult]("セッション名が不正です", detail)
 	}
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("セッション取得に失敗", "error", error)
-		return result.ErrorResult[bool]("セッション取得に失敗しました", error.Error())
+		return result.ErrorResult[SessionMutationResult]("セッション取得に失敗しました", error.Error())
 	}
 	if error := service.repository.UpdatePlaySessionName(ctx, trimmedID, trimmedName); error != nil {
 		service.logger.Error("セッション名更新に失敗", "error", error)
-		return result.ErrorResult[bool]("セッション名更新に失敗しました", error.Error())
+		return result.ErrorResult[SessionMutationResult]("セッション名更新に失敗しました", error.Error())
 	}
+	mutation := SessionMutationResult{}
 	if session != nil {
 		service.afterSessionChange(ctx, session.GameID, nil)
+		mutation.GameID = session.GameID
 	}
-	return result.OkResult(true)
+	return result.OkResult(mutation)
 }
 
 func (service *SessionService) afterSessionChange(ctx context.Context, gameID string, playedAt *time.Time) {
