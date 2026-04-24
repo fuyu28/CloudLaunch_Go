@@ -30,3 +30,14 @@ type SessionRepository interface {
 	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
 	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
+
+// MemoRepository defines the persistence boundary required by MemoService.
+type MemoRepository interface {
+	CreateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error)
+	UpdateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error)
+	GetMemoByID(ctx context.Context, memoID string) (*models.Memo, error)
+	FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error)
+	ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error)
+	ListAllMemos(ctx context.Context) ([]models.Memo, error)
+	DeleteMemo(ctx context.Context, memoID string) error
+}

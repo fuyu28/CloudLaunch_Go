@@ -21,7 +21,6 @@ type App struct {
 	ctx                 context.Context
 	Config              config.Config
 	Logger              *slog.Logger
-	Database            *db.Repository
 	GameService         *services.GameService
 	SessionService      *services.SessionService
 	ChapterService      *services.ChapterService
@@ -83,7 +82,6 @@ func NewApp(ctx context.Context) (*App, error) {
 	app := &App{
 		Config:              cfg,
 		Logger:              logger,
-		Database:            repository,
 		GameService:         services.NewGameService(repository, logger),
 		SessionService:      services.NewSessionService(repository, logger),
 		ChapterService:      services.NewChapterService(repository, logger),

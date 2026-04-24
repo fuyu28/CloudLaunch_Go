@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
@@ -15,13 +14,13 @@ import (
 
 // MemoService はメモ関連の操作を提供する。
 type MemoService struct {
-	repository  *db.Repository
+	repository  MemoRepository
 	fileManager *memo.FileManager
 	logger      *slog.Logger
 }
 
 // NewMemoService は MemoService を生成する。
-func NewMemoService(repository *db.Repository, fileManager *memo.FileManager, logger *slog.Logger) *MemoService {
+func NewMemoService(repository MemoRepository, fileManager *memo.FileManager, logger *slog.Logger) *MemoService {
 	return &MemoService{repository: repository, fileManager: fileManager, logger: logger}
 }
 
@@ -104,6 +103,27 @@ func (service *MemoService) GetMemoByID(ctx context.Context, memoID string) resu
 	}
 
 	memo, error := service.repository.GetMemoByID(ctx, trimmedID)
+	if error != nil {
+		service.logger.Error("メモ取得に失敗", "error", error)
+		return result.ErrorResult[*models.Memo]("メモ取得に失敗しました", error.Error())
+	}
+	return result.OkResult(memo)
+}
+
+// FindMemoByTitle はゲームIDとタイトルでメモを取得する。
+func (service *MemoService) FindMemoByTitle(ctx context.Context, gameID string, title string) result.ApiResult[*models.Memo] {
+	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
+	if !ok {
+		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
+		return result.ErrorResult[*models.Memo]("ゲームIDが不正です", detail)
+	}
+	trimmedTitle, detail, ok := requireNonEmpty(title, "title")
+	if !ok {
+		service.logger.Warn("メモタイトルが不正です", "detail", detail, "title", title)
+		return result.ErrorResult[*models.Memo]("メモタイトルが不正です", detail)
+	}
+
+	memo, error := service.repository.FindMemoByTitle(ctx, trimmedGameID, trimmedTitle)
 	if error != nil {
 		service.logger.Error("メモ取得に失敗", "error", error)
 		return result.ErrorResult[*models.Memo]("メモ取得に失敗しました", error.Error())

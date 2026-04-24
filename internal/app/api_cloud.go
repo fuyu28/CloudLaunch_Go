@@ -221,10 +221,11 @@ func (app *App) GetCloudFileDetails(prefix string) result.ApiResult[[]CloudFileD
 // GetCloudFileDetailsByGame はゲームIDから詳細を取得する。
 func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudFileDetailsResult] {
 	ctx := app.context()
-	game, error := app.Database.GetGameByID(ctx, gameID)
-	if error != nil {
-		return errorResultWithLog[CloudFileDetailsResult](app, "ゲーム取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.getGameByID", "gameId", gameID)
+	gameResult := app.GameService.GetGameByID(ctx, gameID)
+	if !gameResult.Success {
+		return serviceErrorResult[CloudFileDetailsResult](gameResult, "ゲーム取得に失敗しました")
 	}
+	game := gameResult.Data
 	if game == nil {
 		return result.OkResult(CloudFileDetailsResult{Exists: false, Files: []CloudFileDetail{}})
 	}
