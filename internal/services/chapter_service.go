@@ -7,19 +7,18 @@ import (
 	"log/slog"
 	"strings"
 
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 )
 
 // ChapterService は章関連の操作を提供する。
 type ChapterService struct {
-	repository *db.Repository
+	repository ChapterRepository
 	logger     *slog.Logger
 }
 
 // NewChapterService は ChapterService を生成する。
-func NewChapterService(repository *db.Repository, logger *slog.Logger) *ChapterService {
+func NewChapterService(repository ChapterRepository, logger *slog.Logger) *ChapterService {
 	return &ChapterService{repository: repository, logger: logger}
 }
 

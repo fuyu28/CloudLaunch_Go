@@ -7,19 +7,18 @@ import (
 	"log/slog"
 	"strings"
 
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 )
 
 // UploadService はアップロード履歴の操作を提供する。
 type UploadService struct {
-	repository *db.Repository
+	repository UploadRepository
 	logger     *slog.Logger
 }
 
 // NewUploadService は UploadService を生成する。
-func NewUploadService(repository *db.Repository, logger *slog.Logger) *UploadService {
+func NewUploadService(repository UploadRepository, logger *slog.Logger) *UploadService {
 	return &UploadService{repository: repository, logger: logger}
 }
 

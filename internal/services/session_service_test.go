@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -11,8 +12,11 @@ import (
 )
 
 type fakeSessionRepository struct {
-	session       *models.PlaySession
-	totalDuration int64
+	session               *models.PlaySession
+	totalDuration         int64
+	touchedGameID         string
+	updatedWithLastPlayed *time.Time
+	updateTotalCalls      int
 }
 
 func (repository *fakeSessionRepository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
@@ -51,6 +55,7 @@ func (repository *fakeSessionRepository) UpdatePlaySessionName(ctx context.Conte
 }
 
 func (repository *fakeSessionRepository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
+	repository.touchedGameID = gameID
 	return nil
 }
 
@@ -66,11 +71,13 @@ func (repository *fakeSessionRepository) SumPlaySessionDurationsByGame(ctx conte
 
 func (repository *fakeSessionRepository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
 	repository.totalDuration = totalPlayTime
+	repository.updateTotalCalls++
 	return nil
 }
 
 func (repository *fakeSessionRepository) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
 	repository.totalDuration = totalPlayTime
+	repository.updatedWithLastPlayed = &playedAt
 	return nil
 }
 
@@ -95,4 +102,97 @@ func TestSessionServiceDeleteSessionReturnsGameIDForAdapterUse(t *testing.T) {
 	if result.Data.GameID != "game-1" {
 		t.Fatalf("expected affected game id to be returned")
 	}
+	if repository.touchedGameID != "game-1" {
+		t.Fatalf("expected touch updated at to be called")
+	}
+	if repository.updateTotalCalls != 1 {
+		t.Fatalf("expected total play time recalculation without playedAt")
+	}
+}
+
+func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepository{}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	playedAt := time.Date(2026, 4, 24, 18, 0, 0, 0, time.UTC)
+
+	result := service.CreateSession(context.Background(), SessionInput{
+		GameID:   "game-1",
+		PlayedAt: playedAt,
+		Duration: 300,
+	})
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if repository.updatedWithLastPlayed == nil || !repository.updatedWithLastPlayed.Equal(playedAt) {
+		t.Fatalf("expected last played update to be called")
+	}
+	if repository.touchedGameID != "game-1" {
+		t.Fatalf("expected game touch after create")
+	}
+}
+
+func TestSessionServiceUpdateSessionNameRejectsInvalidName(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepository{
+		session: &models.PlaySession{ID: "session-1", GameID: "game-1"},
+	}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.UpdateSessionName(context.Background(), "session-1", "   ")
+
+	if result.Success {
+		t.Fatalf("expected invalid session name to fail")
+	}
+}
+
+func TestSessionServiceDeleteSessionHandlesLookupError(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepositoryWithError{getErr: errors.New("db down")}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.DeleteSession(context.Background(), "session-1")
+
+	if result.Success {
+		t.Fatalf("expected failure")
+	}
+}
+
+type fakeSessionRepositoryWithError struct {
+	getErr error
+}
+
+func (repository *fakeSessionRepositoryWithError) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+	return &session, nil
+}
+func (repository *fakeSessionRepositoryWithError) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+	return nil, nil
+}
+func (repository *fakeSessionRepositoryWithError) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
+	return nil, repository.getErr
+}
+func (repository *fakeSessionRepositoryWithError) DeletePlaySession(ctx context.Context, sessionID string) error {
+	return nil
+}
+func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
+	return nil
+}
+func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
+	return nil
+}
+func (repository *fakeSessionRepositoryWithError) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
+	return nil
+}
+func (repository *fakeSessionRepositoryWithError) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
+	return 0, nil
+}
+func (repository *fakeSessionRepositoryWithError) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
+	return nil
+}
+func (repository *fakeSessionRepositoryWithError) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
+	return nil
 }
