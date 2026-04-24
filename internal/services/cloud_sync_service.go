@@ -23,7 +23,6 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/credentials"
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/storage"
@@ -54,14 +53,14 @@ type CloudSyncSummary struct {
 type CloudSyncService struct {
 	config     config.Config
 	store      credentials.Store
-	repository *db.Repository
+	repository CloudSyncRepository
 	logger     *slog.Logger
 	offlineMu  sync.RWMutex
 	offline    bool
 }
 
 // NewCloudSyncService は CloudSyncService を生成する。
-func NewCloudSyncService(cfg config.Config, store credentials.Store, repository *db.Repository, logger *slog.Logger) *CloudSyncService {
+func NewCloudSyncService(cfg config.Config, store credentials.Store, repository CloudSyncRepository, logger *slog.Logger) *CloudSyncService {
 	return &CloudSyncService{
 		config:     cfg,
 		store:      store,
@@ -191,84 +190,29 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 		return result.ErrorResult[CloudSyncSummary]("ローカルゲーム取得に失敗しました", err.Error())
 	}
 
-	cloudMap := make(map[string]storage.CloudGameMetadata, len(metadata.Games))
-	for _, game := range metadata.Games {
-		cloudMap[game.ID] = game
-	}
-
-	merged := make(map[string]storage.CloudGameMetadata, len(cloudMap))
-	for id, cloudGame := range cloudMap {
-		merged[id] = cloudGame
-	}
+	cloudMap := cloudMetadataToMap(metadata)
+	merged := copyCloudGameMap(cloudMap)
 
 	var summary CloudSyncSummary
 	shouldSave := false
+	targetIDs := collectUnionGameIDs(localGames, cloudMap, gameID)
 
-	unionIDs := map[string]struct{}{}
-	for id := range localGames {
-		unionIDs[id] = struct{}{}
-	}
-	for id := range cloudMap {
-		unionIDs[id] = struct{}{}
-	}
-
-	for id := range unionIDs {
-		if gameID != "" && id != gameID {
-			continue
-		}
+	for _, id := range targetIDs {
 		local, hasLocal := localGames[id]
 		cloud, hasCloud := cloudMap[id]
-
-		switch {
-		case hasLocal && hasCloud:
-			switch {
-			case local.Game.UpdatedAt.After(cloud.UpdatedAt):
-				cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, cfg.Bucket, local, &cloud)
-				if err != nil {
-					service.logger.Error("クラウド更新に失敗", "operation", "sync.buildCloudGame", "gameId", id, "error", err)
-					return result.ErrorResult[CloudSyncSummary]("クラウド更新に失敗しました", err.Error())
-				}
-				merged[id] = cloudGame
-				shouldSave = true
-				summary.UploadedGames++
-				summary.UploadedSessions += len(local.Sessions)
-				summary.UploadedImages += uploadedImages
-			case cloud.UpdatedAt.After(local.Game.UpdatedAt):
-				downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, &local.Game)
-				if err != nil {
-					service.logger.Error("ローカル更新に失敗", "operation", "sync.applyCloudGame", "gameId", id, "error", err)
-					return result.ErrorResult[CloudSyncSummary]("ローカル更新に失敗しました", err.Error())
-				}
-				merged[id] = cloud
-				summary.DownloadedGames++
-				summary.DownloadedSessions += downloadedSessions
-				summary.DownloadedImages += downloadedImages
-			default:
-				merged[id] = cloud
-				summary.SkippedGames++
+		iteration, err := service.syncSingleGame(ctx, client, cfg.Bucket, id, local, hasLocal, cloud, hasCloud)
+		if err != nil {
+			message := "クラウド更新に失敗しました"
+			if determineGameSyncAction(local, hasLocal, cloud, hasCloud) == gameSyncActionDownload {
+				message = "ローカル更新に失敗しました"
 			}
-		case hasLocal && !hasCloud:
-			cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, cfg.Bucket, local, nil)
-			if err != nil {
-				service.logger.Error("クラウド更新に失敗", "operation", "sync.createCloudGame", "gameId", id, "error", err)
-				return result.ErrorResult[CloudSyncSummary]("クラウド更新に失敗しました", err.Error())
-			}
-			merged[id] = cloudGame
-			shouldSave = true
-			summary.UploadedGames++
-			summary.UploadedSessions += len(local.Sessions)
-			summary.UploadedImages += uploadedImages
-		case !hasLocal && hasCloud:
-			downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, cfg.Bucket, cloud, nil)
-			if err != nil {
-				service.logger.Error("ローカル更新に失敗", "operation", "sync.createLocalGame", "gameId", id, "error", err)
-				return result.ErrorResult[CloudSyncSummary]("ローカル更新に失敗しました", err.Error())
-			}
-			merged[id] = cloud
-			summary.DownloadedGames++
-			summary.DownloadedSessions += downloadedSessions
-			summary.DownloadedImages += downloadedImages
+			return result.ErrorResult[CloudSyncSummary](message, err.Error())
 		}
+		if iteration.cloudGame != nil {
+			merged[id] = *iteration.cloudGame
+		}
+		shouldSave = shouldSave || iteration.shouldSaveMetadata
+		summary.add(iteration.summary)
 	}
 
 	if shouldSave {
@@ -292,8 +236,156 @@ type localGameBundle struct {
 	Sessions []models.PlaySession
 }
 
+type gameSyncAction int
+
+const (
+	gameSyncActionSkip gameSyncAction = iota
+	gameSyncActionUpload
+	gameSyncActionDownload
+)
+
+type gameSyncIterationResult struct {
+	cloudGame          *storage.CloudGameMetadata
+	summary            CloudSyncSummary
+	shouldSaveMetadata bool
+}
+
 func cloudSessionsKey(gameID string) string {
 	return fmt.Sprintf("games/%s/%s", gameID, cloudSessionsFileName)
+}
+
+func determineGameSyncAction(local localGameBundle, hasLocal bool, cloud storage.CloudGameMetadata, hasCloud bool) gameSyncAction {
+	switch {
+	case hasLocal && hasCloud:
+		switch {
+		case local.Game.UpdatedAt.After(cloud.UpdatedAt):
+			return gameSyncActionUpload
+		case cloud.UpdatedAt.After(local.Game.UpdatedAt):
+			return gameSyncActionDownload
+		default:
+			return gameSyncActionSkip
+		}
+	case hasLocal && !hasCloud:
+		return gameSyncActionUpload
+	case !hasLocal && hasCloud:
+		return gameSyncActionDownload
+	default:
+		return gameSyncActionSkip
+	}
+}
+
+func cloudMetadataToMap(metadata *storage.CloudMetadata) map[string]storage.CloudGameMetadata {
+	if metadata == nil {
+		return map[string]storage.CloudGameMetadata{}
+	}
+	cloudMap := make(map[string]storage.CloudGameMetadata, len(metadata.Games))
+	for _, game := range metadata.Games {
+		cloudMap[game.ID] = game
+	}
+	return cloudMap
+}
+
+func copyCloudGameMap(source map[string]storage.CloudGameMetadata) map[string]storage.CloudGameMetadata {
+	result := make(map[string]storage.CloudGameMetadata, len(source))
+	for id, game := range source {
+		result[id] = game
+	}
+	return result
+}
+
+func collectUnionGameIDs(localGames map[string]localGameBundle, cloudGames map[string]storage.CloudGameMetadata, gameID string) []string {
+	unionIDs := map[string]struct{}{}
+	for id := range localGames {
+		unionIDs[id] = struct{}{}
+	}
+	for id := range cloudGames {
+		unionIDs[id] = struct{}{}
+	}
+
+	collected := make([]string, 0, len(unionIDs))
+	for id := range unionIDs {
+		if gameID != "" && id != gameID {
+			continue
+		}
+		collected = append(collected, id)
+	}
+	sort.Strings(collected)
+	return collected
+}
+
+func (service *CloudSyncService) syncSingleGame(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+	local localGameBundle,
+	hasLocal bool,
+	cloud storage.CloudGameMetadata,
+	hasCloud bool,
+) (gameSyncIterationResult, error) {
+	switch determineGameSyncAction(local, hasLocal, cloud, hasCloud) {
+	case gameSyncActionUpload:
+		existing := (*storage.CloudGameMetadata)(nil)
+		operation := "sync.createCloudGame"
+		if hasCloud {
+			existing = &cloud
+			operation = "sync.buildCloudGame"
+		}
+		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, local, existing)
+		if err != nil {
+			service.logger.Error("クラウド更新に失敗", "operation", operation, "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+		return gameSyncIterationResult{
+			cloudGame: &cloudGame,
+			summary: CloudSyncSummary{
+				UploadedGames:    1,
+				UploadedSessions: len(local.Sessions),
+				UploadedImages:   uploadedImages,
+			},
+			shouldSaveMetadata: true,
+		}, nil
+	case gameSyncActionDownload:
+		var currentLocal *models.Game
+		operation := "sync.createLocalGame"
+		if hasLocal {
+			currentLocal = &local.Game
+			operation = "sync.applyCloudGame"
+		}
+		downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, bucket, cloud, currentLocal)
+		if err != nil {
+			service.logger.Error("ローカル更新に失敗", "operation", operation, "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+		return gameSyncIterationResult{
+			cloudGame: &cloud,
+			summary: CloudSyncSummary{
+				DownloadedGames:    1,
+				DownloadedSessions: downloadedSessions,
+				DownloadedImages:   downloadedImages,
+			},
+		}, nil
+	default:
+		result := gameSyncIterationResult{
+			summary: CloudSyncSummary{
+				SkippedGames: 1,
+			},
+		}
+		if hasCloud {
+			result.cloudGame = &cloud
+		}
+		return result, nil
+	}
+}
+
+func (summary *CloudSyncSummary) add(other CloudSyncSummary) {
+	summary.UploadedGames += other.UploadedGames
+	summary.DownloadedGames += other.DownloadedGames
+	summary.UploadedSessions += other.UploadedSessions
+	summary.DownloadedSessions += other.DownloadedSessions
+	summary.UploadedImages += other.UploadedImages
+	summary.DownloadedImages += other.DownloadedImages
+	summary.SkippedGames += other.SkippedGames
 }
 
 func (service *CloudSyncService) loadLocalGames(ctx context.Context, gameID string) (map[string]localGameBundle, error) {

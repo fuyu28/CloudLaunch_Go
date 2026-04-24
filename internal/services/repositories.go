@@ -60,3 +60,28 @@ type UploadRepository interface {
 	CreateUpload(ctx context.Context, upload models.Upload) (*models.Upload, error)
 	ListUploadsByGame(ctx context.Context, gameID string) ([]models.Upload, error)
 }
+
+// CloudSyncRepository defines the persistence boundary required by CloudSyncService.
+type CloudSyncRepository interface {
+	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)
+	ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
+	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error)
+	UpsertGameSync(ctx context.Context, game models.Game) error
+	DeletePlaySessionsByGame(ctx context.Context, gameID string) error
+	UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error
+	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
+	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
+}
+
+// ScreenshotRepository defines the persistence boundary required by ScreenshotService.
+type ScreenshotRepository interface {
+	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)
+}
+
+// ProcessMonitorRepository defines the persistence boundary required by ProcessMonitorService.
+type ProcessMonitorRepository interface {
+	CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error)
+	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)
+	UpdateGame(ctx context.Context, game models.Game) (*models.Game, error)
+	ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
+}

@@ -15,7 +15,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/storage"
 
@@ -57,7 +56,7 @@ type normalizedProcess struct {
 
 // ProcessMonitorService はゲームプロセス監視を提供する。
 type ProcessMonitorService struct {
-	repository         *db.Repository
+	repository         ProcessMonitorRepository
 	logger             *slog.Logger
 	cloudSync          *CloudSyncService
 	monitoredGames     map[string]*MonitoringGame
@@ -71,7 +70,7 @@ type ProcessMonitorService struct {
 }
 
 // NewProcessMonitorService は ProcessMonitorService を生成する。
-func NewProcessMonitorService(repository *db.Repository, logger *slog.Logger, cloudSync *CloudSyncService) *ProcessMonitorService {
+func NewProcessMonitorService(repository ProcessMonitorRepository, logger *slog.Logger, cloudSync *CloudSyncService) *ProcessMonitorService {
 	return &ProcessMonitorService{
 		repository:         repository,
 		logger:             logger,

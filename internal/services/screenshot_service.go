@@ -12,12 +12,11 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/db"
 )
 
 // ScreenshotService はゲームウィンドウのスクリーンショット取得を提供する。
 type ScreenshotService struct {
-	repository *db.Repository
+	repository ScreenshotRepository
 	logger     *slog.Logger
 	appDataDir string
 	// Snipping Tool運用では自動適用できないため、設定互換性のために保持する。
@@ -31,7 +30,7 @@ type ScreenshotService struct {
 // NewScreenshotService は ScreenshotService を生成する。
 func NewScreenshotService(
 	cfg config.Config,
-	repository *db.Repository,
+	repository ScreenshotRepository,
 	logger *slog.Logger,
 ) *ScreenshotService {
 	fileLogger, logFile := newScreenshotFileLogger(cfg.AppDataDir, cfg.LogLevel)
