@@ -256,3 +256,83 @@ func TestComposeSyncedLocalGameUsesFallbacksWithoutLocalGame(t *testing.T) {
 		t.Fatalf("expected local-only fields to be nil without local game")
 	}
 }
+
+func TestComposeCloudGameMetadataCopiesSyncFields(t *testing.T) {
+	t.Parallel()
+
+	lastPlayed := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
+	clearedAt := lastPlayed.Add(2 * time.Hour)
+	currentChapter := "chapter-3"
+	game := models.Game{
+		ID:             "game-1",
+		Title:          "Game",
+		Publisher:      "Publisher",
+		PlayStatus:     models.PlayStatusPlayed,
+		TotalPlayTime:  180,
+		LastPlayed:     &lastPlayed,
+		ClearedAt:      &clearedAt,
+		CurrentChapter: &currentChapter,
+		CreatedAt:      lastPlayed.Add(-24 * time.Hour),
+		UpdatedAt:      lastPlayed.Add(time.Hour),
+	}
+
+	composed := composeCloudGameMetadata(game)
+
+	if composed.ID != game.ID || composed.Title != game.Title || composed.Publisher != game.Publisher {
+		t.Fatalf("expected identity fields to be copied")
+	}
+	if composed.PlayStatus != string(game.PlayStatus) || composed.TotalPlayTime != game.TotalPlayTime {
+		t.Fatalf("expected play state to be copied")
+	}
+	if composed.LastPlayed == nil || !composed.LastPlayed.Equal(lastPlayed) {
+		t.Fatalf("expected last played to be copied")
+	}
+	if composed.ClearedAt == nil || !composed.ClearedAt.Equal(clearedAt) {
+		t.Fatalf("expected cleared at to be copied")
+	}
+	if composed.CurrentChapter != game.CurrentChapter ||
+		!composed.CreatedAt.Equal(game.CreatedAt) ||
+		!composed.UpdatedAt.Equal(game.UpdatedAt) {
+		t.Fatalf("expected sync timestamps and chapter to be copied")
+	}
+}
+
+func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
+	t.Parallel()
+
+	playedAt := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
+	updatedAt := playedAt.Add(30 * time.Minute)
+	sessionName1 := "Chapter 1"
+	sessionName2 := "Chapter 2"
+	sessions := []models.PlaySession{
+		{
+			ID:          "session-1",
+			PlayedAt:    playedAt,
+			Duration:    45,
+			SessionName: &sessionName1,
+			UpdatedAt:   updatedAt,
+		},
+		{
+			ID:          "session-2",
+			PlayedAt:    playedAt.Add(time.Hour),
+			Duration:    30,
+			SessionName: &sessionName2,
+			UpdatedAt:   updatedAt.Add(time.Hour),
+		},
+	}
+
+	composed := composeCloudSessions(sessions)
+
+	if len(composed) != 2 {
+		t.Fatalf("expected two session records")
+	}
+	if composed[0].ID != "session-1" || composed[1].ID != "session-2" {
+		t.Fatalf("expected session order to be preserved")
+	}
+	if composed[0].Duration != 45 || composed[0].SessionName == nil || *composed[0].SessionName != "Chapter 1" {
+		t.Fatalf("expected first session fields to be copied")
+	}
+	if !composed[1].PlayedAt.Equal(sessions[1].PlayedAt) || !composed[1].UpdatedAt.Equal(sessions[1].UpdatedAt) {
+		t.Fatalf("expected second session timestamps to be copied")
+	}
+}

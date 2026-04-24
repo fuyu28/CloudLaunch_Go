@@ -428,29 +428,9 @@ func (service *CloudSyncService) buildCloudGame(
 	existing *storage.CloudGameMetadata,
 ) (storage.CloudGameMetadata, int, error) {
 	game := local.Game
-	cloudGame := storage.CloudGameMetadata{
-		ID:             game.ID,
-		Title:          game.Title,
-		Publisher:      game.Publisher,
-		PlayStatus:     string(game.PlayStatus),
-		TotalPlayTime:  game.TotalPlayTime,
-		LastPlayed:     game.LastPlayed,
-		ClearedAt:      game.ClearedAt,
-		CurrentChapter: game.CurrentChapter,
-		CreatedAt:      game.CreatedAt,
-		UpdatedAt:      game.UpdatedAt,
-	}
+	cloudGame := composeCloudGameMetadata(game)
 
-	sessions := make([]storage.CloudSessionRecord, 0, len(local.Sessions))
-	for _, session := range local.Sessions {
-		sessions = append(sessions, storage.CloudSessionRecord{
-			ID:          session.ID,
-			PlayedAt:    session.PlayedAt,
-			Duration:    session.Duration,
-			SessionName: session.SessionName,
-			UpdatedAt:   session.UpdatedAt,
-		})
-	}
+	sessions := composeCloudSessions(local.Sessions)
 	if err := storage.SaveSessions(ctx, client, bucket, cloudSessionsKey(game.ID), sessions); err != nil {
 		return cloudGame, 0, err
 	}
@@ -472,6 +452,35 @@ func (service *CloudSyncService) buildCloudGame(
 	}
 
 	return cloudGame, 0, nil
+}
+
+func composeCloudGameMetadata(game models.Game) storage.CloudGameMetadata {
+	return storage.CloudGameMetadata{
+		ID:             game.ID,
+		Title:          game.Title,
+		Publisher:      game.Publisher,
+		PlayStatus:     string(game.PlayStatus),
+		TotalPlayTime:  game.TotalPlayTime,
+		LastPlayed:     game.LastPlayed,
+		ClearedAt:      game.ClearedAt,
+		CurrentChapter: game.CurrentChapter,
+		CreatedAt:      game.CreatedAt,
+		UpdatedAt:      game.UpdatedAt,
+	}
+}
+
+func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionRecord {
+	records := make([]storage.CloudSessionRecord, 0, len(sessions))
+	for _, session := range sessions {
+		records = append(records, storage.CloudSessionRecord{
+			ID:          session.ID,
+			PlayedAt:    session.PlayedAt,
+			Duration:    session.Duration,
+			SessionName: session.SessionName,
+			UpdatedAt:   session.UpdatedAt,
+		})
+	}
+	return records
 }
 
 func (service *CloudSyncService) applyCloudGame(
