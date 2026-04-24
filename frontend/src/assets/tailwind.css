@@ -7,6 +7,24 @@
 }
 @plugin 'tailwind-scrollbar';
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: oklch(var(--b2));
+}
+
+#root {
+  overflow: hidden;
+}
+
 /* Wails frameless drag regions */
 .wails-drag {
   --wails-draggable: drag;

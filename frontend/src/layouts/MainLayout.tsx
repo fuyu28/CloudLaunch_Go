@@ -40,7 +40,7 @@ export default function MainLayout(): React.JSX.Element {
   }, [currentTheme]);
 
   return (
-    <div className="drawer drawer-mobile min-h-screen bg-base-200 wails-no-drag">
+    <div className="drawer drawer-mobile h-screen max-w-full overflow-hidden bg-base-200 wails-no-drag">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" ref={drawerRef} />
 
       {/* サイドバー */}
@@ -128,7 +128,7 @@ export default function MainLayout(): React.JSX.Element {
       </div>
 
       {/* メイン */}
-      <div className="drawer-content flex flex-col h-screen">
+      <div className="drawer-content flex h-full min-w-0 flex-col overflow-hidden">
         {/* ↓ ここをカスタムタイトルバーに */}
         <header
           className="
@@ -199,7 +199,7 @@ export default function MainLayout(): React.JSX.Element {
         </header>
 
         {/* ページ固有部分 */}
-        <main className="flex-1 pt-4 overflow-y-auto scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent min-h-0">
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden pt-4 scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent">
           <Outlet />
         </main>
 

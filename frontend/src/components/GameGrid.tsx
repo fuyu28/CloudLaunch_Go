@@ -46,7 +46,7 @@ const GameGrid = memo(function GameGrid({
   }
 
   return (
-    <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent min-h-0">
+    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent">
       <div className="relative">
         <div
           className="grid gap-4 justify-center px-6 pb-6"
