@@ -193,3 +193,66 @@ func TestCloudSyncServiceSyncSingleGameSkipKeepsCloudMetadata(t *testing.T) {
 		t.Fatalf("did not expect metadata save on skip")
 	}
 }
+
+func TestComposeSyncedLocalGamePreservesLocalWindowsSpecificFields(t *testing.T) {
+	t.Parallel()
+
+	hash := "abc"
+	hashTime := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
+	saveFolder := `C:\Users\fuyu\Saved Games\Game`
+	imagePath := `C:\CloudLaunch\thumbs\game.png`
+	local := &models.Game{
+		ID:                     "game-1",
+		ExePath:                `C:\Games\game.exe`,
+		SaveFolderPath:         &saveFolder,
+		LocalSaveHash:          &hash,
+		LocalSaveHashUpdatedAt: &hashTime,
+	}
+	cloud := storage.CloudGameMetadata{
+		ID:            "game-1",
+		Title:         "Game",
+		Publisher:     "Publisher",
+		PlayStatus:    string(models.PlayStatusPlaying),
+		TotalPlayTime: 120,
+		UpdatedAt:     hashTime.Add(time.Hour),
+	}
+
+	composed := composeSyncedLocalGame(cloud, local, &imagePath)
+
+	if composed.ExePath != `C:\Games\game.exe` {
+		t.Fatalf("expected local exe path to be preserved")
+	}
+	if composed.SaveFolderPath == nil || *composed.SaveFolderPath != saveFolder {
+		t.Fatalf("expected local save folder to be preserved")
+	}
+	if composed.LocalSaveHash == nil || *composed.LocalSaveHash != hash {
+		t.Fatalf("expected local save hash to be preserved")
+	}
+	if composed.LocalSaveHashUpdatedAt == nil || !composed.LocalSaveHashUpdatedAt.Equal(hashTime) {
+		t.Fatalf("expected local save hash timestamp to be preserved")
+	}
+	if composed.ImagePath == nil || *composed.ImagePath != imagePath {
+		t.Fatalf("expected image path to be applied")
+	}
+}
+
+func TestComposeSyncedLocalGameUsesFallbacksWithoutLocalGame(t *testing.T) {
+	t.Parallel()
+
+	cloud := storage.CloudGameMetadata{
+		ID:            "game-1",
+		Title:         "Game",
+		Publisher:     "Publisher",
+		PlayStatus:    string(models.PlayStatusPlayed),
+		TotalPlayTime: 240,
+	}
+
+	composed := composeSyncedLocalGame(cloud, nil, nil)
+
+	if composed.ExePath != UnconfiguredExePath {
+		t.Fatalf("expected unconfigured exe path fallback")
+	}
+	if composed.SaveFolderPath != nil || composed.LocalSaveHash != nil || composed.LocalSaveHashUpdatedAt != nil {
+		t.Fatalf("expected local-only fields to be nil without local game")
+	}
+}

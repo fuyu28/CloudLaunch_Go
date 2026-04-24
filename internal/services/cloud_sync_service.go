@@ -481,19 +481,6 @@ func (service *CloudSyncService) applyCloudGame(
 	cloud storage.CloudGameMetadata,
 	local *models.Game,
 ) (int, int, error) {
-	exePath := UnconfiguredExePath
-	saveFolder := (*string)(nil)
-	localSaveHash := (*string)(nil)
-	localSaveHashUpdatedAt := (*time.Time)(nil)
-	if local != nil {
-		if strings.TrimSpace(local.ExePath) != "" {
-			exePath = local.ExePath
-		}
-		saveFolder = local.SaveFolderPath
-		localSaveHash = local.LocalSaveHash
-		localSaveHashUpdatedAt = local.LocalSaveHashUpdatedAt
-	}
-
 	imagePath := (*string)(nil)
 	downloadedImages := 0
 	if cloud.ImageKey != nil && strings.TrimSpace(*cloud.ImageKey) != "" {
@@ -507,23 +494,7 @@ func (service *CloudSyncService) applyCloudGame(
 		}
 	}
 
-	game := models.Game{
-		ID:                     cloud.ID,
-		Title:                  cloud.Title,
-		Publisher:              cloud.Publisher,
-		ImagePath:              imagePath,
-		ExePath:                exePath,
-		SaveFolderPath:         saveFolder,
-		CreatedAt:              cloud.CreatedAt,
-		UpdatedAt:              cloud.UpdatedAt,
-		LocalSaveHash:          localSaveHash,
-		LocalSaveHashUpdatedAt: localSaveHashUpdatedAt,
-		PlayStatus:             models.PlayStatus(cloud.PlayStatus),
-		TotalPlayTime:          cloud.TotalPlayTime,
-		LastPlayed:             cloud.LastPlayed,
-		ClearedAt:              cloud.ClearedAt,
-		CurrentChapter:         cloud.CurrentChapter,
-	}
+	game := composeSyncedLocalGame(cloud, local, imagePath)
 
 	if err := service.repository.UpsertGameSync(ctx, game); err != nil {
 		return 0, 0, err
@@ -558,6 +529,43 @@ func (service *CloudSyncService) applyCloudGame(
 	}
 
 	return downloadedImages, len(cloudSessions), nil
+}
+
+func composeSyncedLocalGame(
+	cloud storage.CloudGameMetadata,
+	local *models.Game,
+	imagePath *string,
+) models.Game {
+	exePath := UnconfiguredExePath
+	saveFolder := (*string)(nil)
+	localSaveHash := (*string)(nil)
+	localSaveHashUpdatedAt := (*time.Time)(nil)
+	if local != nil {
+		if strings.TrimSpace(local.ExePath) != "" {
+			exePath = local.ExePath
+		}
+		saveFolder = local.SaveFolderPath
+		localSaveHash = local.LocalSaveHash
+		localSaveHashUpdatedAt = local.LocalSaveHashUpdatedAt
+	}
+
+	return models.Game{
+		ID:                     cloud.ID,
+		Title:                  cloud.Title,
+		Publisher:              cloud.Publisher,
+		ImagePath:              imagePath,
+		ExePath:                exePath,
+		SaveFolderPath:         saveFolder,
+		CreatedAt:              cloud.CreatedAt,
+		UpdatedAt:              cloud.UpdatedAt,
+		LocalSaveHash:          localSaveHash,
+		LocalSaveHashUpdatedAt: localSaveHashUpdatedAt,
+		PlayStatus:             models.PlayStatus(cloud.PlayStatus),
+		TotalPlayTime:          cloud.TotalPlayTime,
+		LastPlayed:             cloud.LastPlayed,
+		ClearedAt:              cloud.ClearedAt,
+		CurrentChapter:         cloud.CurrentChapter,
+	}
 }
 
 func (service *CloudSyncService) loadCloudSessions(
