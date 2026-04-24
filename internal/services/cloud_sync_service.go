@@ -518,14 +518,7 @@ func (service *CloudSyncService) applyCloudGame(
 		return 0, 0, err
 	}
 	for _, session := range cloudSessions {
-		playSession := models.PlaySession{
-			ID:          session.ID,
-			GameID:      cloud.ID,
-			PlayedAt:    session.PlayedAt,
-			Duration:    session.Duration,
-			SessionName: session.SessionName,
-			UpdatedAt:   session.UpdatedAt,
-		}
+		playSession := composeLocalPlaySession(cloud.ID, session)
 		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
 			return 0, 0, err
 		}
@@ -538,6 +531,17 @@ func (service *CloudSyncService) applyCloudGame(
 	}
 
 	return downloadedImages, len(cloudSessions), nil
+}
+
+func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
+	return models.PlaySession{
+		ID:          session.ID,
+		GameID:      gameID,
+		PlayedAt:    session.PlayedAt,
+		Duration:    session.Duration,
+		SessionName: session.SessionName,
+		UpdatedAt:   session.UpdatedAt,
+	}
 }
 
 func composeSyncedLocalGame(

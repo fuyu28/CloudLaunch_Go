@@ -336,3 +336,30 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 		t.Fatalf("expected second session timestamps to be copied")
 	}
 }
+
+func TestComposeLocalPlaySessionCopiesCloudFields(t *testing.T) {
+	t.Parallel()
+
+	sessionName := "Cloud Session"
+	playedAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
+	updatedAt := playedAt.Add(15 * time.Minute)
+	cloudSession := storage.CloudSessionRecord{
+		ID:          "session-1",
+		PlayedAt:    playedAt,
+		Duration:    75,
+		SessionName: &sessionName,
+		UpdatedAt:   updatedAt,
+	}
+
+	composed := composeLocalPlaySession("game-1", cloudSession)
+
+	if composed.ID != "session-1" || composed.GameID != "game-1" {
+		t.Fatalf("expected identifiers to be copied")
+	}
+	if composed.Duration != 75 || composed.SessionName == nil || *composed.SessionName != sessionName {
+		t.Fatalf("expected cloud session fields to be copied")
+	}
+	if !composed.PlayedAt.Equal(playedAt) || !composed.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("expected timestamps to be copied")
+	}
+}
