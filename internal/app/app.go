@@ -34,6 +34,7 @@ type App struct {
 	ProcessMonitor      *services.ProcessMonitorService
 	ScreenshotService   *services.ScreenshotService
 	HotkeyService       services.HotkeyService
+	Database            *db.Repository
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
@@ -94,6 +95,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		ErogameScapeService: erogameScapeService,
 		ProcessMonitor:      processMonitor,
 		ScreenshotService:   screenshotService,
+		Database:            repository,
 		dbConnection:        connection,
 		autoTracking:        true,
 		isMonitoring:        false,

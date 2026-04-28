@@ -71,6 +71,7 @@ type CloudSyncRepository interface {
 	UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error
 	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
 	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
+	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
 // ScreenshotRepository defines the persistence boundary required by ScreenshotService.

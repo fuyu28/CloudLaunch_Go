@@ -119,10 +119,9 @@ func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
 	deleted := app.SessionService.DeleteSession(app.context(), sessionID)
 	if deleted.Success && deleted.Data.GameID != "" {
 		app.syncGameAsync(deleted.Data.GameID)
-		return result.OkResult(true)
 	}
 	if !deleted.Success {
-		return result.ApiResult[bool]{Success: false, Error: deleted.Error}
+		return result.ErrorResult[bool](deleted.Error.Message, deleted.Error.Detail)
 	}
 	return result.OkResult(true)
 }
@@ -132,10 +131,9 @@ func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result
 	updated := app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
 	if updated.Success && updated.Data.GameID != "" {
 		app.syncGameAsync(updated.Data.GameID)
-		return result.OkResult(true)
 	}
 	if !updated.Success {
-		return result.ApiResult[bool]{Success: false, Error: updated.Error}
+		return result.ErrorResult[bool](updated.Error.Message, updated.Error.Detail)
 	}
 	return result.OkResult(true)
 }
@@ -145,10 +143,9 @@ func (app *App) UpdateSessionName(sessionID string, sessionName string) result.A
 	updated := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
 	if updated.Success && updated.Data.GameID != "" {
 		app.syncGameAsync(updated.Data.GameID)
-		return result.OkResult(true)
 	}
 	if !updated.Success {
-		return result.ApiResult[bool]{Success: false, Error: updated.Error}
+		return result.ErrorResult[bool](updated.Error.Message, updated.Error.Detail)
 	}
 	return result.OkResult(true)
 }

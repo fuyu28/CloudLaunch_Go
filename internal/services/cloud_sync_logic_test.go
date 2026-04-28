@@ -178,6 +178,7 @@ func TestCloudSyncServiceSyncSingleGameSkipKeepsCloudMetadata(t *testing.T) {
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
 
 	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Game", UpdatedAt: now}
 	local := localGameBundle{Game: models.Game{ID: "game-1", Title: "Game", UpdatedAt: now}}
@@ -295,14 +296,11 @@ func TestCloudSyncServiceSyncSingleGameDownloadAppliesGameAndSessions(t *testing
 	if repository.upsertedGame.ID != "game-1" || repository.upsertedGame.Title != "Cloud Game" {
 		t.Fatalf("expected cloud game to be upserted locally, got %#v", repository.upsertedGame)
 	}
-	if repository.deletedSessionsGameID != "game-1" {
-		t.Fatalf("expected local sessions to be replaced, got %q", repository.deletedSessionsGameID)
-	}
 	if len(repository.upsertedSessions) != 2 || repository.upsertedSessions[1].Duration != 45 {
 		t.Fatalf("expected cloud sessions to be upserted, got %#v", repository.upsertedSessions)
 	}
 	if repository.updatedTotalGameID != "game-1" || repository.updatedTotalPlayTime != 75 {
-		t.Fatalf("expected total play time to be recalculated, got game=%q total=%d", repository.updatedTotalGameID, repository.updatedTotalPlayTime)
+		t.Fatalf("expected total play time to be updated, got game=%q total=%d", repository.updatedTotalGameID, repository.updatedTotalPlayTime)
 	}
 }
 
@@ -454,6 +452,7 @@ type trackingCloudSyncRepository struct {
 	upsertedSessions      []models.PlaySession
 	updatedTotalGameID    string
 	updatedTotalPlayTime  int64
+	updatedLastPlayed     time.Time
 	upsertGameErr         error
 	deleteSessionsErr     error
 	upsertSessionErr      error
@@ -529,6 +528,16 @@ func (repository *trackingCloudSyncRepository) UpdateGameTotalPlayTime(ctx conte
 	}
 	repository.updatedTotalGameID = gameID
 	repository.updatedTotalPlayTime = totalPlayTime
+	return nil
+}
+
+func (repository *trackingCloudSyncRepository) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
+	if repository.updateTotalErr != nil {
+		return repository.updateTotalErr
+	}
+	repository.updatedTotalGameID = gameID
+	repository.updatedTotalPlayTime = totalPlayTime
+	repository.updatedLastPlayed = playedAt
 	return nil
 }
 
