@@ -300,3 +300,40 @@ func TestCloudSyncServiceDeleteGameFromCloudFailsInOfflineMode(t *testing.T) {
 		t.Fatalf("expected offline delete to fail")
 	}
 }
+
+func TestCloudSyncServiceDeleteGameFromCloudDeletesObjectsAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	cloudStorage := &fakeCloudSyncStorage{
+		savedMetadata: &storage.CloudMetadata{
+			Version: 2,
+			Games: []storage.CloudGameMetadata{
+				{ID: "game-1", Title: "Delete Me"},
+				{ID: "game-2", Title: "Keep Me"},
+			},
+		},
+	}
+	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.newClient = func(ctx context.Context, credentialKey string) (*s3.Client, storage.S3Config, string, string, bool) {
+		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
+	}
+
+	result := service.DeleteGameFromCloud(context.Background(), "default", "game-1")
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if cloudStorage.deletedPrefix != "games/game-1/" {
+		t.Fatalf("expected game object prefix to be deleted, got %q", cloudStorage.deletedPrefix)
+	}
+	if cloudStorage.savedMetadata == nil || len(cloudStorage.savedMetadata.Games) != 1 {
+		t.Fatalf("expected metadata to keep one game, got %#v", cloudStorage.savedMetadata)
+	}
+	if cloudStorage.savedMetadata.Games[0].ID != "game-2" {
+		t.Fatalf("expected remaining metadata game to be game-2, got %#v", cloudStorage.savedMetadata.Games)
+	}
+	if cloudStorage.savedMetadata.UpdatedAt.IsZero() {
+		t.Fatalf("expected metadata updated timestamp to be refreshed")
+	}
+}
