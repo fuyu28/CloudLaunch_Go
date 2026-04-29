@@ -172,6 +172,88 @@ func TestGameServiceUpdateGameReturnsNotFoundWhenMissing(t *testing.T) {
 	}
 }
 
+func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
+	t.Parallel()
+
+	lastPlayed := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	clearedAt := lastPlayed.Add(2 * time.Hour)
+	currentChapter := "chapter-3"
+	var updatedGame models.Game
+	service := NewGameService(&fakeGameRepository{
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return &models.Game{
+				ID:            gameID,
+				Title:         "Old",
+				Publisher:     "Old Publisher",
+				ExePath:       "/old/game.exe",
+				PlayStatus:    models.PlayStatusPlaying,
+				TotalPlayTime: 360,
+				LastPlayed:    &lastPlayed,
+			}, nil
+		},
+		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+			updatedGame = game
+			return &game, nil
+		},
+		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.UpdateGame(context.Background(), " game-1 ", GameUpdateInput{
+		Title:          " New Title ",
+		Publisher:      " New Publisher ",
+		ExePath:        " /games/new.exe ",
+		PlayStatus:     models.PlayStatusPlayed,
+		ClearedAt:      &clearedAt,
+		CurrentChapter: &currentChapter,
+	})
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if updatedGame.Title != "New Title" || updatedGame.Publisher != "New Publisher" || updatedGame.ExePath != "/games/new.exe" {
+		t.Fatalf("expected trimmed game fields, got %#v", updatedGame)
+	}
+	if updatedGame.TotalPlayTime != 360 || updatedGame.LastPlayed == nil || !updatedGame.LastPlayed.Equal(lastPlayed) {
+		t.Fatalf("expected play totals to be preserved, got %#v", updatedGame)
+	}
+	if updatedGame.PlayStatus != models.PlayStatusPlayed ||
+		updatedGame.ClearedAt == nil ||
+		!updatedGame.ClearedAt.Equal(clearedAt) ||
+		updatedGame.CurrentChapter == nil ||
+		*updatedGame.CurrentChapter != "chapter-3" {
+		t.Fatalf("expected progress fields to be updated, got %#v", updatedGame)
+	}
+}
+
+func TestGameServiceListGamesTrimsSearchText(t *testing.T) {
+	t.Parallel()
+
+	var capturedSearch string
+	service := NewGameService(&fakeGameRepository{
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			capturedSearch = searchText
+			return []models.Game{{ID: "game-1", Title: "Game"}}, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		createGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.ListGames(context.Background(), "  Game  ", models.PlayStatus(""), "title", "asc")
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if capturedSearch != "Game" {
+		t.Fatalf("expected search text to be trimmed, got %q", capturedSearch)
+	}
+}
+
 func TestGameServiceUpdatePlayTimeStoresLastPlayed(t *testing.T) {
 	t.Parallel()
 

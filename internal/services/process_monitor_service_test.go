@@ -65,6 +65,35 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseAddsMatchingGame(t *testin
 	}
 }
 
+func TestProcessMonitorServiceAutoAddGamesFromDatabaseRespectsDisabledAutoTracking(t *testing.T) {
+	t.Parallel()
+
+	service := NewProcessMonitorService(fakeProcessMonitorRepository{
+		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+			return &session, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return []models.Game{{ID: "game-1", Title: "Game", ExePath: `C:\games\game.exe`}}, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	service.UpdateAutoTracking(false)
+
+	processes := []ProcessInfo{{Name: "game.exe", Pid: 123, Cmd: `C:\games\game.exe`}}
+	normalized := []normalizedProcess{{
+		info:          processes[0],
+		normalized:    normalizeProcessToken(processes[0].Name),
+		normalizedCmd: normalizeProcessPathToken(processes[0].Cmd),
+	}}
+
+	service.autoAddGamesFromDatabase(processes, normalized)
+
+	if _, ok := service.monitoredGames["game-1"]; ok {
+		t.Fatalf("expected game not to be added while auto tracking is disabled")
+	}
+}
+
 func TestProcessMonitorServiceSaveSessionUpdatesGameTotals(t *testing.T) {
 	t.Parallel()
 
@@ -131,6 +160,37 @@ func TestProcessMonitorServicePauseSessionMarksGamePaused(t *testing.T) {
 	}
 	if game.AccumulatedTime <= 0 {
 		t.Fatalf("expected accumulated time to increase")
+	}
+}
+
+func TestProcessMonitorServiceGetHotkeyTargetGameIDPrefersCurrentPlayingGame(t *testing.T) {
+	t.Parallel()
+
+	service := NewProcessMonitorService(fakeProcessMonitorRepository{
+		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+			return &session, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	oldActivity := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
+	newActivity := oldActivity.Add(time.Hour)
+	service.monitoredGames["paused"] = &MonitoringGame{
+		GameID:       "paused",
+		IsPaused:     true,
+		LastDetected: &newActivity,
+	}
+	service.monitoredGames["playing"] = &MonitoringGame{
+		GameID:        "playing",
+		PlayStartTime: &oldActivity,
+		LastDetected:  &oldActivity,
+	}
+
+	if got := service.GetHotkeyTargetGameID(); got != "playing" {
+		t.Fatalf("expected playing game to be selected, got %q", got)
 	}
 }
 
@@ -271,6 +331,36 @@ func TestProcessMonitorServiceResumeSessionUsesInjectedProcesses(t *testing.T) {
 	game := service.monitoredGames["game-1"]
 	if game.IsPaused || game.PlayStartTime == nil || game.LastDetected == nil {
 		t.Fatalf("expected game to be resumed")
+	}
+}
+
+func TestProcessMonitorServiceGetProcessSnapshotUsesInjectedProcesses(t *testing.T) {
+	t.Parallel()
+
+	service := NewProcessMonitorService(fakeProcessMonitorRepository{
+		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+			return &session, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{{Name: "game.exe", Pid: 20, Cmd: `C:\games\game.exe`}}, "test"
+	}
+
+	snapshot := service.GetProcessSnapshot()
+
+	if snapshot.Source != "test" {
+		t.Fatalf("expected injected source, got %q", snapshot.Source)
+	}
+	if len(snapshot.Items) != 1 || snapshot.Items[0].Name != "game.exe" || snapshot.Items[0].Pid != 20 {
+		t.Fatalf("unexpected process snapshot: %#v", snapshot.Items)
+	}
+	if snapshot.Items[0].NormalizedName == "" || snapshot.Items[0].NormalizedCmd == "" {
+		t.Fatalf("expected normalized process fields")
 	}
 }
 

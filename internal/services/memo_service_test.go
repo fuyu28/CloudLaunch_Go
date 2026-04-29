@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"CloudLaunch_Go/internal/memo"
@@ -135,6 +136,34 @@ func TestMemoServiceCreateMemoRollsBackDatabaseWhenFileWriteFails(t *testing.T) 
 	}
 }
 
+func TestMemoServiceCreateMemoWritesDatabaseAndLocalFile(t *testing.T) {
+	t.Parallel()
+
+	manager := memo.NewFileManager(t.TempDir())
+	repository := &trackingMemoRepository{
+		createResult: &models.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
+	}
+	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.CreateMemo(context.Background(), MemoInput{
+		Title:   " Memo ",
+		Content: "Body",
+		GameID:  " game-1 ",
+	})
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	path := manager.MemoFilePath("game-1", "memo-1", "Memo")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected local memo file to be written: %v", err)
+	}
+	if !strings.Contains(string(payload), "# Memo") || !strings.Contains(string(payload), "Body") {
+		t.Fatalf("expected memo title and body in local file, got %q", string(payload))
+	}
+}
+
 func TestMemoServiceUpdateMemoRollsBackDatabaseWhenFileUpdateFails(t *testing.T) {
 	t.Parallel()
 
@@ -163,6 +192,41 @@ func TestMemoServiceUpdateMemoRollsBackDatabaseWhenFileUpdateFails(t *testing.T)
 	}
 	if repository.updateMemoCalls != 2 {
 		t.Fatalf("expected update rollback to call repository twice")
+	}
+}
+
+func TestMemoServiceUpdateMemoRenamesLocalFile(t *testing.T) {
+	t.Parallel()
+
+	manager := memo.NewFileManager(t.TempDir())
+	if _, err := manager.CreateMemoFile("game-1", "memo-1", "Old", "Old body"); err != nil {
+		t.Fatalf("failed to create existing memo file: %v", err)
+	}
+	repository := &trackingMemoRepository{
+		getResult: &models.Memo{ID: "memo-1", Title: "Old", Content: "Old body", GameID: "game-1"},
+		updateResults: []*models.Memo{
+			{ID: "memo-1", Title: "New", Content: "New body", GameID: "game-1"},
+		},
+	}
+	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.UpdateMemo(context.Background(), "memo-1", MemoUpdateInput{
+		Title:   " New ",
+		Content: "New body",
+	})
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if _, err := os.Stat(manager.MemoFilePath("game-1", "memo-1", "Old")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected old memo file to be removed, got %v", err)
+	}
+	payload, err := os.ReadFile(manager.MemoFilePath("game-1", "memo-1", "New"))
+	if err != nil {
+		t.Fatalf("expected renamed memo file to exist: %v", err)
+	}
+	if !strings.Contains(string(payload), "# New") || !strings.Contains(string(payload), "New body") {
+		t.Fatalf("expected updated memo content, got %q", string(payload))
 	}
 }
 
@@ -238,5 +302,30 @@ func TestMemoServiceListAllMemosHandlesRepositoryError(t *testing.T) {
 	}
 	if result.Error == nil || result.Error.Message == "" {
 		t.Fatalf("expected error details")
+	}
+}
+
+func TestMemoServiceDeleteMemoRemovesDatabaseRecordAndLocalFile(t *testing.T) {
+	t.Parallel()
+
+	manager := memo.NewFileManager(t.TempDir())
+	if _, err := manager.CreateMemoFile("game-1", "memo-1", "Memo", "Body"); err != nil {
+		t.Fatalf("failed to create existing memo file: %v", err)
+	}
+	repository := &trackingMemoRepository{
+		getResult: &models.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
+	}
+	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.DeleteMemo(context.Background(), "memo-1")
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if repository.deleteMemoCalls != 1 {
+		t.Fatalf("expected database memo to be deleted once")
+	}
+	if _, err := os.Stat(manager.MemoFilePath("game-1", "memo-1", "Memo")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected local memo file to be removed, got %v", err)
 	}
 }

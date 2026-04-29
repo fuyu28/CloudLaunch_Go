@@ -111,6 +111,74 @@ func TestCloudSyncServiceLoadLocalGamesReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func TestCloudSyncServiceLoadLocalGamesLoadsAllGamesWithSessions(t *testing.T) {
+	t.Parallel()
+
+	playedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return nil, nil
+		},
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return []models.Game{
+				{ID: "game-2", Title: "Second"},
+				{ID: "game-1", Title: "First"},
+			}, nil
+		},
+		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+			return []models.PlaySession{{ID: "session-" + gameID, GameID: gameID, PlayedAt: playedAt, Duration: 30}}, nil
+		},
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result, err := service.loadLocalGames(context.Background(), "")
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected two local game bundles, got %d", len(result))
+	}
+	if result["game-1"].Game.Title != "First" || len(result["game-1"].Sessions) != 1 {
+		t.Fatalf("expected first game and sessions to be loaded: %#v", result["game-1"])
+	}
+	if result["game-2"].Sessions[0].GameID != "game-2" {
+		t.Fatalf("expected sessions to be loaded per game: %#v", result["game-2"].Sessions)
+	}
+}
+
+func TestCloudSyncServiceLoadLocalGamesReturnsEmptyWhenRequestedGameIsMissing(t *testing.T) {
+	t.Parallel()
+
+	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return nil, nil
+		},
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result, err := service.loadLocalGames(context.Background(), "missing-game")
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result) != 0 {
+		t.Fatalf("expected no local games for missing id, got %#v", result)
+	}
+}
+
 func TestCloudSyncServiceSyncGameRejectsInvalidGameID(t *testing.T) {
 	t.Parallel()
 

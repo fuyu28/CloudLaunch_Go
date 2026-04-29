@@ -149,6 +149,58 @@ func TestSessionServiceUpdateSessionNameRejectsInvalidName(t *testing.T) {
 	}
 }
 
+func TestSessionServiceUpdateSessionNameTrimsNameAndRecalculatesTotal(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepository{
+		session: &models.PlaySession{ID: "session-1", GameID: "game-1", Duration: 120},
+	}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  ")
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if result.Data.GameID != "game-1" {
+		t.Fatalf("expected affected game id to be returned")
+	}
+	if repository.session.SessionName == nil || *repository.session.SessionName != "Chapter 1" {
+		t.Fatalf("expected session name to be trimmed and stored")
+	}
+	if repository.touchedGameID != "game-1" {
+		t.Fatalf("expected game updated timestamp to be touched")
+	}
+	if repository.updateTotalCalls != 1 || repository.totalDuration != 120 {
+		t.Fatalf("expected total play time to be recalculated, calls=%d total=%d", repository.updateTotalCalls, repository.totalDuration)
+	}
+}
+
+func TestSessionServiceUpdateSessionChapterStoresChapterAndRecalculatesTotal(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepository{
+		session: &models.PlaySession{ID: "session-1", GameID: "game-1", Duration: 180},
+	}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	chapterID := "chapter-2"
+
+	result := service.UpdateSessionChapter(context.Background(), "session-1", &chapterID)
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if repository.session.ChapterID == nil || *repository.session.ChapterID != "chapter-2" {
+		t.Fatalf("expected chapter id to be stored")
+	}
+	if repository.touchedGameID != "game-1" {
+		t.Fatalf("expected game updated timestamp to be touched")
+	}
+	if repository.updateTotalCalls != 1 || repository.totalDuration != 180 {
+		t.Fatalf("expected total play time to be recalculated, calls=%d total=%d", repository.updateTotalCalls, repository.totalDuration)
+	}
+}
+
 func TestSessionServiceDeleteSessionHandlesLookupError(t *testing.T) {
 	t.Parallel()
 
