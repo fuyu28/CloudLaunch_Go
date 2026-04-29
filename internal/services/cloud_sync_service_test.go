@@ -24,6 +24,7 @@ type fakeCloudSyncRepository struct {
 	upsertPlaySessionSyncFn    func(ctx context.Context, session models.PlaySession) error
 	sumPlaySessionDurationsFn  func(ctx context.Context, gameID string) (int64, error)
 	updateGameTotalPlayTimeFn  func(ctx context.Context, gameID string, totalPlayTime int64) error
+	updateGameTotalWithLastFn  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
 func (repository fakeCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
@@ -55,7 +56,17 @@ func (repository fakeCloudSyncRepository) SumPlaySessionDurationsByGame(ctx cont
 }
 
 func (repository fakeCloudSyncRepository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
+	if repository.updateGameTotalPlayTimeFn == nil {
+		return nil
+	}
 	return repository.updateGameTotalPlayTimeFn(ctx, gameID, totalPlayTime)
+}
+
+func (repository fakeCloudSyncRepository) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
+	if repository.updateGameTotalWithLastFn == nil {
+		return nil
+	}
+	return repository.updateGameTotalWithLastFn(ctx, gameID, totalPlayTime, playedAt)
 }
 
 func TestCloudSyncServiceLoadLocalGamesUsesRepositoryBoundary(t *testing.T) {
@@ -76,6 +87,7 @@ func TestCloudSyncServiceLoadLocalGamesUsesRepositoryBoundary(t *testing.T) {
 		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+		updateGameTotalWithLastFn:  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	result, err := service.loadLocalGames(context.Background(), "game-1")
@@ -106,6 +118,7 @@ func TestCloudSyncServiceLoadLocalGamesReturnsRepositoryError(t *testing.T) {
 		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+		updateGameTotalWithLastFn:  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	_, err := service.loadLocalGames(context.Background(), "")
@@ -139,7 +152,6 @@ func TestCloudSyncServiceLoadLocalGamesLoadsAllGamesWithSessions(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	result, err := service.loadLocalGames(context.Background(), "")
-
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -173,7 +185,6 @@ func TestCloudSyncServiceLoadLocalGamesReturnsEmptyWhenRequestedGameIsMissing(t 
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	result, err := service.loadLocalGames(context.Background(), "missing-game")
-
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -335,5 +346,82 @@ func TestCloudSyncServiceDeleteGameFromCloudDeletesObjectsAndMetadata(t *testing
 	}
 	if cloudStorage.savedMetadata.UpdatedAt.IsZero() {
 		t.Fatalf("expected metadata updated timestamp to be refreshed")
+	}
+}
+
+func TestMergeSessions_PreservesUniqueSessionsOnBothSides(t *testing.T) {
+	localUpdatedAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
+	cloudUpdatedAt := time.Date(2026, 4, 30, 11, 0, 0, 0, time.UTC)
+	local := []models.PlaySession{
+		{
+			ID:        "local-only",
+			PlayedAt:  time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:  120,
+			UpdatedAt: localUpdatedAt,
+		},
+	}
+	cloud := []storage.CloudSessionRecord{
+		{
+			ID:        "cloud-only",
+			PlayedAt:  time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC),
+			Duration:  240,
+			UpdatedAt: cloudUpdatedAt,
+		},
+	}
+
+	result := mergeSessions(local, cloud)
+
+	if !result.Changed {
+		t.Fatalf("expected merged result to be marked as changed")
+	}
+	if result.UploadedCount != 1 {
+		t.Fatalf("expected UploadedCount=1, got %d", result.UploadedCount)
+	}
+	if result.DownloadedCount != 1 {
+		t.Fatalf("expected DownloadedCount=1, got %d", result.DownloadedCount)
+	}
+	if len(result.Sessions) != 2 {
+		t.Fatalf("expected 2 merged sessions, got %d", len(result.Sessions))
+	}
+}
+
+func TestMergeSessions_PrefersNewerUpdatedSession(t *testing.T) {
+	oldName := "old"
+	newName := "new"
+	local := []models.PlaySession{
+		{
+			ID:          "shared",
+			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:    120,
+			SessionName: &oldName,
+			UpdatedAt:   time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC),
+		},
+	}
+	cloud := []storage.CloudSessionRecord{
+		{
+			ID:          "shared",
+			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:    300,
+			SessionName: &newName,
+			UpdatedAt:   time.Date(2026, 4, 30, 11, 0, 0, 0, time.UTC),
+		},
+	}
+
+	result := mergeSessions(local, cloud)
+
+	if result.DownloadedCount != 1 {
+		t.Fatalf("expected DownloadedCount=1, got %d", result.DownloadedCount)
+	}
+	if result.UploadedCount != 0 {
+		t.Fatalf("expected UploadedCount=0, got %d", result.UploadedCount)
+	}
+	if len(result.Sessions) != 1 {
+		t.Fatalf("expected 1 merged session, got %d", len(result.Sessions))
+	}
+	if result.Sessions[0].Duration != 300 {
+		t.Fatalf("expected newer cloud duration to win, got %d", result.Sessions[0].Duration)
+	}
+	if result.Sessions[0].SessionName == nil || *result.Sessions[0].SessionName != "new" {
+		t.Fatalf("expected newer cloud session name to win")
 	}
 }

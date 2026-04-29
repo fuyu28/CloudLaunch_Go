@@ -297,6 +297,13 @@ type gameSyncIterationResult struct {
 	shouldSaveMetadata bool
 }
 
+type mergedSessionsResult struct {
+	Sessions        []storage.CloudSessionRecord
+	UploadedCount   int
+	DownloadedCount int
+	Changed         bool
+}
+
 func cloudSessionsKey(gameID string) string {
 	return fmt.Sprintf("games/%s/%s", gameID, cloudSessionsFileName)
 }
@@ -370,6 +377,10 @@ func (service *CloudSyncService) syncSingleGame(
 	cloud storage.CloudGameMetadata,
 	hasCloud bool,
 ) (gameSyncIterationResult, error) {
+	if hasLocal && hasCloud {
+		return service.syncExistingGamePair(ctx, client, bucket, gameID, local, cloud)
+	}
+
 	switch determineGameSyncAction(local, hasLocal, cloud, hasCloud) {
 	case gameSyncActionUpload:
 		existing := (*storage.CloudGameMetadata)(nil)
@@ -378,7 +389,7 @@ func (service *CloudSyncService) syncSingleGame(
 			existing = &cloud
 			operation = "sync.buildCloudGame"
 		}
-		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, local, existing)
+		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, local.Game, composeCloudSessions(local.Sessions), existing)
 		if err != nil {
 			service.logger.Error("クラウド更新に失敗", "operation", operation, "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -399,7 +410,12 @@ func (service *CloudSyncService) syncSingleGame(
 			currentLocal = &local.Game
 			operation = "sync.applyCloudGame"
 		}
-		downloadedImages, downloadedSessions, err := service.applyCloudGame(ctx, client, bucket, cloud, currentLocal)
+		cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, cloud.ID)
+		if err != nil {
+			service.logger.Error("クラウドセッション取得に失敗", "operation", operation+".loadCloudSessions", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, cloud, currentLocal, cloudSessions)
 		if err != nil {
 			service.logger.Error("ローカル更新に失敗", "operation", operation, "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -408,7 +424,7 @@ func (service *CloudSyncService) syncSingleGame(
 			cloudGame: &cloud,
 			summary: CloudSyncSummary{
 				DownloadedGames:    1,
-				DownloadedSessions: downloadedSessions,
+				DownloadedSessions: len(cloudSessions),
 				DownloadedImages:   downloadedImages,
 			},
 		}, nil
@@ -422,6 +438,98 @@ func (service *CloudSyncService) syncSingleGame(
 			result.cloudGame = &cloud
 		}
 		return result, nil
+	}
+}
+
+func (service *CloudSyncService) syncExistingGamePair(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+	local localGameBundle,
+	cloud storage.CloudGameMetadata,
+) (gameSyncIterationResult, error) {
+	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, gameID)
+	if err != nil {
+		service.logger.Error("クラウドセッション取得に失敗", "operation", "sync.loadCloudSessions", "gameId", gameID, "error", err)
+		return gameSyncIterationResult{}, err
+	}
+
+	mergedSessions := mergeSessions(local.Sessions, cloudSessions)
+	if mergedSessions.Changed {
+		if err := service.upsertMergedLocalSessions(ctx, gameID, mergedSessions.Sessions); err != nil {
+			service.logger.Error("ローカルセッション統合に失敗", "operation", "sync.upsertMergedLocalSessions", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+	}
+
+	mergedGame := service.mergeCloudGameMetadata(cloud, &local.Game, mergedSessions.Sessions)
+	mergedCloudGame := cloudMetadataFromGame(mergedGame, cloud.ImageKey)
+
+	switch determineGameSyncAction(local, true, cloud, true) {
+	case gameSyncActionUpload:
+		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, mergedGame, mergedSessions.Sessions, &cloud)
+		if err != nil {
+			service.logger.Error("クラウド更新に失敗", "operation", "sync.buildCloudGame", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+		return gameSyncIterationResult{
+			cloudGame: &cloudGame,
+			summary: CloudSyncSummary{
+				UploadedGames:      1,
+				UploadedSessions:   mergedSessions.UploadedCount,
+				DownloadedSessions: mergedSessions.DownloadedCount,
+				UploadedImages:     uploadedImages,
+			},
+			shouldSaveMetadata: true,
+		}, nil
+	case gameSyncActionDownload:
+		if mergedSessions.Changed {
+			if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), mergedSessions.Sessions); err != nil {
+				service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.cloudWins", "gameId", gameID, "error", err)
+				return gameSyncIterationResult{}, err
+			}
+		}
+		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedSessions.Sessions)
+		if err != nil {
+			service.logger.Error("ローカル更新に失敗", "operation", "sync.applyCloudGame", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+		return gameSyncIterationResult{
+			cloudGame: &mergedCloudGame,
+			summary: CloudSyncSummary{
+				UploadedSessions:   mergedSessions.UploadedCount,
+				DownloadedGames:    1,
+				DownloadedSessions: mergedSessions.DownloadedCount,
+				DownloadedImages:   downloadedImages,
+			},
+			shouldSaveMetadata: mergedSessions.Changed,
+		}, nil
+	default:
+		if mergedSessions.Changed {
+			if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), mergedSessions.Sessions); err != nil {
+				service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.sameTimestamp", "gameId", gameID, "error", err)
+				return gameSyncIterationResult{}, err
+			}
+		}
+		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedSessions.Sessions)
+		if err != nil {
+			service.logger.Error("ローカル更新に失敗", "operation", "sync.applyMergedCloudGame", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+		summary := CloudSyncSummary{
+			UploadedSessions:   mergedSessions.UploadedCount,
+			DownloadedSessions: mergedSessions.DownloadedCount,
+			DownloadedImages:   downloadedImages,
+		}
+		if !mergedSessions.Changed {
+			summary.SkippedGames = 1
+		}
+		return gameSyncIterationResult{
+			cloudGame:          &mergedCloudGame,
+			summary:            summary,
+			shouldSaveMetadata: mergedSessions.Changed,
+		}, nil
 	}
 }
 
@@ -471,13 +579,12 @@ func (service *CloudSyncService) buildCloudGame(
 	ctx context.Context,
 	client *s3.Client,
 	bucket string,
-	local localGameBundle,
+	game models.Game,
+	sessions []storage.CloudSessionRecord,
 	existing *storage.CloudGameMetadata,
 ) (storage.CloudGameMetadata, int, error) {
-	game := local.Game
 	cloudGame := composeCloudGameMetadata(game)
 
-	sessions := composeCloudSessions(local.Sessions)
 	if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(game.ID), sessions); err != nil {
 		return cloudGame, 0, err
 	}
@@ -530,32 +637,39 @@ func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionR
 	return records
 }
 
+func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
+	return models.PlaySession{
+		ID:          session.ID,
+		GameID:      gameID,
+		PlayedAt:    session.PlayedAt,
+		Duration:    session.Duration,
+		SessionName: session.SessionName,
+		UpdatedAt:   session.UpdatedAt,
+	}
+}
+
 func (service *CloudSyncService) applyCloudGame(
 	ctx context.Context,
 	client *s3.Client,
 	bucket string,
 	cloud storage.CloudGameMetadata,
 	local *models.Game,
-) (int, int, error) {
+	cloudSessions []storage.CloudSessionRecord,
+) (int, error) {
 	imagePath, downloadedImages, err := service.downloadCloudImagePath(ctx, client, bucket, cloud)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
 	if err := service.upsertSyncedLocalGame(ctx, cloud, local, imagePath); err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
-	downloadedSessions, err := service.replaceSyncedLocalSessions(ctx, client, bucket, cloud.ID)
-	if err != nil {
-		return 0, 0, err
+	if err := service.upsertMergedLocalSessions(ctx, cloud.ID, cloudSessions); err != nil {
+		return 0, err
 	}
 
-	if err := service.recalculateSyncedGameTotal(ctx, cloud.ID); err != nil {
-		return 0, 0, err
-	}
-
-	return downloadedImages, downloadedSessions, nil
+	return downloadedImages, nil
 }
 
 func (service *CloudSyncService) downloadCloudImagePath(
@@ -587,48 +701,6 @@ func (service *CloudSyncService) upsertSyncedLocalGame(
 ) error {
 	game := composeSyncedLocalGame(cloud, local, imagePath)
 	return service.repository.UpsertGameSync(ctx, game)
-}
-
-func (service *CloudSyncService) replaceSyncedLocalSessions(
-	ctx context.Context,
-	client *s3.Client,
-	bucket string,
-	gameID string,
-) (int, error) {
-	if err := service.repository.DeletePlaySessionsByGame(ctx, gameID); err != nil {
-		return 0, err
-	}
-
-	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, gameID)
-	if err != nil {
-		return 0, err
-	}
-	for _, session := range cloudSessions {
-		playSession := composeLocalPlaySession(gameID, session)
-		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
-			return 0, err
-		}
-	}
-	return len(cloudSessions), nil
-}
-
-func (service *CloudSyncService) recalculateSyncedGameTotal(ctx context.Context, gameID string) error {
-	total, err := service.repository.SumPlaySessionDurationsByGame(ctx, gameID)
-	if err != nil {
-		return nil
-	}
-	return service.repository.UpdateGameTotalPlayTime(ctx, gameID, total)
-}
-
-func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
-	return models.PlaySession{
-		ID:          session.ID,
-		GameID:      gameID,
-		PlayedAt:    session.PlayedAt,
-		Duration:    session.Duration,
-		SessionName: session.SessionName,
-		UpdatedAt:   session.UpdatedAt,
-	}
 }
 
 func composeSyncedLocalGame(
@@ -683,6 +755,176 @@ func (service *CloudSyncService) loadCloudSessions(
 		return nil, err
 	}
 	return sessions, nil
+}
+
+func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.CloudSessionRecord) mergedSessionsResult {
+	merged := make(map[string]storage.CloudSessionRecord, len(localSessions)+len(cloudSessions))
+	localMap := make(map[string]models.PlaySession, len(localSessions))
+	cloudMap := make(map[string]storage.CloudSessionRecord, len(cloudSessions))
+	uploadedCount := 0
+	downloadedCount := 0
+	changed := false
+
+	for _, session := range localSessions {
+		localMap[session.ID] = session
+		merged[session.ID] = storage.CloudSessionRecord{
+			ID:          session.ID,
+			PlayedAt:    session.PlayedAt,
+			Duration:    session.Duration,
+			SessionName: session.SessionName,
+			UpdatedAt:   session.UpdatedAt,
+		}
+	}
+	for _, session := range cloudSessions {
+		cloudMap[session.ID] = session
+		existing, ok := localMap[session.ID]
+		if !ok {
+			merged[session.ID] = session
+			downloadedCount++
+			changed = true
+			continue
+		}
+		if session.UpdatedAt.After(existing.UpdatedAt) {
+			if !sessionsEquivalent(existing, session) {
+				merged[session.ID] = session
+				downloadedCount++
+				changed = true
+			}
+			continue
+		}
+		if existing.UpdatedAt.After(session.UpdatedAt) {
+			if !sessionsEquivalent(existing, session) {
+				uploadedCount++
+				changed = true
+			}
+			continue
+		}
+		if !sessionsEquivalent(existing, session) {
+			uploadedCount++
+			changed = true
+		}
+	}
+	for _, session := range localSessions {
+		if _, ok := cloudMap[session.ID]; ok {
+			continue
+		}
+		uploadedCount++
+		changed = true
+	}
+
+	result := make([]storage.CloudSessionRecord, 0, len(merged))
+	for _, session := range merged {
+		result = append(result, session)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].PlayedAt.Equal(result[j].PlayedAt) {
+			return result[i].ID > result[j].ID
+		}
+		return result[i].PlayedAt.After(result[j].PlayedAt)
+	})
+
+	return mergedSessionsResult{
+		Sessions:        result,
+		UploadedCount:   uploadedCount,
+		DownloadedCount: downloadedCount,
+		Changed:         changed,
+	}
+}
+
+func sessionsEquivalent(local models.PlaySession, cloud storage.CloudSessionRecord) bool {
+	return local.ID == cloud.ID &&
+		local.PlayedAt.Equal(cloud.PlayedAt) &&
+		local.Duration == cloud.Duration &&
+		strings.TrimSpace(stringValue(local.SessionName)) == strings.TrimSpace(stringValue(cloud.SessionName)) &&
+		local.UpdatedAt.Equal(cloud.UpdatedAt)
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func (service *CloudSyncService) upsertMergedLocalSessions(
+	ctx context.Context,
+	gameID string,
+	sessions []storage.CloudSessionRecord,
+) error {
+	var lastPlayed *time.Time
+	var total int64
+	for _, session := range sessions {
+		playSession := models.PlaySession{
+			ID:          session.ID,
+			GameID:      gameID,
+			PlayedAt:    session.PlayedAt,
+			Duration:    session.Duration,
+			SessionName: session.SessionName,
+			UpdatedAt:   session.UpdatedAt,
+		}
+		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
+			return err
+		}
+		total += session.Duration
+		if lastPlayed == nil || session.PlayedAt.After(*lastPlayed) {
+			playedAt := session.PlayedAt
+			lastPlayed = &playedAt
+		}
+	}
+	if lastPlayed != nil {
+		return service.repository.UpdateGameTotalPlayTimeWithLastPlayed(ctx, gameID, total, *lastPlayed)
+	}
+	return service.repository.UpdateGameTotalPlayTime(ctx, gameID, total)
+}
+
+func (service *CloudSyncService) mergeCloudGameMetadata(
+	cloud storage.CloudGameMetadata,
+	local *models.Game,
+	sessions []storage.CloudSessionRecord,
+) models.Game {
+	base := models.Game{
+		ID:             cloud.ID,
+		Title:          cloud.Title,
+		Publisher:      cloud.Publisher,
+		PlayStatus:     models.PlayStatus(cloud.PlayStatus),
+		CreatedAt:      cloud.CreatedAt,
+		UpdatedAt:      cloud.UpdatedAt,
+		LastPlayed:     cloud.LastPlayed,
+		ClearedAt:      cloud.ClearedAt,
+		CurrentChapter: cloud.CurrentChapter,
+	}
+	if local != nil && local.UpdatedAt.After(cloud.UpdatedAt) {
+		base = *local
+	}
+
+	var total int64
+	var lastPlayed *time.Time
+	for _, session := range sessions {
+		total += session.Duration
+		if lastPlayed == nil || session.PlayedAt.After(*lastPlayed) {
+			playedAt := session.PlayedAt
+			lastPlayed = &playedAt
+		}
+	}
+	base.TotalPlayTime = total
+	base.LastPlayed = lastPlayed
+	return base
+}
+
+func cloudMetadataFromGame(game models.Game, imageKey *string) storage.CloudGameMetadata {
+	return storage.CloudGameMetadata{
+		ID:             game.ID,
+		Title:          game.Title,
+		Publisher:      game.Publisher,
+		ImageKey:       imageKey,
+		PlayStatus:     string(game.PlayStatus),
+		TotalPlayTime:  game.TotalPlayTime,
+		LastPlayed:     game.LastPlayed,
+		ClearedAt:      game.ClearedAt,
+		CurrentChapter: game.CurrentChapter,
+		CreatedAt:      game.CreatedAt,
+		UpdatedAt:      game.UpdatedAt,
+	}
 }
 
 func (service *CloudSyncService) uploadImageIfNeeded(
