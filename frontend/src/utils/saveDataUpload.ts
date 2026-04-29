@@ -12,6 +12,23 @@ type UploadSaveDataInput = {
   localHash?: string;
 };
 
+type DownloadSaveDataInput = {
+  gameId: string;
+  saveFolderPath: string;
+};
+
+async function syncGameMetadata(gameId: string, actionLabel: string): Promise<ApiResult<void>> {
+  const syncResult = await window.api.cloudSync.syncGame(gameId);
+  if (syncResult.success) {
+    return { success: true };
+  }
+
+  return {
+    success: false,
+    message: `${actionLabel}後のセッション同期に失敗しました: ${syncResult.message ?? "エラー"}`,
+  };
+}
+
 export async function uploadSaveDataAndSyncHash(
   input: UploadSaveDataInput,
 ): Promise<ApiResult<void>> {
@@ -32,5 +49,20 @@ export async function uploadSaveDataAndSyncHash(
     await window.api.saveData.hash.saveCloudHash(input.gameId, hash);
   }
 
-  return uploadResult;
+  return syncGameMetadata(input.gameId, "セーブデータアップロード");
+}
+
+export async function downloadSaveDataAndSyncMetadata(
+  input: DownloadSaveDataInput,
+): Promise<ApiResult<void>> {
+  const remotePath = createRemotePath(input.gameId);
+  const downloadResult = await window.api.saveData.download.downloadSaveData(
+    input.saveFolderPath,
+    remotePath,
+  );
+  if (!downloadResult.success) {
+    return downloadResult;
+  }
+
+  return syncGameMetadata(input.gameId, "セーブデータダウンロード");
 }

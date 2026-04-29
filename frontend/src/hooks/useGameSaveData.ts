@@ -23,11 +23,13 @@
 
 import { useState, useCallback } from "react";
 
-import { createRemotePath } from "@renderer/utils";
 import { handleApiError, withLoadingToast } from "@renderer/utils/errorHandler";
 
 import type { GameType } from "src/types/game";
-import { uploadSaveDataAndSyncHash } from "@renderer/utils/saveDataUpload";
+import {
+  downloadSaveDataAndSyncMetadata,
+  uploadSaveDataAndSyncHash,
+} from "@renderer/utils/saveDataUpload";
 
 /**
  * ゲームセーブデータ操作フックの戻り値
@@ -106,12 +108,12 @@ export function useGameSaveData(): GameSaveDataResult {
     setIsDownloading(true);
 
     try {
-      // リモートパスの生成（ゲームIDベース）
-      const remotePath = createRemotePath(game.id);
-
-      // ダウンロード実行（トースト付き）
       await withLoadingToast(
-        () => window.api.saveData.download.downloadSaveData(game.saveFolderPath!, remotePath),
+        () =>
+          downloadSaveDataAndSyncMetadata({
+            gameId: game.id,
+            saveFolderPath: game.saveFolderPath!,
+          }),
         "セーブデータをダウンロード中…",
         "セーブデータのダウンロードに成功しました。",
         "セーブデータのダウンロード",
