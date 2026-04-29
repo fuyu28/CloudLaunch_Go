@@ -55,6 +55,7 @@ type CloudSyncService struct {
 	store        credentials.Store
 	repository   CloudSyncRepository
 	cloudStorage cloudSyncStorage
+	newClient    cloudSyncClientFactory
 	logger       *slog.Logger
 	offlineMu    sync.RWMutex
 	offline      bool
@@ -62,14 +63,18 @@ type CloudSyncService struct {
 
 // NewCloudSyncService は CloudSyncService を生成する。
 func NewCloudSyncService(cfg config.Config, store credentials.Store, repository CloudSyncRepository, logger *slog.Logger) *CloudSyncService {
-	return &CloudSyncService{
+	service := &CloudSyncService{
 		config:       cfg,
 		store:        store,
 		repository:   repository,
 		cloudStorage: storageCloudSyncStorage{},
 		logger:       logger,
 	}
+	service.newClient = service.newStorageClient
+	return service
 }
+
+type cloudSyncClientFactory func(ctx context.Context, credentialKey string) (*s3.Client, storage.S3Config, string, string, bool)
 
 type cloudSyncStorage interface {
 	LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error)
@@ -890,7 +895,7 @@ func mapToSortedGames(source map[string]storage.CloudGameMetadata) []storage.Clo
 	return games
 }
 
-func (service *CloudSyncService) newClient(
+func (service *CloudSyncService) newStorageClient(
 	ctx context.Context,
 	credentialKey string,
 ) (*s3.Client, storage.S3Config, string, string, bool) {

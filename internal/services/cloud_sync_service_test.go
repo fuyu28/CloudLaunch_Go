@@ -10,6 +10,9 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/storage"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type fakeCloudSyncRepository struct {
@@ -221,6 +224,57 @@ func TestCloudSyncServiceSyncAllGamesFailsInOfflineMode(t *testing.T) {
 	result := service.SyncAllGames(context.Background(), "default")
 	if result.Success {
 		t.Fatalf("expected offline sync to fail")
+	}
+}
+
+func TestCloudSyncServiceSyncAllGamesUploadsLocalGamesAndSavesMetadata(t *testing.T) {
+	t.Parallel()
+
+	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	cloudStorage := &fakeCloudSyncStorage{}
+	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return nil, nil
+		},
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return []models.Game{
+				{ID: "game-b", Title: "Beta", Publisher: "Publisher", UpdatedAt: updatedAt},
+				{ID: "game-a", Title: "Alpha", Publisher: "Publisher", UpdatedAt: updatedAt.Add(time.Hour)},
+			}, nil
+		},
+		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+			return []models.PlaySession{{ID: "session-" + gameID, GameID: gameID, PlayedAt: updatedAt, Duration: 30, UpdatedAt: updatedAt}}, nil
+		},
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.newClient = func(ctx context.Context, credentialKey string) (*s3.Client, storage.S3Config, string, string, bool) {
+		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
+	}
+
+	result := service.SyncAllGames(context.Background(), "default")
+
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result.Error)
+	}
+	if result.Data.UploadedGames != 2 || result.Data.UploadedSessions != 2 {
+		t.Fatalf("expected upload summary, got %#v", result.Data)
+	}
+	if cloudStorage.savedMetadata == nil {
+		t.Fatalf("expected metadata to be saved")
+	}
+	if len(cloudStorage.savedMetadata.Games) != 2 {
+		t.Fatalf("expected two metadata games, got %#v", cloudStorage.savedMetadata.Games)
+	}
+	if cloudStorage.savedMetadata.Games[0].ID != "game-a" || cloudStorage.savedMetadata.Games[1].ID != "game-b" {
+		t.Fatalf("expected metadata games to be sorted by title, got %#v", cloudStorage.savedMetadata.Games)
+	}
+	if len(cloudStorage.savedSessionKeys) != 2 {
+		t.Fatalf("expected sessions for both games to be saved, got %#v", cloudStorage.savedSessionKeys)
 	}
 }
 

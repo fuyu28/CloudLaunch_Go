@@ -396,6 +396,7 @@ type fakeCloudSyncStorage struct {
 	savedMetadata    *storage.CloudMetadata
 	deletedPrefix    string
 	savedSessionsKey string
+	savedSessionKeys []string
 	savedSessions    []storage.CloudSessionRecord
 	saveSessionsErr  error
 	loadSessionsErr  error
@@ -425,6 +426,7 @@ func (fake *fakeCloudSyncStorage) SaveSessions(ctx context.Context, client *s3.C
 		return fake.saveSessionsErr
 	}
 	fake.savedSessionsKey = key
+	fake.savedSessionKeys = append(fake.savedSessionKeys, key)
 	fake.savedSessions = append([]storage.CloudSessionRecord(nil), sessions...)
 	return nil
 }
