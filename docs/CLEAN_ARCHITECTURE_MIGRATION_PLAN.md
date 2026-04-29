@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 移行計画書
 
-最終更新: 2026-04-24
+最終更新: 2026-04-29
 
 ## 1. 目的
 
@@ -120,6 +120,9 @@ internal/
 - 既存コードの全面置換ではなく、境界面から順に整理する
 - テスト容易性が高い箇所から優先して切り出す
 - 複雑な機能ほど port 分離を優先する
+- t_wada TDD に倣い、リファクタリング前に壊したくない振る舞いをテストで固定する
+- テストは実装詳細ではなく、ユーザー価値・ユースケース・外部境界で観測できる振る舞いを優先する
+- 1つの回帰テストを追加して green を確認してから、小さくリファクタリングするサイクルを基本とする
 
 ## 8. フェーズ別移行計画
 
@@ -279,22 +282,45 @@ internal/
 - 画面コンポーネントがユースケースの調停役になりすぎていない
 - Wails bridge が backend API の薄い写像になっている
 
-## 9. 優先順位
+## 9. 現在の進捗と優先順位
 
-最初に着手すべき順序は以下とする。
+2026-04-29 時点の進捗:
 
-1. `app` 層から `Database` 直接参照を排除
-2. `GameService`, `SessionService`, `MemoService` に interface 導入
-3. `ApiResult` を `app` 層へ寄せる
-4. `CloudSyncService` の分割
-5. infrastructure 側の再配置
+- Phase 0 は完了
+- Phase 1 はほぼ完了
+  - `internal/app` から `db.Repository` への直接依存は解消済み
+  - Wails API 層は service 呼び出し中心へ薄型化済み
+- Phase 2 は大部分完了
+  - `GameService`, `SessionService`, `MemoService`, `ChapterService`, `UploadService`, `CloudSyncService`, `ScreenshotService`, `ProcessMonitorService` は repository interface 経由へ移行済み
+  - fake repository によるサービス単体テストを追加済み
+- Phase 3 は着手済み
+  - `services` はまだ物理的には集約されたままだが、ユースケース単位の責務は見え始めている
+  - `ApiResult` が service 層に残っており、adapter/usecase 境界の整理は未完了
+- Phase 4 は進行中
+  - `CloudSyncService` は同期判定、メタデータ変換、セッション変換、ローカルゲーム収集を小さな関数へ切り出し済み
+  - `ProcessMonitorService` は process provider 差し替えと Windows path helper により、Linux 上でも主要判定をテスト可能
+- Phase 5 と Phase 6 は未着手
+
+現在のテスト状況:
+
+- `internal/services` の単体テストは、主要 service の happy path / invalid input / repository error / 副作用整合性を中心に追加済み
+- 2026-04-29 時点で `internal/services` coverage は 30.9%
+- Cloud sync / memo / session / game / process monitor について、リファクタリング前に守るべき回帰テストを追加済み
+
+次に着手すべき順序は以下とする。
+
+1. `CloudSyncService` の副作用を伴う処理をさらに分割する
+2. Cloud sync の upload / download / metadata 保存失敗などの回帰テストを追加する
+3. `services` の戻り値から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
+4. DB 実装を使う最小限の統合テストを追加する
+5. infrastructure 側の再配置を検討する
 
 理由:
 
-- 変更波及が比較的小さい
-- テスト可能性の改善が早い
-- 既存機能を止めずに進めやすい
-- 最も重い `CloudSyncService` に着手する前に境界定義を固められる
+- 入口層の薄型化と repository interface 導入はすでに進んでいる
+- これ以上の構造変更では、重いサービスの振る舞い固定が最も重要になる
+- `ApiResult` 剥離は影響範囲が広いため、回帰テストを厚くしてから進める
+- 物理再配置は差分が大きいため、依存方向とテストの安全網を先に固める
 
 ## 10. リスク
 
@@ -328,6 +354,22 @@ internal/
 
 Use Case 層については、段階的に mock ではなく fake adapter を使ったテストを増やす。
 
+t_wada TDD に倣い、リファクタリングでは以下の進め方を守る。
+
+1. 既存実装で成立している振る舞いを、外部から観測できるテストとして書く
+2. テストが green であることを確認する
+3. そのテストを安全網として、1つずつ小さくリファクタリングする
+4. リファクタリング後に `go test ./...` と必要な frontend test / lint を通す
+5. 実装詳細を固定しすぎるテストは避け、ユースケースの期待結果・副作用・エラーを優先する
+
+優先して固定するテスト観点:
+
+- Cloud sync: upload / download / skip の分岐、metadata 保存判断、セッション同期、画像同期失敗時の扱い
+- Memo: DB とローカルファイルの作成・更新・削除整合性、rollback
+- Session / Game: プレイ時間、LastPlayed、CurrentChapter、更新後の集計
+- Process monitor: プロセス照合、開始/中断/再開/終了、hotkey 対象選択
+- App adapter: service 呼び出し、DTO 変換、`ApiResult` 生成
+
 ## 13. 完了条件
 
 移行完了の判断基準は以下とする。
@@ -341,13 +383,13 @@ Use Case 層については、段階的に mock ではなく fake adapter を使
 
 ## 14. 直近の実行タスク
 
-最初の 1 スプリントでは以下を実施する。
+直近では以下を実施する。
 
-1. `internal/app` から `Database` 直接参照を洗い出す
-2. `GameService` と `SessionService` の repository interface を定義する
-3. `services` の戻り値から `ApiResult` を外す試験的リファクタを 1 系統で実施する
-4. `CloudSyncService` の責務一覧を分解し、分割設計メモを作る
-5. 回帰確認用の最小テスト観点を文書化する
+1. `CloudSyncService` の S3 I/O 周辺を port 化し、upload / download を fake で検証できるようにする
+2. Cloud sync の失敗系回帰テストを追加する
+3. `MemoService`, `SessionService`, `GameService` のテストを必要に応じて補強しながら `ApiResult` 剥離に着手する
+4. `internal/app` に adapter としての薄いテストを追加する
+5. `usecase` / `domain` / `infrastructure` への物理再配置は、責務分離とテストが十分に固まってから実施する
 
 ## 15. 付記
 

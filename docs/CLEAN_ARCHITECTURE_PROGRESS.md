@@ -1,12 +1,12 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-04-24
+最終更新: 2026-04-29
 
 ## 概要
 
-Clean Architecture への移行は、`internal/app` の薄型化と、`internal/services` の repository 境界切り出しを中心に進行している。
+Clean Architecture への移行は、`internal/app` の薄型化、`internal/services` の repository 境界切り出し、t_wada TDD に倣った回帰テスト追加を中心に進行している。
 
-現時点では、教科書どおりの全面再配置はまだ行っていないが、依存方向の整理とテスト容易性の改善はかなり前進している。
+現時点では、教科書どおりの全面再配置はまだ行っていないが、依存方向の整理とテスト容易性の改善はかなり前進している。今後のリファクタリングは、既存実装で成立している振る舞いを先にテストで固定し、その安全網の上で小さく進める。
 
 ## 現在地
 
@@ -14,6 +14,7 @@ Clean Architecture への移行は、`internal/app` の薄型化と、`internal/
 - 主要な service は具象の `*db.Repository` ではなく interface に依存する形へ移行済み
 - 移行済み service には fake repository ベースの単体テストを追加済み
 - `CloudSyncService` は repository 境界化と純粋ロジックの分割を進めている段階
+- `MemoService`, `SessionService`, `GameService`, `ProcessMonitorService` には、リファクタリング前の回帰安全網として副作用・集計・状態遷移テストを追加済み
 - `services` が `result.ApiResult` を返す構造はまだ残っており、完全な Use Case 層分離は未完了
 
 ## フェーズ別進捗
@@ -40,6 +41,7 @@ Clean Architecture への移行は、`internal/app` の薄型化と、`internal/
 
 - `ApiResult` の生成責務はまだ `services` 側にも残っている
 - Wails adapter と Use Case の責務分離をさらに明確にする余地がある
+- `internal/app` の adapter としての薄いテストはまだ不足している
 
 ### Phase 2. Port interface の導入
 
@@ -61,6 +63,7 @@ interface 化済み service:
 - `internal/services/repositories.go` に各ユースケース向け interface を導入
 - service コンストラクタが具象の `*db.Repository` ではなく interface を受け取る形へ移行
 - fake repository による単体テストが書ける状態を確立
+- service 単体テストで DB なしに主要ユースケースの振る舞いを検証できるようになった
 
 残課題:
 
@@ -75,6 +78,7 @@ interface 化済み service:
 
 - `services` は徐々に「ユースケース単位の処理」として読める形になってきている
 - `game` / `session` / `memo` / `chapter` / `upload` は責務の輪郭が比較的明確
+- t_wada TDD に倣い、既存の振る舞いを固定するテストを追加してから構造変更する方針に更新
 
 未完了の点:
 
@@ -103,6 +107,7 @@ interface 化済み service:
   - `composeCloudSessions`
   - `composeLocalPlaySession`
 - upload / download の表現変換ロジックを I/O なしでテストできるようになった
+- `loadLocalGames` の全件取得・指定ゲームなしの振る舞いをテストで固定
 
 まだ重い部分:
 
@@ -117,6 +122,7 @@ interface 化済み service:
 - repository 境界を interface 化
 - Windows パス前提の helper を導入し、Linux 上でも Windows 形式のパスでテスト可能にした
 - `processProvider` を差し替え可能にして、主要な状態遷移とプロセス判定をテスト可能にした
+- 自動検出 OFF、hotkey 対象選択、process snapshot のテストを追加
 
 残課題:
 
@@ -162,6 +168,31 @@ interface 化済み service:
 - `process_monitor_service_test.go`
 - `windows_path_test.go`
 
+2026-04-29 に追加した主な回帰テスト:
+
+- Cloud sync:
+  - ローカル全ゲームとセッションをまとめて読み込む
+  - 指定ゲームが存在しない場合に空結果を返す
+- Memo:
+  - メモ作成時に DB とローカルファイルの両方へ反映する
+  - メモ更新時にローカルファイルをリネームして本文を更新する
+  - メモ削除時に DB レコードとローカルファイルを削除する
+- Session:
+  - セッション名更新時に trim し、ゲーム更新時刻 touch と合計時間再計算を行う
+  - セッション章更新時に章を保存し、ゲーム更新時刻 touch と合計時間再計算を行う
+- Game:
+  - ゲーム更新時に入力を trim しつつプレイ集計を保持する
+  - ゲーム一覧検索時に検索文字列を trim する
+- Process monitor:
+  - 自動検出 OFF のときに監視対象を追加しない
+  - hotkey 対象は中断中より現在プレイ中のゲームを優先する
+  - process snapshot は注入した process provider を使う
+
+現在の coverage:
+
+- `internal/services`: 30.9%
+- `internal/result`: 100.0%
+
 ### 現在の評価
 
 良い点:
@@ -169,6 +200,7 @@ interface 化済み service:
 - 移行済み service については、具象 DB 実装なしでユースケースを検証できる
 - `CloudSyncService` と `ProcessMonitorService` の pure な判定部分は以前より明確にテストしやすい
 - Windows 実行前提の path 判定を Linux 上のテストで扱えるようになった
+- memo / session / game の副作用と集計更新について、リファクタリング前の安全網が増えた
 
 不足している点:
 
@@ -191,8 +223,8 @@ interface 化済み service:
 
 ## 次の優先事項
 
-1. `CloudSyncService` の副作用を伴う処理をさらに分割する
-2. `CloudSyncService` の失敗系テストを厚くする
+1. `CloudSyncService` の S3 I/O 周辺を port 化し、副作用を fake でテストできるようにする
+2. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
 3. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
-4. 必要最小限の統合テストを追加する
+4. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
 5. その後に `usecase` / `domain` / `infrastructure` への再配置を検討する
