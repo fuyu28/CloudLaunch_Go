@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -10,6 +11,8 @@ import (
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/storage"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 func TestDetermineGameSyncAction(t *testing.T) {
@@ -194,6 +197,159 @@ func TestCloudSyncServiceSyncSingleGameSkipKeepsCloudMetadata(t *testing.T) {
 	}
 }
 
+func TestCloudSyncServiceSyncSingleGameUploadSavesSessions(t *testing.T) {
+	t.Parallel()
+
+	playedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	cloudStorage := &fakeCloudSyncStorage{}
+	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	local := localGameBundle{
+		Game: models.Game{
+			ID:            "game-1",
+			Title:         "Game",
+			Publisher:     "Publisher",
+			PlayStatus:    models.PlayStatusPlaying,
+			UpdatedAt:     playedAt.Add(time.Hour),
+			CreatedAt:     playedAt,
+			LastPlayed:    &playedAt,
+			TotalPlayTime: 90,
+		},
+		Sessions: []models.PlaySession{
+			{ID: "session-1", GameID: "game-1", PlayedAt: playedAt, Duration: 30, UpdatedAt: playedAt},
+			{ID: "session-2", GameID: "game-1", PlayedAt: playedAt.Add(time.Hour), Duration: 60, UpdatedAt: playedAt.Add(time.Hour)},
+		},
+	}
+
+	iteration, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, storage.CloudGameMetadata{}, false)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if iteration.cloudGame == nil || iteration.cloudGame.ID != "game-1" || iteration.cloudGame.TotalPlayTime != 90 {
+		t.Fatalf("expected uploaded cloud metadata, got %#v", iteration.cloudGame)
+	}
+	if iteration.summary.UploadedGames != 1 || iteration.summary.UploadedSessions != 2 {
+		t.Fatalf("expected upload summary, got %#v", iteration.summary)
+	}
+	if !iteration.shouldSaveMetadata {
+		t.Fatalf("expected metadata save to be requested")
+	}
+	if cloudStorage.savedSessionsKey != cloudSessionsKey("game-1") {
+		t.Fatalf("expected sessions to be saved under game key, got %q", cloudStorage.savedSessionsKey)
+	}
+	if len(cloudStorage.savedSessions) != 2 || cloudStorage.savedSessions[1].Duration != 60 {
+		t.Fatalf("expected cloud sessions to be saved, got %#v", cloudStorage.savedSessions)
+	}
+}
+
+func TestCloudSyncServiceSyncSingleGameUploadReturnsSessionSaveError(t *testing.T) {
+	t.Parallel()
+
+	saveErr := errors.New("save sessions failed")
+	cloudStorage := &fakeCloudSyncStorage{saveSessionsErr: saveErr}
+	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	local := localGameBundle{
+		Game: models.Game{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: time.Now()},
+	}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, storage.CloudGameMetadata{}, false)
+
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected save sessions error, got %v", err)
+	}
+}
+
+func TestCloudSyncServiceSyncSingleGameDownloadAppliesGameAndSessions(t *testing.T) {
+	t.Parallel()
+
+	playedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	repository := &trackingCloudSyncRepository{}
+	cloudStorage := &fakeCloudSyncStorage{
+		loadedSessions: []storage.CloudSessionRecord{
+			{ID: "session-1", PlayedAt: playedAt, Duration: 30, UpdatedAt: playedAt},
+			{ID: "session-2", PlayedAt: playedAt.Add(time.Hour), Duration: 45, UpdatedAt: playedAt.Add(time.Hour)},
+		},
+	}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	cloud := storage.CloudGameMetadata{
+		ID:            "game-1",
+		Title:         "Cloud Game",
+		Publisher:     "Cloud Publisher",
+		PlayStatus:    string(models.PlayStatusPlayed),
+		TotalPlayTime: 75,
+		CreatedAt:     playedAt.Add(-24 * time.Hour),
+		UpdatedAt:     playedAt,
+	}
+
+	iteration, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", localGameBundle{}, false, cloud, true)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if iteration.summary.DownloadedGames != 1 || iteration.summary.DownloadedSessions != 2 {
+		t.Fatalf("expected download summary, got %#v", iteration.summary)
+	}
+	if repository.upsertedGame.ID != "game-1" || repository.upsertedGame.Title != "Cloud Game" {
+		t.Fatalf("expected cloud game to be upserted locally, got %#v", repository.upsertedGame)
+	}
+	if repository.deletedSessionsGameID != "game-1" {
+		t.Fatalf("expected local sessions to be replaced, got %q", repository.deletedSessionsGameID)
+	}
+	if len(repository.upsertedSessions) != 2 || repository.upsertedSessions[1].Duration != 45 {
+		t.Fatalf("expected cloud sessions to be upserted, got %#v", repository.upsertedSessions)
+	}
+	if repository.updatedTotalGameID != "game-1" || repository.updatedTotalPlayTime != 75 {
+		t.Fatalf("expected total play time to be recalculated, got game=%q total=%d", repository.updatedTotalGameID, repository.updatedTotalPlayTime)
+	}
+}
+
+func TestCloudSyncServiceSyncSingleGameDownloadReturnsSessionLoadError(t *testing.T) {
+	t.Parallel()
+
+	loadErr := errors.New("load sessions failed")
+	repository := &trackingCloudSyncRepository{}
+	cloudStorage := &fakeCloudSyncStorage{loadSessionsErr: loadErr}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Cloud Game", UpdatedAt: time.Now()}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", localGameBundle{}, false, cloud, true)
+
+	if !errors.Is(err, loadErr) {
+		t.Fatalf("expected load sessions error, got %v", err)
+	}
+	if len(repository.upsertedSessions) != 0 {
+		t.Fatalf("expected no sessions to be upserted after load failure")
+	}
+}
+
+func TestCloudSyncServiceSyncSingleGameDownloadReturnsTotalUpdateError(t *testing.T) {
+	t.Parallel()
+
+	updateErr := errors.New("update total failed")
+	repository := &trackingCloudSyncRepository{updateTotalErr: updateErr}
+	cloudStorage := &fakeCloudSyncStorage{
+		loadedSessions: []storage.CloudSessionRecord{
+			{ID: "session-1", PlayedAt: time.Now(), Duration: 30, UpdatedAt: time.Now()},
+		},
+	}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Cloud Game", UpdatedAt: time.Now()}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", localGameBundle{}, false, cloud, true)
+
+	if !errors.Is(err, updateErr) {
+		t.Fatalf("expected total update error, got %v", err)
+	}
+	if len(repository.upsertedSessions) != 1 {
+		t.Fatalf("expected sessions to be upserted before total update failure")
+	}
+}
+
 func TestComposeSyncedLocalGamePreservesLocalWindowsSpecificFields(t *testing.T) {
 	t.Parallel()
 
@@ -234,6 +390,144 @@ func TestComposeSyncedLocalGamePreservesLocalWindowsSpecificFields(t *testing.T)
 	if composed.ImagePath == nil || *composed.ImagePath != imagePath {
 		t.Fatalf("expected image path to be applied")
 	}
+}
+
+type fakeCloudSyncStorage struct {
+	savedMetadata    *storage.CloudMetadata
+	deletedPrefix    string
+	savedSessionsKey string
+	savedSessions    []storage.CloudSessionRecord
+	saveSessionsErr  error
+	loadSessionsErr  error
+	loadedSessions   []storage.CloudSessionRecord
+	uploadedKey      string
+	downloadedKey    string
+	downloadedObject []byte
+}
+
+func (fake *fakeCloudSyncStorage) LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error) {
+	return fake.savedMetadata, nil
+}
+
+func (fake *fakeCloudSyncStorage) SaveMetadata(ctx context.Context, client *s3.Client, bucket string, key string, metadata storage.CloudMetadata) error {
+	stored := metadata
+	fake.savedMetadata = &stored
+	return nil
+}
+
+func (fake *fakeCloudSyncStorage) DeleteObjectsByPrefix(ctx context.Context, client *s3.Client, bucket string, prefix string) error {
+	fake.deletedPrefix = prefix
+	return nil
+}
+
+func (fake *fakeCloudSyncStorage) SaveSessions(ctx context.Context, client *s3.Client, bucket string, key string, sessions []storage.CloudSessionRecord) error {
+	if fake.saveSessionsErr != nil {
+		return fake.saveSessionsErr
+	}
+	fake.savedSessionsKey = key
+	fake.savedSessions = append([]storage.CloudSessionRecord(nil), sessions...)
+	return nil
+}
+
+func (fake *fakeCloudSyncStorage) LoadSessions(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudSessionRecord, error) {
+	if fake.loadSessionsErr != nil {
+		return nil, fake.loadSessionsErr
+	}
+	return append([]storage.CloudSessionRecord(nil), fake.loadedSessions...), nil
+}
+
+func (fake *fakeCloudSyncStorage) UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error {
+	fake.uploadedKey = key
+	return nil
+}
+
+func (fake *fakeCloudSyncStorage) DownloadObject(ctx context.Context, client *s3.Client, bucket string, key string) ([]byte, error) {
+	fake.downloadedKey = key
+	return append([]byte(nil), fake.downloadedObject...), nil
+}
+
+type trackingCloudSyncRepository struct {
+	upsertedGame          models.Game
+	deletedSessionsGameID string
+	upsertedSessions      []models.PlaySession
+	updatedTotalGameID    string
+	updatedTotalPlayTime  int64
+	upsertGameErr         error
+	deleteSessionsErr     error
+	upsertSessionErr      error
+	sumErr                error
+	updateTotalErr        error
+}
+
+func newNoopCloudSyncRepository() fakeCloudSyncRepository {
+	return fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}
+}
+
+func (repository *trackingCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+	return nil, nil
+}
+
+func (repository *trackingCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+	return nil, nil
+}
+
+func (repository *trackingCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+	return nil, nil
+}
+
+func (repository *trackingCloudSyncRepository) UpsertGameSync(ctx context.Context, game models.Game) error {
+	if repository.upsertGameErr != nil {
+		return repository.upsertGameErr
+	}
+	repository.upsertedGame = game
+	return nil
+}
+
+func (repository *trackingCloudSyncRepository) DeletePlaySessionsByGame(ctx context.Context, gameID string) error {
+	if repository.deleteSessionsErr != nil {
+		return repository.deleteSessionsErr
+	}
+	repository.deletedSessionsGameID = gameID
+	return nil
+}
+
+func (repository *trackingCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+	if repository.upsertSessionErr != nil {
+		return repository.upsertSessionErr
+	}
+	repository.upsertedSessions = append(repository.upsertedSessions, session)
+	return nil
+}
+
+func (repository *trackingCloudSyncRepository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
+	if repository.sumErr != nil {
+		return 0, repository.sumErr
+	}
+	var total int64
+	for _, session := range repository.upsertedSessions {
+		total += session.Duration
+	}
+	return total, nil
+}
+
+func (repository *trackingCloudSyncRepository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
+	if repository.updateTotalErr != nil {
+		return repository.updateTotalErr
+	}
+	repository.updatedTotalGameID = gameID
+	repository.updatedTotalPlayTime = totalPlayTime
+	return nil
 }
 
 func TestComposeSyncedLocalGameUsesFallbacksWithoutLocalGame(t *testing.T) {

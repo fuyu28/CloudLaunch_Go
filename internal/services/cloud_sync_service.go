@@ -51,22 +51,64 @@ type CloudSyncSummary struct {
 
 // CloudSyncService はゲーム情報のクラウド同期を提供する。
 type CloudSyncService struct {
-	config     config.Config
-	store      credentials.Store
-	repository CloudSyncRepository
-	logger     *slog.Logger
-	offlineMu  sync.RWMutex
-	offline    bool
+	config       config.Config
+	store        credentials.Store
+	repository   CloudSyncRepository
+	cloudStorage cloudSyncStorage
+	logger       *slog.Logger
+	offlineMu    sync.RWMutex
+	offline      bool
 }
 
 // NewCloudSyncService は CloudSyncService を生成する。
 func NewCloudSyncService(cfg config.Config, store credentials.Store, repository CloudSyncRepository, logger *slog.Logger) *CloudSyncService {
 	return &CloudSyncService{
-		config:     cfg,
-		store:      store,
-		repository: repository,
-		logger:     logger,
+		config:       cfg,
+		store:        store,
+		repository:   repository,
+		cloudStorage: storageCloudSyncStorage{},
+		logger:       logger,
 	}
+}
+
+type cloudSyncStorage interface {
+	LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error)
+	SaveMetadata(ctx context.Context, client *s3.Client, bucket string, key string, metadata storage.CloudMetadata) error
+	DeleteObjectsByPrefix(ctx context.Context, client *s3.Client, bucket string, prefix string) error
+	SaveSessions(ctx context.Context, client *s3.Client, bucket string, key string, sessions []storage.CloudSessionRecord) error
+	LoadSessions(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudSessionRecord, error)
+	UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error
+	DownloadObject(ctx context.Context, client *s3.Client, bucket string, key string) ([]byte, error)
+}
+
+type storageCloudSyncStorage struct{}
+
+func (storageCloudSyncStorage) LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error) {
+	return storage.LoadMetadata(ctx, client, bucket, key)
+}
+
+func (storageCloudSyncStorage) SaveMetadata(ctx context.Context, client *s3.Client, bucket string, key string, metadata storage.CloudMetadata) error {
+	return storage.SaveMetadata(ctx, client, bucket, key, metadata)
+}
+
+func (storageCloudSyncStorage) DeleteObjectsByPrefix(ctx context.Context, client *s3.Client, bucket string, prefix string) error {
+	return storage.DeleteObjectsByPrefix(ctx, client, bucket, prefix)
+}
+
+func (storageCloudSyncStorage) SaveSessions(ctx context.Context, client *s3.Client, bucket string, key string, sessions []storage.CloudSessionRecord) error {
+	return storage.SaveSessions(ctx, client, bucket, key, sessions)
+}
+
+func (storageCloudSyncStorage) LoadSessions(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudSessionRecord, error) {
+	return storage.LoadSessions(ctx, client, bucket, key)
+}
+
+func (storageCloudSyncStorage) UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error {
+	return storage.UploadBytes(ctx, client, bucket, key, payload, contentType)
+}
+
+func (storageCloudSyncStorage) DownloadObject(ctx context.Context, client *s3.Client, bucket string, key string) ([]byte, error) {
+	return storage.DownloadObject(ctx, client, bucket, key)
 }
 
 // SetOfflineMode は同期可否を切り替える。
@@ -120,12 +162,12 @@ func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, creden
 	}
 
 	prefix := fmt.Sprintf("games/%s/", trimmedID)
-	if err := storage.DeleteObjectsByPrefix(ctx, client, cfg.Bucket, prefix); err != nil {
+	if err := service.cloudStorage.DeleteObjectsByPrefix(ctx, client, cfg.Bucket, prefix); err != nil {
 		service.logger.Error("クラウドデータ削除に失敗", "error", err, "gameId", trimmedID)
 		return result.ErrorResult[bool]("クラウドデータ削除に失敗しました", err.Error())
 	}
 
-	metadata, err := storage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
+	metadata, err := service.cloudStorage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
 	if err != nil {
 		if isNotFoundError(err) {
 			return result.OkResult(true)
@@ -147,7 +189,7 @@ func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, creden
 
 	metadata.Games = updatedGames
 	metadata.UpdatedAt = time.Now()
-	if err := storage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, *metadata); err != nil {
+	if err := service.cloudStorage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, *metadata); err != nil {
 		service.logger.Error("クラウドメタ情報更新に失敗", "error", err)
 		return result.ErrorResult[bool]("クラウドメタ情報更新に失敗しました", err.Error())
 	}
@@ -172,7 +214,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 		return result.ErrorResult[CloudSyncSummary](message, detail)
 	}
 
-	metadata, err := storage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
+	metadata, err := service.cloudStorage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
 	if err != nil {
 		if !isNotFoundError(err) {
 			service.logger.Error("クラウドメタ情報取得に失敗", "error", err)
@@ -222,7 +264,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 			UpdatedAt: time.Now(),
 			Games:     updatedGames,
 		}
-		if err := storage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, updated); err != nil {
+		if err := service.cloudStorage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, updated); err != nil {
 			service.logger.Error("クラウドメタ情報更新に失敗", "error", err)
 			return result.ErrorResult[CloudSyncSummary]("クラウド更新に失敗しました", err.Error())
 		}
@@ -431,7 +473,7 @@ func (service *CloudSyncService) buildCloudGame(
 	cloudGame := composeCloudGameMetadata(game)
 
 	sessions := composeCloudSessions(local.Sessions)
-	if err := storage.SaveSessions(ctx, client, bucket, cloudSessionsKey(game.ID), sessions); err != nil {
+	if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(game.ID), sessions); err != nil {
 		return cloudGame, 0, err
 	}
 
@@ -490,47 +532,87 @@ func (service *CloudSyncService) applyCloudGame(
 	cloud storage.CloudGameMetadata,
 	local *models.Game,
 ) (int, int, error) {
+	imagePath, downloadedImages, err := service.downloadCloudImagePath(ctx, client, bucket, cloud)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err := service.upsertSyncedLocalGame(ctx, cloud, local, imagePath); err != nil {
+		return 0, 0, err
+	}
+
+	downloadedSessions, err := service.replaceSyncedLocalSessions(ctx, client, bucket, cloud.ID)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err := service.recalculateSyncedGameTotal(ctx, cloud.ID); err != nil {
+		return 0, 0, err
+	}
+
+	return downloadedImages, downloadedSessions, nil
+}
+
+func (service *CloudSyncService) downloadCloudImagePath(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	cloud storage.CloudGameMetadata,
+) (*string, int, error) {
 	imagePath := (*string)(nil)
 	downloadedImages := 0
 	if cloud.ImageKey != nil && strings.TrimSpace(*cloud.ImageKey) != "" {
 		path, downloaded, err := service.downloadImageIfNeeded(ctx, client, bucket, cloud.ID, *cloud.ImageKey)
 		if err != nil {
-			return 0, 0, err
+			return nil, 0, err
 		}
 		imagePath = &path
 		if downloaded {
 			downloadedImages++
 		}
 	}
+	return imagePath, downloadedImages, nil
+}
 
+func (service *CloudSyncService) upsertSyncedLocalGame(
+	ctx context.Context,
+	cloud storage.CloudGameMetadata,
+	local *models.Game,
+	imagePath *string,
+) error {
 	game := composeSyncedLocalGame(cloud, local, imagePath)
+	return service.repository.UpsertGameSync(ctx, game)
+}
 
-	if err := service.repository.UpsertGameSync(ctx, game); err != nil {
-		return 0, 0, err
+func (service *CloudSyncService) replaceSyncedLocalSessions(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+) (int, error) {
+	if err := service.repository.DeletePlaySessionsByGame(ctx, gameID); err != nil {
+		return 0, err
 	}
 
-	if err := service.repository.DeletePlaySessionsByGame(ctx, cloud.ID); err != nil {
-		return 0, 0, err
-	}
-
-	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, cloud.ID)
+	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, gameID)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	for _, session := range cloudSessions {
-		playSession := composeLocalPlaySession(cloud.ID, session)
+		playSession := composeLocalPlaySession(gameID, session)
 		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
-			return 0, 0, err
+			return 0, err
 		}
 	}
+	return len(cloudSessions), nil
+}
 
-	if total, err := service.repository.SumPlaySessionDurationsByGame(ctx, cloud.ID); err == nil {
-		if updateErr := service.repository.UpdateGameTotalPlayTime(ctx, cloud.ID, total); updateErr != nil {
-			return 0, 0, updateErr
-		}
+func (service *CloudSyncService) recalculateSyncedGameTotal(ctx context.Context, gameID string) error {
+	total, err := service.repository.SumPlaySessionDurationsByGame(ctx, gameID)
+	if err != nil {
+		return nil
 	}
-
-	return downloadedImages, len(cloudSessions), nil
+	return service.repository.UpdateGameTotalPlayTime(ctx, gameID, total)
 }
 
 func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
@@ -588,7 +670,7 @@ func (service *CloudSyncService) loadCloudSessions(
 	gameID string,
 ) ([]storage.CloudSessionRecord, error) {
 	key := cloudSessionsKey(gameID)
-	sessions, err := storage.LoadSessions(ctx, client, bucket, key)
+	sessions, err := service.cloudStorage.LoadSessions(ctx, client, bucket, key)
 	if err != nil {
 		if isNotFoundError(err) {
 			return []storage.CloudSessionRecord{}, nil
@@ -619,7 +701,7 @@ func (service *CloudSyncService) uploadImageIfNeeded(
 		return key, false, nil
 	}
 
-	if err := storage.UploadBytes(ctx, client, bucket, key, payload, contentType); err != nil {
+	if err := service.cloudStorage.UploadBytes(ctx, client, bucket, key, payload, contentType); err != nil {
 		return "", false, err
 	}
 	return key, true, nil
@@ -650,7 +732,7 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 		return targetPath, false, nil
 	}
 
-	payload, err := storage.DownloadObject(ctx, client, bucket, key)
+	payload, err := service.cloudStorage.DownloadObject(ctx, client, bucket, key)
 	if err != nil {
 		return "", false, err
 	}
