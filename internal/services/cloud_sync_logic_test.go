@@ -446,6 +446,29 @@ func TestCloudSyncServiceDownloadImageIfNeededReturnsWriteError(t *testing.T) {
 	}
 }
 
+func TestCloudImageLocalPathBuildsThumbnailPathFromImageKey(t *testing.T) {
+	t.Parallel()
+
+	path, err := cloudImageLocalPath("appdata", "game-1", "games/game-1/thumbnail/hash.jpg")
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if path != "appdata/thumbnails/hash_game-1.jpg" {
+		t.Fatalf("unexpected image path: %q", path)
+	}
+}
+
+func TestCloudImageLocalPathRejectsKeyWithoutHash(t *testing.T) {
+	t.Parallel()
+
+	_, err := cloudImageLocalPath("appdata", "game-1", "games/game-1/thumbnail/.png")
+
+	if err == nil {
+		t.Fatalf("expected hash validation error")
+	}
+}
+
 type fakeCloudSyncStorage struct {
 	savedMetadata    *storage.CloudMetadata
 	deletedPrefix    string

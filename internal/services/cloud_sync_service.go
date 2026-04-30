@@ -989,20 +989,14 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 	gameID string,
 	key string,
 ) (string, bool, error) {
-	baseName := filepath.Base(key)
-	if baseName == "" {
-		return "", false, errors.New("image key is empty")
-	}
-	ext := filepath.Ext(baseName)
-	hash := strings.TrimSuffix(baseName, ext)
-	if hash == "" {
-		return "", false, errors.New("image hash is empty")
+	targetPath, err := cloudImageLocalPath(service.config.AppDataDir, gameID, key)
+	if err != nil {
+		return "", false, err
 	}
 	targetDir := filepath.Join(service.config.AppDataDir, "thumbnails")
 	if err := service.imageFiles.EnsureDir(targetDir); err != nil {
 		return "", false, err
 	}
-	targetPath := filepath.Join(targetDir, fmt.Sprintf("%s_%s%s", hash, gameID, ext))
 	exists, err := service.imageFiles.Exists(targetPath)
 	if err != nil {
 		return "", false, err
@@ -1019,6 +1013,19 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 		return "", false, err
 	}
 	return targetPath, true, nil
+}
+
+func cloudImageLocalPath(appDataDir string, gameID string, key string) (string, error) {
+	baseName := filepath.Base(key)
+	if baseName == "" {
+		return "", errors.New("image key is empty")
+	}
+	ext := filepath.Ext(baseName)
+	hash := strings.TrimSuffix(baseName, ext)
+	if hash == "" {
+		return "", errors.New("image hash is empty")
+	}
+	return filepath.Join(appDataDir, "thumbnails", fmt.Sprintf("%s_%s%s", hash, gameID, ext)), nil
 }
 
 func loadImagePayload(path string) ([]byte, string, string, error) {
