@@ -56,6 +56,7 @@ type CloudSyncService struct {
 	repository   CloudSyncRepository
 	cloudStorage cloudSyncStorage
 	imageFiles   cloudImageFileStore
+	imageLoader  cloudImageLoader
 	newClient    cloudSyncClientFactory
 	logger       *slog.Logger
 	offlineMu    sync.RWMutex
@@ -70,6 +71,7 @@ func NewCloudSyncService(cfg config.Config, store credentials.Store, repository 
 		repository:   repository,
 		cloudStorage: storageCloudSyncStorage{},
 		imageFiles:   osCloudImageFileStore{},
+		imageLoader:  defaultCloudImageLoader{},
 		logger:       logger,
 	}
 	service.newClient = service.newStorageClient
@@ -97,6 +99,16 @@ type cloudImageFileStore interface {
 }
 
 type osCloudImageFileStore struct{}
+
+type cloudImageLoader interface {
+	Load(path string) ([]byte, string, string, error)
+}
+
+type defaultCloudImageLoader struct{}
+
+func (defaultCloudImageLoader) Load(path string) ([]byte, string, string, error) {
+	return loadImagePayload(path)
+}
 
 func (osCloudImageFileStore) EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o700)
@@ -963,7 +975,7 @@ func (service *CloudSyncService) uploadImageIfNeeded(
 	imagePath string,
 	existing *storage.CloudGameMetadata,
 ) (string, bool, error) {
-	payload, ext, contentType, err := loadImagePayload(imagePath)
+	payload, ext, contentType, err := service.imageLoader.Load(imagePath)
 	if err != nil {
 		return "", false, err
 	}

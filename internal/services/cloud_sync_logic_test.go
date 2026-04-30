@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -446,6 +448,83 @@ func TestCloudSyncServiceDownloadImageIfNeededReturnsWriteError(t *testing.T) {
 	}
 }
 
+func TestCloudSyncServiceUploadImageIfNeededUploadsLoadedPayload(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte("image payload")
+	hash := sha256.Sum256(payload)
+	expectedKey := "games/game-1/thumbnail/" + hex.EncodeToString(hash[:]) + ".jpeg"
+	cloudStorage := &fakeCloudSyncStorage{}
+	imageLoader := &fakeCloudImageLoader{
+		payload:     payload,
+		ext:         ".jpeg",
+		contentType: "image/jpeg",
+	}
+	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.imageLoader = imageLoader
+
+	key, uploaded, err := service.uploadImageIfNeeded(context.Background(), nil, "bucket", "game-1", "/tmp/source.jpeg", nil)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if key != expectedKey {
+		t.Fatalf("unexpected uploaded key: %q", key)
+	}
+	if !uploaded {
+		t.Fatalf("expected image to be uploaded")
+	}
+	if imageLoader.loadedPath != "/tmp/source.jpeg" {
+		t.Fatalf("expected source path to be loaded, got %q", imageLoader.loadedPath)
+	}
+	if cloudStorage.uploadedKey != expectedKey {
+		t.Fatalf("expected payload to be uploaded to %q, got %q", expectedKey, cloudStorage.uploadedKey)
+	}
+	if string(cloudStorage.uploadedPayload) != string(payload) || cloudStorage.uploadedContentType != "image/jpeg" {
+		t.Fatalf("expected uploaded payload and content type to be preserved")
+	}
+}
+
+func TestCloudSyncServiceUploadImageIfNeededSkipsExistingImageKey(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte("image payload")
+	hash := sha256.Sum256(payload)
+	existingKey := "games/game-1/thumbnail/" + hex.EncodeToString(hash[:]) + ".png"
+	cloudStorage := &fakeCloudSyncStorage{}
+	imageLoader := &fakeCloudImageLoader{
+		payload:     payload,
+		ext:         ".png",
+		contentType: "image/png",
+	}
+	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.imageLoader = imageLoader
+
+	key, uploaded, err := service.uploadImageIfNeeded(
+		context.Background(),
+		nil,
+		"bucket",
+		"game-1",
+		"/tmp/source.png",
+		&storage.CloudGameMetadata{ImageKey: &existingKey},
+	)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if key != existingKey {
+		t.Fatalf("expected existing key, got %q", key)
+	}
+	if uploaded {
+		t.Fatalf("expected upload to be skipped")
+	}
+	if cloudStorage.uploadedKey != "" {
+		t.Fatalf("expected no upload, got %q", cloudStorage.uploadedKey)
+	}
+}
+
 func TestCloudImageLocalPathBuildsThumbnailPathFromImageKey(t *testing.T) {
 	t.Parallel()
 
@@ -470,17 +549,35 @@ func TestCloudImageLocalPathRejectsKeyWithoutHash(t *testing.T) {
 }
 
 type fakeCloudSyncStorage struct {
-	savedMetadata    *storage.CloudMetadata
-	deletedPrefix    string
-	savedSessionsKey string
-	savedSessionKeys []string
-	savedSessions    []storage.CloudSessionRecord
-	saveSessionsErr  error
-	loadSessionsErr  error
-	loadedSessions   []storage.CloudSessionRecord
-	uploadedKey      string
-	downloadedKey    string
-	downloadedObject []byte
+	savedMetadata       *storage.CloudMetadata
+	deletedPrefix       string
+	savedSessionsKey    string
+	savedSessionKeys    []string
+	savedSessions       []storage.CloudSessionRecord
+	saveSessionsErr     error
+	loadSessionsErr     error
+	loadedSessions      []storage.CloudSessionRecord
+	uploadedKey         string
+	uploadedPayload     []byte
+	uploadedContentType string
+	downloadedKey       string
+	downloadedObject    []byte
+}
+
+type fakeCloudImageLoader struct {
+	loadedPath  string
+	payload     []byte
+	ext         string
+	contentType string
+	err         error
+}
+
+func (fake *fakeCloudImageLoader) Load(path string) ([]byte, string, string, error) {
+	fake.loadedPath = path
+	if fake.err != nil {
+		return nil, "", "", fake.err
+	}
+	return append([]byte(nil), fake.payload...), fake.ext, fake.contentType, nil
 }
 
 type fakeCloudImageFileStore struct {
@@ -550,6 +647,8 @@ func (fake *fakeCloudSyncStorage) LoadSessions(ctx context.Context, client *s3.C
 
 func (fake *fakeCloudSyncStorage) UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error {
 	fake.uploadedKey = key
+	fake.uploadedPayload = append([]byte(nil), payload...)
+	fake.uploadedContentType = contentType
 	return nil
 }
 
