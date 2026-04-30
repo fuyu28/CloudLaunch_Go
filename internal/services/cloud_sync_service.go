@@ -979,10 +979,7 @@ func (service *CloudSyncService) uploadImageIfNeeded(
 	if err != nil {
 		return "", false, err
 	}
-	hash := sha256.Sum256(payload)
-	hashHex := hex.EncodeToString(hash[:])
-	normalizedExt := normalizeImageExt(ext, contentType)
-	key := fmt.Sprintf("games/%s/thumbnail/%s%s", gameID, hashHex, normalizedExt)
+	key := cloudImageObjectKey(gameID, payload, ext, contentType)
 
 	if existing != nil && existing.ImageKey != nil && *existing.ImageKey == key {
 		return key, false, nil
@@ -992,6 +989,13 @@ func (service *CloudSyncService) uploadImageIfNeeded(
 		return "", false, err
 	}
 	return key, true, nil
+}
+
+func cloudImageObjectKey(gameID string, payload []byte, ext string, contentType string) string {
+	hash := sha256.Sum256(payload)
+	hashHex := hex.EncodeToString(hash[:])
+	normalizedExt := normalizeImageExt(ext, contentType)
+	return fmt.Sprintf("games/%s/thumbnail/%s%s", gameID, hashHex, normalizedExt)
 }
 
 func (service *CloudSyncService) downloadImageIfNeeded(

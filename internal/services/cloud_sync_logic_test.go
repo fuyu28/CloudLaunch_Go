@@ -525,6 +525,20 @@ func TestCloudSyncServiceUploadImageIfNeededSkipsExistingImageKey(t *testing.T) 
 	}
 }
 
+func TestCloudImageObjectKeyBuildsHashBasedThumbnailKey(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte("image payload")
+	hash := sha256.Sum256(payload)
+	expectedKey := "games/game-1/thumbnail/" + hex.EncodeToString(hash[:]) + ".png"
+
+	key := cloudImageObjectKey("game-1", payload, "", "image/png")
+
+	if key != expectedKey {
+		t.Fatalf("unexpected object key: %q", key)
+	}
+}
+
 func TestCloudImageLocalPathBuildsThumbnailPathFromImageKey(t *testing.T) {
 	t.Parallel()
 
