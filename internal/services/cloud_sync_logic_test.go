@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"os"
 	"testing"
 	"time"
 
@@ -390,6 +391,61 @@ func TestComposeSyncedLocalGamePreservesLocalWindowsSpecificFields(t *testing.T)
 	}
 }
 
+func TestCloudSyncServiceDownloadImageIfNeededSkipsExistingLocalFile(t *testing.T) {
+	t.Parallel()
+
+	imageFiles := &fakeCloudImageFileStore{
+		existingPaths: map[string]bool{
+			"appdata/thumbnails/hash_game-1.png": true,
+		},
+	}
+	cloudStorage := &fakeCloudSyncStorage{downloadedObject: []byte("image")}
+	service := NewCloudSyncService(config.Config{AppDataDir: "appdata"}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.imageFiles = imageFiles
+
+	path, downloaded, err := service.downloadImageIfNeeded(context.Background(), nil, "bucket", "game-1", "games/game-1/thumbnail/hash.png")
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if downloaded {
+		t.Fatalf("expected existing image to be reused")
+	}
+	if path != "appdata/thumbnails/hash_game-1.png" {
+		t.Fatalf("unexpected image path: %q", path)
+	}
+	if cloudStorage.downloadedKey != "" {
+		t.Fatalf("expected cloud object not to be downloaded, got %q", cloudStorage.downloadedKey)
+	}
+	if len(imageFiles.writtenPayload) != 0 {
+		t.Fatalf("expected no local write for existing image")
+	}
+}
+
+func TestCloudSyncServiceDownloadImageIfNeededReturnsWriteError(t *testing.T) {
+	t.Parallel()
+
+	writeErr := errors.New("disk full")
+	imageFiles := &fakeCloudImageFileStore{
+		existingPaths: map[string]bool{},
+		writeErr:      writeErr,
+	}
+	cloudStorage := &fakeCloudSyncStorage{downloadedObject: []byte("image")}
+	service := NewCloudSyncService(config.Config{AppDataDir: "appdata"}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.imageFiles = imageFiles
+
+	_, _, err := service.downloadImageIfNeeded(context.Background(), nil, "bucket", "game-1", "games/game-1/thumbnail/hash.png")
+
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("expected write error, got %v", err)
+	}
+	if cloudStorage.downloadedKey != "games/game-1/thumbnail/hash.png" {
+		t.Fatalf("expected cloud object to be downloaded before write, got %q", cloudStorage.downloadedKey)
+	}
+}
+
 type fakeCloudSyncStorage struct {
 	savedMetadata    *storage.CloudMetadata
 	deletedPrefix    string
@@ -402,6 +458,39 @@ type fakeCloudSyncStorage struct {
 	uploadedKey      string
 	downloadedKey    string
 	downloadedObject []byte
+}
+
+type fakeCloudImageFileStore struct {
+	existingPaths  map[string]bool
+	ensuredDir     string
+	writtenPath    string
+	writtenPayload []byte
+	writtenPerm    os.FileMode
+	ensureDirErr   error
+	existsErr      error
+	writeErr       error
+}
+
+func (fake *fakeCloudImageFileStore) EnsureDir(path string) error {
+	fake.ensuredDir = path
+	return fake.ensureDirErr
+}
+
+func (fake *fakeCloudImageFileStore) Exists(path string) (bool, error) {
+	if fake.existsErr != nil {
+		return false, fake.existsErr
+	}
+	return fake.existingPaths[path], nil
+}
+
+func (fake *fakeCloudImageFileStore) WriteFile(path string, payload []byte, perm os.FileMode) error {
+	if fake.writeErr != nil {
+		return fake.writeErr
+	}
+	fake.writtenPath = path
+	fake.writtenPayload = append([]byte(nil), payload...)
+	fake.writtenPerm = perm
+	return nil
 }
 
 func (fake *fakeCloudSyncStorage) LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error) {

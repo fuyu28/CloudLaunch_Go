@@ -55,6 +55,7 @@ type CloudSyncService struct {
 	store        credentials.Store
 	repository   CloudSyncRepository
 	cloudStorage cloudSyncStorage
+	imageFiles   cloudImageFileStore
 	newClient    cloudSyncClientFactory
 	logger       *slog.Logger
 	offlineMu    sync.RWMutex
@@ -68,6 +69,7 @@ func NewCloudSyncService(cfg config.Config, store credentials.Store, repository 
 		store:        store,
 		repository:   repository,
 		cloudStorage: storageCloudSyncStorage{},
+		imageFiles:   osCloudImageFileStore{},
 		logger:       logger,
 	}
 	service.newClient = service.newStorageClient
@@ -87,6 +89,32 @@ type cloudSyncStorage interface {
 }
 
 type storageCloudSyncStorage struct{}
+
+type cloudImageFileStore interface {
+	EnsureDir(path string) error
+	Exists(path string) (bool, error)
+	WriteFile(path string, payload []byte, perm os.FileMode) error
+}
+
+type osCloudImageFileStore struct{}
+
+func (osCloudImageFileStore) EnsureDir(path string) error {
+	return os.MkdirAll(path, 0o700)
+}
+
+func (osCloudImageFileStore) Exists(path string) (bool, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (osCloudImageFileStore) WriteFile(path string, payload []byte, perm os.FileMode) error {
+	return os.WriteFile(path, payload, perm)
+}
 
 func (storageCloudSyncStorage) LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error) {
 	return storage.LoadMetadata(ctx, client, bucket, key)
@@ -971,11 +999,15 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 		return "", false, errors.New("image hash is empty")
 	}
 	targetDir := filepath.Join(service.config.AppDataDir, "thumbnails")
-	if err := os.MkdirAll(targetDir, 0o700); err != nil {
+	if err := service.imageFiles.EnsureDir(targetDir); err != nil {
 		return "", false, err
 	}
 	targetPath := filepath.Join(targetDir, fmt.Sprintf("%s_%s%s", hash, gameID, ext))
-	if _, err := os.Stat(targetPath); err == nil {
+	exists, err := service.imageFiles.Exists(targetPath)
+	if err != nil {
+		return "", false, err
+	}
+	if exists {
 		return targetPath, false, nil
 	}
 
@@ -983,7 +1015,7 @@ func (service *CloudSyncService) downloadImageIfNeeded(
 	if err != nil {
 		return "", false, err
 	}
-	if err := os.WriteFile(targetPath, payload, 0o600); err != nil {
+	if err := service.imageFiles.WriteFile(targetPath, payload, 0o600); err != nil {
 		return "", false, err
 	}
 	return targetPath, true, nil
