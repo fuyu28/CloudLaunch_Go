@@ -89,6 +89,38 @@ func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
 	}
 }
 
+func TestGameServiceListGetDeleteUseRepositoryBoundary(t *testing.T) {
+	t.Parallel()
+
+	game := models.Game{ID: "game-1", Title: "Game"}
+	service := NewGameService(&fakeGameRepository{
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return []models.Game{game}, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return &game, nil
+		},
+		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	listed := service.ListGames(context.Background(), " game ", models.PlayStatus(""), "title", "asc")
+	if !listed.Success || len(listed.Data) != 1 || listed.Data[0].ID != "game-1" {
+		t.Fatalf("unexpected list result: %#v", listed)
+	}
+
+	got := service.GetGameByID(context.Background(), "game-1")
+	if !got.Success || got.Data == nil || got.Data.ID != "game-1" {
+		t.Fatalf("unexpected get result: %#v", got)
+	}
+
+	deleted := service.DeleteGame(context.Background(), "game-1")
+	if !deleted.Success || !deleted.Data {
+		t.Fatalf("unexpected delete result: %#v", deleted)
+	}
+}
+
 func TestGameServiceUpdateGameHandlesRepositoryError(t *testing.T) {
 	t.Parallel()
 

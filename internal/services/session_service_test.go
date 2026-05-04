@@ -110,6 +110,29 @@ func TestSessionServiceDeleteSessionReturnsGameIDForAdapterUse(t *testing.T) {
 	}
 }
 
+func TestSessionServiceListSessionsByGameUsesRepositoryBoundary(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepository{
+		session: func() *models.PlaySession {
+			name := "Session 1"
+			return &models.PlaySession{
+				ID:          "session-1",
+				GameID:      "game-1",
+				PlayedAt:    time.Now(),
+				Duration:    120,
+				SessionName: &name,
+			}
+		}(),
+	}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	result := service.ListSessionsByGame(context.Background(), "game-1")
+	if !result.Success || len(result.Data) != 1 || result.Data[0].ID != "session-1" {
+		t.Fatalf("unexpected list result: %#v", result)
+	}
+}
+
 func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T) {
 	t.Parallel()
 

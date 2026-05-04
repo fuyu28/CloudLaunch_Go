@@ -13,6 +13,7 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 - `internal/app` から `db.Repository` 直接依存を解消し、`App.Database` フィールドを削除した
 - 主要な service は具象の `*db.Repository` ではなく interface に依存する形へ移行済み
 - 移行済み service には fake repository ベースの単体テストを追加済み
+- `CloudService` / `MemoCloudService` / `CredentialService` も fake port を差し替えて単体テストできる状態になった
 - `CloudSyncService` は repository 境界化と純粋ロジックの分割を進めている段階
 - `MemoService`, `SessionService`, `GameService`, `ProcessMonitorService` には、リファクタリング前の回帰安全網として副作用・集計・状態遷移テストを追加済み
 - `api_memo_cloud.go` と `api_maintenance.go` は service 呼び出し中心の薄い adapter へ整理した
@@ -49,7 +50,7 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 
 ### Phase 2. Port interface の導入
 
-状態: 大部分完了
+状態: 完了
 
 interface 化済み service:
 
@@ -58,6 +59,9 @@ interface 化済み service:
 - `MemoService`
 - `ChapterService`
 - `UploadService`
+- `CredentialService`
+- `CloudService`
+- `MemoCloudService`
 - `CloudSyncService`
 - `ScreenshotService`
 - `ProcessMonitorService`
@@ -66,13 +70,15 @@ interface 化済み service:
 
 - `internal/services/repositories.go` に各ユースケース向け interface を導入
 - service コンストラクタが具象の `*db.Repository` ではなく interface を受け取る形へ移行
+- `CloudService` / `MemoCloudService` が高レベルな cloud object store port を介して外部 I/O を扱う形へ移行
+- `CredentialService` は credential store interface に対して単体テスト可能な状態を維持
 - fake repository による単体テストが書ける状態を確立
-- service 単体テストで DB なしに主要ユースケースの振る舞いを検証できるようになった
+- service 単体テストで DB なしに主要ユースケースと cloud / credentials の振る舞いを検証できるようになった
 
 残課題:
 
 - DB 実装と service の結線を確認する統合テストはまだ薄い
-- cloud / credentials / OS 連携も、repository 以外の port としてはまだ整理途中
+- Screenshot / maintenance 周辺など、一部 OS / filesystem 依存の port 化は今後の整理余地がある
 
 ### Phase 3. Use Case 層の明確化
 
@@ -171,6 +177,10 @@ interface 化済み service:
 - `memo_service_test.go`
 - `chapter_service_test.go`
 - `upload_service_test.go`
+- `credential_service_test.go`
+- `cloud_service_test.go`
+- `memo_cloud_service_test.go`
+- `maintenance_service_test.go`
 - `cloud_sync_service_test.go`
 - `cloud_sync_logic_test.go`
 - `screenshot_service_test.go`
@@ -204,7 +214,7 @@ interface 化済み service:
 
 現在の coverage:
 
-- `internal/services`: 40.6%
+- `internal/services`: 44.5%
 - `internal/result`: 100.0%
 
 2026-05-04 の確認結果:
@@ -234,7 +244,7 @@ interface 化済み service:
 現状は、以下の段階に入っている。
 
 - Phase 1 は完了
-- Phase 2 は大部分完了
+- Phase 2 は完了
 - Phase 3 は着手済みだが構造の整理はこれから
 - Phase 4 は `CloudSyncService` を中心に進行中
 - Phase 5 は未着手
@@ -246,5 +256,5 @@ interface 化済み service:
 1. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
 2. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
 3. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
-4. `cloud` 系 API の usecase 化を進め、storage 直操作を adapter からさらに切り離す
+4. Screenshot / maintenance 周辺の OS / filesystem 依存を必要に応じてさらに port 化する
 5. その後に `usecase` / `domain` / `infrastructure` への再配置を検討する

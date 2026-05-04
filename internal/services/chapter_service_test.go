@@ -85,6 +85,53 @@ func TestChapterServiceSetCurrentChapterUsesRepositoryBoundary(t *testing.T) {
 	}
 }
 
+func TestChapterServiceListCreateUpdateDeleteUseRepositoryBoundary(t *testing.T) {
+	t.Parallel()
+
+	chapter := models.Chapter{ID: "chapter-1", Name: "Chapter 1", Order: 1, GameID: "game-1"}
+	repository := fakeChapterRepository{
+		listChaptersByGameFn: func(ctx context.Context, gameID string) ([]models.Chapter, error) {
+			return []models.Chapter{chapter}, nil
+		},
+		createChapterFn: func(ctx context.Context, created models.Chapter) (*models.Chapter, error) {
+			created.ID = "chapter-1"
+			return &created, nil
+		},
+		getChapterByIDFn: func(ctx context.Context, chapterID string) (*models.Chapter, error) {
+			return &chapter, nil
+		},
+		updateChapterFn: func(ctx context.Context, updated models.Chapter) (*models.Chapter, error) {
+			return &updated, nil
+		},
+		deleteChapterFn:      func(ctx context.Context, chapterID string) error { return nil },
+		updateChapterOrderFn: func(ctx context.Context, chapterID string, order int64) error { return nil },
+		getChapterStatsFn:    func(ctx context.Context, gameID string) ([]models.ChapterStat, error) { return nil, nil },
+		getGameByIDFn:        func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		updateGameFn:         func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+	}
+	service := NewChapterService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	listed := service.ListChaptersByGame(context.Background(), "game-1")
+	if !listed.Success || len(listed.Data) != 1 || listed.Data[0].ID != "chapter-1" {
+		t.Fatalf("unexpected listed chapters: %#v", listed)
+	}
+
+	created := service.CreateChapter(context.Background(), ChapterInput{Name: " Chapter 1 ", Order: 1, GameID: "game-1"})
+	if !created.Success || created.Data == nil || created.Data.Name != "Chapter 1" {
+		t.Fatalf("unexpected create result: %#v", created)
+	}
+
+	updated := service.UpdateChapter(context.Background(), "chapter-1", ChapterUpdateInput{Name: " Chapter X ", Order: 2})
+	if !updated.Success || updated.Data == nil || updated.Data.Name != "Chapter X" || updated.Data.Order != 2 {
+		t.Fatalf("unexpected update result: %#v", updated)
+	}
+
+	deleted := service.DeleteChapter(context.Background(), "chapter-1")
+	if !deleted.Success || !deleted.Data {
+		t.Fatalf("unexpected delete result: %#v", deleted)
+	}
+}
+
 func TestChapterServiceGetChapterStatsHandlesRepositoryError(t *testing.T) {
 	t.Parallel()
 
