@@ -52,6 +52,36 @@ func TestApplyMigrationsIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestApplyMigrationsUpgradesLegacySchema(t *testing.T) {
+	t.Parallel()
+
+	connection, err := Open(filepath.Join(t.TempDir(), "legacy.db"))
+	if err != nil {
+		t.Fatalf("failed to open legacy test database: %v", err)
+	}
+	defer func() { _ = connection.Close() }()
+
+	seedLegacySchema(t, connection)
+
+	if err := ApplyMigrations(connection); err != nil {
+		t.Fatalf("expected legacy schema upgrade to succeed, got %v", err)
+	}
+
+	assertTableExists(t, connection, "Game")
+	assertTableExists(t, connection, "PlaySession")
+	assertTableExists(t, connection, "PlayRoute")
+	assertTableExists(t, connection, "Memo")
+	assertTableNotExists(t, connection, "Upload")
+	assertTableNotExists(t, connection, "Chapter")
+
+	assertColumnMissing(t, connection, "Game", "playStatus")
+	assertColumnMissing(t, connection, "Game", "currentChapter")
+	assertColumnMissing(t, connection, "PlaySession", "sessionName")
+	assertColumnMissing(t, connection, "PlaySession", "chapterId")
+	assertColumnMissing(t, connection, "PlaySession", "uploadId")
+	assertPlaySessionForeignKey(t, connection, "Game")
+}
+
 func openMigratedTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -183,5 +213,95 @@ func assertPlaySessionForeignKey(t *testing.T, connection *sql.DB, expectedTable
 	}
 	if !found {
 		t.Fatal("expected PlaySession.gameId foreign key to exist")
+	}
+}
+
+func seedLegacySchema(t *testing.T, connection *sql.DB) {
+	t.Helper()
+
+	statements := []string{
+		`CREATE TABLE schema_migrations (
+			id TEXT NOT NULL PRIMARY KEY,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`INSERT INTO schema_migrations (id) VALUES
+			('0001_init.sql'),
+			('0002_add_updated_at.sql'),
+			('0003_add_local_save_hash.sql'),
+			('0004_remove_upload.sql'),
+			('0005_remove_session_name.sql');`,
+		`CREATE TABLE "Game" (
+			"id" TEXT NOT NULL PRIMARY KEY,
+			"title" TEXT NOT NULL,
+			"publisher" TEXT NOT NULL,
+			"imagePath" TEXT,
+			"exePath" TEXT NOT NULL UNIQUE,
+			"saveFolderPath" TEXT,
+			"createdAt" DATETIME NOT NULL,
+			"updatedAt" DATETIME NOT NULL,
+			"localSaveHash" TEXT,
+			"localSaveHashUpdatedAt" DATETIME,
+			"playStatus" TEXT NOT NULL DEFAULT 'unplayed',
+			"currentChapter" TEXT,
+			"totalPlayTime" INTEGER NOT NULL DEFAULT 0,
+			"lastPlayed" DATETIME,
+			"clearedAt" DATETIME
+		);`,
+		`CREATE TABLE "Upload" (
+			"id" TEXT NOT NULL PRIMARY KEY,
+			"title" TEXT NOT NULL,
+			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE TABLE "Chapter" (
+			"id" TEXT NOT NULL PRIMARY KEY,
+			"gameId" TEXT NOT NULL,
+			"name" TEXT NOT NULL,
+			"sortOrder" INTEGER NOT NULL DEFAULT 0
+		);`,
+		`CREATE TABLE "PlaySession" (
+			"id" TEXT NOT NULL PRIMARY KEY,
+			"gameId" TEXT NOT NULL,
+			"sessionName" TEXT,
+			"chapterId" TEXT,
+			"uploadId" TEXT,
+			"playedAt" DATETIME NOT NULL,
+			"duration" INTEGER NOT NULL,
+			"updatedAt" DATETIME NOT NULL
+		);`,
+		`CREATE TABLE "Memo" (
+			"id" TEXT NOT NULL PRIMARY KEY,
+			"title" TEXT NOT NULL,
+			"content" TEXT NOT NULL,
+			"gameId" TEXT NOT NULL,
+			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE INDEX "idx_chapters_gameid_order" ON "Chapter"("gameId", "sortOrder");`,
+		`CREATE INDEX "idx_chapters_name" ON "Chapter"("name");`,
+		`INSERT INTO "Game" (
+			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+			localSaveHash, localSaveHashUpdatedAt, playStatus, currentChapter, totalPlayTime, lastPlayed, clearedAt
+		) VALUES (
+			'game-1', 'Legacy Game', 'Legacy Brand', NULL, '/games/legacy.exe', NULL,
+			'2026-05-01 10:00:00', '2026-05-02 11:00:00', NULL, NULL, 'played', 'chapter-1', 3600,
+			'2026-05-02 12:00:00', '2026-05-03 00:00:00'
+		);`,
+		`INSERT INTO "Upload" (id, title, createdAt) VALUES ('upload-1', 'old upload', '2026-05-01 10:00:00');`,
+		`INSERT INTO "Chapter" (id, gameId, name, sortOrder) VALUES ('chapter-1', 'game-1', 'Common', 0);`,
+		`INSERT INTO "PlaySession" (
+			id, gameId, sessionName, chapterId, uploadId, playedAt, duration, updatedAt
+		) VALUES (
+			'session-1', 'game-1', 'legacy session', 'chapter-1', 'upload-1',
+			'2026-05-02 11:00:00', 1800, '2026-05-02 11:30:00'
+		);`,
+		`INSERT INTO "Memo" (id, title, content, gameId, createdAt, updatedAt) VALUES (
+			'memo-1', 'Legacy Memo', 'memo body', 'game-1', '2026-05-01 10:00:00', '2026-05-01 10:00:00'
+		);`,
+	}
+
+	for _, statement := range statements {
+		if _, err := connection.Exec(statement); err != nil {
+			t.Fatalf("failed to seed legacy schema: %v\nstatement: %s", err, statement)
+		}
 	}
 }
