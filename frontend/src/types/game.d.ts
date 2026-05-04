@@ -1,4 +1,4 @@
-export type PlayStatus = "unplayed" | "playing" | "played";
+export type PlayStatus = "unplayed" | "playing" | "cleared";
 
 export type GameType = {
   id: string;

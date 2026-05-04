@@ -14,7 +14,7 @@ import (
 
 const derivedPlayStatusSQL = `
 CASE
-  WHEN clearedAt IS NOT NULL THEN 'played'
+  WHEN clearedAt IS NOT NULL THEN 'cleared'
   WHEN lastPlayed IS NOT NULL OR totalPlayTime > 0 THEN 'playing'
   ELSE 'unplayed'
 END
@@ -599,7 +599,7 @@ func normalizeProgressPlayStatus(
 	totalPlayTime int64,
 ) models.PlayStatus {
 	if clearedAt != nil {
-		return models.PlayStatusPlayed
+		return models.PlayStatusCleared
 	}
 	if lastPlayed != nil || totalPlayTime > 0 {
 		return models.PlayStatusPlaying

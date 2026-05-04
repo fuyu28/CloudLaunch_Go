@@ -853,7 +853,7 @@ func composeSyncedLocalGame(
 		UpdatedAt:              cloud.UpdatedAt,
 		LocalSaveHash:          localSaveHash,
 		LocalSaveHashUpdatedAt: localSaveHashUpdatedAt,
-		PlayStatus:             models.PlayStatus(cloud.PlayStatus),
+		PlayStatus:             normalizeCloudPlayStatus(cloud.PlayStatus),
 		TotalPlayTime:          cloud.TotalPlayTime,
 		LastPlayed:             cloud.LastPlayed,
 		ClearedAt:              cloud.ClearedAt,
@@ -1115,7 +1115,7 @@ func (service *CloudSyncService) mergeCloudGameMetadata(
 		ID:         cloud.ID,
 		Title:      cloud.Title,
 		Publisher:  cloud.Publisher,
-		PlayStatus: models.PlayStatus(cloud.PlayStatus),
+		PlayStatus: normalizeCloudPlayStatus(cloud.PlayStatus),
 		CreatedAt:  cloud.CreatedAt,
 		UpdatedAt:  cloud.UpdatedAt,
 		LastPlayed: cloud.LastPlayed,
@@ -1151,6 +1151,19 @@ func cloudMetadataFromGame(game models.Game, imageKey *string) storage.CloudGame
 		ClearedAt:     game.ClearedAt,
 		CreatedAt:     game.CreatedAt,
 		UpdatedAt:     game.UpdatedAt,
+	}
+}
+
+func normalizeCloudPlayStatus(value string) models.PlayStatus {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(models.PlayStatusUnplayed):
+		return models.PlayStatusUnplayed
+	case string(models.PlayStatusPlaying):
+		return models.PlayStatusPlaying
+	case "played", string(models.PlayStatusCleared):
+		return models.PlayStatusCleared
+	default:
+		return models.PlayStatusUnplayed
 	}
 }
 

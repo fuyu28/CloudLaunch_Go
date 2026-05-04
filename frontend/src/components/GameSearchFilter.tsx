@@ -138,7 +138,7 @@ const GameSearchFilter = memo(function GameSearchFilter({
               <option value="all">すべて</option>
               <option value="unplayed">未プレイ</option>
               <option value="playing">プレイ中</option>
-              <option value="played">プレイ済み</option>
+              <option value="cleared">クリア済み</option>
             </select>
           </div>
         </div>

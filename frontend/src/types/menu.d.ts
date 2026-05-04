@@ -2,4 +2,4 @@ export type SortOption = "title" | "lastPlayed" | "totalPlayTime" | "publisher" 
 
 export type SortDirection = "asc" | "desc";
 
-export type FilterOption = "all" | "unplayed" | "playing" | "played";
+export type FilterOption = "all" | "unplayed" | "playing" | "cleared";

@@ -24,7 +24,7 @@ func TestNormalizeProgressPlayStatus(t *testing.T) {
 			name:          "clearedAt wins over progress",
 			clearedAt:     &clearedAt,
 			totalPlayTime: 0,
-			expected:      models.PlayStatusPlayed,
+			expected:      models.PlayStatusCleared,
 		},
 		{
 			name:          "history promotes to playing by lastPlayed",

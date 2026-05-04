@@ -9,7 +9,8 @@ type PlayStatus string
 const (
 	PlayStatusUnplayed PlayStatus = "unplayed"
 	PlayStatusPlaying  PlayStatus = "playing"
-	PlayStatusPlayed   PlayStatus = "played"
+	PlayStatusCleared  PlayStatus = "cleared"
+	PlayStatusPlayed   PlayStatus = PlayStatusCleared
 )
 
 // Game はゲーム基本情報を表す。

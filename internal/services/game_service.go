@@ -66,7 +66,7 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*m
 		ClearedAt:      normalizeDateOnly(input.ClearedAt),
 	}
 	if game.ClearedAt != nil {
-		game.PlayStatus = models.PlayStatusPlayed
+		game.PlayStatus = models.PlayStatusCleared
 	}
 
 	created, error := service.repository.CreateGame(ctx, game)

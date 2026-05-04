@@ -715,8 +715,10 @@ func normalizePlayStatus(filter string) models.PlayStatus {
 		return models.PlayStatusUnplayed
 	case "playing":
 		return models.PlayStatusPlaying
+	case "cleared":
+		return models.PlayStatusCleared
 	case "played":
-		return models.PlayStatusPlayed
+		return models.PlayStatusCleared
 	default:
 		return ""
 	}

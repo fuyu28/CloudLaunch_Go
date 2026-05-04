@@ -18,7 +18,7 @@ import { FaGamepad, FaPlay, FaCheck } from "react-icons/fa";
 /**
  * プレイステータスの型定義
  */
-export type PlayStatus = "unplayed" | "playing" | "played";
+export type PlayStatus = "unplayed" | "playing" | "cleared";
 
 /**
  * プレイステータス表示コンポーネントのprops
@@ -44,7 +44,7 @@ const STATUS_CONFIG = {
     badgeClass: "badge-primary",
     description: "現在プレイしている",
   },
-  played: {
+  cleared: {
     label: "クリア済み",
     icon: FaCheck,
     badgeClass: "badge-success",

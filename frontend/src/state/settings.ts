@@ -164,5 +164,5 @@ export const filterStateLabels: Record<FilterOption, string> = {
   all: "すべて",
   unplayed: "未プレイ",
   playing: "プレイ中",
-  played: "クリア済み",
+  cleared: "クリア済み",
 };

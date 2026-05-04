@@ -282,7 +282,7 @@ func TestCloudSyncServiceSyncSingleGameDownloadAppliesGameAndSessions(t *testing
 		ID:            "game-1",
 		Title:         "Cloud Game",
 		Publisher:     "Cloud Publisher",
-		PlayStatus:    string(models.PlayStatusPlayed),
+		PlayStatus:    "played",
 		TotalPlayTime: 75,
 		CreatedAt:     playedAt.Add(-24 * time.Hour),
 		UpdatedAt:     playedAt,
@@ -298,6 +298,9 @@ func TestCloudSyncServiceSyncSingleGameDownloadAppliesGameAndSessions(t *testing
 	}
 	if repository.upsertedGame.ID != "game-1" || repository.upsertedGame.Title != "Cloud Game" {
 		t.Fatalf("expected cloud game to be upserted locally, got %#v", repository.upsertedGame)
+	}
+	if repository.upsertedGame.PlayStatus != models.PlayStatusCleared {
+		t.Fatalf("expected legacy cloud play status to normalize to cleared, got %#v", repository.upsertedGame.PlayStatus)
 	}
 	if len(repository.upsertedSessions) != 2 || repository.upsertedSessions[1].Duration != 45 {
 		t.Fatalf("expected cloud sessions to be upserted, got %#v", repository.upsertedSessions)
@@ -815,7 +818,7 @@ func TestComposeSyncedLocalGameUsesFallbacksWithoutLocalGame(t *testing.T) {
 		ID:            "game-1",
 		Title:         "Game",
 		Publisher:     "Publisher",
-		PlayStatus:    string(models.PlayStatusPlayed),
+		PlayStatus:    "played",
 		TotalPlayTime: 240,
 	}
 
@@ -838,7 +841,7 @@ func TestComposeCloudGameMetadataCopiesSyncFields(t *testing.T) {
 		ID:            "game-1",
 		Title:         "Game",
 		Publisher:     "Publisher",
-		PlayStatus:    models.PlayStatusPlayed,
+		PlayStatus:    models.PlayStatusCleared,
 		TotalPlayTime: 180,
 		LastPlayed:    &lastPlayed,
 		ClearedAt:     &clearedAt,
