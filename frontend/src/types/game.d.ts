@@ -16,6 +16,14 @@ export type GameType = {
   clearedAt: Date | null; // null - 明確な「未クリア」状態
 };
 
+export type PlayRouteType = {
+  id: string;
+  gameId: string;
+  name: string;
+  sortOrder: number;
+  createdAt: Date;
+};
+
 export type InputGameData = {
   title: string;
   publisher: string;
@@ -57,6 +65,7 @@ export type MonitoringGameStatus = {
 
 export type PlaySessionType = {
   id: string;
+  playRouteId?: string | null;
   playedAt: Date;
   duration: number;
   gameId: string;

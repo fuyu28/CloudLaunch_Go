@@ -9,6 +9,7 @@ import ConfirmModal from "@renderer/components/ConfirmModal";
 import GameInfo from "@renderer/components/GameInfo";
 import GameFormModal from "@renderer/components/GameModal";
 import MemoCard from "@renderer/components/MemoCard";
+import PlayRouteCard from "@renderer/components/PlayRouteCard";
 import PlaySessionManagementModal from "@renderer/components/PlaySessionManagementModal";
 import PlaySessionModal from "@renderer/components/PlaySessionModal";
 import PlayStatistics from "@renderer/components/PlayStatistics";
@@ -350,7 +351,7 @@ export default function GameDetail(): React.JSX.Element {
       </div>
 
       {/* 下段：その他の管理機能 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
         {/* クラウドデータ管理カード */}
         <CloudDataCard
           gameId={game.id}
@@ -365,6 +366,9 @@ export default function GameDetail(): React.JSX.Element {
 
         {/* メモ管理カード */}
         <MemoCard gameId={game.id} />
+
+        {/* プレイルート管理カード */}
+        <PlayRouteCard gameId={game.id} />
       </div>
 
       {/* モーダル */}

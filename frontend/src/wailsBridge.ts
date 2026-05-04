@@ -6,6 +6,7 @@ import type { ApiResult } from "src/types/result";
 import type {
   InputGameData,
   GameType,
+  PlayRouteType,
   PlaySessionType,
   MonitoringGameStatus,
   GameImport,
@@ -107,6 +108,36 @@ function parseClearedAtInput(value?: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function playRouteApp(): {
+  CreatePlayRoute: (input: {
+    GameID: string;
+    Name: string;
+    SortOrder: number;
+  }) => Promise<{ success: boolean; data?: unknown; error?: { message?: string } }>;
+  ListPlayRoutesByGame: (
+    gameId: string,
+  ) => Promise<{ success: boolean; data?: unknown; error?: { message?: string } }>;
+  DeletePlayRoute: (
+    routeId: string,
+  ) => Promise<{ success: boolean; data?: unknown; error?: { message?: string } }>;
+} {
+  return (window as typeof window & { go: Record<string, Record<string, unknown>> }).go["app"][
+    "App"
+  ] as unknown as {
+    CreatePlayRoute: (input: {
+      GameID: string;
+      Name: string;
+      SortOrder: number;
+    }) => Promise<{ success: boolean; data?: unknown; error?: { message?: string } }>;
+    ListPlayRoutesByGame: (
+      gameId: string,
+    ) => Promise<{ success: boolean; data?: unknown; error?: { message?: string } }>;
+    DeletePlayRoute: (
+      routeId: string,
+    ) => Promise<{ success: boolean; data?: unknown; error?: { message?: string } }>;
+  };
+}
+
 export type WindowApi = {
   window: {
     minimize: () => Promise<void>;
@@ -155,6 +186,15 @@ export type WindowApi = {
     createSession: (duration: number, gameId: string) => Promise<ApiResult<void>>;
     getPlaySessions: (gameId: string) => Promise<ApiResult<PlaySessionType[]>>;
     deletePlaySession: (sessionId: string) => Promise<ApiResult<void>>;
+  };
+  playRoute: {
+    listByGame: (gameId: string) => Promise<ApiResult<PlayRouteType[]>>;
+    create: (input: {
+      gameId: string;
+      name: string;
+      sortOrder: number;
+    }) => Promise<ApiResult<PlayRouteType>>;
+    delete: (routeId: string) => Promise<ApiResult<void>>;
   };
   memo: {
     getAllMemos: () => Promise<ApiResult<MemoType[]>>;
@@ -528,6 +568,30 @@ export const createWailsBridge = (): WindowApi => {
       },
       deletePlaySession: async (sessionId) => {
         const result = await DeleteSession(sessionId);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+    },
+    playRoute: {
+      listByGame: async (gameId) => {
+        const result = await playRouteApp().ListPlayRoutesByGame(gameId);
+        return result.success
+          ? { success: true, data: (result.data ?? []) as PlayRouteType[] }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      create: async (input) => {
+        const result = await playRouteApp().CreatePlayRoute({
+          GameID: input.gameId,
+          Name: input.name,
+          SortOrder: input.sortOrder,
+        });
+        return result.success
+          ? { success: true, data: result.data as PlayRouteType }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      delete: async (routeId) => {
+        const result = await playRouteApp().DeletePlayRoute(routeId);
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
