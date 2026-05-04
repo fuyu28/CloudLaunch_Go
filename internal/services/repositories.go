@@ -39,6 +39,13 @@ type MemoRepository interface {
 	DeleteMemo(ctx context.Context, memoID string) error
 }
 
+// PlayRouteRepository defines the persistence boundary required by PlayRouteService.
+type PlayRouteRepository interface {
+	CreatePlayRoute(ctx context.Context, route models.PlayRoute) (*models.PlayRoute, error)
+	ListPlayRoutesByGame(ctx context.Context, gameID string) ([]models.PlayRoute, error)
+	DeletePlayRoute(ctx context.Context, routeID string) error
+}
+
 // CloudSyncRepository defines the persistence boundary required by CloudSyncService.
 type CloudSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)

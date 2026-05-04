@@ -207,12 +207,61 @@ func (repository *Repository) DeleteGame(ctx context.Context, gameID string) err
 	return error
 }
 
+// CreatePlayRoute はプレイルートを作成して返す。
+func (repository *Repository) CreatePlayRoute(ctx context.Context, route models.PlayRoute) (*models.PlayRoute, error) {
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PlayRoute" (gameId, name, sortOrder)
+		VALUES (?, ?, ?)
+	`, route.GameID, route.Name, route.SortOrder)
+	if err != nil {
+		return nil, err
+	}
+	return repository.findLatestPlayRoute(ctx, route.GameID, route.Name)
+}
+
+// ListPlayRoutesByGame はゲームID配下のプレイルート一覧を取得する。
+func (repository *Repository) ListPlayRoutesByGame(ctx context.Context, gameID string) (routes []models.PlayRoute, err error) {
+	rows, err := repository.connection.QueryContext(ctx, `
+		SELECT id, gameId, name, sortOrder, createdAt
+		FROM "PlayRoute"
+		WHERE gameId = ?
+		ORDER BY sortOrder ASC, createdAt ASC
+	`, gameID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	routes = make([]models.PlayRoute, 0)
+	for rows.Next() {
+		route, err := scanPlayRoute(rows)
+		if err != nil {
+			return nil, err
+		}
+		routes = append(routes, *route)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return routes, nil
+}
+
+// DeletePlayRoute はプレイルートを削除する。
+func (repository *Repository) DeletePlayRoute(ctx context.Context, routeID string) error {
+	_, err := repository.connection.ExecContext(ctx, `DELETE FROM "PlayRoute" WHERE id = ?`, routeID)
+	return err
+}
+
 // CreatePlaySession はプレイセッションを作成して返す。
 func (repository *Repository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "PlaySession" (gameId, playedAt, duration)
-		VALUES (?, ?, ?)
-	`, session.GameID, session.PlayedAt, session.Duration)
+		INSERT INTO "PlaySession" (gameId, playRouteId, playedAt, duration)
+		VALUES (?, ?, ?, ?)
+	`, session.GameID, session.PlayRouteID, session.PlayedAt, session.Duration)
 	if error != nil {
 		return nil, error
 	}
@@ -223,7 +272,7 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session mod
 // GetPlaySessionByID はID指定でセッションを取得する。
 func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, updatedAt
+		SELECT id, gameId, playRouteId, playedAt, duration, updatedAt
 		FROM "PlaySession" WHERE id = ?
 	`, sessionID)
 	session, error := scanPlaySession(row)
@@ -239,7 +288,7 @@ func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
 func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []models.PlaySession, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, gameId, playedAt, duration, updatedAt
+		SELECT id, gameId, playRouteId, playedAt, duration, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
 	`, gameID)
 	if err != nil {
@@ -327,14 +376,15 @@ func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, updatedAt)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO "PlaySession" (id, gameId, playRouteId, playedAt, duration, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			gameId = excluded.gameId,
+			playRouteId = excluded.playRouteId,
 			playedAt = excluded.playedAt,
 			duration = excluded.duration,
 			updatedAt = excluded.updatedAt
-	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.UpdatedAt)
+	`, session.ID, session.GameID, session.PlayRouteID, session.PlayedAt, session.Duration, session.UpdatedAt)
 	return error
 }
 
@@ -539,10 +589,12 @@ func normalizeProgressPlayStatus(
 
 // scanPlaySession は1行分のセッションデータを読み取る。
 func scanPlaySession(row scanner) (*models.PlaySession, error) {
+	var playRouteID sql.NullString
 	session := models.PlaySession{}
 	error := row.Scan(
 		&session.ID,
 		&session.GameID,
+		&playRouteID,
 		&session.PlayedAt,
 		&session.Duration,
 		&session.UpdatedAt,
@@ -550,8 +602,17 @@ func scanPlaySession(row scanner) (*models.PlaySession, error) {
 	if error != nil {
 		return nil, error
 	}
-
+	session.PlayRouteID = nullStringPtr(playRouteID)
 	return &session, nil
+}
+
+func scanPlayRoute(row scanner) (*models.PlayRoute, error) {
+	route := models.PlayRoute{}
+	err := row.Scan(&route.ID, &route.GameID, &route.Name, &route.SortOrder, &route.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &route, nil
 }
 
 // scanMemo は1行分のメモデータを読み取る。
@@ -594,10 +655,21 @@ func (repository *Repository) findLatestGame(ctx context.Context, title string, 
 // findLatestPlaySession は直近のプレイセッションを取得する。
 func (repository *Repository) findLatestPlaySession(ctx context.Context, gameID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, updatedAt
+		SELECT id, gameId, playRouteId, playedAt, duration, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1
 	`, gameID)
 	return scanPlaySession(row)
+}
+
+func (repository *Repository) findLatestPlayRoute(ctx context.Context, gameID string, name string) (*models.PlayRoute, error) {
+	row := repository.connection.QueryRowContext(ctx, `
+		SELECT id, gameId, name, sortOrder, createdAt
+		FROM "PlayRoute"
+		WHERE gameId = ? AND name = ?
+		ORDER BY createdAt DESC
+		LIMIT 1
+	`, gameID, name)
+	return scanPlayRoute(row)
 }
 
 // findLatestMemo は直近のメモを取得する。

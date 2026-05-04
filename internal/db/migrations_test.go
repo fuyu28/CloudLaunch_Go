@@ -14,6 +14,7 @@ func TestApplyMigrationsBuildsCurrentSchema(t *testing.T) {
 
 	assertTableExists(t, connection, "Game")
 	assertTableExists(t, connection, "PlaySession")
+	assertTableExists(t, connection, "PlayRoute")
 	assertTableExists(t, connection, "Memo")
 
 	assertTableNotExists(t, connection, "Upload")
@@ -25,7 +26,10 @@ func TestApplyMigrationsBuildsCurrentSchema(t *testing.T) {
 		"totalPlayTime", "lastPlayed", "clearedAt",
 	})
 	assertTableColumns(t, connection, "PlaySession", []string{
-		"id", "gameId", "playedAt", "duration", "updatedAt",
+		"id", "gameId", "playRouteId", "playedAt", "duration", "updatedAt",
+	})
+	assertTableColumns(t, connection, "PlayRoute", []string{
+		"id", "gameId", "name", "sortOrder", "createdAt",
 	})
 
 	assertColumnMissing(t, connection, "Game", "playStatus")

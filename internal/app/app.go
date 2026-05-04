@@ -22,6 +22,7 @@ type App struct {
 	Config              config.Config
 	Logger              *slog.Logger
 	GameService         *services.GameService
+	PlayRouteService    *services.PlayRouteService
 	SessionService      *services.SessionService
 	MemoService         *services.MemoService
 	MemoFiles           *memo.FileManager
@@ -121,6 +122,7 @@ func (app *App) Shutdown(ctx context.Context) error {
 
 func (app *App) configureServices(repository *db.Repository, credentialStore credentials.Store) {
 	app.GameService = services.NewGameService(repository, app.Logger)
+	app.PlayRouteService = services.NewPlayRouteService(repository, app.Logger)
 	app.SessionService = services.NewSessionService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)

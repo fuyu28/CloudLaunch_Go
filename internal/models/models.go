@@ -32,11 +32,21 @@ type Game struct {
 
 // PlaySession はプレイセッションを表す。
 type PlaySession struct {
+	ID          string    `json:"id"`
+	GameID      string    `json:"gameId"`
+	PlayRouteID *string   `json:"playRouteId,omitempty"`
+	PlayedAt    time.Time `json:"playedAt"`
+	Duration    int64     `json:"duration"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// PlayRoute はゲームごとのプレイルートを表す。
+type PlayRoute struct {
 	ID        string    `json:"id"`
 	GameID    string    `json:"gameId"`
-	PlayedAt  time.Time `json:"playedAt"`
-	Duration  int64     `json:"duration"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Name      string    `json:"name"`
+	SortOrder int       `json:"sortOrder"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // Memo はメモ情報を表す。
