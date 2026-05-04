@@ -53,6 +53,9 @@ func TestAppExportGameData_WritesUserVisibleArtifacts(t *testing.T) {
 	if payload.Games[0].ID != game.ID {
 		t.Fatalf("expected exported game id %q, got %q", game.ID, payload.Games[0].ID)
 	}
+	if len(payload.Routes) != 1 || payload.Routes[0].GameID != game.ID {
+		t.Fatalf("expected 1 route in export payload for %q, got %#v", game.ID, payload.Routes)
+	}
 	if len(payload.SessionRows) != len(sessions) {
 		t.Fatalf("expected %d sessions in export payload, got %d", len(sessions), len(payload.SessionRows))
 	}
@@ -277,13 +280,19 @@ func seedExportFixture(t *testing.T, repository *db.Repository) (*models.Game, [
 		TotalPlayTime: 5400,
 		LastPlayed:    &lastPlayed,
 	})
+	route := createRouteForTest(t, repository, models.PlayRoute{
+		GameID:    game.ID,
+		Name:      "Common",
+		SortOrder: 0,
+	})
 
 	firstPlayedAt := time.Date(2026, 4, 27, 20, 0, 0, 0, time.UTC)
 	secondPlayedAt := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
 	session1 := createSessionForTest(t, repository, models.PlaySession{
-		GameID:   game.ID,
-		PlayedAt: firstPlayedAt,
-		Duration: 1800,
+		GameID:      game.ID,
+		PlayRouteID: &route.ID,
+		PlayedAt:    firstPlayedAt,
+		Duration:    1800,
 	})
 	session2 := createSessionForTest(t, repository, models.PlaySession{
 		GameID:   game.ID,
@@ -310,6 +319,16 @@ func createSessionForTest(t *testing.T, repository *db.Repository, session model
 	created, err := repository.CreatePlaySession(context.Background(), session)
 	if err != nil {
 		t.Fatalf("failed to create test session: %v", err)
+	}
+	return created
+}
+
+func createRouteForTest(t *testing.T, repository *db.Repository, route models.PlayRoute) *models.PlayRoute {
+	t.Helper()
+
+	created, err := repository.CreatePlayRoute(context.Background(), route)
+	if err != nil {
+		t.Fatalf("failed to create test route: %v", err)
 	}
 	return created
 }

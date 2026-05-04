@@ -256,6 +256,12 @@ func (repository *Repository) DeletePlayRoute(ctx context.Context, routeID strin
 	return err
 }
 
+// DeletePlayRoutesByGame はゲームID配下のプレイルートを削除する。
+func (repository *Repository) DeletePlayRoutesByGame(ctx context.Context, gameID string) error {
+	_, err := repository.connection.ExecContext(ctx, `DELETE FROM "PlayRoute" WHERE gameId = ?`, gameID)
+	return err
+}
+
 // CreatePlaySession はプレイセッションを作成して返す。
 func (repository *Repository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
 	_, error := repository.connection.ExecContext(ctx, `
@@ -386,6 +392,20 @@ func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session
 			updatedAt = excluded.updatedAt
 	`, session.ID, session.GameID, session.PlayRouteID, session.PlayedAt, session.Duration, session.UpdatedAt)
 	return error
+}
+
+// UpsertPlayRouteSync はID指定でプレイルートを追加/更新する。
+func (repository *Repository) UpsertPlayRouteSync(ctx context.Context, route models.PlayRoute) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PlayRoute" (id, gameId, name, sortOrder, createdAt)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			gameId = excluded.gameId,
+			name = excluded.name,
+			sortOrder = excluded.sortOrder,
+			createdAt = excluded.createdAt
+	`, route.ID, route.GameID, route.Name, route.SortOrder, route.CreatedAt)
+	return err
 }
 
 // CreateMemo はメモを作成して返す。

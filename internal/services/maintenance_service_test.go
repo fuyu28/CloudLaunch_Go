@@ -47,6 +47,9 @@ func TestMaintenanceServiceExportGameDataWritesArtifacts(t *testing.T) {
 	if len(payload.Games) != 1 || payload.Games[0].ID != game.ID {
 		t.Fatalf("unexpected exported games: %#v", payload.Games)
 	}
+	if len(payload.Routes) != 1 || payload.Routes[0].GameID != game.ID {
+		t.Fatalf("unexpected exported routes: %#v", payload.Routes)
+	}
 	if len(payload.SessionRows) != len(sessions) {
 		t.Fatalf("expected %d sessions, got %d", len(sessions), len(payload.SessionRows))
 	}
@@ -290,13 +293,19 @@ func seedMaintenanceFixture(t *testing.T, repository *db.Repository) (*models.Ga
 		TotalPlayTime: 5400,
 		LastPlayed:    &lastPlayed,
 	})
+	route := createMaintenanceRoute(t, repository, models.PlayRoute{
+		GameID:    game.ID,
+		Name:      "Common",
+		SortOrder: 0,
+	})
 
 	firstPlayedAt := time.Date(2026, 4, 27, 20, 0, 0, 0, time.UTC)
 	secondPlayedAt := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
 	session1 := createMaintenanceSession(t, repository, models.PlaySession{
-		GameID:   game.ID,
-		PlayedAt: firstPlayedAt,
-		Duration: 1800,
+		GameID:      game.ID,
+		PlayRouteID: &route.ID,
+		PlayedAt:    firstPlayedAt,
+		Duration:    1800,
 	})
 	session2 := createMaintenanceSession(t, repository, models.PlaySession{
 		GameID:   game.ID,
@@ -323,6 +332,16 @@ func createMaintenanceSession(t *testing.T, repository *db.Repository, session m
 	created, err := repository.CreatePlaySession(context.Background(), session)
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
+	}
+	return created
+}
+
+func createMaintenanceRoute(t *testing.T, repository *db.Repository, route models.PlayRoute) *models.PlayRoute {
+	t.Helper()
+
+	created, err := repository.CreatePlayRoute(context.Background(), route)
+	if err != nil {
+		t.Fatalf("failed to create route: %v", err)
 	}
 	return created
 }

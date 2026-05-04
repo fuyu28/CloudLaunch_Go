@@ -27,6 +27,10 @@ func (noopAppCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, ga
 	return nil, nil
 }
 
+func (noopAppCloudSyncRepository) ListPlayRoutesByGame(ctx context.Context, gameID string) ([]models.PlayRoute, error) {
+	return nil, nil
+}
+
 func (noopAppCloudSyncRepository) UpsertGameSync(ctx context.Context, game models.Game) error {
 	return nil
 }
@@ -35,7 +39,15 @@ func (noopAppCloudSyncRepository) DeletePlaySessionsByGame(ctx context.Context, 
 	return nil
 }
 
+func (noopAppCloudSyncRepository) DeletePlayRoutesByGame(ctx context.Context, gameID string) error {
+	return nil
+}
+
 func (noopAppCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+	return nil
+}
+
+func (noopAppCloudSyncRepository) UpsertPlayRouteSync(ctx context.Context, route models.PlayRoute) error {
 	return nil
 }
 

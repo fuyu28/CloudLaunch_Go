@@ -32,6 +32,7 @@ type GameExportStatistic struct {
 type GameExportPayload struct {
 	ExportedAt  time.Time             `json:"exportedAt"`
 	Games       []models.Game         `json:"games"`
+	Routes      []models.PlayRoute    `json:"routes"`
 	Statistics  []GameExportStatistic `json:"statistics"`
 	SessionRows []models.PlaySession  `json:"sessions"`
 }
@@ -53,6 +54,7 @@ type BackupManifest struct {
 type MaintenanceRepository interface {
 	ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error)
+	ListPlayRoutesByGame(ctx context.Context, gameID string) ([]models.PlayRoute, error)
 }
 
 type MaintenanceRuntimeHooks struct {
@@ -101,8 +103,16 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 	}
 
 	stats := make([]GameExportStatistic, 0, len(games))
+	routes := make([]models.PlayRoute, 0, len(games))
 	sessionRows := make([]models.PlaySession, 0, len(games)*2)
 	for _, game := range games {
+		gameRoutes, err := service.repository.ListPlayRoutesByGame(ctx, game.ID)
+		if err != nil {
+			service.logger.Error("プレイルート取得に失敗しました", "error", err, "operation", "ExportGameData.listPlayRoutes", "gameId", game.ID)
+			return GameExportResult{}, newServiceError("プレイルート取得に失敗しました", err.Error())
+		}
+		routes = append(routes, gameRoutes...)
+
 		sessions, err := service.repository.ListPlaySessionsByGame(ctx, game.ID)
 		if err != nil {
 			service.logger.Error("セッション取得に失敗しました", "error", err, "operation", "ExportGameData.listSessions", "gameId", game.ID)
@@ -141,6 +151,7 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 	payload := GameExportPayload{
 		ExportedAt:  now,
 		Games:       games,
+		Routes:      routes,
 		Statistics:  stats,
 		SessionRows: sessionRows,
 	}

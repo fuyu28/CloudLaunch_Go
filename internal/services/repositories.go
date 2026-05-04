@@ -51,9 +51,12 @@ type CloudSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)
 	ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error)
+	ListPlayRoutesByGame(ctx context.Context, gameID string) ([]models.PlayRoute, error)
 	UpsertGameSync(ctx context.Context, game models.Game) error
 	DeletePlaySessionsByGame(ctx context.Context, gameID string) error
+	DeletePlayRoutesByGame(ctx context.Context, gameID string) error
 	UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error
+	UpsertPlayRouteSync(ctx context.Context, route models.PlayRoute) error
 	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
 	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
 	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error

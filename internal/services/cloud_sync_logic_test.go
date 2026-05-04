@@ -565,6 +565,12 @@ func TestCloudImageLocalPathRejectsKeyWithoutHash(t *testing.T) {
 type fakeCloudSyncStorage struct {
 	savedMetadata       *storage.CloudMetadata
 	deletedPrefix       string
+	savedRoutesKey      string
+	savedRouteKeys      []string
+	savedRoutes         []storage.CloudPlayRouteRecord
+	saveRoutesErr       error
+	loadRoutesErr       error
+	loadedRoutes        []storage.CloudPlayRouteRecord
 	savedSessionsKey    string
 	savedSessionKeys    []string
 	savedSessions       []storage.CloudSessionRecord
@@ -642,6 +648,23 @@ func (fake *fakeCloudSyncStorage) DeleteObjectsByPrefix(ctx context.Context, cli
 	return nil
 }
 
+func (fake *fakeCloudSyncStorage) SavePlayRoutes(ctx context.Context, client *s3.Client, bucket string, key string, routes []storage.CloudPlayRouteRecord) error {
+	if fake.saveRoutesErr != nil {
+		return fake.saveRoutesErr
+	}
+	fake.savedRoutesKey = key
+	fake.savedRouteKeys = append(fake.savedRouteKeys, key)
+	fake.savedRoutes = append([]storage.CloudPlayRouteRecord(nil), routes...)
+	return nil
+}
+
+func (fake *fakeCloudSyncStorage) LoadPlayRoutes(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudPlayRouteRecord, error) {
+	if fake.loadRoutesErr != nil {
+		return nil, fake.loadRoutesErr
+	}
+	return append([]storage.CloudPlayRouteRecord(nil), fake.loadedRoutes...), nil
+}
+
 func (fake *fakeCloudSyncStorage) SaveSessions(ctx context.Context, client *s3.Client, bucket string, key string, sessions []storage.CloudSessionRecord) error {
 	if fake.saveSessionsErr != nil {
 		return fake.saveSessionsErr
@@ -673,7 +696,9 @@ func (fake *fakeCloudSyncStorage) DownloadObject(ctx context.Context, client *s3
 
 type trackingCloudSyncRepository struct {
 	upsertedGame          models.Game
+	deletedRoutesGameID   string
 	deletedSessionsGameID string
+	upsertedRoutes        []models.PlayRoute
 	upsertedSessions      []models.PlaySession
 	updatedTotalGameID    string
 	updatedTotalPlayTime  int64
@@ -691,9 +716,12 @@ func newNoopCloudSyncRepository() fakeCloudSyncRepository {
 		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
 			return nil, nil
 		},
+		listPlayRoutesByGameFn:     func(ctx context.Context, gameID string) ([]models.PlayRoute, error) { return nil, nil },
 		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
 		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlayRoutesByGameFn:   func(ctx context.Context, gameID string) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlayRouteSyncFn:      func(ctx context.Context, route models.PlayRoute) error { return nil },
 		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
@@ -709,6 +737,10 @@ func (repository *trackingCloudSyncRepository) ListGames(ctx context.Context, se
 }
 
 func (repository *trackingCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+	return nil, nil
+}
+
+func (repository *trackingCloudSyncRepository) ListPlayRoutesByGame(ctx context.Context, gameID string) ([]models.PlayRoute, error) {
 	return nil, nil
 }
 
@@ -728,11 +760,21 @@ func (repository *trackingCloudSyncRepository) DeletePlaySessionsByGame(ctx cont
 	return nil
 }
 
+func (repository *trackingCloudSyncRepository) DeletePlayRoutesByGame(ctx context.Context, gameID string) error {
+	repository.deletedRoutesGameID = gameID
+	return nil
+}
+
 func (repository *trackingCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
 	if repository.upsertSessionErr != nil {
 		return repository.upsertSessionErr
 	}
 	repository.upsertedSessions = append(repository.upsertedSessions, session)
+	return nil
+}
+
+func (repository *trackingCloudSyncRepository) UpsertPlayRouteSync(ctx context.Context, route models.PlayRoute) error {
+	repository.upsertedRoutes = append(repository.upsertedRoutes, route)
 	return nil
 }
 
@@ -829,12 +871,14 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 
 	playedAt := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
 	updatedAt := playedAt.Add(30 * time.Minute)
+	routeID := "route-1"
 	sessions := []models.PlaySession{
 		{
-			ID:        "session-1",
-			PlayedAt:  playedAt,
-			Duration:  45,
-			UpdatedAt: updatedAt,
+			ID:          "session-1",
+			PlayRouteID: &routeID,
+			PlayedAt:    playedAt,
+			Duration:    45,
+			UpdatedAt:   updatedAt,
 		},
 		{
 			ID:        "session-2",
@@ -855,8 +899,33 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 	if composed[0].Duration != 45 {
 		t.Fatalf("expected first session fields to be copied")
 	}
+	if composed[0].PlayRouteID == nil || *composed[0].PlayRouteID != routeID {
+		t.Fatalf("expected play route id to be copied")
+	}
 	if !composed[1].PlayedAt.Equal(sessions[1].PlayedAt) || !composed[1].UpdatedAt.Equal(sessions[1].UpdatedAt) {
 		t.Fatalf("expected second session timestamps to be copied")
+	}
+}
+
+func TestComposeCloudRoutesCopiesOrderAndRouteFields(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, 4, 24, 7, 0, 0, 0, time.UTC)
+	routes := []models.PlayRoute{
+		{ID: "route-1", Name: "Common", SortOrder: 0, CreatedAt: createdAt},
+		{ID: "route-2", Name: "Heroine", SortOrder: 1, CreatedAt: createdAt.Add(time.Minute)},
+	}
+
+	composed := composeCloudRoutes(routes)
+
+	if len(composed) != 2 {
+		t.Fatalf("expected two route records")
+	}
+	if composed[0].ID != "route-1" || composed[1].Name != "Heroine" {
+		t.Fatalf("expected route fields to be copied")
+	}
+	if composed[1].SortOrder != 1 || !composed[1].CreatedAt.Equal(routes[1].CreatedAt) {
+		t.Fatalf("expected route metadata to be copied")
 	}
 }
 
@@ -865,11 +934,13 @@ func TestComposeLocalPlaySessionCopiesCloudFields(t *testing.T) {
 
 	playedAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
 	updatedAt := playedAt.Add(15 * time.Minute)
+	routeID := "route-1"
 	cloudSession := storage.CloudSessionRecord{
-		ID:        "session-1",
-		PlayedAt:  playedAt,
-		Duration:  75,
-		UpdatedAt: updatedAt,
+		ID:          "session-1",
+		PlayRouteID: &routeID,
+		PlayedAt:    playedAt,
+		Duration:    75,
+		UpdatedAt:   updatedAt,
 	}
 
 	composed := composeLocalPlaySession("game-1", cloudSession)
@@ -880,7 +951,31 @@ func TestComposeLocalPlaySessionCopiesCloudFields(t *testing.T) {
 	if composed.Duration != 75 {
 		t.Fatalf("expected cloud session fields to be copied")
 	}
+	if composed.PlayRouteID == nil || *composed.PlayRouteID != routeID {
+		t.Fatalf("expected play route id to be copied")
+	}
 	if !composed.PlayedAt.Equal(playedAt) || !composed.UpdatedAt.Equal(updatedAt) {
 		t.Fatalf("expected timestamps to be copied")
+	}
+}
+
+func TestComposeLocalPlayRouteCopiesCloudFields(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, 4, 24, 6, 0, 0, 0, time.UTC)
+	cloudRoute := storage.CloudPlayRouteRecord{
+		ID:        "route-1",
+		Name:      "Common",
+		SortOrder: 0,
+		CreatedAt: createdAt,
+	}
+
+	composed := composeLocalPlayRoute("game-1", cloudRoute)
+
+	if composed.ID != "route-1" || composed.GameID != "game-1" {
+		t.Fatalf("expected identifiers to be copied")
+	}
+	if composed.Name != "Common" || composed.SortOrder != 0 || !composed.CreatedAt.Equal(createdAt) {
+		t.Fatalf("expected route fields to be copied")
 	}
 }

@@ -33,6 +33,7 @@ import (
 
 const cloudMetadataVersion = 2
 const cloudSessionsFileName = "sessions.json"
+const cloudRoutesFileName = "routes.json"
 const maxRemoteImageBytes = 10 << 20
 
 var remoteImageHTTPClient = &http.Client{Timeout: 15 * time.Second}
@@ -85,6 +86,8 @@ type cloudSyncStorage interface {
 	DeleteObjectsByPrefix(ctx context.Context, client *s3.Client, bucket string, prefix string) error
 	SaveSessions(ctx context.Context, client *s3.Client, bucket string, key string, sessions []storage.CloudSessionRecord) error
 	LoadSessions(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudSessionRecord, error)
+	SavePlayRoutes(ctx context.Context, client *s3.Client, bucket string, key string, routes []storage.CloudPlayRouteRecord) error
+	LoadPlayRoutes(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudPlayRouteRecord, error)
 	UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error
 	DownloadObject(ctx context.Context, client *s3.Client, bucket string, key string) ([]byte, error)
 }
@@ -145,6 +148,14 @@ func (storageCloudSyncStorage) SaveSessions(ctx context.Context, client *s3.Clie
 
 func (storageCloudSyncStorage) LoadSessions(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudSessionRecord, error) {
 	return storage.LoadSessions(ctx, client, bucket, key)
+}
+
+func (storageCloudSyncStorage) SavePlayRoutes(ctx context.Context, client *s3.Client, bucket string, key string, routes []storage.CloudPlayRouteRecord) error {
+	return storage.SavePlayRoutes(ctx, client, bucket, key, routes)
+}
+
+func (storageCloudSyncStorage) LoadPlayRoutes(ctx context.Context, client *s3.Client, bucket string, key string) ([]storage.CloudPlayRouteRecord, error) {
+	return storage.LoadPlayRoutes(ctx, client, bucket, key)
 }
 
 func (storageCloudSyncStorage) UploadBytes(ctx context.Context, client *s3.Client, bucket string, key string, payload []byte, contentType string) error {
@@ -319,6 +330,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 
 type localGameBundle struct {
 	Game     models.Game
+	Routes   []models.PlayRoute
 	Sessions []models.PlaySession
 }
 
@@ -345,6 +357,10 @@ type mergedSessionsResult struct {
 
 func cloudSessionsKey(gameID string) string {
 	return fmt.Sprintf("games/%s/%s", gameID, cloudSessionsFileName)
+}
+
+func cloudRoutesKey(gameID string) string {
+	return fmt.Sprintf("games/%s/%s", gameID, cloudRoutesFileName)
 }
 
 func determineGameSyncAction(local localGameBundle, hasLocal bool, cloud storage.CloudGameMetadata, hasCloud bool) gameSyncAction {
@@ -428,7 +444,7 @@ func (service *CloudSyncService) syncSingleGame(
 			existing = &cloud
 			operation = "sync.buildCloudGame"
 		}
-		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, local.Game, composeCloudSessions(local.Sessions), existing)
+		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, local.Game, composeCloudRoutes(local.Routes), composeCloudSessions(local.Sessions), existing)
 		if err != nil {
 			service.logger.Error("クラウド更新に失敗", "operation", operation, "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -449,12 +465,17 @@ func (service *CloudSyncService) syncSingleGame(
 			currentLocal = &local.Game
 			operation = "sync.applyCloudGame"
 		}
+		cloudRoutes, err := service.loadCloudRoutes(ctx, client, bucket, cloud.ID)
+		if err != nil {
+			service.logger.Error("クラウドルート取得に失敗", "operation", operation+".loadCloudRoutes", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
 		cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, cloud.ID)
 		if err != nil {
 			service.logger.Error("クラウドセッション取得に失敗", "operation", operation+".loadCloudSessions", "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
 		}
-		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, cloud, currentLocal, cloudSessions)
+		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, cloud, currentLocal, cloudRoutes, cloudSessions)
 		if err != nil {
 			service.logger.Error("ローカル更新に失敗", "operation", operation, "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -488,14 +509,25 @@ func (service *CloudSyncService) syncExistingGamePair(
 	local localGameBundle,
 	cloud storage.CloudGameMetadata,
 ) (gameSyncIterationResult, error) {
+	cloudRoutes, err := service.loadCloudRoutes(ctx, client, bucket, gameID)
+	if err != nil {
+		service.logger.Error("クラウドルート取得に失敗", "operation", "sync.loadCloudRoutes", "gameId", gameID, "error", err)
+		return gameSyncIterationResult{}, err
+	}
+
 	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, gameID)
 	if err != nil {
 		service.logger.Error("クラウドセッション取得に失敗", "operation", "sync.loadCloudSessions", "gameId", gameID, "error", err)
 		return gameSyncIterationResult{}, err
 	}
 
+	mergedRoutes := mergeRoutes(local.Routes, cloudRoutes)
 	mergedSessions := mergeSessions(local.Sessions, cloudSessions)
-	if mergedSessions.Changed {
+	if mergedRoutes.Changed || mergedSessions.Changed {
+		if err := service.upsertMergedLocalRoutes(ctx, gameID, mergedRoutes.Routes); err != nil {
+			service.logger.Error("ローカルプレイルート統合に失敗", "operation", "sync.upsertMergedLocalRoutes", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
 		if err := service.upsertMergedLocalSessions(ctx, gameID, mergedSessions.Sessions); err != nil {
 			service.logger.Error("ローカルセッション統合に失敗", "operation", "sync.upsertMergedLocalSessions", "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -507,7 +539,7 @@ func (service *CloudSyncService) syncExistingGamePair(
 
 	switch determineGameSyncAction(local, true, cloud, true) {
 	case gameSyncActionUpload:
-		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, mergedGame, mergedSessions.Sessions, &cloud)
+		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, mergedGame, mergedRoutes.Routes, mergedSessions.Sessions, &cloud)
 		if err != nil {
 			service.logger.Error("クラウド更新に失敗", "operation", "sync.buildCloudGame", "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -523,13 +555,19 @@ func (service *CloudSyncService) syncExistingGamePair(
 			shouldSaveMetadata: true,
 		}, nil
 	case gameSyncActionDownload:
+		if mergedRoutes.Changed {
+			if err := service.cloudStorage.SavePlayRoutes(ctx, client, bucket, cloudRoutesKey(gameID), mergedRoutes.Routes); err != nil {
+				service.logger.Error("クラウドルート更新に失敗", "operation", "sync.saveMergedRoutes.cloudWins", "gameId", gameID, "error", err)
+				return gameSyncIterationResult{}, err
+			}
+		}
 		if mergedSessions.Changed {
 			if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), mergedSessions.Sessions); err != nil {
 				service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.cloudWins", "gameId", gameID, "error", err)
 				return gameSyncIterationResult{}, err
 			}
 		}
-		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedSessions.Sessions)
+		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedRoutes.Routes, mergedSessions.Sessions)
 		if err != nil {
 			service.logger.Error("ローカル更新に失敗", "operation", "sync.applyCloudGame", "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -542,16 +580,22 @@ func (service *CloudSyncService) syncExistingGamePair(
 				DownloadedSessions: mergedSessions.DownloadedCount,
 				DownloadedImages:   downloadedImages,
 			},
-			shouldSaveMetadata: mergedSessions.Changed,
+			shouldSaveMetadata: mergedRoutes.Changed || mergedSessions.Changed,
 		}, nil
 	default:
+		if mergedRoutes.Changed {
+			if err := service.cloudStorage.SavePlayRoutes(ctx, client, bucket, cloudRoutesKey(gameID), mergedRoutes.Routes); err != nil {
+				service.logger.Error("クラウドルート更新に失敗", "operation", "sync.saveMergedRoutes.sameTimestamp", "gameId", gameID, "error", err)
+				return gameSyncIterationResult{}, err
+			}
+		}
 		if mergedSessions.Changed {
 			if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), mergedSessions.Sessions); err != nil {
 				service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.sameTimestamp", "gameId", gameID, "error", err)
 				return gameSyncIterationResult{}, err
 			}
 		}
-		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedSessions.Sessions)
+		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedRoutes.Routes, mergedSessions.Sessions)
 		if err != nil {
 			service.logger.Error("ローカル更新に失敗", "operation", "sync.applyMergedCloudGame", "gameId", gameID, "error", err)
 			return gameSyncIterationResult{}, err
@@ -567,7 +611,7 @@ func (service *CloudSyncService) syncExistingGamePair(
 		return gameSyncIterationResult{
 			cloudGame:          &mergedCloudGame,
 			summary:            summary,
-			shouldSaveMetadata: mergedSessions.Changed,
+			shouldSaveMetadata: mergedRoutes.Changed || mergedSessions.Changed,
 		}, nil
 	}
 }
@@ -596,7 +640,11 @@ func (service *CloudSyncService) loadLocalGames(ctx context.Context, gameID stri
 		if err != nil {
 			return nil, err
 		}
-		result[game.ID] = localGameBundle{Game: *game, Sessions: sessions}
+		routes, err := service.repository.ListPlayRoutesByGame(ctx, gameID)
+		if err != nil {
+			return nil, err
+		}
+		result[game.ID] = localGameBundle{Game: *game, Routes: routes, Sessions: sessions}
 		return result, nil
 	}
 
@@ -609,7 +657,11 @@ func (service *CloudSyncService) loadLocalGames(ctx context.Context, gameID stri
 		if err != nil {
 			return nil, err
 		}
-		result[game.ID] = localGameBundle{Game: game, Sessions: sessions}
+		routes, err := service.repository.ListPlayRoutesByGame(ctx, game.ID)
+		if err != nil {
+			return nil, err
+		}
+		result[game.ID] = localGameBundle{Game: game, Routes: routes, Sessions: sessions}
 	}
 	return result, nil
 }
@@ -619,11 +671,15 @@ func (service *CloudSyncService) buildCloudGame(
 	client *s3.Client,
 	bucket string,
 	game models.Game,
+	routes []storage.CloudPlayRouteRecord,
 	sessions []storage.CloudSessionRecord,
 	existing *storage.CloudGameMetadata,
 ) (storage.CloudGameMetadata, int, error) {
 	cloudGame := composeCloudGameMetadata(game)
 
+	if err := service.cloudStorage.SavePlayRoutes(ctx, client, bucket, cloudRoutesKey(game.ID), routes); err != nil {
+		return cloudGame, 0, err
+	}
 	if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(game.ID), sessions); err != nil {
 		return cloudGame, 0, err
 	}
@@ -665,10 +721,24 @@ func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionR
 	records := make([]storage.CloudSessionRecord, 0, len(sessions))
 	for _, session := range sessions {
 		records = append(records, storage.CloudSessionRecord{
-			ID:        session.ID,
-			PlayedAt:  session.PlayedAt,
-			Duration:  session.Duration,
-			UpdatedAt: session.UpdatedAt,
+			ID:          session.ID,
+			PlayRouteID: session.PlayRouteID,
+			PlayedAt:    session.PlayedAt,
+			Duration:    session.Duration,
+			UpdatedAt:   session.UpdatedAt,
+		})
+	}
+	return records
+}
+
+func composeCloudRoutes(routes []models.PlayRoute) []storage.CloudPlayRouteRecord {
+	records := make([]storage.CloudPlayRouteRecord, 0, len(routes))
+	for _, route := range routes {
+		records = append(records, storage.CloudPlayRouteRecord{
+			ID:        route.ID,
+			Name:      route.Name,
+			SortOrder: route.SortOrder,
+			CreatedAt: route.CreatedAt,
 		})
 	}
 	return records
@@ -676,11 +746,22 @@ func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionR
 
 func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
 	return models.PlaySession{
-		ID:        session.ID,
+		ID:          session.ID,
+		GameID:      gameID,
+		PlayRouteID: session.PlayRouteID,
+		PlayedAt:    session.PlayedAt,
+		Duration:    session.Duration,
+		UpdatedAt:   session.UpdatedAt,
+	}
+}
+
+func composeLocalPlayRoute(gameID string, route storage.CloudPlayRouteRecord) models.PlayRoute {
+	return models.PlayRoute{
+		ID:        route.ID,
 		GameID:    gameID,
-		PlayedAt:  session.PlayedAt,
-		Duration:  session.Duration,
-		UpdatedAt: session.UpdatedAt,
+		Name:      route.Name,
+		SortOrder: route.SortOrder,
+		CreatedAt: route.CreatedAt,
 	}
 }
 
@@ -690,6 +771,7 @@ func (service *CloudSyncService) applyCloudGame(
 	bucket string,
 	cloud storage.CloudGameMetadata,
 	local *models.Game,
+	cloudRoutes []storage.CloudPlayRouteRecord,
 	cloudSessions []storage.CloudSessionRecord,
 ) (int, error) {
 	imagePath, downloadedImages, err := service.downloadCloudImagePath(ctx, client, bucket, cloud)
@@ -701,6 +783,9 @@ func (service *CloudSyncService) applyCloudGame(
 		return 0, err
 	}
 
+	if err := service.upsertMergedLocalRoutes(ctx, cloud.ID, cloudRoutes); err != nil {
+		return 0, err
+	}
 	if err := service.upsertMergedLocalSessions(ctx, cloud.ID, cloudSessions); err != nil {
 		return 0, err
 	}
@@ -792,6 +877,88 @@ func (service *CloudSyncService) loadCloudSessions(
 	return sessions, nil
 }
 
+func (service *CloudSyncService) loadCloudRoutes(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+) ([]storage.CloudPlayRouteRecord, error) {
+	key := cloudRoutesKey(gameID)
+	routes, err := service.cloudStorage.LoadPlayRoutes(ctx, client, bucket, key)
+	if err != nil {
+		if isNotFoundError(err) {
+			return []storage.CloudPlayRouteRecord{}, nil
+		}
+		return nil, err
+	}
+	return routes, nil
+}
+
+type mergedRoutesResult struct {
+	Routes     []storage.CloudPlayRouteRecord
+	Changed    bool
+	Uploaded   int
+	Downloaded int
+}
+
+func mergeRoutes(localRoutes []models.PlayRoute, cloudRoutes []storage.CloudPlayRouteRecord) mergedRoutesResult {
+	merged := make(map[string]storage.CloudPlayRouteRecord, len(localRoutes)+len(cloudRoutes))
+	localMap := make(map[string]models.PlayRoute, len(localRoutes))
+	cloudMap := make(map[string]storage.CloudPlayRouteRecord, len(cloudRoutes))
+	changed := false
+	uploaded := 0
+	downloaded := 0
+
+	for _, route := range localRoutes {
+		localMap[route.ID] = route
+		merged[route.ID] = storage.CloudPlayRouteRecord{
+			ID:        route.ID,
+			Name:      route.Name,
+			SortOrder: route.SortOrder,
+			CreatedAt: route.CreatedAt,
+		}
+	}
+	for _, route := range cloudRoutes {
+		cloudMap[route.ID] = route
+		existing, ok := localMap[route.ID]
+		if !ok {
+			merged[route.ID] = route
+			downloaded++
+			changed = true
+			continue
+		}
+		if !routesEquivalent(existing, route) {
+			uploaded++
+			changed = true
+		}
+	}
+	for _, route := range localRoutes {
+		if _, ok := cloudMap[route.ID]; ok {
+			continue
+		}
+		uploaded++
+		changed = true
+	}
+
+	result := make([]storage.CloudPlayRouteRecord, 0, len(merged))
+	for _, route := range merged {
+		result = append(result, route)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].SortOrder == result[j].SortOrder {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].SortOrder < result[j].SortOrder
+	})
+
+	return mergedRoutesResult{
+		Routes:     result,
+		Changed:    changed,
+		Uploaded:   uploaded,
+		Downloaded: downloaded,
+	}
+}
+
 func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.CloudSessionRecord) mergedSessionsResult {
 	merged := make(map[string]storage.CloudSessionRecord, len(localSessions)+len(cloudSessions))
 	localMap := make(map[string]models.PlaySession, len(localSessions))
@@ -803,10 +970,11 @@ func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.C
 	for _, session := range localSessions {
 		localMap[session.ID] = session
 		merged[session.ID] = storage.CloudSessionRecord{
-			ID:        session.ID,
-			PlayedAt:  session.PlayedAt,
-			Duration:  session.Duration,
-			UpdatedAt: session.UpdatedAt,
+			ID:          session.ID,
+			PlayRouteID: session.PlayRouteID,
+			PlayedAt:    session.PlayedAt,
+			Duration:    session.Duration,
+			UpdatedAt:   session.UpdatedAt,
 		}
 	}
 	for _, session := range cloudSessions {
@@ -867,9 +1035,44 @@ func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.C
 
 func sessionsEquivalent(local models.PlaySession, cloud storage.CloudSessionRecord) bool {
 	return local.ID == cloud.ID &&
+		nullableStringsEqual(local.PlayRouteID, cloud.PlayRouteID) &&
 		local.PlayedAt.Equal(cloud.PlayedAt) &&
 		local.Duration == cloud.Duration &&
 		local.UpdatedAt.Equal(cloud.UpdatedAt)
+}
+
+func routesEquivalent(local models.PlayRoute, cloud storage.CloudPlayRouteRecord) bool {
+	return local.ID == cloud.ID &&
+		local.Name == cloud.Name &&
+		local.SortOrder == cloud.SortOrder &&
+		local.CreatedAt.Equal(cloud.CreatedAt)
+}
+
+func nullableStringsEqual(left *string, right *string) bool {
+	switch {
+	case left == nil && right == nil:
+		return true
+	case left == nil || right == nil:
+		return false
+	default:
+		return *left == *right
+	}
+}
+
+func (service *CloudSyncService) upsertMergedLocalRoutes(
+	ctx context.Context,
+	gameID string,
+	routes []storage.CloudPlayRouteRecord,
+) error {
+	if err := service.repository.DeletePlayRoutesByGame(ctx, gameID); err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if err := service.repository.UpsertPlayRouteSync(ctx, composeLocalPlayRoute(gameID, route)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (service *CloudSyncService) upsertMergedLocalSessions(
@@ -881,11 +1084,12 @@ func (service *CloudSyncService) upsertMergedLocalSessions(
 	var total int64
 	for _, session := range sessions {
 		playSession := models.PlaySession{
-			ID:        session.ID,
-			GameID:    gameID,
-			PlayedAt:  session.PlayedAt,
-			Duration:  session.Duration,
-			UpdatedAt: session.UpdatedAt,
+			ID:          session.ID,
+			GameID:      gameID,
+			PlayRouteID: session.PlayRouteID,
+			PlayedAt:    session.PlayedAt,
+			Duration:    session.Duration,
+			UpdatedAt:   session.UpdatedAt,
 		}
 		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
 			return err

@@ -19,39 +19,84 @@ type fakeCloudSyncRepository struct {
 	getGameByIDFn              func(ctx context.Context, gameID string) (*models.Game, error)
 	listGamesFn                func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
 	listPlaySessionsByGameFn   func(ctx context.Context, gameID string) ([]models.PlaySession, error)
+	listPlayRoutesByGameFn     func(ctx context.Context, gameID string) ([]models.PlayRoute, error)
 	upsertGameSyncFn           func(ctx context.Context, game models.Game) error
 	deletePlaySessionsByGameFn func(ctx context.Context, gameID string) error
+	deletePlayRoutesByGameFn   func(ctx context.Context, gameID string) error
 	upsertPlaySessionSyncFn    func(ctx context.Context, session models.PlaySession) error
+	upsertPlayRouteSyncFn      func(ctx context.Context, route models.PlayRoute) error
 	sumPlaySessionDurationsFn  func(ctx context.Context, gameID string) (int64, error)
 	updateGameTotalPlayTimeFn  func(ctx context.Context, gameID string, totalPlayTime int64) error
 	updateGameTotalWithLastFn  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
 func (repository fakeCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+	if repository.getGameByIDFn == nil {
+		return nil, nil
+	}
 	return repository.getGameByIDFn(ctx, gameID)
 }
 
 func (repository fakeCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+	if repository.listGamesFn == nil {
+		return nil, nil
+	}
 	return repository.listGamesFn(ctx, searchText, filter, sortBy, sortDirection)
 }
 
 func (repository fakeCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+	if repository.listPlaySessionsByGameFn == nil {
+		return nil, nil
+	}
 	return repository.listPlaySessionsByGameFn(ctx, gameID)
 }
 
+func (repository fakeCloudSyncRepository) ListPlayRoutesByGame(ctx context.Context, gameID string) ([]models.PlayRoute, error) {
+	if repository.listPlayRoutesByGameFn == nil {
+		return nil, nil
+	}
+	return repository.listPlayRoutesByGameFn(ctx, gameID)
+}
+
 func (repository fakeCloudSyncRepository) UpsertGameSync(ctx context.Context, game models.Game) error {
+	if repository.upsertGameSyncFn == nil {
+		return nil
+	}
 	return repository.upsertGameSyncFn(ctx, game)
 }
 
 func (repository fakeCloudSyncRepository) DeletePlaySessionsByGame(ctx context.Context, gameID string) error {
+	if repository.deletePlaySessionsByGameFn == nil {
+		return nil
+	}
 	return repository.deletePlaySessionsByGameFn(ctx, gameID)
 }
 
+func (repository fakeCloudSyncRepository) DeletePlayRoutesByGame(ctx context.Context, gameID string) error {
+	if repository.deletePlayRoutesByGameFn == nil {
+		return nil
+	}
+	return repository.deletePlayRoutesByGameFn(ctx, gameID)
+}
+
 func (repository fakeCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+	if repository.upsertPlaySessionSyncFn == nil {
+		return nil
+	}
 	return repository.upsertPlaySessionSyncFn(ctx, session)
 }
 
+func (repository fakeCloudSyncRepository) UpsertPlayRouteSync(ctx context.Context, route models.PlayRoute) error {
+	if repository.upsertPlayRouteSyncFn == nil {
+		return nil
+	}
+	return repository.upsertPlayRouteSyncFn(ctx, route)
+}
+
 func (repository fakeCloudSyncRepository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
+	if repository.sumPlaySessionDurationsFn == nil {
+		return 0, nil
+	}
 	return repository.sumPlaySessionDurationsFn(ctx, gameID)
 }
 
@@ -82,9 +127,12 @@ func TestCloudSyncServiceLoadLocalGamesUsesRepositoryBoundary(t *testing.T) {
 		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]models.PlaySession, error) {
 			return []models.PlaySession{{ID: "session-1", GameID: gameID, PlayedAt: time.Now(), Duration: 10}}, nil
 		},
+		listPlayRoutesByGameFn:     func(ctx context.Context, gameID string) ([]models.PlayRoute, error) { return nil, nil },
 		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		deletePlayRoutesByGameFn:   func(ctx context.Context, gameID string) error { return nil },
 		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlayRouteSyncFn:      func(ctx context.Context, route models.PlayRoute) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 		updateGameTotalWithLastFn:  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error { return nil },
@@ -113,9 +161,12 @@ func TestCloudSyncServiceLoadLocalGamesReturnsRepositoryError(t *testing.T) {
 			return nil, errors.New("db down")
 		},
 		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		listPlayRoutesByGameFn:     func(ctx context.Context, gameID string) ([]models.PlayRoute, error) { return nil, nil },
 		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		deletePlayRoutesByGameFn:   func(ctx context.Context, gameID string) error { return nil },
 		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlayRouteSyncFn:      func(ctx context.Context, route models.PlayRoute) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 		updateGameTotalWithLastFn:  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error { return nil },
