@@ -209,8 +209,8 @@ func TestCloudSyncServiceSyncGameRejectsInvalidGameID(t *testing.T) {
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.SyncGame(context.Background(), "default", "   ")
-	if result.Success {
+	_, err := service.SyncGame(context.Background(), "default", "   ")
+	if err == nil {
 		t.Fatalf("expected invalid game id to fail")
 	}
 }
@@ -232,8 +232,8 @@ func TestCloudSyncServiceSyncAllGamesFailsInOfflineMode(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetOfflineMode(true)
 
-	result := service.SyncAllGames(context.Background(), "default")
-	if result.Success {
+	_, err := service.SyncAllGames(context.Background(), "default")
+	if err == nil {
 		t.Fatalf("expected offline sync to fail")
 	}
 }
@@ -267,13 +267,12 @@ func TestCloudSyncServiceSyncAllGamesUploadsLocalGamesAndSavesMetadata(t *testin
 		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
 	}
 
-	result := service.SyncAllGames(context.Background(), "default")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	result, err := service.SyncAllGames(context.Background(), "default")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if result.Data.UploadedGames != 2 || result.Data.UploadedSessions != 2 {
-		t.Fatalf("expected upload summary, got %#v", result.Data)
+	if result.UploadedGames != 2 || result.UploadedSessions != 2 {
+		t.Fatalf("expected upload summary, got %#v", result)
 	}
 	if cloudStorage.savedMetadata == nil {
 		t.Fatalf("expected metadata to be saved")
@@ -306,8 +305,8 @@ func TestCloudSyncServiceDeleteGameFromCloudFailsInOfflineMode(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetOfflineMode(true)
 
-	result := service.DeleteGameFromCloud(context.Background(), "default", "game-1")
-	if result.Success {
+	err := service.DeleteGameFromCloud(context.Background(), "default", "game-1")
+	if err == nil {
 		t.Fatalf("expected offline delete to fail")
 	}
 }
@@ -330,10 +329,9 @@ func TestCloudSyncServiceDeleteGameFromCloudDeletesObjectsAndMetadata(t *testing
 		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
 	}
 
-	result := service.DeleteGameFromCloud(context.Background(), "default", "game-1")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	err := service.DeleteGameFromCloud(context.Background(), "default", "game-1")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if cloudStorage.deletedPrefix != "games/game-1/" {
 		t.Fatalf("expected game object prefix to be deleted, got %q", cloudStorage.deletedPrefix)

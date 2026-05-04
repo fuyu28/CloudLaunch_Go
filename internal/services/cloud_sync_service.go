@@ -24,7 +24,6 @@ import (
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/credentials"
 	"CloudLaunch_Go/internal/models"
-	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/storage"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -170,55 +169,55 @@ func (service *CloudSyncService) isOffline() bool {
 }
 
 // SyncAllGames は全ゲームの同期を行う。
-func (service *CloudSyncService) SyncAllGames(ctx context.Context, credentialKey string) result.ApiResult[CloudSyncSummary] {
+func (service *CloudSyncService) SyncAllGames(ctx context.Context, credentialKey string) (CloudSyncSummary, error) {
 	return service.sync(ctx, credentialKey, "")
 }
 
 // SyncGame は指定ゲームのみ同期する。
-func (service *CloudSyncService) SyncGame(ctx context.Context, credentialKey string, gameID string) result.ApiResult[CloudSyncSummary] {
+func (service *CloudSyncService) SyncGame(ctx context.Context, credentialKey string, gameID string) (CloudSyncSummary, error) {
 	if _, detail, ok := requireNonEmpty(gameID, "gameID"); !ok {
 		service.logger.Warn("ゲームIDが不正です", "operation", "SyncGame", "detail", detail, "gameId", gameID)
-		return result.ErrorResult[CloudSyncSummary]("ゲームIDが不正です", detail)
+		return CloudSyncSummary{}, newServiceError("ゲームIDが不正です", detail)
 	}
 	return service.sync(ctx, credentialKey, strings.TrimSpace(gameID))
 }
 
 // DeleteGameFromCloud は指定ゲームのクラウドデータを削除する。
-func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, credentialKey string, gameID string) result.ApiResult[bool] {
+func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, credentialKey string, gameID string) error {
 	if service.isOffline() {
 		service.logger.Warn("オフラインモードのため削除できません", "operation", "DeleteGameFromCloud")
-		return result.ErrorResult[bool]("オフラインモードのため削除できません", "offline mode")
+		return newServiceError("オフラインモードのため削除できません", "offline mode")
 	}
 	trimmedKey, detail, ok := requireNonEmpty(credentialKey, "credentialKey")
 	if !ok {
 		service.logger.Warn("認証情報が不正です", "operation", "DeleteGameFromCloud", "detail", detail)
-		return result.ErrorResult[bool]("認証情報が不正です", detail)
+		return newServiceError("認証情報が不正です", detail)
 	}
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "operation", "DeleteGameFromCloud", "detail", detail, "gameId", gameID)
-		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
+		return newServiceError("ゲームIDが不正です", detail)
 	}
 
 	client, cfg, message, detail, ok := service.newClient(ctx, trimmedKey)
 	if !ok {
 		service.logger.Warn("S3クライアント初期化に失敗", "operation", "DeleteGameFromCloud", "message", message, "detail", detail)
-		return result.ErrorResult[bool](message, detail)
+		return newServiceError(message, detail)
 	}
 
 	prefix := fmt.Sprintf("games/%s/", trimmedID)
 	if err := service.cloudStorage.DeleteObjectsByPrefix(ctx, client, cfg.Bucket, prefix); err != nil {
 		service.logger.Error("クラウドデータ削除に失敗", "error", err, "gameId", trimmedID)
-		return result.ErrorResult[bool]("クラウドデータ削除に失敗しました", err.Error())
+		return newServiceError("クラウドデータ削除に失敗しました", err.Error())
 	}
 
 	metadata, err := service.cloudStorage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
 	if err != nil {
 		if isNotFoundError(err) {
-			return result.OkResult(true)
+			return nil
 		}
 		service.logger.Error("クラウドメタ情報取得に失敗", "error", err)
-		return result.ErrorResult[bool]("クラウドメタ情報取得に失敗しました", err.Error())
+		return newServiceError("クラウドメタ情報取得に失敗しました", err.Error())
 	}
 
 	updatedGames := make([]storage.CloudGameMetadata, 0, len(metadata.Games))
@@ -229,41 +228,41 @@ func (service *CloudSyncService) DeleteGameFromCloud(ctx context.Context, creden
 	}
 
 	if len(updatedGames) == len(metadata.Games) {
-		return result.OkResult(true)
+		return nil
 	}
 
 	metadata.Games = updatedGames
 	metadata.UpdatedAt = time.Now()
 	if err := service.cloudStorage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, *metadata); err != nil {
 		service.logger.Error("クラウドメタ情報更新に失敗", "error", err)
-		return result.ErrorResult[bool]("クラウドメタ情報更新に失敗しました", err.Error())
+		return newServiceError("クラウドメタ情報更新に失敗しました", err.Error())
 	}
 
-	return result.OkResult(true)
+	return nil
 }
 
-func (service *CloudSyncService) sync(ctx context.Context, credentialKey string, gameID string) result.ApiResult[CloudSyncSummary] {
+func (service *CloudSyncService) sync(ctx context.Context, credentialKey string, gameID string) (CloudSyncSummary, error) {
 	if service.isOffline() {
 		service.logger.Warn("オフラインモードのため同期できません", "operation", "sync", "gameId", gameID)
-		return result.ErrorResult[CloudSyncSummary]("オフラインモードのため同期できません", "offline mode")
+		return CloudSyncSummary{}, newServiceError("オフラインモードのため同期できません", "offline mode")
 	}
 	trimmedKey, detail, ok := requireNonEmpty(credentialKey, "credentialKey")
 	if !ok {
 		service.logger.Warn("認証情報が不正です", "operation", "sync", "detail", detail)
-		return result.ErrorResult[CloudSyncSummary]("認証情報が不正です", detail)
+		return CloudSyncSummary{}, newServiceError("認証情報が不正です", detail)
 	}
 
 	client, cfg, message, detail, ok := service.newClient(ctx, trimmedKey)
 	if !ok {
 		service.logger.Warn("S3クライアント初期化に失敗", "operation", "sync", "message", message, "detail", detail)
-		return result.ErrorResult[CloudSyncSummary](message, detail)
+		return CloudSyncSummary{}, newServiceError(message, detail)
 	}
 
 	metadata, err := service.cloudStorage.LoadMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey)
 	if err != nil {
 		if !isNotFoundError(err) {
 			service.logger.Error("クラウドメタ情報取得に失敗", "error", err)
-			return result.ErrorResult[CloudSyncSummary]("クラウドメタ情報取得に失敗しました", err.Error())
+			return CloudSyncSummary{}, newServiceError("クラウドメタ情報取得に失敗しました", err.Error())
 		}
 		metadata = &storage.CloudMetadata{
 			Version: cloudMetadataVersion,
@@ -274,7 +273,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 	localGames, err := service.loadLocalGames(ctx, gameID)
 	if err != nil {
 		service.logger.Error("ローカルゲーム取得に失敗", "error", err)
-		return result.ErrorResult[CloudSyncSummary]("ローカルゲーム取得に失敗しました", err.Error())
+		return CloudSyncSummary{}, newServiceError("ローカルゲーム取得に失敗しました", err.Error())
 	}
 
 	cloudMap := cloudMetadataToMap(metadata)
@@ -293,7 +292,7 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 			if determineGameSyncAction(local, hasLocal, cloud, hasCloud) == gameSyncActionDownload {
 				message = "ローカル更新に失敗しました"
 			}
-			return result.ErrorResult[CloudSyncSummary](message, err.Error())
+			return CloudSyncSummary{}, newServiceError(message, err.Error())
 		}
 		if iteration.cloudGame != nil {
 			merged[id] = *iteration.cloudGame
@@ -311,11 +310,11 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 		}
 		if err := service.cloudStorage.SaveMetadata(ctx, client, cfg.Bucket, service.config.CloudMetadataKey, updated); err != nil {
 			service.logger.Error("クラウドメタ情報更新に失敗", "error", err)
-			return result.ErrorResult[CloudSyncSummary]("クラウド更新に失敗しました", err.Error())
+			return CloudSyncSummary{}, newServiceError("クラウド更新に失敗しました", err.Error())
 		}
 	}
 
-	return result.OkResult(summary)
+	return summary, nil
 }
 
 type localGameBundle struct {

@@ -65,12 +65,12 @@ func TestCloudServiceUploadFolderUsesObjectStorePort(t *testing.T) {
 		uploadSummary: storage.UploadSummary{FileCount: 2, TotalBytes: 123},
 	}
 
-	result := service.UploadFolder(context.Background(), "default", "/tmp/save", "games/game-1")
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	result, err := service.UploadFolder(context.Background(), "default", "/tmp/save", "games/game-1")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if result.Data.FileCount != 2 || result.Data.TotalBytes != 123 {
-		t.Fatalf("unexpected upload summary: %#v", result.Data)
+	if result.FileCount != 2 || result.TotalBytes != 123 {
+		t.Fatalf("unexpected upload summary: %#v", result)
 	}
 }
 
@@ -88,8 +88,8 @@ func TestCloudServiceLoadCloudMetadataReturnsStoreError(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.objectStore = &fakeCloudObjectStore{loadMetadataErr: errors.New("boom")}
 
-	result := service.LoadCloudMetadata(context.Background(), "default")
-	if result.Success {
+	_, err := service.LoadCloudMetadata(context.Background(), "default")
+	if err == nil {
 		t.Fatal("expected error result")
 	}
 }
@@ -108,11 +108,11 @@ func TestCloudServiceSaveCloudMetadataUsesResolvedCredentialConfig(t *testing.T)
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.objectStore = &fakeCloudObjectStore{}
 
-	result := service.SaveCloudMetadata(context.Background(), "default", storage.CloudMetadata{
+	err := service.SaveCloudMetadata(context.Background(), "default", storage.CloudMetadata{
 		Version:   1,
 		UpdatedAt: time.Now(),
 	})
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 }

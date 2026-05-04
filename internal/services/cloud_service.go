@@ -9,7 +9,6 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/credentials"
-	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/storage"
 	"CloudLaunch_Go/internal/util"
 )
@@ -38,16 +37,16 @@ func (service *CloudService) UploadFolder(
 	credentialKey string,
 	folderPath string,
 	prefix string,
-) result.ApiResult[storage.UploadSummary] {
+) (storage.UploadSummary, error) {
 	if error := validateCloudInput(credentialKey, folderPath); error != nil {
 		service.logger.Warn("アップロード入力が不正です", "error", error)
-		return result.ErrorResult[storage.UploadSummary]("アップロード入力が不正です", error.Error())
+		return storage.UploadSummary{}, newServiceError("アップロード入力が不正です", error.Error())
 	}
 
 	cfg, credential, message, detail, ok := service.resolveCredentialConfig(ctx, credentialKey)
 	if !ok {
 		service.logger.Warn("S3クライアント初期化に失敗", "operation", "UploadFolder", "message", message, "detail", detail)
-		return result.ErrorResult[storage.UploadSummary](message, detail)
+		return storage.UploadSummary{}, newServiceError(message, detail)
 	}
 
 	summary, error := service.objectStore.UploadFolder(
@@ -61,9 +60,9 @@ func (service *CloudService) UploadFolder(
 	)
 	if error != nil {
 		service.logger.Error("フォルダアップロードに失敗", "error", error)
-		return result.ErrorResult[storage.UploadSummary]("フォルダアップロードに失敗しました", error.Error())
+		return storage.UploadSummary{}, newServiceError("フォルダアップロードに失敗しました", error.Error())
 	}
-	return result.OkResult(summary)
+	return summary, nil
 }
 
 // SaveCloudMetadata はメタ情報をクラウドに保存する。
@@ -71,37 +70,37 @@ func (service *CloudService) SaveCloudMetadata(
 	ctx context.Context,
 	credentialKey string,
 	metadata storage.CloudMetadata,
-) result.ApiResult[bool] {
+) error {
 	cfg, credential, message, detail, ok := service.resolveCredentialConfig(ctx, credentialKey)
 	if !ok {
 		service.logger.Warn("S3クライアント初期化に失敗", "operation", "SaveCloudMetadata", "message", message, "detail", detail)
-		return result.ErrorResult[bool](message, detail)
+		return newServiceError(message, detail)
 	}
 
 	if error := service.objectStore.SaveMetadata(ctx, cfg, credential, service.config.CloudMetadataKey, metadata); error != nil {
 		service.logger.Error("メタ情報保存に失敗", "error", error)
-		return result.ErrorResult[bool]("メタ情報保存に失敗しました", error.Error())
+		return newServiceError("メタ情報保存に失敗しました", error.Error())
 	}
-	return result.OkResult(true)
+	return nil
 }
 
 // LoadCloudMetadata はクラウドからメタ情報を取得する。
 func (service *CloudService) LoadCloudMetadata(
 	ctx context.Context,
 	credentialKey string,
-) result.ApiResult[*storage.CloudMetadata] {
+) (*storage.CloudMetadata, error) {
 	cfg, credential, message, detail, ok := service.resolveCredentialConfig(ctx, credentialKey)
 	if !ok {
 		service.logger.Warn("S3クライアント初期化に失敗", "operation", "LoadCloudMetadata", "message", message, "detail", detail)
-		return result.ErrorResult[*storage.CloudMetadata](message, detail)
+		return nil, newServiceError(message, detail)
 	}
 
 	metadata, error := service.objectStore.LoadMetadata(ctx, cfg, credential, service.config.CloudMetadataKey)
 	if error != nil {
 		service.logger.Error("メタ情報取得に失敗", "error", error)
-		return result.ErrorResult[*storage.CloudMetadata]("メタ情報取得に失敗しました", error.Error())
+		return nil, newServiceError("メタ情報取得に失敗しました", error.Error())
 	}
-	return result.OkResult(metadata)
+	return metadata, nil
 }
 
 // SetUploadConcurrency はアップロードの同時実行数を更新する。

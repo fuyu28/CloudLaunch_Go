@@ -521,9 +521,8 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
 	if service.cloudSync != nil {
 		go func(gameID string) {
-			result := service.cloudSync.SyncGame(context.Background(), "default", gameID)
-			if !result.Success {
-				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", result.Error)
+			if _, err := service.cloudSync.SyncGame(context.Background(), "default", gameID); err != nil {
+				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
 		}(game.GameID)
 	}

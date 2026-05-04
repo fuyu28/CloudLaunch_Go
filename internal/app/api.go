@@ -630,17 +630,22 @@ func (app *App) DeleteCredential(key string) result.ApiResult[bool] {
 
 // UploadFolder はフォルダをクラウドへアップロードする。
 func (app *App) UploadFolder(credentialKey string, folderPath string, prefix string) result.ApiResult[storage.UploadSummary] {
-	return app.CloudService.UploadFolder(app.context(), credentialKey, folderPath, prefix)
+	summary, err := app.CloudService.UploadFolder(app.context(), credentialKey, folderPath, prefix)
+	return serviceResult(summary, err, "フォルダアップロードに失敗しました")
 }
 
 // SaveCloudMetadata はメタ情報をクラウドに保存する。
 func (app *App) SaveCloudMetadata(credentialKey string, metadata storage.CloudMetadata) result.ApiResult[bool] {
-	return app.CloudService.SaveCloudMetadata(app.context(), credentialKey, metadata)
+	if err := app.CloudService.SaveCloudMetadata(app.context(), credentialKey, metadata); err != nil {
+		return serviceErrorResult[bool](err, "メタ情報保存に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 // LoadCloudMetadata はメタ情報をクラウドから取得する。
 func (app *App) LoadCloudMetadata(credentialKey string) result.ApiResult[*storage.CloudMetadata] {
-	return app.CloudService.LoadCloudMetadata(app.context(), credentialKey)
+	metadata, err := app.CloudService.LoadCloudMetadata(app.context(), credentialKey)
+	return serviceResult(metadata, err, "メタ情報取得に失敗しました")
 }
 
 // LaunchGame は指定された実行ファイルを起動する。
