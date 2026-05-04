@@ -68,15 +68,9 @@ DROP TABLE "PlaySession_old";
 CREATE INDEX IF NOT EXISTS "idx_playsessions_gameid_played_at" ON "PlaySession"("gameId", "playedAt");
 CREATE INDEX IF NOT EXISTS "idx_playsessions_played_at_desc" ON "PlaySession"("playedAt" DESC);
 
-DROP TRIGGER IF EXISTS "trigger_play_session_updated_at";
-
 CREATE TRIGGER IF NOT EXISTS "trigger_play_session_updated_at"
 AFTER UPDATE ON "PlaySession"
 FOR EACH ROW
 BEGIN
   UPDATE "PlaySession" SET "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = OLD."id";
 END;
-
-DROP INDEX IF EXISTS "idx_chapters_gameid_order";
-DROP INDEX IF EXISTS "idx_chapters_name";
-DROP TABLE IF EXISTS "Chapter";

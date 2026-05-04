@@ -74,7 +74,7 @@ describe("GameModal", () => {
     exePath: "/path/to/game.exe",
     saveFolderPath: "/path/to/saves",
     imagePath: "/path/to/image.jpg",
-    playStatus: "unplayed",
+    clearedAt: "",
   };
 
   // Window APIのモック
@@ -294,7 +294,7 @@ describe("GameModal", () => {
           exePath: "/path/to/game.exe",
           saveFolderPath: "",
           imagePath: "",
-          playStatus: "unplayed",
+          clearedAt: "",
         });
       });
 

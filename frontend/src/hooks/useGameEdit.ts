@@ -91,14 +91,14 @@ export function useGameEdit(
   // 編集データをメモ化
   const editData = useMemo(() => {
     if (!game) return undefined;
-    const { title, publisher, imagePath, exePath, saveFolderPath, playStatus } = game;
+    const { title, publisher, imagePath, exePath, saveFolderPath, clearedAt } = game;
     return {
       title,
       publisher,
       imagePath,
       exePath: exePath === UNCONFIGURED_EXE_PATH ? "" : exePath,
       saveFolderPath,
-      playStatus,
+      clearedAt: clearedAt ? toDateTimeLocalValue(clearedAt) : "",
     };
   }, [game]);
 
@@ -155,8 +155,10 @@ export function useGameEdit(
       if (result.success) {
         showSuccessToast("ゲーム情報を更新しました。");
 
-        // ゲーム一覧を更新
-        setFilteredGames((list) => list.map((g) => (g.id === game.id ? { ...g, ...values } : g)));
+        const updatedGame = await window.api.database.getGameById(game.id);
+        if (updatedGame) {
+          setFilteredGames((list) => list.map((g) => (g.id === game.id ? updatedGame : g)));
+        }
       } else {
         handleApiError(result);
       }
@@ -232,3 +234,12 @@ export function useGameEdit(
 }
 
 export default useGameEdit;
+
+function toDateTimeLocalValue(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}

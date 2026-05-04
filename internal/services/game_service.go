@@ -63,6 +63,10 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*m
 		SaveFolderPath: input.SaveFolderPath,
 		PlayStatus:     models.PlayStatusUnplayed,
 		TotalPlayTime:  0,
+		ClearedAt:      input.ClearedAt,
+	}
+	if input.ClearedAt != nil {
+		game.PlayStatus = models.PlayStatusPlayed
 	}
 
 	created, error := service.repository.CreateGame(ctx, game)
@@ -98,9 +102,6 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.ImagePath = input.ImagePath
 	current.ExePath = strings.TrimSpace(input.ExePath)
 	current.SaveFolderPath = input.SaveFolderPath
-	if input.PlayStatus != "" {
-		current.PlayStatus = input.PlayStatus
-	}
 	current.ClearedAt = input.ClearedAt
 
 	updated, error := service.repository.UpdateGame(ctx, *current)
@@ -162,6 +163,7 @@ type GameInput struct {
 	ImagePath      *string
 	ExePath        string
 	SaveFolderPath *string
+	ClearedAt      *time.Time
 }
 
 // GameUpdateInput はゲーム更新入力を表す。
@@ -171,7 +173,6 @@ type GameUpdateInput struct {
 	ImagePath      *string
 	ExePath        string
 	SaveFolderPath *string
-	PlayStatus     models.PlayStatus
 	ClearedAt      *time.Time
 }
 

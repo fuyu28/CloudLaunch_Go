@@ -37,7 +37,6 @@ export default function GameDetail(): React.JSX.Element {
   const [isPlaySessionModalOpen, setIsPlaySessionModalOpen] = useState(false);
   const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const [saveSyncMessage, setSaveSyncMessage] = useState("");
   const { showToast } = useToastHandler();
@@ -309,47 +308,6 @@ export default function GameDetail(): React.JSX.Element {
     await launchGameDirect();
   }, [launchGameDirect]);
 
-  // プレイステータス変更のハンドラー
-  const handleStatusChange = useCallback(
-    async (newStatus: "unplayed" | "playing" | "played"): Promise<void> => {
-      if (!game) return;
-
-      setIsUpdatingStatus(true);
-      try {
-        // 現在のゲームデータを使用してupdateGameを呼び出し
-        const updateData = {
-          title: game.title,
-          publisher: game.publisher,
-          imagePath: game.imagePath,
-          exePath: game.exePath,
-          saveFolderPath: game.saveFolderPath,
-          playStatus: newStatus,
-        };
-
-        const result = await window.api.database.updateGame(game.id, updateData);
-
-        if (result.success) {
-          showToast("プレイステータスを更新しました", "success");
-          // 全データを再取得
-          await refreshGameData();
-        } else {
-          showToast(result.message || "プレイステータスの更新に失敗しました", "error");
-        }
-      } catch (error) {
-        logger.error("プレイステータスの更新エラー", {
-          component: "GameDetail",
-          function: "handleStatusChange",
-          error: error instanceof Error ? error : new Error(String(error)),
-          data: { gameId: game.id, newStatus },
-        });
-        showToast("プレイステータスの更新に失敗しました", "error");
-      } finally {
-        setIsUpdatingStatus(false);
-      }
-    },
-    [game, showToast, refreshGameData],
-  );
-
   if (!id) {
     return <Navigate to="/" replace />;
   }
@@ -374,11 +332,7 @@ export default function GameDetail(): React.JSX.Element {
       <div className="mb-5">
         <GameInfo
           game={game}
-          isUpdatingStatus={isUpdatingStatus}
           isLaunching={isLaunching}
-          onStatusChange={(status) =>
-            handleStatusChange(status as "unplayed" | "playing" | "played")
-          }
           onLaunchGame={handleLaunchGameWithSync}
           onEditGame={openEdit}
           onDeleteGame={openDelete}

@@ -224,11 +224,10 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	_, err := service.UpdateGame(context.Background(), " game-1 ", GameUpdateInput{
-		Title:      " New Title ",
-		Publisher:  " New Publisher ",
-		ExePath:    " /games/new.exe ",
-		PlayStatus: models.PlayStatusPlayed,
-		ClearedAt:  &clearedAt,
+		Title:     " New Title ",
+		Publisher: " New Publisher ",
+		ExePath:   " /games/new.exe ",
+		ClearedAt: &clearedAt,
 	})
 
 	if err != nil {
@@ -240,7 +239,7 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 	if updatedGame.TotalPlayTime != 360 || updatedGame.LastPlayed == nil || !updatedGame.LastPlayed.Equal(lastPlayed) {
 		t.Fatalf("expected play totals to be preserved, got %#v", updatedGame)
 	}
-	if updatedGame.PlayStatus != models.PlayStatusPlayed ||
+	if updatedGame.PlayStatus != models.PlayStatusPlaying ||
 		updatedGame.ClearedAt == nil ||
 		!updatedGame.ClearedAt.Equal(clearedAt) {
 		t.Fatalf("expected progress fields to be updated, got %#v", updatedGame)

@@ -7,7 +7,6 @@ import type {
   InputGameData,
   GameType,
   PlaySessionType,
-  PlayStatus,
   MonitoringGameStatus,
   GameImport,
 } from "src/types/game";
@@ -100,6 +99,14 @@ import {
 } from "../wailsjs/go/app/App";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../wailsjs/runtime/runtime";
 
+function parseClearedAtInput(value?: string): Date | null {
+  if (!value || !value.trim()) {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export type WindowApi = {
   window: {
     minimize: () => Promise<void>;
@@ -145,11 +152,6 @@ export type WindowApi = {
     createGame: (game: InputGameData) => Promise<ApiResult<void>>;
     updateGame: (id: string, game: InputGameData) => Promise<ApiResult<void>>;
     deleteGame: (id: string) => Promise<ApiResult<void>>;
-    updatePlayStatus: (
-      gameId: string,
-      playStatus: PlayStatus,
-      clearedAt?: Date,
-    ) => Promise<ApiResult<GameType>>;
     createSession: (duration: number, gameId: string) => Promise<ApiResult<void>>;
     getPlaySessions: (gameId: string) => Promise<ApiResult<PlaySessionType[]>>;
     deletePlaySession: (sessionId: string) => Promise<ApiResult<void>>;
@@ -480,6 +482,7 @@ export const createWailsBridge = (): WindowApi => {
           ImagePath: game.imagePath ?? null,
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
+          ClearedAt: parseClearedAtInput(game.clearedAt),
         };
         const result = await CreateGame(payload);
         return result.success
@@ -493,8 +496,7 @@ export const createWailsBridge = (): WindowApi => {
           ImagePath: game.imagePath ?? null,
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
-          PlayStatus: game.playStatus ?? "unplayed",
-          ClearedAt: null,
+          ClearedAt: parseClearedAtInput(game.clearedAt),
         };
         const result = await UpdateGame(id, payload);
         return result.success
@@ -506,31 +508,6 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
-      },
-      updatePlayStatus: async (gameId, playStatus, clearedAt) => {
-        const current = await GetGameByID(gameId);
-        if (!current.success || !current.data) {
-          return { success: false, message: current.error?.message ?? "ゲーム取得に失敗しました" };
-        }
-        const game = current.data as GameType;
-        const updatePayload = {
-          Title: game.title,
-          Publisher: game.publisher,
-          ImagePath: game.imagePath ?? null,
-          ExePath: game.exePath,
-          SaveFolderPath: game.saveFolderPath ?? null,
-          PlayStatus: playStatus,
-          ClearedAt: clearedAt ?? null,
-        };
-        const result = await UpdateGame(gameId, updatePayload);
-        if (!result.success) {
-          return { success: false, message: result.error?.message ?? "エラー" };
-        }
-        const updated = await GetGameByID(gameId);
-        if (!updated.success) {
-          return { success: false, message: updated.error?.message ?? "エラー" };
-        }
-        return { success: true, data: updated.data as GameType };
       },
       createSession: async (duration, gameId) => {
         const payload = {

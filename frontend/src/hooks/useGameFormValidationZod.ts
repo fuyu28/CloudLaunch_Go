@@ -37,6 +37,7 @@ export type ValidationErrors = {
   exePath?: string;
   imagePath?: string;
   saveFolderPath?: string;
+  clearedAt?: string;
 };
 
 /**
@@ -203,7 +204,9 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
 
   // すべてのフィールドをタッチ済みとして設定
   const markAllFieldsAsTouched = useCallback(() => {
-    setTouchedFields(new Set(["title", "publisher", "exePath", "imagePath", "saveFolderPath"]));
+    setTouchedFields(
+      new Set(["title", "publisher", "exePath", "imagePath", "saveFolderPath", "clearedAt"]),
+    );
   }, []);
 
   // タッチされたフィールドをリセット
@@ -326,6 +329,7 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
       "exePath",
       "imagePath",
       "saveFolderPath",
+      "clearedAt",
     ];
 
     return fieldNames.reduce(
@@ -367,6 +371,9 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
         : undefined,
       saveFolderPath: fieldValidation.saveFolderPath?.shouldShowError
         ? fieldValidation.saveFolderPath.message
+        : undefined,
+      clearedAt: fieldValidation.clearedAt?.shouldShowError
+        ? fieldValidation.clearedAt.message
         : undefined,
     };
   }, [fieldValidation]);

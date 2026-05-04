@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS "Game" (
   "exePath" TEXT NOT NULL,
   "saveFolderPath" TEXT,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "playStatus" TEXT NOT NULL DEFAULT 'unplayed',
   "totalPlayTime" INTEGER NOT NULL DEFAULT 0,
   "lastPlayed" DATETIME,
   "clearedAt" DATETIME,
@@ -16,8 +15,7 @@ CREATE TABLE IF NOT EXISTS "Game" (
   CHECK ("title" != ''),
   CHECK ("publisher" != ''),
   CHECK ("exePath" != ''),
-  CHECK ("totalPlayTime" >= 0),
-  CHECK ("playStatus" IN ('unplayed', 'playing', 'played'))
+  CHECK ("totalPlayTime" >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS "Chapter" (
@@ -71,7 +69,6 @@ CREATE TABLE IF NOT EXISTS "Memo" (
 
 CREATE INDEX IF NOT EXISTS "idx_games_title" ON "Game"("title");
 CREATE INDEX IF NOT EXISTS "idx_games_publisher" ON "Game"("publisher");
-CREATE INDEX IF NOT EXISTS "idx_games_play_status" ON "Game"("playStatus");
 CREATE INDEX IF NOT EXISTS "idx_games_last_played_desc" ON "Game"("lastPlayed" DESC);
 CREATE INDEX IF NOT EXISTS "idx_games_total_play_time_desc" ON "Game"("totalPlayTime" DESC);
 

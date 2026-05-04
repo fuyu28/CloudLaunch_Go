@@ -22,7 +22,7 @@ export type InputGameData = {
   imagePath?: string;
   exePath: string;
   saveFolderPath?: string;
-  playStatus: PlayStatus;
+  clearedAt?: string;
 };
 
 export type GameImport = {

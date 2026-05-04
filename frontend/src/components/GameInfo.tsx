@@ -25,12 +25,8 @@ import type { GameType } from "src/types/game";
 type GameInfoProps = {
   /** ゲーム情報 */
   game: GameType;
-  /** プレイステータス更新中フラグ */
-  isUpdatingStatus: boolean;
   /** 起動中フラグ */
   isLaunching?: boolean;
-  /** プレイステータス変更ハンドラ */
-  onStatusChange: (status: string) => void;
   /** ゲーム起動ハンドラ */
   onLaunchGame: () => void;
   /** ゲーム編集ハンドラ */
@@ -47,9 +43,7 @@ type GameInfoProps = {
  */
 const GameInfo = memo(function GameInfo({
   game,
-  isUpdatingStatus,
   isLaunching,
-  onStatusChange,
   onLaunchGame,
   onEditGame,
   onDeleteGame,
@@ -122,11 +116,7 @@ const GameInfo = memo(function GameInfo({
 
               {/* プレイステータス */}
               <div className="mb-4">
-                <PlayStatusSelector
-                  currentStatus={game.playStatus}
-                  onStatusChange={onStatusChange}
-                  disabled={isUpdatingStatus}
-                />
+                <PlayStatusSelector currentStatus={game.playStatus} />
               </div>
 
               {/* メタ情報 */}
@@ -135,9 +125,7 @@ const GameInfo = memo(function GameInfo({
                   最終プレイ: {game.lastPlayed ? formatDateWithTime(game.lastPlayed) : "なし"}
                 </span>
                 <span>総プレイ時間: {formatSmart(game.totalPlayTime ?? 0)}</span>
-                {game.playStatus === "played" && game.clearedAt && (
-                  <span>クリア日時: {formatDateWithTime(game.clearedAt)}</span>
-                )}
+                {game.clearedAt && <span>クリア日時: {formatDateWithTime(game.clearedAt)}</span>}
               </div>
             </div>
 

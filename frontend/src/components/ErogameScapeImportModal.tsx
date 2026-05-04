@@ -31,7 +31,7 @@ const initialValues: InputGameData = {
   saveFolderPath: "",
   exePath: "",
   imagePath: "",
-  playStatus: "unplayed",
+  clearedAt: "",
 };
 
 const erogameScapeIdRegex = /^\d+$/;

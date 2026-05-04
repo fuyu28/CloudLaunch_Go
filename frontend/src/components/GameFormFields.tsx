@@ -150,6 +150,27 @@ export function GameFormFields({
         placeholder="セーブデータフォルダを選択してください"
         errorMessage={validation.errors.saveFolderPath}
       />
+
+      <div>
+        <label className="label" htmlFor="clearedAt">
+          <span className="label-text">クリア日時</span>
+        </label>
+        <input
+          type="datetime-local"
+          id="clearedAt"
+          name="clearedAt"
+          value={gameData.clearedAt || ""}
+          onChange={onChange}
+          onBlur={() => validation.markFieldAsTouched("clearedAt")}
+          className={`input input-bordered w-full ${validation.errors.clearedAt ? "input-error" : ""}`}
+          disabled={disabled}
+        />
+        {validation.errors.clearedAt && (
+          <div className="label">
+            <span className="label-text-alt text-error">{validation.errors.clearedAt}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

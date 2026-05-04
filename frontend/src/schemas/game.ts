@@ -10,7 +10,13 @@ export const gameSchema = z.object({
   imagePath: z.string().optional().or(z.literal("")),
   exePath: z.string().min(1, "実行ファイルのパスは必須です"),
   saveFolderPath: z.string().optional().or(z.literal("")),
-  playStatus: z.enum(["unplayed", "playing", "played"]),
+  clearedAt: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine((value) => value === undefined || value === "" || !Number.isNaN(Date.parse(value)), {
+      message: "有効なクリア日時を指定してください",
+    }),
 });
 
 /**
