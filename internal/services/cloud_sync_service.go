@@ -891,9 +891,9 @@ func (service *CloudSyncService) upsertMergedLocalSessions(
 			return err
 		}
 		total += session.Duration
-		if lastPlayed == nil || session.PlayedAt.After(*lastPlayed) {
-			playedAt := session.PlayedAt
-			lastPlayed = &playedAt
+		endedAt := session.PlayedAt.Add(time.Duration(session.Duration) * time.Second)
+		if lastPlayed == nil || endedAt.After(*lastPlayed) {
+			lastPlayed = &endedAt
 		}
 	}
 	if lastPlayed != nil {
@@ -925,9 +925,9 @@ func (service *CloudSyncService) mergeCloudGameMetadata(
 	var lastPlayed *time.Time
 	for _, session := range sessions {
 		total += session.Duration
-		if lastPlayed == nil || session.PlayedAt.After(*lastPlayed) {
-			playedAt := session.PlayedAt
-			lastPlayed = &playedAt
+		endedAt := session.PlayedAt.Add(time.Duration(session.Duration) * time.Second)
+		if lastPlayed == nil || endedAt.After(*lastPlayed) {
+			lastPlayed = &endedAt
 		}
 	}
 	base.TotalPlayTime = total

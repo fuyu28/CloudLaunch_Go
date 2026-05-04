@@ -46,7 +46,8 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 		return nil, newServiceError("セッション作成に失敗しました", error.Error())
 	}
 	if created != nil {
-		service.afterSessionChange(ctx, created.GameID, &input.PlayedAt)
+		lastPlayed := input.PlayedAt.Add(time.Duration(input.Duration) * time.Second)
+		service.afterSessionChange(ctx, created.GameID, &lastPlayed)
 	}
 	return created, nil
 }

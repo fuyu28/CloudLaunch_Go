@@ -122,6 +122,7 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	repository := &fakeSessionRepository{}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	playedAt := time.Date(2026, 4, 24, 18, 0, 0, 0, time.UTC)
+	expectedLastPlayed := playedAt.Add(5 * time.Minute)
 
 	_, err := service.CreateSession(context.Background(), SessionInput{
 		GameID:   "game-1",
@@ -132,7 +133,7 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if repository.updatedWithLastPlayed == nil || !repository.updatedWithLastPlayed.Equal(playedAt) {
+	if repository.updatedWithLastPlayed == nil || !repository.updatedWithLastPlayed.Equal(expectedLastPlayed) {
 		t.Fatalf("expected last played update to be called")
 	}
 	if repository.touchedGameID != "game-1" {

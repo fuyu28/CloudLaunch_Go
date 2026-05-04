@@ -481,9 +481,10 @@ func (service *ProcessMonitorService) checkProcesses() {
 
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
 	ctx := context.Background()
+	playedAt := endedAt.Add(-time.Duration(game.AccumulatedTime) * time.Second)
 	_, err := service.repository.CreatePlaySession(ctx, models.PlaySession{
 		GameID:   game.GameID,
-		PlayedAt: endedAt,
+		PlayedAt: playedAt,
 		Duration: game.AccumulatedTime,
 	})
 	if err != nil {
