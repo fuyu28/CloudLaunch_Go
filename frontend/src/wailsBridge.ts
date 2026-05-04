@@ -190,7 +190,11 @@ export type WindowApi = {
     createGame: (game: InputGameData) => Promise<ApiResult<void>>;
     updateGame: (id: string, game: InputGameData) => Promise<ApiResult<void>>;
     deleteGame: (id: string) => Promise<ApiResult<void>>;
-    createSession: (duration: number, gameId: string) => Promise<ApiResult<void>>;
+    createSession: (
+      duration: number,
+      gameId: string,
+      playRouteId?: string | null,
+    ) => Promise<ApiResult<void>>;
     getPlaySessions: (gameId: string) => Promise<ApiResult<PlaySessionType[]>>;
     deletePlaySession: (sessionId: string) => Promise<ApiResult<void>>;
   };
@@ -556,9 +560,10 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      createSession: async (duration, gameId) => {
+      createSession: async (duration, gameId, playRouteId) => {
         const payload = {
           GameID: gameId,
+          PlayRouteID: playRouteId ?? null,
           PlayedAt: new Date(),
           Duration: duration,
         };

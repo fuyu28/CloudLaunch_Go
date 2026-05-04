@@ -25,6 +25,8 @@ import { FaClock, FaEdit, FaPlay, FaStop, FaCheck, FaTimes } from "react-icons/f
 
 import { useTimeFormat, timeUtils } from "@renderer/hooks/useTimeFormat";
 
+import type { PlayRouteType } from "src/types/game";
+
 /**
  * プレイセッション追加モーダルのprops
  */
@@ -33,8 +35,10 @@ export type PlaySessionModalProps = {
   isOpen: boolean;
   /** モーダルを閉じる時のコールバック */
   onClose: () => void;
+  /** 対象ゲームID */
+  gameId: string;
   /** プレイセッションを追加する時のコールバック */
-  onSubmit: (duration: number) => Promise<void>;
+  onSubmit: (duration: number, playRouteId?: string | null) => Promise<void>;
   /** ゲームのタイトル */
   gameTitle: string;
 };
@@ -61,9 +65,12 @@ type TimerState = "stopped" | "running" | "paused";
 export function PlaySessionModal({
   isOpen,
   onClose,
+  gameId,
   onSubmit,
   gameTitle,
 }: PlaySessionModalProps): React.JSX.Element {
+  const [routes, setRoutes] = useState<PlayRouteType[]>([]);
+  const [selectedRouteId, setSelectedRouteId] = useState("");
   const [mode, setMode] = useState<ModalMode>("manual");
   const [hoursInput, setHoursInput] = useState<string>("");
   const [minutesInput, setMinutesInput] = useState<string>("");
@@ -79,7 +86,20 @@ export function PlaySessionModal({
   // モーダルが開いたときの初期化
   useEffect(() => {
     if (isOpen) {
+      void (async () => {
+        try {
+          const result = await window.api.playRoute.listByGame(gameId);
+          if (result.success && result.data) {
+            setRoutes(result.data);
+          } else {
+            setRoutes([]);
+          }
+        } catch {
+          setRoutes([]);
+        }
+      })();
       setMode("manual");
+      setSelectedRouteId("");
       setHoursInput("");
       setMinutesInput("");
       setSecondsInput("");
@@ -87,8 +107,11 @@ export function PlaySessionModal({
       setTimerState("stopped");
       setError("");
       setIsSubmitting(false);
+    } else {
+      setRoutes([]);
+      setSelectedRouteId("");
     }
-  }, [isOpen]);
+  }, [gameId, isOpen]);
 
   // タイマー処理
   useEffect(() => {
@@ -188,7 +211,7 @@ export function PlaySessionModal({
         duration = timerSeconds;
       }
 
-      await onSubmit(duration);
+      await onSubmit(duration, selectedRouteId || null);
       onClose();
     } catch {
       setError("プレイセッションの追加に失敗しました");
@@ -231,6 +254,26 @@ export function PlaySessionModal({
         </div>
 
         {/* 手動追加モード */}
+        {routes.length > 0 && (
+          <div className="form-control mb-4">
+            <label className="label">
+              <span className="label-text">プレイルート</span>
+            </label>
+            <select
+              className="select select-bordered w-full"
+              value={selectedRouteId}
+              onChange={(event) => setSelectedRouteId(event.target.value)}
+            >
+              <option value="">指定なし</option>
+              {routes.map((route) => (
+                <option key={route.id} value={route.id}>
+                  {route.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {mode === "manual" && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
