@@ -8,30 +8,30 @@
  * - executeWithToast ヘルパー関数
  */
 
-/// <reference types="jest" />
 /// <reference types="@testing-library/jest-dom" />
 
 import { renderHook, act } from "@testing-library/react";
 import toast from "react-hot-toast";
+import { vi, type Mocked } from "vitest";
 
 import { useToastHandler, executeWithToast } from "../useToastHandler";
 
 // React Hot Toastのモック
-jest.mock("react-hot-toast", () => ({
+vi.mock("react-hot-toast", () => ({
   __esModule: true,
   default: {
-    loading: jest.fn(),
-    success: jest.fn(),
-    error: jest.fn(),
-    dismiss: jest.fn(),
+    loading: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    dismiss: vi.fn(),
   },
 }));
 
-const mockToast = toast as jest.Mocked<typeof toast>;
+const mockToast = toast as Mocked<typeof toast>;
 
 describe("useToastHandler", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("showLoading", () => {
@@ -161,20 +161,20 @@ describe("useToastHandler", () => {
 
 describe("executeWithToast", () => {
   const mockToastHandler = {
-    showLoading: jest.fn(),
-    showSuccess: jest.fn(),
-    showError: jest.fn(),
-    dismiss: jest.fn(),
-    showToast: jest.fn(),
+    showLoading: vi.fn(),
+    showSuccess: vi.fn(),
+    showError: vi.fn(),
+    dismiss: vi.fn(),
+    showToast: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("成功ケース", () => {
     it("非同期関数が成功し、成功メッセージを表示する", async () => {
-      const mockAsyncFn = jest.fn().mockResolvedValue("success result");
+      const mockAsyncFn = vi.fn().mockResolvedValue("success result");
       const toastId = "loading-id";
       mockToastHandler.showLoading.mockReturnValue(toastId);
 
@@ -194,7 +194,7 @@ describe("executeWithToast", () => {
     });
 
     it("成功メッセージがない場合、ローディングトーストを削除する", async () => {
-      const mockAsyncFn = jest.fn().mockResolvedValue("success result");
+      const mockAsyncFn = vi.fn().mockResolvedValue("success result");
       const toastId = "loading-id";
       mockToastHandler.showLoading.mockReturnValue(toastId);
 
@@ -212,7 +212,7 @@ describe("executeWithToast", () => {
     });
 
     it("showToastがfalseの場合、トーストを表示しない", async () => {
-      const mockAsyncFn = jest.fn().mockResolvedValue("success result");
+      const mockAsyncFn = vi.fn().mockResolvedValue("success result");
 
       const options = {
         loadingMessage: "処理中...",
@@ -232,7 +232,7 @@ describe("executeWithToast", () => {
   describe("エラーケース", () => {
     it("非同期関数がエラーを投げ、エラーメッセージを表示する", async () => {
       const error = new Error("テストエラー");
-      const mockAsyncFn = jest.fn().mockRejectedValue(error);
+      const mockAsyncFn = vi.fn().mockRejectedValue(error);
       const toastId = "loading-id";
       mockToastHandler.showLoading.mockReturnValue(toastId);
 
@@ -253,7 +253,7 @@ describe("executeWithToast", () => {
 
     it("カスタムエラーメッセージがない場合、元のエラーメッセージを使用する", async () => {
       const error = new Error("元のエラーメッセージ");
-      const mockAsyncFn = jest.fn().mockRejectedValue(error);
+      const mockAsyncFn = vi.fn().mockRejectedValue(error);
       const toastId = "loading-id";
       mockToastHandler.showLoading.mockReturnValue(toastId);
 
@@ -271,7 +271,7 @@ describe("executeWithToast", () => {
 
     it("Errorオブジェクトでないエラーの場合、文字列に変換する", async () => {
       const error = "string error";
-      const mockAsyncFn = jest.fn().mockRejectedValue(error);
+      const mockAsyncFn = vi.fn().mockRejectedValue(error);
       const toastId = "loading-id";
       mockToastHandler.showLoading.mockReturnValue(toastId);
 
@@ -289,7 +289,7 @@ describe("executeWithToast", () => {
 
     it("showToastがfalseの場合、エラートーストを表示しない", async () => {
       const error = new Error("テストエラー");
-      const mockAsyncFn = jest.fn().mockRejectedValue(error);
+      const mockAsyncFn = vi.fn().mockRejectedValue(error);
 
       const options = {
         loadingMessage: "処理中...",
@@ -308,7 +308,7 @@ describe("executeWithToast", () => {
 
   describe("オプションのデフォルト値", () => {
     it("showToastのデフォルトはtrue", async () => {
-      const mockAsyncFn = jest.fn().mockResolvedValue("result");
+      const mockAsyncFn = vi.fn().mockResolvedValue("result");
       const toastId = "loading-id";
       mockToastHandler.showLoading.mockReturnValue(toastId);
 
