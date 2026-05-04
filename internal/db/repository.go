@@ -513,7 +513,23 @@ func scanGame(row scanner) (*models.Game, error) {
 	game.LocalSaveHashUpdatedAt = nullTimePtr(localSaveHashUpdatedAt)
 	game.LastPlayed = nullTimePtr(lastPlayed)
 	game.ClearedAt = nullTimePtr(clearedAt)
+	game.PlayStatus = normalizeProgressPlayStatus(game.PlayStatus, game.LastPlayed, game.ClearedAt, game.TotalPlayTime)
 	return &game, nil
+}
+
+func normalizeProgressPlayStatus(
+	current models.PlayStatus,
+	lastPlayed *time.Time,
+	clearedAt *time.Time,
+	totalPlayTime int64,
+) models.PlayStatus {
+	if current == models.PlayStatusPlayed || clearedAt != nil {
+		return models.PlayStatusPlayed
+	}
+	if lastPlayed != nil || totalPlayTime > 0 {
+		return models.PlayStatusPlaying
+	}
+	return models.PlayStatusUnplayed
 }
 
 // scanPlaySession は1行分のセッションデータを読み取る。
