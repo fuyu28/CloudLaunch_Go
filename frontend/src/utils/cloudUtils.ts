@@ -23,14 +23,18 @@ export function formatFileSize(bytes: number): string {
  * @param date 日時
  * @returns 読みやすい形式の文字列
  */
-export function formatDate(date: Date): string {
+export function formatDate(date: Date | string | null | undefined): string {
+  const normalized = date instanceof Date ? date : new Date(date ?? Number.NaN);
+  if (Number.isNaN(normalized.getTime()) || normalized.getTime() <= 0) {
+    return "不明";
+  }
   return new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(date));
+  }).format(normalized);
 }
 
 /**
@@ -90,8 +94,10 @@ export function sumSizesRecursively(node: CloudDirectoryNode): number {
  * @returns 最新の更新日時
  */
 export function latestModifiedRecursively(node: CloudDirectoryNode): Date {
-  const baseTime = node.lastModified instanceof Date ? node.lastModified.getTime() : 0;
-  let latest = Number.isFinite(baseTime) ? baseTime : 0;
+  const baseDate =
+    node.lastModified instanceof Date ? node.lastModified : new Date(node.lastModified);
+  const baseTime = baseDate.getTime();
+  let latest = Number.isFinite(baseTime) && baseTime > 0 ? baseTime : 0;
 
   if (node.children && node.children.length > 0) {
     node.children.forEach((child) => {
@@ -102,7 +108,7 @@ export function latestModifiedRecursively(node: CloudDirectoryNode): Date {
     });
   }
 
-  return new Date(latest);
+  return latest > 0 ? new Date(latest) : new Date(Number.NaN);
 }
 
 /**

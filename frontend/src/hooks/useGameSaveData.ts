@@ -80,6 +80,7 @@ export function useGameSaveData(): GameSaveDataResult {
           uploadSaveDataAndSyncHash({
             gameId: game.id,
             saveFolderPath: game.saveFolderPath!,
+            localUpdatedAt: game.localSaveHashUpdatedAt ?? null,
           }),
         "セーブデータをアップロード中…",
         "セーブデータのアップロードに成功しました。",

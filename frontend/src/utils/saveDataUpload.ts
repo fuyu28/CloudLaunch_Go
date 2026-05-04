@@ -10,6 +10,7 @@ type UploadSaveDataInput = {
   gameId: string;
   saveFolderPath: string;
   localHash?: string;
+  localUpdatedAt?: Date | string | null;
 };
 
 type DownloadSaveDataInput = {
@@ -46,7 +47,7 @@ export async function uploadSaveDataAndSyncHash(
     (await window.api.saveData.hash.computeLocalHash(input.saveFolderPath)).data ??
     null;
   if (hash) {
-    await window.api.saveData.hash.saveCloudHash(input.gameId, hash);
+    await window.api.saveData.hash.saveCloudHash(input.gameId, hash, input.localUpdatedAt ?? null);
   }
 
   return syncGameMetadata(input.gameId, "セーブデータアップロード");

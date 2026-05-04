@@ -16,6 +16,7 @@ type PendingUpload = {
   gameTitle: string;
   saveFolderPath: string;
   localHash: string;
+  localUpdatedAt?: Date | null;
 };
 
 type UseUploadAfterSessionResult = {
@@ -57,6 +58,7 @@ export function useUploadAfterSession(
           gameTitle: game.title,
           saveFolderPath: game.saveFolderPath,
           localHash: localHashResult.data,
+          localUpdatedAt: game.localSaveHashUpdatedAt ?? null,
         });
       }
     },
@@ -74,6 +76,7 @@ export function useUploadAfterSession(
         gameId: payload.gameId,
         saveFolderPath: payload.saveFolderPath,
         localHash: payload.localHash,
+        localUpdatedAt: payload.localUpdatedAt ?? null,
       });
       if (result.success) {
         if (toastId) {

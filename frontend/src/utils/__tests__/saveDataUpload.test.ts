@@ -37,12 +37,18 @@ describe("saveDataUpload", () => {
     const result = await uploadSaveDataAndSyncHash({
       gameId: "game-1",
       saveFolderPath: "/tmp/save",
+      localUpdatedAt: "2026-05-04T12:34:56Z",
     });
 
     expect(result).toEqual({ success: true });
     expect(window.api.saveData.upload.uploadSaveDataFolder).toHaveBeenCalledWith(
       "/tmp/save",
       "games/game-1/save_data",
+    );
+    expect(window.api.saveData.hash.saveCloudHash).toHaveBeenCalledWith(
+      "game-1",
+      "local-hash",
+      "2026-05-04T12:34:56Z",
     );
     expect(window.api.cloudSync.syncGame).toHaveBeenCalledWith("game-1");
   });

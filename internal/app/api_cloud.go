@@ -275,13 +275,38 @@ func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHa
 	return result.OkResult(metadata)
 }
 
+func resolveSaveHashUpdatedAt(raw string, now func() time.Time) (time.Time, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return now(), nil
+	}
+
+	updatedAt, err := time.Parse(time.RFC3339Nano, trimmed)
+	if err == nil {
+		return updatedAt, nil
+	}
+
+	updatedAt, fallbackErr := time.Parse(time.RFC3339, trimmed)
+	if fallbackErr == nil {
+		return updatedAt, nil
+	}
+
+	return time.Time{}, err
+}
+
 // SaveCloudSaveHash はクラウドにセーブデータハッシュを保存する。
-func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[bool] {
+func (app *App) SaveCloudSaveHash(gameID string, hash string, updatedAtRaw string) result.ApiResult[bool] {
 	trimmed := strings.TrimSpace(gameID)
 	trimmedHash := strings.TrimSpace(hash)
 	if trimmed == "" || trimmedHash == "" {
 		app.Logger.Warn("入力が不正です", "operation", "SaveCloudSaveHash", "gameId", gameID)
 		return result.ErrorResult[bool]("入力が不正です", "gameID or hash is empty")
+	}
+
+	updatedAt, err := resolveSaveHashUpdatedAt(updatedAtRaw, time.Now)
+	if err != nil {
+		app.Logger.Warn("日時の形式が不正です", "operation", "SaveCloudSaveHash", "updatedAt", updatedAtRaw)
+		return result.ErrorResult[bool]("入力が不正です", "updatedAt must be RFC3339")
 	}
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
@@ -291,7 +316,7 @@ func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[b
 	key := createSaveHashPath(trimmed)
 	metadata := storage.SaveHashMetadata{
 		Hash:      trimmedHash,
-		UpdatedAt: time.Now(),
+		UpdatedAt: updatedAt,
 	}
 	if error := storage.SaveSaveHash(ctx, client, bucket, key, metadata); error != nil {
 		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.saveSaveHash", "key", key)
