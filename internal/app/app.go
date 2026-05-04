@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/credentials"
@@ -132,12 +131,7 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.CloudService = services.NewCloudService(app.Config, credentialStore, app.Logger)
 	app.CloudSyncService = services.NewCloudSyncService(app.Config, credentialStore, repository, app.Logger)
 	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
-	if runtime.GOOS == "windows" {
-		app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.CloudSyncService)
-	} else {
-		app.ProcessMonitor = nil
-		app.Logger.Info("非Windows環境のためプロセス監視を無効化します", "goos", runtime.GOOS)
-	}
+	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.CloudSyncService)
 	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)
 	app.MemoCloudService = services.NewMemoCloudService(app.Config, credentialStore, app.GameService, app.MemoService, app.Logger)
 	app.MaintenanceService = services.NewMaintenanceService(
