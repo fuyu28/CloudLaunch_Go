@@ -14,7 +14,6 @@ type GameRepository interface {
 	CreateGame(ctx context.Context, game models.Game) (*models.Game, error)
 	UpdateGame(ctx context.Context, game models.Game) (*models.Game, error)
 	DeleteGame(ctx context.Context, gameID string) error
-	CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error)
 }
 
 // SessionRepository defines the persistence boundary required by SessionService.
@@ -23,7 +22,6 @@ type SessionRepository interface {
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error)
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error)
 	DeletePlaySession(ctx context.Context, sessionID string) error
-	UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error
 	TouchGameUpdatedAt(ctx context.Context, gameID string) error
 	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
 	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
@@ -39,19 +37,6 @@ type MemoRepository interface {
 	ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error)
 	ListAllMemos(ctx context.Context) ([]models.Memo, error)
 	DeleteMemo(ctx context.Context, memoID string) error
-}
-
-// ChapterRepository defines the persistence boundary required by ChapterService.
-type ChapterRepository interface {
-	ListChaptersByGame(ctx context.Context, gameID string) ([]models.Chapter, error)
-	CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error)
-	GetChapterByID(ctx context.Context, chapterID string) (*models.Chapter, error)
-	UpdateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error)
-	DeleteChapter(ctx context.Context, chapterID string) error
-	UpdateChapterOrder(ctx context.Context, chapterID string, order int64) error
-	GetChapterStats(ctx context.Context, gameID string) ([]models.ChapterStat, error)
-	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)
-	UpdateGame(ctx context.Context, game models.Game) (*models.Game, error)
 }
 
 // CloudSyncRepository defines the persistence boundary required by CloudSyncService.

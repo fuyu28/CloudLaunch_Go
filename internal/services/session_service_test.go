@@ -40,13 +40,6 @@ func (repository *fakeSessionRepository) DeletePlaySession(ctx context.Context, 
 	return nil
 }
 
-func (repository *fakeSessionRepository) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
-	if repository.session != nil {
-		repository.session.ChapterID = chapterID
-	}
-	return nil
-}
-
 func (repository *fakeSessionRepository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
 	repository.touchedGameID = gameID
 	return nil
@@ -147,30 +140,6 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	}
 }
 
-func TestSessionServiceUpdateSessionChapterStoresChapterAndRecalculatesTotal(t *testing.T) {
-	t.Parallel()
-
-	repository := &fakeSessionRepository{
-		session: &models.PlaySession{ID: "session-1", GameID: "game-1", Duration: 180},
-	}
-	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	chapterID := "chapter-2"
-
-	_, err := service.UpdateSessionChapter(context.Background(), "session-1", &chapterID)
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-	if repository.session.ChapterID == nil || *repository.session.ChapterID != "chapter-2" {
-		t.Fatalf("expected chapter id to be stored")
-	}
-	if repository.touchedGameID != "game-1" {
-		t.Fatalf("expected game updated timestamp to be touched")
-	}
-	if repository.updateTotalCalls != 1 || repository.totalDuration != 180 {
-		t.Fatalf("expected total play time to be recalculated, calls=%d total=%d", repository.updateTotalCalls, repository.totalDuration)
-	}
-}
-
 func TestSessionServiceDeleteSessionHandlesLookupError(t *testing.T) {
 	t.Parallel()
 
@@ -197,9 +166,6 @@ func (repository *fakeSessionRepositoryWithError) GetPlaySessionByID(ctx context
 	return nil, repository.getErr
 }
 func (repository *fakeSessionRepositoryWithError) DeletePlaySession(ctx context.Context, sessionID string) error {
-	return nil
-}
-func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
 	return nil
 }
 func (repository *fakeSessionRepositoryWithError) TouchGameUpdatedAt(ctx context.Context, gameID string) error {

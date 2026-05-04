@@ -12,17 +12,16 @@ import (
 
 // CloudGameMetadata はクラウドに保存するゲーム情報を表す。
 type CloudGameMetadata struct {
-	ID             string     `json:"id"`
-	Title          string     `json:"title"`
-	Publisher      string     `json:"publisher"`
-	ImageKey       *string    `json:"imageKey,omitempty"`
-	PlayStatus     string     `json:"playStatus"`
-	TotalPlayTime  int64      `json:"totalPlayTime"`
-	LastPlayed     *time.Time `json:"lastPlayed,omitempty"`
-	ClearedAt      *time.Time `json:"clearedAt,omitempty"`
-	CurrentChapter *string    `json:"currentChapter,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	ID            string     `json:"id"`
+	Title         string     `json:"title"`
+	Publisher     string     `json:"publisher"`
+	ImageKey      *string    `json:"imageKey,omitempty"`
+	PlayStatus    string     `json:"playStatus"`
+	TotalPlayTime int64      `json:"totalPlayTime"`
+	LastPlayed    *time.Time `json:"lastPlayed,omitempty"`
+	ClearedAt     *time.Time `json:"clearedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 // CloudMetadata は全ゲーム情報のまとめを表す。

@@ -77,54 +77,6 @@ func (app *App) DeleteGame(gameID string) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// ListChaptersByGame は章一覧を取得する。
-func (app *App) ListChaptersByGame(gameID string) result.ApiResult[[]models.Chapter] {
-	chapters, err := app.ChapterService.ListChaptersByGame(app.context(), gameID)
-	return serviceResult(chapters, err, "章取得に失敗しました")
-}
-
-// CreateChapter は章を作成する。
-func (app *App) CreateChapter(input services.ChapterInput) result.ApiResult[*models.Chapter] {
-	chapter, err := app.ChapterService.CreateChapter(app.context(), input)
-	return serviceResult(chapter, err, "章作成に失敗しました")
-}
-
-// UpdateChapter は章を更新する。
-func (app *App) UpdateChapter(chapterID string, input services.ChapterUpdateInput) result.ApiResult[*models.Chapter] {
-	chapter, err := app.ChapterService.UpdateChapter(app.context(), chapterID, input)
-	return serviceResult(chapter, err, "章更新に失敗しました")
-}
-
-// UpdateChapterOrders は章の並び順を更新する。
-func (app *App) UpdateChapterOrders(gameID string, orders []services.ChapterOrderUpdate) result.ApiResult[bool] {
-	if err := app.ChapterService.UpdateChapterOrders(app.context(), gameID, orders); err != nil {
-		return serviceErrorResult[bool](err, "章順序更新に失敗しました")
-	}
-	return result.OkResult(true)
-}
-
-// GetChapterStats は章の統計を取得する。
-func (app *App) GetChapterStats(gameID string) result.ApiResult[[]models.ChapterStat] {
-	stats, err := app.ChapterService.GetChapterStats(app.context(), gameID)
-	return serviceResult(stats, err, "章統計取得に失敗しました")
-}
-
-// SetCurrentChapter はゲームの現在章を設定する。
-func (app *App) SetCurrentChapter(gameID string, chapterID string) result.ApiResult[bool] {
-	if err := app.ChapterService.SetCurrentChapter(app.context(), gameID, chapterID); err != nil {
-		return serviceErrorResult[bool](err, "現在章更新に失敗しました")
-	}
-	return result.OkResult(true)
-}
-
-// DeleteChapter は章を削除する。
-func (app *App) DeleteChapter(chapterID string) result.ApiResult[bool] {
-	if err := app.ChapterService.DeleteChapter(app.context(), chapterID); err != nil {
-		return serviceErrorResult[bool](err, "章削除に失敗しました")
-	}
-	return result.OkResult(true)
-}
-
 // CreateSession はセッションを作成する。
 func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*models.PlaySession] {
 	created, err := app.SessionService.CreateSession(app.context(), input)
@@ -151,18 +103,6 @@ func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
 	}
 	if deleted.GameID != "" {
 		app.syncGameAsync(deleted.GameID)
-	}
-	return result.OkResult(true)
-}
-
-// UpdateSessionChapter はセッション章を更新する。
-func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッション章更新に失敗しました")
-	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
 	}
 	return result.OkResult(true)
 }

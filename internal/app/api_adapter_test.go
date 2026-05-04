@@ -73,10 +73,6 @@ func (noopAppGameRepository) DeleteGame(ctx context.Context, gameID string) erro
 	return nil
 }
 
-func (noopAppGameRepository) CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
-	return nil, nil
-}
-
 type noopAppMemoRepository struct{}
 
 func (noopAppMemoRepository) CreateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {

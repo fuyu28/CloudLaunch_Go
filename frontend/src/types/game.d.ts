@@ -14,7 +14,6 @@ export type GameType = {
   totalPlayTime: number;
   lastPlayed: Date | null; // null - 明確な「未プレイ」状態
   clearedAt: Date | null; // null - 明確な「未クリア」状態
-  currentChapter: string | null; // null - 明確な「未選択」状態
 };
 
 export type InputGameData = {

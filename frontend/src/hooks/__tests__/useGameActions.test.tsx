@@ -77,7 +77,6 @@ describe("useGameActions", () => {
       lastPlayed: null,
       playStatus: "unplayed",
       createdAt: new Date("2024-01-01"),
-      currentChapter: null,
       clearedAt: null,
     },
   ];

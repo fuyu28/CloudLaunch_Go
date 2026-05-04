@@ -27,7 +27,7 @@ func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
+		       playStatus, totalPlayTime, lastPlayed, clearedAt
 		FROM "Game" WHERE id = ?
 	`, gameID)
 
@@ -50,7 +50,7 @@ func (repository *Repository) GetGameByExePath(ctx context.Context, exePath stri
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
+		       playStatus, totalPlayTime, lastPlayed, clearedAt
 		FROM "Game" WHERE lower(exePath) = lower(?)
 	`, trimmed)
 
@@ -76,7 +76,7 @@ func (repository *Repository) ListGames(
 	queryBuilder.WriteString(`
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
+		       playStatus, totalPlayTime, lastPlayed, clearedAt
 		FROM "Game"
 	`)
 
@@ -129,11 +129,11 @@ func (repository *Repository) ListGames(
 func (repository *Repository) CreateGame(ctx context.Context, game models.Game) (*models.Game, error) {
 	_, error := repository.connection.ExecContext(ctx, `
 		INSERT INTO "Game" (title, publisher, imagePath, exePath, saveFolderPath, localSaveHash, localSaveHashUpdatedAt,
-			playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			playStatus, totalPlayTime, lastPlayed, clearedAt)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
 		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter)
+		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt)
 	if error != nil {
 		return nil, error
 	}
@@ -146,11 +146,11 @@ func (repository *Repository) UpdateGame(ctx context.Context, game models.Game) 
 	_, error := repository.connection.ExecContext(ctx, `
 		UPDATE "Game" SET title = ?, publisher = ?, imagePath = ?, exePath = ?, saveFolderPath = ?,
 			localSaveHash = ?, localSaveHashUpdatedAt = ?,
-			playStatus = ?, totalPlayTime = ?, lastPlayed = ?, clearedAt = ?, currentChapter = ?
+			playStatus = ?, totalPlayTime = ?, lastPlayed = ?, clearedAt = ?
 		WHERE id = ?
 	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
 		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter, game.ID)
+		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.ID)
 	if error != nil {
 		return nil, error
 	}
@@ -164,8 +164,8 @@ func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Ga
 		INSERT INTO "Game" (
 			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 			localSaveHash, localSaveHashUpdatedAt,
-			playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			playStatus, totalPlayTime, lastPlayed, clearedAt
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title = excluded.title,
 			publisher = excluded.publisher,
@@ -179,11 +179,10 @@ func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Ga
 			playStatus = excluded.playStatus,
 			totalPlayTime = excluded.totalPlayTime,
 			lastPlayed = excluded.lastPlayed,
-			clearedAt = excluded.clearedAt,
-			currentChapter = excluded.currentChapter
+			clearedAt = excluded.clearedAt
 	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
 		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentChapter)
+		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt)
 	return error
 }
 
@@ -201,96 +200,12 @@ func (repository *Repository) DeleteGame(ctx context.Context, gameID string) err
 	return error
 }
 
-// CreateChapter は章を作成して返す。
-func (repository *Repository) CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
-	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "Chapter" (name, "order", gameId)
-		VALUES (?, ?, ?)
-	`, chapter.Name, chapter.Order, chapter.GameID)
-	if error != nil {
-		return nil, error
-	}
-
-	return repository.findLatestChapter(ctx, chapter.GameID, chapter.Name)
-}
-
-// ListChaptersByGame はゲームIDで章一覧を取得する。
-func (repository *Repository) ListChaptersByGame(ctx context.Context, gameID string) (chapters []models.Chapter, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, name, "order", gameId, createdAt
-		FROM "Chapter" WHERE gameId = ? ORDER BY "order" ASC
-	`, gameID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	chapters = make([]models.Chapter, 0)
-	for rows.Next() {
-		chapter, err := scanChapter(rows)
-		if err != nil {
-			return nil, err
-		}
-		chapters = append(chapters, *chapter)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return chapters, nil
-}
-
-// UpdateChapter は章を更新して返す。
-func (repository *Repository) UpdateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
-	_, error := repository.connection.ExecContext(ctx, `
-		UPDATE "Chapter" SET name = ?, "order" = ? WHERE id = ?
-	`, chapter.Name, chapter.Order, chapter.ID)
-	if error != nil {
-		return nil, error
-	}
-	return repository.GetChapterByID(ctx, chapter.ID)
-}
-
-// UpdateChapterOrder は章の順序を更新する。
-func (repository *Repository) UpdateChapterOrder(ctx context.Context, chapterID string, order int64) error {
-	_, error := repository.connection.ExecContext(ctx, `
-		UPDATE "Chapter" SET "order" = ? WHERE id = ?
-	`, order, chapterID)
-	return error
-}
-
-// GetChapterByID は章IDで章を取得する。
-func (repository *Repository) GetChapterByID(ctx context.Context, chapterID string) (*models.Chapter, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, name, "order", gameId, createdAt FROM "Chapter" WHERE id = ?
-	`, chapterID)
-
-	chapter, error := scanChapter(row)
-	if error == sql.ErrNoRows {
-		return nil, nil
-	}
-	if error != nil {
-		return nil, error
-	}
-	return chapter, nil
-}
-
-// DeleteChapter は章を削除する。
-func (repository *Repository) DeleteChapter(ctx context.Context, chapterID string) error {
-	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "Chapter" WHERE id = ?`, chapterID)
-	return error
-}
-
 // CreatePlaySession はプレイセッションを作成して返す。
 func (repository *Repository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "PlaySession" (gameId, playedAt, duration, chapterId)
-		VALUES (?, ?, ?, ?)
-	`, session.GameID, session.PlayedAt, session.Duration, session.ChapterID)
+		INSERT INTO "PlaySession" (gameId, playedAt, duration)
+		VALUES (?, ?, ?)
+	`, session.GameID, session.PlayedAt, session.Duration)
 	if error != nil {
 		return nil, error
 	}
@@ -301,7 +216,7 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session mod
 // GetPlaySessionByID はID指定でセッションを取得する。
 func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, chapterId, updatedAt
+		SELECT id, gameId, playedAt, duration, updatedAt
 		FROM "PlaySession" WHERE id = ?
 	`, sessionID)
 	session, error := scanPlaySession(row)
@@ -317,7 +232,7 @@ func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
 func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []models.PlaySession, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, gameId, playedAt, duration, chapterId, updatedAt
+		SELECT id, gameId, playedAt, duration, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
 	`, gameID)
 	if err != nil {
@@ -398,23 +313,14 @@ func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, chapterId, updatedAt)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, updatedAt)
+		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			gameId = excluded.gameId,
 			playedAt = excluded.playedAt,
 			duration = excluded.duration,
-			chapterId = excluded.chapterId,
 			updatedAt = excluded.updatedAt
-	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.ChapterID, session.UpdatedAt)
-	return error
-}
-
-// UpdatePlaySessionChapter はセッションの章を更新する。
-func (repository *Repository) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
-	_, error := repository.connection.ExecContext(ctx, `
-		UPDATE "PlaySession" SET chapterId = ? WHERE id = ?
-	`, chapterID, sessionID)
+	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.UpdatedAt)
 	return error
 }
 
@@ -506,58 +412,6 @@ func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string
 	return memos, nil
 }
 
-// GetChapterStats は章ごとの統計を取得する。
-func (repository *Repository) GetChapterStats(ctx context.Context, gameID string) (stats []models.ChapterStat, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT c.id, c.name, c."order",
-		       COALESCE(SUM(ps.duration), 0) as total_time,
-		       COUNT(ps.id) as session_count
-		FROM "Chapter" c
-		LEFT JOIN "PlaySession" ps ON ps.chapterId = c.id
-		WHERE c.gameId = ?
-		GROUP BY c.id, c.name, c."order"
-		ORDER BY c."order" ASC
-	`, gameID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	stats = make([]models.ChapterStat, 0)
-	for rows.Next() {
-		var (
-			chapterID    string
-			chapterName  string
-			orderValue   int64
-			totalTime    int64
-			sessionCount int64
-		)
-		if err := rows.Scan(&chapterID, &chapterName, &orderValue, &totalTime, &sessionCount); err != nil {
-			return nil, err
-		}
-		average := float64(0)
-		if sessionCount > 0 {
-			average = float64(totalTime) / float64(sessionCount)
-		}
-		stats = append(stats, models.ChapterStat{
-			ChapterID:    chapterID,
-			ChapterName:  chapterName,
-			TotalTime:    totalTime,
-			SessionCount: sessionCount,
-			AverageTime:  average,
-			Order:        orderValue,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return stats, nil
-}
-
 // ListAllMemos は全メモを取得する。
 func (repository *Repository) ListAllMemos(ctx context.Context) (memos []models.Memo, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
@@ -623,7 +477,6 @@ func scanGame(row scanner) (*models.Game, error) {
 		localSaveHashUpdatedAt sql.NullTime
 		lastPlayed             sql.NullTime
 		clearedAt              sql.NullTime
-		currentChapter         sql.NullString
 	)
 
 	game := models.Game{}
@@ -642,7 +495,6 @@ func scanGame(row scanner) (*models.Game, error) {
 		&game.TotalPlayTime,
 		&lastPlayed,
 		&clearedAt,
-		&currentChapter,
 	)
 	if error != nil {
 		return nil, error
@@ -654,39 +506,22 @@ func scanGame(row scanner) (*models.Game, error) {
 	game.LocalSaveHashUpdatedAt = nullTimePtr(localSaveHashUpdatedAt)
 	game.LastPlayed = nullTimePtr(lastPlayed)
 	game.ClearedAt = nullTimePtr(clearedAt)
-	game.CurrentChapter = nullStringPtr(currentChapter)
-
 	return &game, nil
-}
-
-// scanChapter は1行分の章データを読み取る。
-func scanChapter(row scanner) (*models.Chapter, error) {
-	chapter := models.Chapter{}
-	error := row.Scan(&chapter.ID, &chapter.Name, &chapter.Order, &chapter.GameID, &chapter.CreatedAt)
-	if error != nil {
-		return nil, error
-	}
-	return &chapter, nil
 }
 
 // scanPlaySession は1行分のセッションデータを読み取る。
 func scanPlaySession(row scanner) (*models.PlaySession, error) {
-	var chapterID sql.NullString
-
 	session := models.PlaySession{}
 	error := row.Scan(
 		&session.ID,
 		&session.GameID,
 		&session.PlayedAt,
 		&session.Duration,
-		&chapterID,
 		&session.UpdatedAt,
 	)
 	if error != nil {
 		return nil, error
 	}
-
-	session.ChapterID = nullStringPtr(chapterID)
 
 	return &session, nil
 }
@@ -722,25 +557,16 @@ func (repository *Repository) findLatestGame(ctx context.Context, title string, 
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentChapter
+		       playStatus, totalPlayTime, lastPlayed, clearedAt
 		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
 	`, title, exePath)
 	return scanGame(row)
 }
 
-// findLatestChapter は直近作成の章を取得する。
-func (repository *Repository) findLatestChapter(ctx context.Context, gameID string, name string) (*models.Chapter, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, name, "order", gameId, createdAt
-		FROM "Chapter" WHERE gameId = ? AND name = ? ORDER BY createdAt DESC LIMIT 1
-	`, gameID, name)
-	return scanChapter(row)
-}
-
 // findLatestPlaySession は直近のプレイセッションを取得する。
 func (repository *Repository) findLatestPlaySession(ctx context.Context, gameID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, chapterId, updatedAt
+		SELECT id, gameId, playedAt, duration, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1
 	`, gameID)
 	return scanPlaySession(row)

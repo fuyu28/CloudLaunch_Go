@@ -649,16 +649,15 @@ func (service *CloudSyncService) buildCloudGame(
 
 func composeCloudGameMetadata(game models.Game) storage.CloudGameMetadata {
 	return storage.CloudGameMetadata{
-		ID:             game.ID,
-		Title:          game.Title,
-		Publisher:      game.Publisher,
-		PlayStatus:     string(game.PlayStatus),
-		TotalPlayTime:  game.TotalPlayTime,
-		LastPlayed:     game.LastPlayed,
-		ClearedAt:      game.ClearedAt,
-		CurrentChapter: game.CurrentChapter,
-		CreatedAt:      game.CreatedAt,
-		UpdatedAt:      game.UpdatedAt,
+		ID:            game.ID,
+		Title:         game.Title,
+		Publisher:     game.Publisher,
+		PlayStatus:    string(game.PlayStatus),
+		TotalPlayTime: game.TotalPlayTime,
+		LastPlayed:    game.LastPlayed,
+		ClearedAt:     game.ClearedAt,
+		CreatedAt:     game.CreatedAt,
+		UpdatedAt:     game.UpdatedAt,
 	}
 }
 
@@ -773,7 +772,6 @@ func composeSyncedLocalGame(
 		TotalPlayTime:          cloud.TotalPlayTime,
 		LastPlayed:             cloud.LastPlayed,
 		ClearedAt:              cloud.ClearedAt,
-		CurrentChapter:         cloud.CurrentChapter,
 	}
 }
 
@@ -910,15 +908,14 @@ func (service *CloudSyncService) mergeCloudGameMetadata(
 	sessions []storage.CloudSessionRecord,
 ) models.Game {
 	base := models.Game{
-		ID:             cloud.ID,
-		Title:          cloud.Title,
-		Publisher:      cloud.Publisher,
-		PlayStatus:     models.PlayStatus(cloud.PlayStatus),
-		CreatedAt:      cloud.CreatedAt,
-		UpdatedAt:      cloud.UpdatedAt,
-		LastPlayed:     cloud.LastPlayed,
-		ClearedAt:      cloud.ClearedAt,
-		CurrentChapter: cloud.CurrentChapter,
+		ID:         cloud.ID,
+		Title:      cloud.Title,
+		Publisher:  cloud.Publisher,
+		PlayStatus: models.PlayStatus(cloud.PlayStatus),
+		CreatedAt:  cloud.CreatedAt,
+		UpdatedAt:  cloud.UpdatedAt,
+		LastPlayed: cloud.LastPlayed,
+		ClearedAt:  cloud.ClearedAt,
 	}
 	if local != nil && local.UpdatedAt.After(cloud.UpdatedAt) {
 		base = *local
@@ -940,17 +937,16 @@ func (service *CloudSyncService) mergeCloudGameMetadata(
 
 func cloudMetadataFromGame(game models.Game, imageKey *string) storage.CloudGameMetadata {
 	return storage.CloudGameMetadata{
-		ID:             game.ID,
-		Title:          game.Title,
-		Publisher:      game.Publisher,
-		ImageKey:       imageKey,
-		PlayStatus:     string(game.PlayStatus),
-		TotalPlayTime:  game.TotalPlayTime,
-		LastPlayed:     game.LastPlayed,
-		ClearedAt:      game.ClearedAt,
-		CurrentChapter: game.CurrentChapter,
-		CreatedAt:      game.CreatedAt,
-		UpdatedAt:      game.UpdatedAt,
+		ID:            game.ID,
+		Title:         game.Title,
+		Publisher:     game.Publisher,
+		ImageKey:      imageKey,
+		PlayStatus:    string(game.PlayStatus),
+		TotalPlayTime: game.TotalPlayTime,
+		LastPlayed:    game.LastPlayed,
+		ClearedAt:     game.ClearedAt,
+		CreatedAt:     game.CreatedAt,
+		UpdatedAt:     game.UpdatedAt,
 	}
 }
 

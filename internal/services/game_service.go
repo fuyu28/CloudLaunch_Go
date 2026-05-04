@@ -71,14 +71,6 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*m
 		return nil, newServiceError("ゲーム作成に失敗しました", error.Error())
 	}
 
-	if created != nil {
-		_, _ = service.repository.CreateChapter(ctx, models.Chapter{
-			Name:   "第1章",
-			Order:  1,
-			GameID: created.ID,
-		})
-	}
-
 	service.logger.Info("ゲームを作成", "title", game.Title)
 	return created, nil
 }
@@ -110,7 +102,6 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 		current.PlayStatus = input.PlayStatus
 	}
 	current.ClearedAt = input.ClearedAt
-	current.CurrentChapter = input.CurrentChapter
 
 	updated, error := service.repository.UpdateGame(ctx, *current)
 	if error != nil {
@@ -182,7 +173,6 @@ type GameUpdateInput struct {
 	SaveFolderPath *string
 	PlayStatus     models.PlayStatus
 	ClearedAt      *time.Time
-	CurrentChapter *string
 }
 
 // validateGameInput はゲーム作成入力の簡易検証を行う。

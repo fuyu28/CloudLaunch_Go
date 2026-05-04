@@ -38,10 +38,6 @@ func (repository fakeMemoCloudGameRepository) DeleteGame(ctx context.Context, ga
 	return nil
 }
 
-func (repository fakeMemoCloudGameRepository) CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
-	return nil, nil
-}
-
 type fakeMemoCloudMemoRepository struct {
 	memo       *models.Memo
 	memoByGame []models.Memo

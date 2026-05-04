@@ -495,7 +495,6 @@ export const createWailsBridge = (): WindowApi => {
           SaveFolderPath: game.saveFolderPath ?? null,
           PlayStatus: game.playStatus ?? "unplayed",
           ClearedAt: null,
-          CurrentChapter: null,
         };
         const result = await UpdateGame(id, payload);
         return result.success
@@ -522,7 +521,6 @@ export const createWailsBridge = (): WindowApi => {
           SaveFolderPath: game.saveFolderPath ?? null,
           PlayStatus: playStatus,
           ClearedAt: clearedAt ?? null,
-          CurrentChapter: game.currentChapter ?? null,
         };
         const result = await UpdateGame(gameId, updatePayload);
         if (!result.success) {
@@ -539,7 +537,6 @@ export const createWailsBridge = (): WindowApi => {
           GameID: gameId,
           PlayedAt: new Date(),
           Duration: duration,
-          ChapterID: null,
         };
         const result = await CreateSession(payload);
         return result.success
