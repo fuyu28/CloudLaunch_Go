@@ -35,9 +35,10 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 	}
 
 	session := models.PlaySession{
-		GameID:   strings.TrimSpace(input.GameID),
-		PlayedAt: input.PlayedAt,
-		Duration: input.Duration,
+		GameID:      strings.TrimSpace(input.GameID),
+		PlayRouteID: normalizeOptionalString(input.PlayRouteID),
+		PlayedAt:    input.PlayedAt,
+		Duration:    input.Duration,
 	}
 
 	created, error := service.repository.CreatePlaySession(ctx, session)
@@ -112,9 +113,10 @@ func (service *SessionService) recalculateTotalPlayTime(ctx context.Context, gam
 
 // SessionInput はセッション作成入力を表す。
 type SessionInput struct {
-	GameID   string
-	PlayedAt time.Time
-	Duration int64
+	GameID      string
+	PlayRouteID *string
+	PlayedAt    time.Time
+	Duration    int64
 }
 
 // validateSessionInput はセッション入力を検証する。
@@ -129,4 +131,15 @@ func validateSessionInput(input SessionInput) error {
 		return errors.New("durationが不正です")
 	}
 	return nil
+}
+
+func normalizeOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

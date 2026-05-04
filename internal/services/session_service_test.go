@@ -141,6 +141,28 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	}
 }
 
+func TestSessionServiceCreateSessionCarriesPlayRouteID(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeSessionRepository{}
+	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	routeID := " route-1 "
+
+	_, err := service.CreateSession(context.Background(), SessionInput{
+		GameID:      "game-1",
+		PlayRouteID: &routeID,
+		PlayedAt:    time.Date(2026, 4, 24, 18, 0, 0, 0, time.UTC),
+		Duration:    120,
+	})
+
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if repository.session == nil || repository.session.PlayRouteID == nil || *repository.session.PlayRouteID != "route-1" {
+		t.Fatalf("expected trimmed play route id to be persisted, got %#v", repository.session)
+	}
+}
+
 func TestSessionServiceDeleteSessionHandlesLookupError(t *testing.T) {
 	t.Parallel()
 
