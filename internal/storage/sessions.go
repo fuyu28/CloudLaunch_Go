@@ -12,11 +12,10 @@ import (
 
 // CloudSessionRecord はクラウドに保存するセッション情報を表す。
 type CloudSessionRecord struct {
-	ID          string    `json:"id"`
-	PlayedAt    time.Time `json:"playedAt"`
-	Duration    int64     `json:"duration"`
-	SessionName *string   `json:"sessionName,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID        string    `json:"id"`
+	PlayedAt  time.Time `json:"playedAt"`
+	Duration  int64     `json:"duration"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // LoadSessions はクラウド上のセッション情報を取得する。

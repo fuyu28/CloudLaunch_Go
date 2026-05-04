@@ -33,13 +33,12 @@ type Game struct {
 
 // PlaySession はプレイセッションを表す。
 type PlaySession struct {
-	ID          string    `json:"id"`
-	GameID      string    `json:"gameId"`
-	PlayedAt    time.Time `json:"playedAt"`
-	Duration    int64     `json:"duration"`
-	SessionName *string   `json:"sessionName,omitempty"`
-	ChapterID   *string   `json:"chapterId,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID        string    `json:"id"`
+	GameID    string    `json:"gameId"`
+	PlayedAt  time.Time `json:"playedAt"`
+	Duration  int64     `json:"duration"`
+	ChapterID *string   `json:"chapterId,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Chapter は章情報を表す。

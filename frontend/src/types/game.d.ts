@@ -58,7 +58,6 @@ export type MonitoringGameStatus = {
 
 export type PlaySessionType = {
   id: string;
-  sessionName?: string; // undefined - オプショナル情報
   playedAt: Date;
   duration: number;
   gameId: string;

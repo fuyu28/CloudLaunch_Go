@@ -35,11 +35,10 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 	}
 
 	session := models.PlaySession{
-		GameID:      strings.TrimSpace(input.GameID),
-		PlayedAt:    input.PlayedAt,
-		Duration:    input.Duration,
-		SessionName: input.SessionName,
-		ChapterID:   input.ChapterID,
+		GameID:    strings.TrimSpace(input.GameID),
+		PlayedAt:  input.PlayedAt,
+		Duration:  input.Duration,
+		ChapterID: input.ChapterID,
 	}
 
 	created, error := service.repository.CreatePlaySession(ctx, session)
@@ -115,37 +114,6 @@ func (service *SessionService) UpdateSessionChapter(ctx context.Context, session
 	return mutation, nil
 }
 
-// UpdateSessionName はセッション名を更新する。
-func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) (SessionMutationResult, error) {
-	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
-	if !ok {
-		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return SessionMutationResult{}, newServiceError("セッションIDが不正です", detail)
-	}
-	trimmedName, detail, ok := requireNonEmpty(sessionName, "sessionName")
-	if !ok {
-		service.logger.Warn("セッション名が不正です", "detail", detail, "sessionId", sessionID)
-		return SessionMutationResult{}, newServiceError("セッション名が不正です", detail)
-	}
-
-	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
-	if error != nil {
-		service.logger.Error("セッション取得に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション取得に失敗しました", error.Error())
-	}
-	if error := service.repository.UpdatePlaySessionName(ctx, trimmedID, trimmedName); error != nil {
-		service.logger.Error("セッション名更新に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション名更新に失敗しました", error.Error())
-	}
-
-	mutation := SessionMutationResult{}
-	if session != nil {
-		service.afterSessionChange(ctx, session.GameID, nil)
-		mutation.GameID = session.GameID
-	}
-	return mutation, nil
-}
-
 func (service *SessionService) afterSessionChange(ctx context.Context, gameID string, playedAt *time.Time) {
 	_ = service.repository.TouchGameUpdatedAt(ctx, gameID)
 	service.recalculateTotalPlayTime(ctx, gameID, playedAt)
@@ -170,11 +138,10 @@ func (service *SessionService) recalculateTotalPlayTime(ctx context.Context, gam
 
 // SessionInput はセッション作成入力を表す。
 type SessionInput struct {
-	GameID      string
-	PlayedAt    time.Time
-	Duration    int64
-	SessionName *string
-	ChapterID   *string
+	GameID    string
+	PlayedAt  time.Time
+	Duration  int64
+	ChapterID *string
 }
 
 // validateSessionInput はセッション入力を検証する。

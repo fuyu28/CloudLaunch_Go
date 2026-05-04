@@ -16,8 +16,7 @@
  * @param onProcessUpdated - セッション情報更新時のコールバック
  */
 
-import { useCallback, useEffect, useState, useMemo } from "react";
-import { FaEdit } from "react-icons/fa";
+import { useCallback, useEffect, useState } from "react";
 import { RxCross1 } from "react-icons/rx";
 
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
@@ -26,21 +25,7 @@ import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { logger } from "@renderer/utils/logger";
 
 import ConfirmModal from "./ConfirmModal";
-import { playSessionEditSchema } from "@renderer/schemas/playSession";
 import type { PlaySessionType } from "src/types/game";
-import { useZodValidation } from "../hooks/useZodValidation";
-
-/**
- * 編集用のフォームデータ
- */
-type EditFormData = Record<string, unknown> & {
-  sessionName: string;
-};
-
-/**
- * 編集フォームのフィールド名の型
- */
-type EditFormFields = keyof Pick<EditFormData, "sessionName">;
 
 /**
  * セッション管理モーダルのProps
@@ -72,17 +57,6 @@ export default function PlaySessionManagementModal({
   const [loading, setLoading] = useState(false);
   const [selectedProcessId, setSelectedProcessId] = useState<string | undefined>(undefined);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingProcess, setEditingProcess] = useState<PlaySessionType | undefined>(undefined);
-  const [editFormData, setEditFormData] = useState<EditFormData>({
-    sessionName: "",
-  });
-
-  // フォームデータをuseMemoでラップ
-  const memoizedEditFormData = useMemo(() => editFormData, [editFormData]);
-
-  // バリデーション
-  const validation = useZodValidation(playSessionEditSchema, memoizedEditFormData);
   const { formatSmart, formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
 
@@ -111,92 +85,6 @@ export default function PlaySessionManagementModal({
       setLoading(false);
     }
   }, [gameId, showToast]);
-
-  /**
-   * 編集モーダルを開く
-   */
-  const openEditModal = useCallback(
-    (process: PlaySessionType) => {
-      setEditingProcess(process);
-      setEditFormData({
-        sessionName: process.sessionName ?? "未設定",
-      });
-      validation.resetTouched(); // タッチ状態をリセット
-      setIsEditModalOpen(true);
-    },
-    [validation],
-  );
-
-  /**
-   * 編集モーダルを閉じる
-   */
-  const closeEditModal = useCallback(() => {
-    setIsEditModalOpen(false);
-    setEditingProcess(undefined);
-    setEditFormData({
-      sessionName: "",
-    });
-    validation.resetTouched(); // タッチ状態をリセット
-  }, [validation]);
-
-  /**
-   * フォーム入力変更処理
-   */
-  const handleFormChange = useCallback(
-    (field: EditFormFields, value: string | null) => {
-      setEditFormData((prev) => ({ ...prev, [field]: value }));
-      validation.touch(field);
-    },
-    [validation],
-  );
-
-  /**
-   * セッション編集処理
-   */
-  const handleEditSession = useCallback(async () => {
-    if (!editingProcess) return;
-
-    // バリデーション実行
-    const validationResult = validation.validate();
-    if (!validationResult.isValid) {
-      showToast("入力内容に問題があります", "error");
-      return;
-    }
-
-    try {
-      // セッション名を更新
-      if (memoizedEditFormData.sessionName !== editingProcess.sessionName) {
-        const nameResult = await window.api.database.updateSessionName(
-          editingProcess.id,
-          memoizedEditFormData.sessionName,
-        );
-        if (!nameResult.success) {
-          showToast("セッション名の更新に失敗しました", "error");
-          return;
-        }
-      }
-
-      showToast("セッションを更新しました", "success");
-      await fetchProcesses();
-      onProcessUpdated?.();
-      closeEditModal();
-    } catch (error) {
-      logger.error("セッション編集エラー:", {
-        component: "PlaySessionManagementModal",
-        function: "unknown",
-        data: error,
-      });
-      showToast("セッションの更新に失敗しました", "error");
-    }
-  }, [
-    editingProcess,
-    memoizedEditFormData,
-    validation,
-    fetchProcesses,
-    onProcessUpdated,
-    showToast,
-    closeEditModal,
-  ]);
 
   /**
    * セッション削除処理
@@ -284,7 +172,6 @@ export default function PlaySessionManagementModal({
                     <table className="table w-full">
                       <thead>
                         <tr>
-                          <th>セッション名</th>
                           <th>実行時間</th>
                           <th>プレイ日時</th>
                           <th>操作</th>
@@ -293,20 +180,10 @@ export default function PlaySessionManagementModal({
                       <tbody>
                         {processes.map((process) => (
                           <tr key={process.id}>
-                            <td>
-                              <div className="font-medium">{process.sessionName ?? "未設定"}</div>
-                            </td>
                             <td>{formatSmart(process.duration)}</td>
                             <td>{formatDateWithTime(process.playedAt)}</td>
                             <td>
                               <div className="flex gap-2">
-                                <button
-                                  className="btn btn-sm btn-outline btn-primary"
-                                  onClick={() => openEditModal(process)}
-                                >
-                                  <FaEdit />
-                                  編集
-                                </button>
                                 <button
                                   className="btn btn-sm btn-outline btn-error"
                                   onClick={() => openDeleteModal(process.id)}
@@ -337,53 +214,14 @@ export default function PlaySessionManagementModal({
       <ConfirmModal
         id="delete-session-modal"
         isOpen={isDeleteModalOpen}
-        message={`セッション「${selectedProcess?.sessionName || "未設定"}」を削除しますか？\nこの操作は取り消せません。`}
+        message={`このセッションを削除しますか？\nプレイ日時: ${
+          selectedProcess ? formatDateWithTime(selectedProcess.playedAt) : "-"
+        }\nこの操作は取り消せません。`}
         cancelText="キャンセル"
         confirmText="削除する"
         onConfirm={handleDeleteProcess}
         onCancel={closeDeleteModal}
       />
-
-      {/* 編集モーダル */}
-      <div className={`modal ${isEditModalOpen ? "modal-open" : ""}`}>
-        <div className="modal-box">
-          <h3 className="font-bold text-lg mb-4">セッション編集</h3>
-
-          <div className="space-y-4">
-            {/* セッション名 */}
-            <div>
-              <label className="label">
-                <span className="label-text">セッション名</span>
-              </label>
-              <input
-                type="text"
-                className={`input input-bordered w-full ${
-                  validation.hasError("sessionName") ? "input-error" : ""
-                }`}
-                value={editFormData.sessionName}
-                onChange={(e) => handleFormChange("sessionName", e.target.value)}
-                placeholder="セッション名を入力"
-              />
-              {validation.getError("sessionName") && (
-                <div className="text-error text-sm mt-1">{validation.getError("sessionName")}</div>
-              )}
-            </div>
-          </div>
-
-          <div className="modal-action">
-            <button className="btn btn-ghost" onClick={closeEditModal}>
-              キャンセル
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleEditSession}
-              disabled={!editFormData.sessionName.trim()}
-            >
-              更新
-            </button>
-          </div>
-        </div>
-      </div>
     </>
   );
 }

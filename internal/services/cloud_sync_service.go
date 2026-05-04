@@ -666,11 +666,10 @@ func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionR
 	records := make([]storage.CloudSessionRecord, 0, len(sessions))
 	for _, session := range sessions {
 		records = append(records, storage.CloudSessionRecord{
-			ID:          session.ID,
-			PlayedAt:    session.PlayedAt,
-			Duration:    session.Duration,
-			SessionName: session.SessionName,
-			UpdatedAt:   session.UpdatedAt,
+			ID:        session.ID,
+			PlayedAt:  session.PlayedAt,
+			Duration:  session.Duration,
+			UpdatedAt: session.UpdatedAt,
 		})
 	}
 	return records
@@ -678,12 +677,11 @@ func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionR
 
 func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
 	return models.PlaySession{
-		ID:          session.ID,
-		GameID:      gameID,
-		PlayedAt:    session.PlayedAt,
-		Duration:    session.Duration,
-		SessionName: session.SessionName,
-		UpdatedAt:   session.UpdatedAt,
+		ID:        session.ID,
+		GameID:    gameID,
+		PlayedAt:  session.PlayedAt,
+		Duration:  session.Duration,
+		UpdatedAt: session.UpdatedAt,
 	}
 }
 
@@ -807,11 +805,10 @@ func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.C
 	for _, session := range localSessions {
 		localMap[session.ID] = session
 		merged[session.ID] = storage.CloudSessionRecord{
-			ID:          session.ID,
-			PlayedAt:    session.PlayedAt,
-			Duration:    session.Duration,
-			SessionName: session.SessionName,
-			UpdatedAt:   session.UpdatedAt,
+			ID:        session.ID,
+			PlayedAt:  session.PlayedAt,
+			Duration:  session.Duration,
+			UpdatedAt: session.UpdatedAt,
 		}
 	}
 	for _, session := range cloudSessions {
@@ -874,15 +871,7 @@ func sessionsEquivalent(local models.PlaySession, cloud storage.CloudSessionReco
 	return local.ID == cloud.ID &&
 		local.PlayedAt.Equal(cloud.PlayedAt) &&
 		local.Duration == cloud.Duration &&
-		strings.TrimSpace(stringValue(local.SessionName)) == strings.TrimSpace(stringValue(cloud.SessionName)) &&
 		local.UpdatedAt.Equal(cloud.UpdatedAt)
-}
-
-func stringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
 }
 
 func (service *CloudSyncService) upsertMergedLocalSessions(
@@ -894,12 +883,11 @@ func (service *CloudSyncService) upsertMergedLocalSessions(
 	var total int64
 	for _, session := range sessions {
 		playSession := models.PlaySession{
-			ID:          session.ID,
-			GameID:      gameID,
-			PlayedAt:    session.PlayedAt,
-			Duration:    session.Duration,
-			SessionName: session.SessionName,
-			UpdatedAt:   session.UpdatedAt,
+			ID:        session.ID,
+			GameID:    gameID,
+			PlayedAt:  session.PlayedAt,
+			Duration:  session.Duration,
+			UpdatedAt: session.UpdatedAt,
 		}
 		if err := service.repository.UpsertPlaySessionSync(ctx, playSession); err != nil {
 			return err

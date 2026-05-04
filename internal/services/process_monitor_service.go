@@ -480,13 +480,11 @@ func (service *ProcessMonitorService) checkProcesses() {
 }
 
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
-	sessionName := "自動記録 - " + game.ExeName
 	ctx := context.Background()
 	_, err := service.repository.CreatePlaySession(ctx, models.PlaySession{
-		GameID:      game.GameID,
-		PlayedAt:    endedAt,
-		Duration:    game.AccumulatedTime,
-		SessionName: &sessionName,
+		GameID:   game.GameID,
+		PlayedAt: endedAt,
+		Duration: game.AccumulatedTime,
 	})
 	if err != nil {
 		service.logger.Error("プレイセッション保存に失敗", "error", err)

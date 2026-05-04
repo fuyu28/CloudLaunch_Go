@@ -167,18 +167,6 @@ func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result
 	return result.OkResult(true)
 }
 
-// UpdateSessionName はセッション名を更新する。
-func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッション名更新に失敗しました")
-	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
-	}
-	return result.OkResult(true)
-}
-
 // CreateMemo はメモを作成する。
 func (app *App) CreateMemo(input services.MemoInput) result.ApiResult[*models.Memo] {
 	memo, err := app.MemoService.CreateMemo(app.context(), input)

@@ -24,7 +24,6 @@ type SessionRepository interface {
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error)
 	DeletePlaySession(ctx context.Context, sessionID string) error
 	UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error
-	UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error
 	TouchGameUpdatedAt(ctx context.Context, gameID string) error
 	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
 	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error

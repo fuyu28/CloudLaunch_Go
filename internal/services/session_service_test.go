@@ -47,13 +47,6 @@ func (repository *fakeSessionRepository) UpdatePlaySessionChapter(ctx context.Co
 	return nil
 }
 
-func (repository *fakeSessionRepository) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
-	if repository.session != nil {
-		repository.session.SessionName = &sessionName
-	}
-	return nil
-}
-
 func (repository *fakeSessionRepository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
 	repository.touchedGameID = gameID
 	return nil
@@ -114,13 +107,11 @@ func TestSessionServiceListSessionsByGameUsesRepositoryBoundary(t *testing.T) {
 
 	repository := &fakeSessionRepository{
 		session: func() *models.PlaySession {
-			name := "Session 1"
 			return &models.PlaySession{
-				ID:          "session-1",
-				GameID:      "game-1",
-				PlayedAt:    time.Now(),
-				Duration:    120,
-				SessionName: &name,
+				ID:       "session-1",
+				GameID:   "game-1",
+				PlayedAt: time.Now(),
+				Duration: 120,
 			}
 		}(),
 	}
@@ -153,46 +144,6 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	}
 	if repository.touchedGameID != "game-1" {
 		t.Fatalf("expected game touch after create")
-	}
-}
-
-func TestSessionServiceUpdateSessionNameRejectsInvalidName(t *testing.T) {
-	t.Parallel()
-
-	repository := &fakeSessionRepository{
-		session: &models.PlaySession{ID: "session-1", GameID: "game-1"},
-	}
-	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
-
-	_, err := service.UpdateSessionName(context.Background(), "session-1", "   ")
-	if err == nil {
-		t.Fatalf("expected invalid session name to fail")
-	}
-}
-
-func TestSessionServiceUpdateSessionNameTrimsNameAndRecalculatesTotal(t *testing.T) {
-	t.Parallel()
-
-	repository := &fakeSessionRepository{
-		session: &models.PlaySession{ID: "session-1", GameID: "game-1", Duration: 120},
-	}
-	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
-
-	result, err := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  ")
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-	if result.GameID != "game-1" {
-		t.Fatalf("expected affected game id to be returned")
-	}
-	if repository.session.SessionName == nil || *repository.session.SessionName != "Chapter 1" {
-		t.Fatalf("expected session name to be trimmed and stored")
-	}
-	if repository.touchedGameID != "game-1" {
-		t.Fatalf("expected game updated timestamp to be touched")
-	}
-	if repository.updateTotalCalls != 1 || repository.totalDuration != 120 {
-		t.Fatalf("expected total play time to be recalculated, calls=%d total=%d", repository.updateTotalCalls, repository.totalDuration)
 	}
 }
 
@@ -249,9 +200,6 @@ func (repository *fakeSessionRepositoryWithError) DeletePlaySession(ctx context.
 	return nil
 }
 func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
-	return nil
-}
-func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
 	return nil
 }
 func (repository *fakeSessionRepositoryWithError) TouchGameUpdatedAt(ctx context.Context, gameID string) error {

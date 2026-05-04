@@ -87,7 +87,6 @@ import {
   UpdateTransferRetryCount,
   UpdateGame,
   UpdateMemo,
-  UpdateSessionName,
   UploadFolder,
   PauseMonitoringSession,
   ResumeMonitoringSession,
@@ -151,13 +150,8 @@ export type WindowApi = {
       playStatus: PlayStatus,
       clearedAt?: Date,
     ) => Promise<ApiResult<GameType>>;
-    createSession: (
-      duration: number,
-      gameId: string,
-      sessionName?: string,
-    ) => Promise<ApiResult<void>>;
+    createSession: (duration: number, gameId: string) => Promise<ApiResult<void>>;
     getPlaySessions: (gameId: string) => Promise<ApiResult<PlaySessionType[]>>;
-    updateSessionName: (sessionId: string, sessionName: string) => Promise<ApiResult<void>>;
     deletePlaySession: (sessionId: string) => Promise<ApiResult<void>>;
   };
   memo: {
@@ -540,12 +534,11 @@ export const createWailsBridge = (): WindowApi => {
         }
         return { success: true, data: updated.data as GameType };
       },
-      createSession: async (duration, gameId, sessionName) => {
+      createSession: async (duration, gameId) => {
         const payload = {
           GameID: gameId,
           PlayedAt: new Date(),
           Duration: duration,
-          SessionName: sessionName ?? null,
           ChapterID: null,
         };
         const result = await CreateSession(payload);
@@ -557,12 +550,6 @@ export const createWailsBridge = (): WindowApi => {
         const result = await ListSessionsByGame(gameId);
         return result.success
           ? { success: true, data: (result.data ?? []) as PlaySessionType[] }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
-      updateSessionName: async (sessionId, sessionName) => {
-        const result = await UpdateSessionName(sessionId, sessionName);
-        return result.success
-          ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       deletePlaySession: async (sessionId) => {

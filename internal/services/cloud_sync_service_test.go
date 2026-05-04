@@ -384,24 +384,20 @@ func TestMergeSessions_PreservesUniqueSessionsOnBothSides(t *testing.T) {
 }
 
 func TestMergeSessions_PrefersNewerUpdatedSession(t *testing.T) {
-	oldName := "old"
-	newName := "new"
 	local := []models.PlaySession{
 		{
-			ID:          "shared",
-			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-			Duration:    120,
-			SessionName: &oldName,
-			UpdatedAt:   time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC),
+			ID:        "shared",
+			PlayedAt:  time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:  120,
+			UpdatedAt: time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC),
 		},
 	}
 	cloud := []storage.CloudSessionRecord{
 		{
-			ID:          "shared",
-			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-			Duration:    300,
-			SessionName: &newName,
-			UpdatedAt:   time.Date(2026, 4, 30, 11, 0, 0, 0, time.UTC),
+			ID:        "shared",
+			PlayedAt:  time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:  300,
+			UpdatedAt: time.Date(2026, 4, 30, 11, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -419,70 +415,24 @@ func TestMergeSessions_PrefersNewerUpdatedSession(t *testing.T) {
 	if result.Sessions[0].Duration != 300 {
 		t.Fatalf("expected newer cloud duration to win, got %d", result.Sessions[0].Duration)
 	}
-	if result.Sessions[0].SessionName == nil || *result.Sessions[0].SessionName != "new" {
-		t.Fatalf("expected newer cloud session name to win")
-	}
-}
-
-func TestMergeSessions_DoesNotMarkEquivalentWhitespaceOnlyDifferenceAsChanged(t *testing.T) {
-	localName := "  chapter 1  "
-	cloudName := "chapter 1"
-	updatedAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
-	local := []models.PlaySession{
-		{
-			ID:          "shared",
-			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-			Duration:    120,
-			SessionName: &localName,
-			UpdatedAt:   updatedAt,
-		},
-	}
-	cloud := []storage.CloudSessionRecord{
-		{
-			ID:          "shared",
-			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-			Duration:    120,
-			SessionName: &cloudName,
-			UpdatedAt:   updatedAt,
-		},
-	}
-
-	result := mergeSessions(local, cloud)
-
-	if result.Changed {
-		t.Fatalf("expected equivalent whitespace-only difference to be ignored")
-	}
-	if result.UploadedCount != 0 {
-		t.Fatalf("expected UploadedCount=0, got %d", result.UploadedCount)
-	}
-	if result.DownloadedCount != 0 {
-		t.Fatalf("expected DownloadedCount=0, got %d", result.DownloadedCount)
-	}
-	if len(result.Sessions) != 1 {
-		t.Fatalf("expected 1 merged session, got %d", len(result.Sessions))
-	}
 }
 
 func TestMergeSessions_PrefersLocalWhenUpdatedAtMatchesButPayloadDiffers(t *testing.T) {
-	localName := "local"
-	cloudName := "cloud"
 	updatedAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
 	local := []models.PlaySession{
 		{
-			ID:          "shared",
-			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-			Duration:    120,
-			SessionName: &localName,
-			UpdatedAt:   updatedAt,
+			ID:        "shared",
+			PlayedAt:  time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:  120,
+			UpdatedAt: updatedAt,
 		},
 	}
 	cloud := []storage.CloudSessionRecord{
 		{
-			ID:          "shared",
-			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
-			Duration:    300,
-			SessionName: &cloudName,
-			UpdatedAt:   updatedAt,
+			ID:        "shared",
+			PlayedAt:  time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+			Duration:  300,
+			UpdatedAt: updatedAt,
 		},
 	}
 
@@ -502,9 +452,6 @@ func TestMergeSessions_PrefersLocalWhenUpdatedAtMatchesButPayloadDiffers(t *test
 	}
 	if result.Sessions[0].Duration != 120 {
 		t.Fatalf("expected local session duration to be preserved, got %d", result.Sessions[0].Duration)
-	}
-	if result.Sessions[0].SessionName == nil || *result.Sessions[0].SessionName != "local" {
-		t.Fatalf("expected local session name to be preserved")
 	}
 }
 

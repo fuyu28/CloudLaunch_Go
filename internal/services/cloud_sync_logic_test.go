@@ -832,22 +832,18 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 
 	playedAt := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
 	updatedAt := playedAt.Add(30 * time.Minute)
-	sessionName1 := "Chapter 1"
-	sessionName2 := "Chapter 2"
 	sessions := []models.PlaySession{
 		{
-			ID:          "session-1",
-			PlayedAt:    playedAt,
-			Duration:    45,
-			SessionName: &sessionName1,
-			UpdatedAt:   updatedAt,
+			ID:        "session-1",
+			PlayedAt:  playedAt,
+			Duration:  45,
+			UpdatedAt: updatedAt,
 		},
 		{
-			ID:          "session-2",
-			PlayedAt:    playedAt.Add(time.Hour),
-			Duration:    30,
-			SessionName: &sessionName2,
-			UpdatedAt:   updatedAt.Add(time.Hour),
+			ID:        "session-2",
+			PlayedAt:  playedAt.Add(time.Hour),
+			Duration:  30,
+			UpdatedAt: updatedAt.Add(time.Hour),
 		},
 	}
 
@@ -859,7 +855,7 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 	if composed[0].ID != "session-1" || composed[1].ID != "session-2" {
 		t.Fatalf("expected session order to be preserved")
 	}
-	if composed[0].Duration != 45 || composed[0].SessionName == nil || *composed[0].SessionName != "Chapter 1" {
+	if composed[0].Duration != 45 {
 		t.Fatalf("expected first session fields to be copied")
 	}
 	if !composed[1].PlayedAt.Equal(sessions[1].PlayedAt) || !composed[1].UpdatedAt.Equal(sessions[1].UpdatedAt) {
@@ -870,15 +866,13 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 func TestComposeLocalPlaySessionCopiesCloudFields(t *testing.T) {
 	t.Parallel()
 
-	sessionName := "Cloud Session"
 	playedAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
 	updatedAt := playedAt.Add(15 * time.Minute)
 	cloudSession := storage.CloudSessionRecord{
-		ID:          "session-1",
-		PlayedAt:    playedAt,
-		Duration:    75,
-		SessionName: &sessionName,
-		UpdatedAt:   updatedAt,
+		ID:        "session-1",
+		PlayedAt:  playedAt,
+		Duration:  75,
+		UpdatedAt: updatedAt,
 	}
 
 	composed := composeLocalPlaySession("game-1", cloudSession)
@@ -886,7 +880,7 @@ func TestComposeLocalPlaySessionCopiesCloudFields(t *testing.T) {
 	if composed.ID != "session-1" || composed.GameID != "game-1" {
 		t.Fatalf("expected identifiers to be copied")
 	}
-	if composed.Duration != 75 || composed.SessionName == nil || *composed.SessionName != sessionName {
+	if composed.Duration != 75 {
 		t.Fatalf("expected cloud session fields to be copied")
 	}
 	if !composed.PlayedAt.Equal(playedAt) || !composed.UpdatedAt.Equal(updatedAt) {
