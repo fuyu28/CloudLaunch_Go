@@ -82,19 +82,19 @@ interface 化済み service:
 
 ### Phase 3. Use Case 層の明確化
 
-状態: 着手済み
+状態: 完了
 
 進んだこと:
 
-- `services` は徐々に「ユースケース単位の処理」として読める形になってきている
-- `game` / `session` / `memo` / `chapter` / `upload` は責務の輪郭が比較的明確
+- `services` から `result.ApiResult` 依存を除去し、service は `value + error` / `error` を返す形へ移行
+- `app` 側へ API レスポンス整形を戻し、adapter と usecase の責務を分離
+- `game` / `session` / `memo` / `chapter` / `upload` / `credential` / `cloud` / `maintenance` / `memo cloud` の返り値境界を統一
 - `internal/services/repositories.go` を中心に、ユースケースごとの依存境界が読み取りやすくなった
 - t_wada TDD に倣い、既存の振る舞いを固定するテストを追加してから構造変更する方針に更新
 
-未完了の点:
+残課題:
 
 - package はまだ `internal/services` に集約されたまま
-- `ApiResult` を返しているため、Use Case と adapter の境界がまだ混ざっている
 - `credential` / `cloud` などはユースケース境界がまだ粗い
 - `usecase` / `domain` / `infrastructure` への物理再配置は未着手
 
@@ -245,16 +245,15 @@ interface 化済み service:
 
 - Phase 1 は完了
 - Phase 2 は完了
-- Phase 3 は着手済みだが構造の整理はこれから
+- Phase 3 は完了
 - Phase 4 は `CloudSyncService` を中心に進行中
 - Phase 5 は未着手
 
-要するに、現在の移行は「`app` 層からの direct DB 依存除去」と「厚い adapter の service 移管」までは完了した。次の主戦場は、「`services` から `ApiResult` を外すこと」と「重い service をさらに分割して Use Case 境界を明確にすること」である。
+要するに、現在の移行は「`app` 層からの direct DB 依存除去」「厚い adapter の service 移管」「`services` からの `ApiResult` 除去」までは完了した。次の主戦場は、重い service をさらに分割して Use Case 境界を明確にすることである。
 
 ## 次の優先事項
 
-1. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
-2. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
-3. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
-4. Screenshot / maintenance 周辺の OS / filesystem 依存を必要に応じてさらに port 化する
-5. その後に `usecase` / `domain` / `infrastructure` への再配置を検討する
+1. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
+2. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
+3. Screenshot / maintenance 周辺の OS / filesystem 依存を必要に応じてさらに port 化する
+4. `usecase` / `domain` / `infrastructure` への再配置を検討する

@@ -98,15 +98,15 @@ func TestMemoCloudServiceGetCloudMemosUsesObjectStorePort(t *testing.T) {
 		},
 	}
 
-	result := service.GetCloudMemos(context.Background())
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	result, err := service.GetCloudMemos(context.Background())
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if len(result.Data) != 1 {
-		t.Fatalf("expected 1 memo object, got %d", len(result.Data))
+	if len(result) != 1 {
+		t.Fatalf("expected 1 memo object, got %d", len(result))
 	}
-	if result.Data[0].GameID != "game-1" || result.Data[0].MemoID != "memo-1" {
-		t.Fatalf("unexpected memo info: %#v", result.Data[0])
+	if result[0].GameID != "game-1" || result[0].MemoID != "memo-1" {
+		t.Fatalf("unexpected memo info: %#v", result[0])
 	}
 }
 
@@ -136,9 +136,9 @@ func TestMemoCloudServiceUploadMemoToCloudUsesObjectStorePort(t *testing.T) {
 	)
 	service.objectStore = objectStore
 
-	result := service.UploadMemoToCloud(context.Background(), "memo-1")
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	err := service.UploadMemoToCloud(context.Background(), "memo-1")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if objectStore.uploadedKey == "" {
 		t.Fatal("expected upload key to be recorded")
