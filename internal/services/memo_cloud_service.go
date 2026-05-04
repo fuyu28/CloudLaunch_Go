@@ -124,20 +124,18 @@ func (service *MemoCloudService) UploadMemoToCloud(ctx context.Context, memoID s
 		service.logger.Error("メモのアップロードに失敗しました", "error", err, "operation", "UploadMemoToCloud.getDefaultS3Client")
 		return result.ErrorResult[bool]("メモのアップロードに失敗しました", err.Error())
 	}
-	memoResult := service.memoService.GetMemoByID(ctx, strings.TrimSpace(memoID))
-	if !memoResult.Success {
-		return convertServiceError[bool](memoResult, "メモの取得に失敗しました")
+	memoData, err := service.memoService.GetMemoByID(ctx, strings.TrimSpace(memoID))
+	if err != nil {
+		return convertServiceError[bool](err, "メモの取得に失敗しました")
 	}
-	memoData := memoResult.Data
 	if memoData == nil {
 		service.logger.Warn("メモが見つかりません", "operation", "UploadMemoToCloud", "memoId", memoID)
 		return result.ErrorResult[bool]("メモが見つかりません", "指定されたIDが存在しません")
 	}
-	gameResult := service.gameService.GetGameByID(ctx, memoData.GameID)
-	if !gameResult.Success {
-		return convertServiceError[bool](gameResult, "ゲームの取得に失敗しました")
+	game, err := service.gameService.GetGameByID(ctx, memoData.GameID)
+	if err != nil {
+		return convertServiceError[bool](err, "ゲームの取得に失敗しました")
 	}
-	game := gameResult.Data
 	if game == nil {
 		service.logger.Warn("ゲームが見つかりません", "operation", "UploadMemoToCloud", "gameId", memoData.GameID)
 		return result.ErrorResult[bool]("ゲームが見つかりません", "指定されたIDが存在しません")
@@ -167,7 +165,7 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 	cloudMemosResult := service.GetCloudMemos(ctx)
 	if !cloudMemosResult.Success {
 		service.logger.Warn("クラウドメモ取得に失敗しました", "operation", "SyncMemosFromCloud", "detail", cloudMemosResult.Error)
-		return convertServiceError[MemoSyncResult](cloudMemosResult, "メモ同期に失敗しました")
+		return convertServiceError[MemoSyncResult](newServiceError(cloudMemosResult.Error.Message, cloudMemosResult.Error.Detail), "メモ同期に失敗しました")
 	}
 	cloudMemos := cloudMemosResult.Data
 	if cloudMemos == nil {
@@ -176,11 +174,10 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 
 	var targetGame *models.Game
 	if strings.TrimSpace(gameID) != "" {
-		gameResult := service.gameService.GetGameByID(ctx, strings.TrimSpace(gameID))
-		if !gameResult.Success {
-			return convertServiceError[MemoSyncResult](gameResult, "メモ同期に失敗しました")
+		game, err := service.gameService.GetGameByID(ctx, strings.TrimSpace(gameID))
+		if err != nil {
+			return convertServiceError[MemoSyncResult](err, "メモ同期に失敗しました")
 		}
-		game := gameResult.Data
 		if game == nil {
 			service.logger.Warn("指定されたゲームが見つかりません", "operation", "SyncMemosFromCloud", "gameId", gameID)
 			return result.ErrorResult[MemoSyncResult]("メモ同期に失敗しました", "指定されたゲームが見つかりません")
@@ -193,21 +190,19 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		cloudMap[fmt.Sprintf("%s:%s", cloudMemo.GameID, cloudMemo.MemoID)] = cloudMemo
 	}
 
-	gamesResult := service.gameService.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
-	if !gamesResult.Success {
-		return convertServiceError[MemoSyncResult](gamesResult, "メモ同期に失敗しました")
+	games, err := service.gameService.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
+	if err != nil {
+		return convertServiceError[MemoSyncResult](err, "メモ同期に失敗しました")
 	}
-	games := gamesResult.Data
 	gameByID := map[string]models.Game{}
 	for _, game := range games {
 		gameByID[game.ID] = game
 	}
 
-	localMemosResult := service.fetchLocalMemos(ctx, gameID)
-	if !localMemosResult.Success {
-		return convertServiceError[MemoSyncResult](localMemosResult, "メモ同期に失敗しました")
+	localMemos, err := service.fetchLocalMemos(ctx, gameID)
+	if err != nil {
+		return convertServiceError[MemoSyncResult](err, "メモ同期に失敗しました")
 	}
-	localMemos := localMemosResult.Data
 
 	processed := map[string]bool{}
 
@@ -291,30 +286,28 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		}
 		content := memo.ExtractMemoContent(string(payload))
 
-		existingMemoResult := service.memoService.GetMemoByID(ctx, cloudMemo.MemoID)
-		if !existingMemoResult.Success {
+		existingMemo, err := service.memoService.GetMemoByID(ctx, cloudMemo.MemoID)
+		if err != nil {
 			resultData.Skipped++
 			resultData.Details = append(resultData.Details, fmt.Sprintf("メモ取得失敗: %s", cloudMemo.MemoTitle))
 			continue
 		}
-		existingMemo := existingMemoResult.Data
 		if existingMemo == nil || existingMemo.GameID != game.ID {
-			findMemoResult := service.memoService.FindMemoByTitle(ctx, game.ID, cloudMemo.MemoTitle)
-			if !findMemoResult.Success {
+			existingMemo, err = service.memoService.FindMemoByTitle(ctx, game.ID, cloudMemo.MemoTitle)
+			if err != nil {
 				resultData.Skipped++
 				resultData.Details = append(resultData.Details, fmt.Sprintf("メモ検索失敗: %s", cloudMemo.MemoTitle))
 				continue
 			}
-			existingMemo = findMemoResult.Data
 		}
 
 		if existingMemo == nil {
-			createdResult := service.memoService.CreateMemo(ctx, MemoInput{
+			createdMemo, err := service.memoService.CreateMemo(ctx, MemoInput{
 				Title:   cloudMemo.MemoTitle,
 				Content: content,
 				GameID:  game.ID,
 			})
-			if !createdResult.Success || createdResult.Data == nil {
+			if err != nil || createdMemo == nil {
 				resultData.Skipped++
 				resultData.Details = append(resultData.Details, fmt.Sprintf("作成失敗: %s", cloudMemo.MemoTitle))
 				continue
@@ -330,11 +323,11 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 			continue
 		}
 		if cloudMemo.LastModified.After(existingMemo.UpdatedAt) || cloudMemo.LastModified.Equal(existingMemo.UpdatedAt) {
-			updatedResult := service.memoService.UpdateMemo(ctx, existingMemo.ID, MemoUpdateInput{
+			_, err := service.memoService.UpdateMemo(ctx, existingMemo.ID, MemoUpdateInput{
 				Title:   existingMemo.Title,
 				Content: content,
 			})
-			if !updatedResult.Success {
+			if err != nil {
 				resultData.Skipped++
 				resultData.Details = append(resultData.Details, fmt.Sprintf("更新失敗: %s", cloudMemo.MemoTitle))
 				continue
@@ -367,7 +360,7 @@ func (service *MemoCloudService) uploadMemoContent(
 	return service.objectStore.UploadBytes(ctx, cfg, credential, key, []byte(payload), "text/markdown")
 }
 
-func (service *MemoCloudService) fetchLocalMemos(ctx context.Context, gameID string) result.ApiResult[[]models.Memo] {
+func (service *MemoCloudService) fetchLocalMemos(ctx context.Context, gameID string) ([]models.Memo, error) {
 	if strings.TrimSpace(gameID) == "" {
 		return service.memoService.ListAllMemos(ctx)
 	}
@@ -382,13 +375,17 @@ func (service *MemoCloudService) resolveDefaultS3Config(ctx context.Context) (st
 	return resolveS3Config(service.config, credential), *credential, nil
 }
 
-func convertServiceError[T any, U any](serviceResult result.ApiResult[U], fallbackMessage string) result.ApiResult[T] {
-	if serviceResult.Error == nil {
+func convertServiceError[T any](err error, fallbackMessage string) result.ApiResult[T] {
+	if err == nil {
 		return result.ErrorResult[T](fallbackMessage, "不明なエラーです")
 	}
-	message := serviceResult.Error.Message
-	if strings.TrimSpace(message) == "" {
-		message = fallbackMessage
+	serviceErr := &ServiceError{}
+	if errors.As(err, &serviceErr) {
+		message := serviceErr.Message
+		if strings.TrimSpace(message) == "" {
+			message = fallbackMessage
+		}
+		return result.ErrorResult[T](message, serviceErr.Detail)
 	}
-	return result.ErrorResult[T](message, serviceResult.Error.Detail)
+	return result.ErrorResult[T](fallbackMessage, err.Error())
 }

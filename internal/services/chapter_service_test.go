@@ -78,10 +78,8 @@ func TestChapterServiceSetCurrentChapterUsesRepositoryBoundary(t *testing.T) {
 	}
 	service := NewChapterService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.SetCurrentChapter(context.Background(), "game-1", "chapter-1")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err := service.SetCurrentChapter(context.Background(), "game-1", "chapter-1"); err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 }
 
@@ -111,24 +109,23 @@ func TestChapterServiceListCreateUpdateDeleteUseRepositoryBoundary(t *testing.T)
 	}
 	service := NewChapterService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	listed := service.ListChaptersByGame(context.Background(), "game-1")
-	if !listed.Success || len(listed.Data) != 1 || listed.Data[0].ID != "chapter-1" {
+	listed, err := service.ListChaptersByGame(context.Background(), "game-1")
+	if err != nil || len(listed) != 1 || listed[0].ID != "chapter-1" {
 		t.Fatalf("unexpected listed chapters: %#v", listed)
 	}
 
-	created := service.CreateChapter(context.Background(), ChapterInput{Name: " Chapter 1 ", Order: 1, GameID: "game-1"})
-	if !created.Success || created.Data == nil || created.Data.Name != "Chapter 1" {
+	created, err := service.CreateChapter(context.Background(), ChapterInput{Name: " Chapter 1 ", Order: 1, GameID: "game-1"})
+	if err != nil || created == nil || created.Name != "Chapter 1" {
 		t.Fatalf("unexpected create result: %#v", created)
 	}
 
-	updated := service.UpdateChapter(context.Background(), "chapter-1", ChapterUpdateInput{Name: " Chapter X ", Order: 2})
-	if !updated.Success || updated.Data == nil || updated.Data.Name != "Chapter X" || updated.Data.Order != 2 {
+	updated, err := service.UpdateChapter(context.Background(), "chapter-1", ChapterUpdateInput{Name: " Chapter X ", Order: 2})
+	if err != nil || updated == nil || updated.Name != "Chapter X" || updated.Order != 2 {
 		t.Fatalf("unexpected update result: %#v", updated)
 	}
 
-	deleted := service.DeleteChapter(context.Background(), "chapter-1")
-	if !deleted.Success || !deleted.Data {
-		t.Fatalf("unexpected delete result: %#v", deleted)
+	if err := service.DeleteChapter(context.Background(), "chapter-1"); err != nil {
+		t.Fatalf("unexpected delete error: %v", err)
 	}
 }
 
@@ -150,9 +147,8 @@ func TestChapterServiceGetChapterStatsHandlesRepositoryError(t *testing.T) {
 	}
 	service := NewChapterService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.GetChapterStats(context.Background(), "game-1")
-
-	if result.Success {
+	_, err := service.GetChapterStats(context.Background(), "game-1")
+	if err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -173,9 +169,7 @@ func TestChapterServiceSetCurrentChapterReturnsNotFoundWhenGameMissing(t *testin
 	}
 	service := NewChapterService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.SetCurrentChapter(context.Background(), "game-1", "chapter-1")
-
-	if result.Success {
+	if err := service.SetCurrentChapter(context.Background(), "game-1", "chapter-1"); err == nil {
 		t.Fatalf("expected missing game to fail")
 	}
 }
@@ -196,9 +190,7 @@ func TestChapterServiceUpdateChapterOrdersRejectsNegativeOrder(t *testing.T) {
 	}
 	service := NewChapterService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateChapterOrders(context.Background(), "game-1", []ChapterOrderUpdate{{ID: "chapter-1", Order: -1}})
-
-	if result.Success {
+	if err := service.UpdateChapterOrders(context.Background(), "game-1", []ChapterOrderUpdate{{ID: "chapter-1", Order: -1}}); err == nil {
 		t.Fatalf("expected invalid order to fail")
 	}
 }

@@ -94,12 +94,11 @@ func TestSessionServiceDeleteSessionReturnsGameIDForAdapterUse(t *testing.T) {
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.DeleteSession(context.Background(), "session-1")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	result, err := service.DeleteSession(context.Background(), "session-1")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if result.Data.GameID != "game-1" {
+	if result.GameID != "game-1" {
 		t.Fatalf("expected affected game id to be returned")
 	}
 	if repository.touchedGameID != "game-1" {
@@ -127,8 +126,8 @@ func TestSessionServiceListSessionsByGameUsesRepositoryBoundary(t *testing.T) {
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.ListSessionsByGame(context.Background(), "game-1")
-	if !result.Success || len(result.Data) != 1 || result.Data[0].ID != "session-1" {
+	result, err := service.ListSessionsByGame(context.Background(), "game-1")
+	if err != nil || len(result) != 1 || result[0].ID != "session-1" {
 		t.Fatalf("unexpected list result: %#v", result)
 	}
 }
@@ -140,14 +139,14 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	playedAt := time.Date(2026, 4, 24, 18, 0, 0, 0, time.UTC)
 
-	result := service.CreateSession(context.Background(), SessionInput{
+	_, err := service.CreateSession(context.Background(), SessionInput{
 		GameID:   "game-1",
 		PlayedAt: playedAt,
 		Duration: 300,
 	})
 
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if repository.updatedWithLastPlayed == nil || !repository.updatedWithLastPlayed.Equal(playedAt) {
 		t.Fatalf("expected last played update to be called")
@@ -165,9 +164,8 @@ func TestSessionServiceUpdateSessionNameRejectsInvalidName(t *testing.T) {
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateSessionName(context.Background(), "session-1", "   ")
-
-	if result.Success {
+	_, err := service.UpdateSessionName(context.Background(), "session-1", "   ")
+	if err == nil {
 		t.Fatalf("expected invalid session name to fail")
 	}
 }
@@ -180,12 +178,11 @@ func TestSessionServiceUpdateSessionNameTrimsNameAndRecalculatesTotal(t *testing
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  ")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	result, err := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  ")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if result.Data.GameID != "game-1" {
+	if result.GameID != "game-1" {
 		t.Fatalf("expected affected game id to be returned")
 	}
 	if repository.session.SessionName == nil || *repository.session.SessionName != "Chapter 1" {
@@ -208,10 +205,9 @@ func TestSessionServiceUpdateSessionChapterStoresChapterAndRecalculatesTotal(t *
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chapterID := "chapter-2"
 
-	result := service.UpdateSessionChapter(context.Background(), "session-1", &chapterID)
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	_, err := service.UpdateSessionChapter(context.Background(), "session-1", &chapterID)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if repository.session.ChapterID == nil || *repository.session.ChapterID != "chapter-2" {
 		t.Fatalf("expected chapter id to be stored")
@@ -230,9 +226,8 @@ func TestSessionServiceDeleteSessionHandlesLookupError(t *testing.T) {
 	repository := &fakeSessionRepositoryWithError{getErr: errors.New("db down")}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.DeleteSession(context.Background(), "session-1")
-
-	if result.Success {
+	_, err := service.DeleteSession(context.Background(), "session-1")
+	if err == nil {
 		t.Fatalf("expected failure")
 	}
 }

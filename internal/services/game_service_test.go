@@ -72,16 +72,16 @@ func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
 	}
 	service := NewGameService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.CreateGame(context.Background(), GameInput{
+	result, err := service.CreateGame(context.Background(), GameInput{
 		Title:     "Game",
 		Publisher: "Publisher",
 		ExePath:   "/games/game.exe",
 	})
 
-	if !result.Success {
-		t.Fatalf("expected success, got error: %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v", err)
 	}
-	if result.Data == nil || result.Data.ID != "game-1" {
+	if result == nil || result.ID != "game-1" {
 		t.Fatalf("expected created game id to be returned")
 	}
 	if repository.createChapterCalls != 1 {
@@ -105,19 +105,18 @@ func TestGameServiceListGetDeleteUseRepositoryBoundary(t *testing.T) {
 		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	listed := service.ListGames(context.Background(), " game ", models.PlayStatus(""), "title", "asc")
-	if !listed.Success || len(listed.Data) != 1 || listed.Data[0].ID != "game-1" {
+	listed, err := service.ListGames(context.Background(), " game ", models.PlayStatus(""), "title", "asc")
+	if err != nil || len(listed) != 1 || listed[0].ID != "game-1" {
 		t.Fatalf("unexpected list result: %#v", listed)
 	}
 
-	got := service.GetGameByID(context.Background(), "game-1")
-	if !got.Success || got.Data == nil || got.Data.ID != "game-1" {
+	got, err := service.GetGameByID(context.Background(), "game-1")
+	if err != nil || got == nil || got.ID != "game-1" {
 		t.Fatalf("unexpected get result: %#v", got)
 	}
 
-	deleted := service.DeleteGame(context.Background(), "game-1")
-	if !deleted.Success || !deleted.Data {
-		t.Fatalf("unexpected delete result: %#v", deleted)
+	if err := service.DeleteGame(context.Background(), "game-1"); err != nil {
+		t.Fatalf("unexpected delete error: %v", err)
 	}
 }
 
@@ -142,17 +141,17 @@ func TestGameServiceUpdateGameHandlesRepositoryError(t *testing.T) {
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateGame(context.Background(), "game-1", GameUpdateInput{
+	_, err := service.UpdateGame(context.Background(), "game-1", GameUpdateInput{
 		Title:     "Updated",
 		Publisher: "Publisher",
 		ExePath:   "/games/game.exe",
 	})
 
-	if result.Success {
+	if err == nil {
 		t.Fatalf("expected failure")
 	}
-	if result.Error == nil || result.Error.Message == "" {
-		t.Fatalf("expected api error details")
+	if serviceErr := new(ServiceError); !errors.As(err, &serviceErr) || serviceErr.Message == "" {
+		t.Fatalf("expected service error details, got %v", err)
 	}
 }
 
@@ -169,13 +168,13 @@ func TestGameServiceCreateGameRejectsInvalidInput(t *testing.T) {
 		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.CreateGame(context.Background(), GameInput{
+	_, err := service.CreateGame(context.Background(), GameInput{
 		Title:     "Game",
 		Publisher: "",
 		ExePath:   "/games/game.exe",
 	})
 
-	if result.Success {
+	if err == nil {
 		t.Fatalf("expected invalid input to fail")
 	}
 }
@@ -193,13 +192,13 @@ func TestGameServiceUpdateGameReturnsNotFoundWhenMissing(t *testing.T) {
 		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateGame(context.Background(), "game-1", GameUpdateInput{
+	_, err := service.UpdateGame(context.Background(), "game-1", GameUpdateInput{
 		Title:     "Updated",
 		Publisher: "Publisher",
 		ExePath:   "/games/game.exe",
 	})
 
-	if result.Success {
+	if err == nil {
 		t.Fatalf("expected missing game to fail")
 	}
 }
@@ -234,7 +233,7 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateGame(context.Background(), " game-1 ", GameUpdateInput{
+	_, err := service.UpdateGame(context.Background(), " game-1 ", GameUpdateInput{
 		Title:          " New Title ",
 		Publisher:      " New Publisher ",
 		ExePath:        " /games/new.exe ",
@@ -243,8 +242,8 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 		CurrentChapter: &currentChapter,
 	})
 
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if updatedGame.Title != "New Title" || updatedGame.Publisher != "New Publisher" || updatedGame.ExePath != "/games/new.exe" {
 		t.Fatalf("expected trimmed game fields, got %#v", updatedGame)
@@ -276,10 +275,9 @@ func TestGameServiceListGamesTrimsSearchText(t *testing.T) {
 		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.ListGames(context.Background(), "  Game  ", models.PlayStatus(""), "title", "asc")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	_, err := service.ListGames(context.Background(), "  Game  ", models.PlayStatus(""), "title", "asc")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if capturedSearch != "Game" {
 		t.Fatalf("expected search text to be trimmed, got %q", capturedSearch)
@@ -306,10 +304,9 @@ func TestGameServiceUpdatePlayTimeStoresLastPlayed(t *testing.T) {
 		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdatePlayTime(context.Background(), "game-1", 240, lastPlayed)
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	_, err := service.UpdatePlayTime(context.Background(), "game-1", 240, lastPlayed)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if updatedGame.LastPlayed == nil || !updatedGame.LastPlayed.Equal(lastPlayed) {
 		t.Fatalf("expected lastPlayed to be updated")

@@ -34,15 +34,15 @@ func TestUploadServiceCreateUploadUsesRepositoryBoundary(t *testing.T) {
 		listUploadsByGameFn: func(ctx context.Context, gameID string) ([]models.Upload, error) { return nil, nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.CreateUpload(context.Background(), UploadInput{
+	result, err := service.CreateUpload(context.Background(), UploadInput{
 		Comment: "comment",
 		GameID:  "game-1",
 	})
 
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if result.Data == nil || result.Data.ID != "upload-1" {
+	if result == nil || result.ID != "upload-1" {
 		t.Fatalf("expected upload to be returned")
 	}
 }
@@ -59,9 +59,8 @@ func TestUploadServiceListUploadsByGameHandlesRepositoryError(t *testing.T) {
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.ListUploadsByGame(context.Background(), "game-1")
-
-	if result.Success {
+	_, err := service.ListUploadsByGame(context.Background(), "game-1")
+	if err == nil {
 		t.Fatalf("expected failure")
 	}
 }
@@ -76,12 +75,12 @@ func TestUploadServiceCreateUploadRejectsInvalidInput(t *testing.T) {
 		listUploadsByGameFn: func(ctx context.Context, gameID string) ([]models.Upload, error) { return nil, nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.CreateUpload(context.Background(), UploadInput{
+	_, err := service.CreateUpload(context.Background(), UploadInput{
 		Comment: "",
 		GameID:  "game-1",
 	})
 
-	if result.Success {
+	if err == nil {
 		t.Fatalf("expected invalid input to fail")
 	}
 }

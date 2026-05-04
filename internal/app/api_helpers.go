@@ -2,9 +2,11 @@
 package app
 
 import (
+	"errors"
 	"strings"
 
 	"CloudLaunch_Go/internal/result"
+	"CloudLaunch_Go/internal/services"
 )
 
 func errorResultWithLog[T any](app *App, message string, err error, attrs ...any) result.ApiResult[T] {
@@ -17,13 +19,24 @@ func errorResultWithLog[T any](app *App, message string, err error, attrs ...any
 	return result.ErrorResult[T](message, err.Error())
 }
 
-func serviceErrorResult[T any, U any](serviceResult result.ApiResult[U], fallbackMessage string) result.ApiResult[T] {
-	if serviceResult.Error == nil {
+func serviceErrorResult[T any](err error, fallbackMessage string) result.ApiResult[T] {
+	if err == nil {
 		return result.ErrorResult[T](fallbackMessage, "不明なエラーです")
 	}
-	message := serviceResult.Error.Message
-	if strings.TrimSpace(message) == "" {
-		message = fallbackMessage
+	serviceErr := &services.ServiceError{}
+	if errors.As(err, &serviceErr) {
+		message := serviceErr.Message
+		if strings.TrimSpace(message) == "" {
+			message = fallbackMessage
+		}
+		return result.ErrorResult[T](message, serviceErr.Detail)
 	}
-	return result.ErrorResult[T](message, serviceResult.Error.Detail)
+	return result.ErrorResult[T](fallbackMessage, err.Error())
+}
+
+func serviceResult[T any](data T, err error, fallbackMessage string) result.ApiResult[T] {
+	if err != nil {
+		return serviceErrorResult[T](err, fallbackMessage)
+	}
+	return result.OkResult(data)
 }

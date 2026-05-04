@@ -79,12 +79,11 @@ func TestMemoServiceGetMemoByIDUsesRepositoryBoundary(t *testing.T) {
 		},
 	}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.GetMemoByID(context.Background(), "memo-1")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	result, err := service.GetMemoByID(context.Background(), "memo-1")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
-	if result.Data == nil || result.Data.ID != "memo-1" {
+	if result == nil || result.ID != "memo-1" {
 		t.Fatalf("expected memo to be returned")
 	}
 }
@@ -102,9 +101,8 @@ func TestMemoServiceFindMemoByTitleRejectsInvalidInput(t *testing.T) {
 		deleteMemoFn:    func(ctx context.Context, memoID string) error { return nil },
 	}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.FindMemoByTitle(context.Background(), "", "title")
-
-	if result.Success {
+	_, err := service.FindMemoByTitle(context.Background(), "", "title")
+	if err == nil {
 		t.Fatalf("expected invalid input to fail")
 	}
 }
@@ -122,13 +120,13 @@ func TestMemoServiceCreateMemoRollsBackDatabaseWhenFileWriteFails(t *testing.T) 
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.CreateMemo(context.Background(), MemoInput{
+	_, err := service.CreateMemo(context.Background(), MemoInput{
 		Title:   "Memo",
 		Content: "Body",
 		GameID:  "game-1",
 	})
 
-	if result.Success {
+	if err == nil {
 		t.Fatalf("expected file write failure")
 	}
 	if repository.deleteMemoCalls != 1 {
@@ -145,14 +143,14 @@ func TestMemoServiceCreateMemoWritesDatabaseAndLocalFile(t *testing.T) {
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.CreateMemo(context.Background(), MemoInput{
+	_, err := service.CreateMemo(context.Background(), MemoInput{
 		Title:   " Memo ",
 		Content: "Body",
 		GameID:  " game-1 ",
 	})
 
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	path := manager.MemoFilePath("game-1", "memo-1", "Memo")
 	payload, err := os.ReadFile(path)
@@ -182,12 +180,12 @@ func TestMemoServiceUpdateMemoRollsBackDatabaseWhenFileUpdateFails(t *testing.T)
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateMemo(context.Background(), "memo-1", MemoUpdateInput{
+	_, err := service.UpdateMemo(context.Background(), "memo-1", MemoUpdateInput{
 		Title:   "New",
 		Content: "New body",
 	})
 
-	if result.Success {
+	if err == nil {
 		t.Fatalf("expected file update failure")
 	}
 	if repository.updateMemoCalls != 2 {
@@ -210,13 +208,13 @@ func TestMemoServiceUpdateMemoRenamesLocalFile(t *testing.T) {
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.UpdateMemo(context.Background(), "memo-1", MemoUpdateInput{
+	_, err := service.UpdateMemo(context.Background(), "memo-1", MemoUpdateInput{
 		Title:   " New ",
 		Content: "New body",
 	})
 
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if _, err := os.Stat(manager.MemoFilePath("game-1", "memo-1", "Old")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected old memo file to be removed, got %v", err)
@@ -295,13 +293,12 @@ func TestMemoServiceListAllMemosHandlesRepositoryError(t *testing.T) {
 		},
 	}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.ListAllMemos(context.Background())
-
-	if result.Success {
+	_, err := service.ListAllMemos(context.Background())
+	if err == nil {
 		t.Fatalf("expected failure")
 	}
-	if result.Error == nil || result.Error.Message == "" {
-		t.Fatalf("expected error details")
+	if serviceErr := new(ServiceError); !errors.As(err, &serviceErr) || serviceErr.Message == "" {
+		t.Fatalf("expected error details, got %v", err)
 	}
 }
 
@@ -317,10 +314,8 @@ func TestMemoServiceDeleteMemoRemovesDatabaseRecordAndLocalFile(t *testing.T) {
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.DeleteMemo(context.Background(), "memo-1")
-
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err := service.DeleteMemo(context.Background(), "memo-1"); err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if repository.deleteMemoCalls != 1 {
 		t.Fatalf("expected database memo to be deleted once")

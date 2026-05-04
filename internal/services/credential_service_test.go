@@ -43,15 +43,15 @@ func TestCredentialServiceSaveCredentialUsesStoreBoundary(t *testing.T) {
 	store := &fakeCredentialStore{}
 	service := NewCredentialService(store, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.SaveCredential(context.Background(), " default ", CredentialInput{
+	err := service.SaveCredential(context.Background(), " default ", CredentialInput{
 		AccessKeyID:     " access ",
 		SecretAccessKey: " secret ",
 		BucketName:      " bucket ",
 		Region:          " region ",
 		Endpoint:        " endpoint ",
 	})
-	if !result.Success {
-		t.Fatalf("expected success, got %#v", result.Error)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
 	}
 	if store.savedKey != "default" {
 		t.Fatalf("expected trimmed key, got %q", store.savedKey)
@@ -70,8 +70,8 @@ func TestCredentialServiceDeleteCredentialReturnsStoreError(t *testing.T) {
 	store := &fakeCredentialStore{deleteErr: errors.New("boom")}
 	service := NewCredentialService(store, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result := service.DeleteCredential(context.Background(), "default")
-	if result.Success {
+	err := service.DeleteCredential(context.Background(), "default")
+	if err == nil {
 		t.Fatal("expected error result")
 	}
 	if store.deletedKey != "default" {

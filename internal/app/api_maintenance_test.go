@@ -182,11 +182,10 @@ func TestAppRestoreFullBackup_ReplacesAppDataWithBackupContents(t *testing.T) {
 		t.Fatalf("RestoreFullBackup failed: %#v", restored.Error)
 	}
 
-	gamesResult := targetApp.GameService.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
-	if !gamesResult.Success {
-		t.Fatalf("failed to list restored games: %#v", gamesResult.Error)
+	games, err := targetApp.GameService.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	if err != nil {
+		t.Fatalf("failed to list restored games: %v", err)
 	}
-	games := gamesResult.Data
 	if len(games) != 1 {
 		t.Fatalf("expected 1 restored game, got %d", len(games))
 	}

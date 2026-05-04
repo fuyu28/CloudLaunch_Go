@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"CloudLaunch_Go/internal/credentials"
-	"CloudLaunch_Go/internal/result"
 )
 
 // CredentialService は認証情報管理を提供する。
@@ -23,10 +22,10 @@ func NewCredentialService(store credentials.Store, logger *slog.Logger) *Credent
 }
 
 // SaveCredential は認証情報を保存する。
-func (service *CredentialService) SaveCredential(ctx context.Context, key string, input CredentialInput) result.ApiResult[bool] {
+func (service *CredentialService) SaveCredential(ctx context.Context, key string, input CredentialInput) error {
 	if error := validateCredentialInput(input); error != nil {
 		service.logger.Warn("認証情報が不正です", "error", error)
-		return result.ErrorResult[bool]("認証情報が不正です", error.Error())
+		return newServiceError("認証情報が不正です", error.Error())
 	}
 
 	credential := credentials.Credential{
@@ -39,33 +38,33 @@ func (service *CredentialService) SaveCredential(ctx context.Context, key string
 
 	if error := service.store.Save(ctx, strings.TrimSpace(key), credential); error != nil {
 		service.logger.Error("認証情報保存に失敗", "error", error)
-		return result.ErrorResult[bool]("認証情報保存に失敗しました", error.Error())
+		return newServiceError("認証情報保存に失敗しました", error.Error())
 	}
-	return result.OkResult(true)
+	return nil
 }
 
 // LoadCredential は認証情報を取得する。
-func (service *CredentialService) LoadCredential(ctx context.Context, key string) result.ApiResult[*credentials.Credential] {
+func (service *CredentialService) LoadCredential(ctx context.Context, key string) (*credentials.Credential, error) {
 	credential, error := service.store.Load(ctx, strings.TrimSpace(key))
 	if error != nil {
 		service.logger.Error("認証情報取得に失敗", "error", error)
-		return result.ErrorResult[*credentials.Credential]("認証情報取得に失敗しました", error.Error())
+		return nil, newServiceError("認証情報取得に失敗しました", error.Error())
 	}
-	return result.OkResult(credential)
+	return credential, nil
 }
 
 // DeleteCredential は認証情報を削除する。
-func (service *CredentialService) DeleteCredential(ctx context.Context, key string) result.ApiResult[bool] {
+func (service *CredentialService) DeleteCredential(ctx context.Context, key string) error {
 	trimmedKey, detail, ok := requireNonEmpty(key, "key")
 	if !ok {
 		service.logger.Warn("キーが不正です", "detail", detail)
-		return result.ErrorResult[bool]("キーが不正です", detail)
+		return newServiceError("キーが不正です", detail)
 	}
 	if error := service.store.Delete(ctx, trimmedKey); error != nil {
 		service.logger.Error("認証情報削除に失敗", "error", error)
-		return result.ErrorResult[bool]("認証情報削除に失敗しました", error.Error())
+		return newServiceError("認証情報削除に失敗しました", error.Error())
 	}
-	return result.OkResult(true)
+	return nil
 }
 
 // CredentialInput は認証情報入力を表す。

@@ -221,11 +221,10 @@ func (app *App) GetCloudFileDetails(prefix string) result.ApiResult[[]CloudFileD
 // GetCloudFileDetailsByGame はゲームIDから詳細を取得する。
 func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudFileDetailsResult] {
 	ctx := app.context()
-	gameResult := app.GameService.GetGameByID(ctx, gameID)
-	if !gameResult.Success {
-		return serviceErrorResult[CloudFileDetailsResult](gameResult, "ゲーム取得に失敗しました")
+	game, err := app.GameService.GetGameByID(ctx, gameID)
+	if err != nil {
+		return serviceErrorResult[CloudFileDetailsResult](err, "ゲーム取得に失敗しました")
 	}
-	game := gameResult.Data
 	if game == nil {
 		return result.OkResult(CloudFileDetailsResult{Exists: false, Files: []CloudFileDetail{}})
 	}
@@ -396,18 +395,17 @@ func (app *App) getDefaultS3Client(ctx context.Context) (*s3.Client, string, err
 }
 
 func (app *App) resolveS3Config(ctx context.Context) (storage.S3Config, credentials.Credential, error) {
-	credResult := app.CredentialService.LoadCredential(ctx, "default")
-	if !credResult.Success || credResult.Data == nil {
+	credential, err := app.CredentialService.LoadCredential(ctx, "default")
+	if err != nil || credential == nil {
 		return storage.S3Config{}, credentials.Credential{}, errors.New("認証情報がありません")
 	}
-	credential := *credResult.Data
 	return storage.S3Config{
 		Endpoint:       util.FirstNonEmpty(credential.Endpoint, app.Config.S3Endpoint),
 		Region:         util.FirstNonEmpty(credential.Region, app.Config.S3Region),
 		Bucket:         util.FirstNonEmpty(credential.BucketName, app.Config.S3Bucket),
 		ForcePathStyle: app.Config.S3ForcePathStyle,
 		UseTLS:         app.Config.S3UseTLS,
-	}, credential, nil
+	}, *credential, nil
 }
 
 func detectGamePrefix(key string) string {
