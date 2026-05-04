@@ -39,7 +39,6 @@ type PlaySession struct {
 	Duration    int64     `json:"duration"`
 	SessionName *string   `json:"sessionName,omitempty"`
 	ChapterID   *string   `json:"chapterId,omitempty"`
-	UploadID    *string   `json:"uploadId,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
@@ -50,15 +49,6 @@ type Chapter struct {
 	Order     int64     `json:"order"`
 	GameID    string    `json:"gameId"`
 	CreatedAt time.Time `json:"createdAt"`
-}
-
-// Upload はクラウドアップロード履歴を表す。
-type Upload struct {
-	ID        string    `json:"id"`
-	ClientID  *string   `json:"clientId,omitempty"`
-	Comment   string    `json:"comment"`
-	CreatedAt time.Time `json:"createdAt"`
-	GameID    string    `json:"gameId"`
 }
 
 // Memo はメモ情報を表す。

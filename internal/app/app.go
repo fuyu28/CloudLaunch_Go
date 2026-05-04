@@ -26,7 +26,6 @@ type App struct {
 	ChapterService      *services.ChapterService
 	MemoService         *services.MemoService
 	MemoFiles           *memo.FileManager
-	UploadService       *services.UploadService
 	CredentialService   *services.CredentialService
 	CloudService        *services.CloudService
 	CloudSyncService    *services.CloudSyncService
@@ -126,7 +125,6 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.SessionService = services.NewSessionService(repository, app.Logger)
 	app.ChapterService = services.NewChapterService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
-	app.UploadService = services.NewUploadService(repository, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
 	app.CloudService = services.NewCloudService(app.Config, credentialStore, app.Logger)
 	app.CloudSyncService = services.NewCloudSyncService(app.Config, credentialStore, repository, app.Logger)

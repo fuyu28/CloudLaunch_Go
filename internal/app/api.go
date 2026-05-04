@@ -595,18 +595,6 @@ func (app *App) OpenLogsDirectory() result.ApiResult[string] {
 	return result.OkResult(path)
 }
 
-// CreateUpload はアップロード履歴を作成する。
-func (app *App) CreateUpload(input services.UploadInput) result.ApiResult[*models.Upload] {
-	upload, err := app.UploadService.CreateUpload(app.context(), input)
-	return serviceResult(upload, err, "アップロード作成に失敗しました")
-}
-
-// ListUploadsByGame はアップロード履歴を取得する。
-func (app *App) ListUploadsByGame(gameID string) result.ApiResult[[]models.Upload] {
-	uploads, err := app.UploadService.ListUploadsByGame(app.context(), gameID)
-	return serviceResult(uploads, err, "アップロード取得に失敗しました")
-}
-
 // SaveCredential は認証情報を保存する。
 func (app *App) SaveCredential(key string, input services.CredentialInput) result.ApiResult[bool] {
 	if err := app.CredentialService.SaveCredential(app.context(), key, input); err != nil {

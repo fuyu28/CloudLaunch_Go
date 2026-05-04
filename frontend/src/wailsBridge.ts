@@ -547,7 +547,6 @@ export const createWailsBridge = (): WindowApi => {
           Duration: duration,
           SessionName: sessionName ?? null,
           ChapterID: null,
-          UploadID: null,
         };
         const result = await CreateSession(payload);
         return result.success
