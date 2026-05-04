@@ -15,13 +15,14 @@ import (
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/db"
 	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/services"
 )
 
 func TestAppExportGameData_WritesUserVisibleArtifacts(t *testing.T) {
 	t.Parallel()
 
-	app := newMaintenanceTestApp(t)
-	game, sessions := seedExportFixture(t, app)
+	app, repository := newMaintenanceTestApp(t)
+	game, sessions := seedExportFixture(t, repository)
 
 	outputDir := t.TempDir()
 	exported := app.ExportGameData(outputDir)
@@ -41,7 +42,7 @@ func TestAppExportGameData_WritesUserVisibleArtifacts(t *testing.T) {
 		t.Fatalf("failed to read export json: %v", err)
 	}
 
-	var payload GameExportPayload
+	var payload services.GameExportPayload
 	if err := json.Unmarshal(jsonBytes, &payload); err != nil {
 		t.Fatalf("failed to unmarshal export json: %v", err)
 	}
@@ -108,8 +109,8 @@ func TestAppExportGameData_WritesUserVisibleArtifacts(t *testing.T) {
 func TestAppCreateFullBackup_CapturesDatabaseAndFiles(t *testing.T) {
 	t.Parallel()
 
-	app := newMaintenanceTestApp(t)
-	game, _ := seedExportFixture(t, app)
+	app, repository := newMaintenanceTestApp(t)
+	game, _ := seedExportFixture(t, repository)
 	writeTestFile(t, filepath.Join(app.Config.AppDataDir, "notes", "readme.txt"), "keep me")
 
 	outputDir := t.TempDir()
@@ -119,11 +120,11 @@ func TestAppCreateFullBackup_CapturesDatabaseAndFiles(t *testing.T) {
 	}
 
 	restoreRoot := t.TempDir()
-	if err := unzipToDirectory(backupResult.Data, restoreRoot); err != nil {
+	if err := services.UnzipToDirectory(backupResult.Data, restoreRoot); err != nil {
 		t.Fatalf("failed to unzip backup: %v", err)
 	}
 
-	manifest, err := readBackupManifest(restoreRoot)
+	manifest, err := services.ReadBackupManifest(restoreRoot)
 	if err != nil {
 		t.Fatalf("failed to read backup manifest: %v", err)
 	}
@@ -142,8 +143,8 @@ func TestAppCreateFullBackup_CapturesDatabaseAndFiles(t *testing.T) {
 		_ = connection.Close()
 	}()
 
-	repository := db.NewRepository(connection)
-	games, err := repository.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	backupRepository := db.NewRepository(connection)
+	games, err := backupRepository.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
 	if err != nil {
 		t.Fatalf("failed to list games from backup database: %v", err)
 	}
@@ -158,8 +159,8 @@ func TestAppCreateFullBackup_CapturesDatabaseAndFiles(t *testing.T) {
 func TestAppRestoreFullBackup_ReplacesAppDataWithBackupContents(t *testing.T) {
 	t.Parallel()
 
-	sourceApp := newMaintenanceTestApp(t)
-	game, _ := seedExportFixture(t, sourceApp)
+	sourceApp, sourceRepository := newMaintenanceTestApp(t)
+	game, _ := seedExportFixture(t, sourceRepository)
 	writeTestFile(t, filepath.Join(sourceApp.Config.AppDataDir, "screenshots", "latest.txt"), "from backup")
 
 	backupPath := sourceApp.CreateFullBackup(t.TempDir())
@@ -167,9 +168,9 @@ func TestAppRestoreFullBackup_ReplacesAppDataWithBackupContents(t *testing.T) {
 		t.Fatalf("CreateFullBackup failed: %#v", backupPath.Error)
 	}
 
-	targetApp := newMaintenanceTestApp(t)
+	targetApp, targetRepository := newMaintenanceTestApp(t)
 	writeTestFile(t, filepath.Join(targetApp.Config.AppDataDir, "obsolete.txt"), "remove me")
-	createGameForTest(t, targetApp.Database, models.Game{
+	createGameForTest(t, targetRepository, models.Game{
 		Title:      "Old Game",
 		Publisher:  "Legacy",
 		ExePath:    "/games/old.exe",
@@ -181,10 +182,11 @@ func TestAppRestoreFullBackup_ReplacesAppDataWithBackupContents(t *testing.T) {
 		t.Fatalf("RestoreFullBackup failed: %#v", restored.Error)
 	}
 
-	games, err := targetApp.Database.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
-	if err != nil {
-		t.Fatalf("failed to list restored games: %v", err)
+	gamesResult := targetApp.GameService.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	if !gamesResult.Success {
+		t.Fatalf("failed to list restored games: %#v", gamesResult.Error)
 	}
+	games := gamesResult.Data
 	if len(games) != 1 {
 		t.Fatalf("expected 1 restored game, got %d", len(games))
 	}
@@ -222,13 +224,13 @@ func TestUnzipToDirectory_RejectsPathTraversalArchive(t *testing.T) {
 		t.Fatalf("failed to close zip file: %v", err)
 	}
 
-	err = unzipToDirectory(zipPath, t.TempDir())
+	err = services.UnzipToDirectory(zipPath, t.TempDir())
 	if err == nil {
 		t.Fatal("expected unzipToDirectory to reject path traversal archive")
 	}
 }
 
-func newMaintenanceTestApp(t *testing.T) *App {
+func newMaintenanceTestApp(t *testing.T) (*App, *db.Repository) {
 	t.Helper()
 
 	appDataDir := t.TempDir()
@@ -242,15 +244,17 @@ func newMaintenanceTestApp(t *testing.T) *App {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
 
+	repository := db.NewRepository(connection)
 	app := &App{
 		Config: config.Config{
 			AppDataDir:   appDataDir,
 			DatabasePath: databasePath,
 		},
 		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Database:     db.NewRepository(connection),
 		dbConnection: connection,
+		autoTracking: true,
 	}
+	app.configureServices(repository, newCredentialStore(app.Config))
 
 	t.Cleanup(func() {
 		if app.dbConnection != nil {
@@ -259,14 +263,14 @@ func newMaintenanceTestApp(t *testing.T) *App {
 		}
 	})
 
-	return app
+	return app, repository
 }
 
-func seedExportFixture(t *testing.T, app *App) (*models.Game, []models.PlaySession) {
+func seedExportFixture(t *testing.T, repository *db.Repository) (*models.Game, []models.PlaySession) {
 	t.Helper()
 
 	lastPlayed := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
-	game := createGameForTest(t, app.Database, models.Game{
+	game := createGameForTest(t, repository, models.Game{
 		Title:         "Test Game",
 		Publisher:     "Test Publisher",
 		ExePath:       "/games/test.exe",
@@ -277,12 +281,12 @@ func seedExportFixture(t *testing.T, app *App) (*models.Game, []models.PlaySessi
 
 	firstPlayedAt := time.Date(2026, 4, 27, 20, 0, 0, 0, time.UTC)
 	secondPlayedAt := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
-	session1 := createSessionForTest(t, app.Database, models.PlaySession{
+	session1 := createSessionForTest(t, repository, models.PlaySession{
 		GameID:   game.ID,
 		PlayedAt: firstPlayedAt,
 		Duration: 1800,
 	})
-	session2 := createSessionForTest(t, app.Database, models.PlaySession{
+	session2 := createSessionForTest(t, repository, models.PlaySession{
 		GameID:   game.ID,
 		PlayedAt: secondPlayedAt,
 		Duration: 3600,

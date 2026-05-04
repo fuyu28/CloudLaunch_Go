@@ -10,12 +10,12 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 
 ## 現在地
 
-- CRUD 系 API は service 経由化が進んでいるが、`internal/app` にはまだ一部 `db.Repository` 直接依存が残っている
+- `internal/app` から `db.Repository` 直接依存を解消し、`App.Database` フィールドを削除した
 - 主要な service は具象の `*db.Repository` ではなく interface に依存する形へ移行済み
 - 移行済み service には fake repository ベースの単体テストを追加済み
 - `CloudSyncService` は repository 境界化と純粋ロジックの分割を進めている段階
 - `MemoService`, `SessionService`, `GameService`, `ProcessMonitorService` には、リファクタリング前の回帰安全網として副作用・集計・状態遷移テストを追加済み
-- `internal/app` にはまだ `api_memo_cloud.go` や `api_maintenance.go` のような厚い adapter が残っている
+- `api_memo_cloud.go` と `api_maintenance.go` は service 呼び出し中心の薄い adapter へ整理した
 - `services` が `result.ApiResult` を返す構造はまだ残っており、完全な Use Case 層分離は未完了
 
 ## フェーズ別進捗
@@ -30,18 +30,19 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 
 ### Phase 1. 入口層の薄型化
 
-状態: 進行中
+状態: 完了
 
 進んだこと:
 
 - `ListGames` / `GetGameByID` / `CreateGame` / `UpdateGame` などの基本 API は service 呼び出し中心の薄い形になっている
 - `session` / `memo` / `chapter` など主要 CRUD API も概ね service 経由で統一されている
 - `DeleteSession` や `UpdateSessionName` など、adapter 側で最小限の戻り値整形に寄せる実装が進んだ
+- `App.Database` フィールドを削除し、`internal/app` から `db.Repository` 直接参照を除去した
+- `MemoCloudService` / `MaintenanceService` を導入し、厚かった `api_memo_cloud.go` / `api_maintenance.go` の処理を移管した
+- サービス再構築処理を `configureServices` に集約し、起動時と復元後の結線を統一した
 
 残課題:
 
-- `App.Database` フィールドはまだ残っており、`api_maintenance.go` で直接利用している
-- `SyncMemosFromCloud` など一部の API は `app` 層に業務ロジックが残っている
 - `ApiResult` の生成責務はまだ `services` 側にも残っている
 - Wails adapter と Use Case の責務分離をさらに明確にする余地がある
 - `internal/app` の adapter テストは依然として薄く、現状は `api_maintenance_test.go` が中心
@@ -88,7 +89,7 @@ interface 化済み service:
 
 - package はまだ `internal/services` に集約されたまま
 - `ApiResult` を返しているため、Use Case と adapter の境界がまだ混ざっている
-- `credential` / `cloud` / `memo cloud sync` などはユースケース境界がまだ粗い
+- `credential` / `cloud` などはユースケース境界がまだ粗い
 - `usecase` / `domain` / `infrastructure` への物理再配置は未着手
 
 ### Phase 4. 複雑機能の分割
@@ -223,7 +224,6 @@ interface 化済み service:
 
 不足している点:
 
-- `docs` 上では完了扱いだった `App.Database` / `db.Repository` 直接依存が実装にはまだ残っている
 - `CloudSyncService` の副作用を伴う失敗系テストがまだ薄い
 - DB 実装を使う統合テストが不足している
 - `internal/app` の adapter 層のテストはまだかなり薄い
@@ -233,18 +233,18 @@ interface 化済み service:
 
 現状は、以下の段階に入っている。
 
-- Phase 1 は進行中
+- Phase 1 は完了
 - Phase 2 は大部分完了
 - Phase 3 は着手済みだが構造の整理はこれから
 - Phase 4 は `CloudSyncService` を中心に進行中
 - Phase 5 は未着手
 
-要するに、現在の移行は「service の依存境界整理と回帰テスト追加」はかなり進んでいる。一方で、「`app` 層の薄型化」と「Use Case / adapter の責務分離」はまだ完了しておらず、次の主戦場はそこにある。
+要するに、現在の移行は「`app` 層からの direct DB 依存除去」と「厚い adapter の service 移管」までは完了した。次の主戦場は、「`services` から `ApiResult` を外すこと」と「重い service をさらに分割して Use Case 境界を明確にすること」である。
 
 ## 次の優先事項
 
-1. `api_maintenance.go` と `api_memo_cloud.go` の業務ロジックを service / usecase 側へ寄せ、`App.Database` 依存を解消する
-2. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
-3. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
-4. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
+1. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
+2. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
+3. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
+4. `cloud` 系 API の usecase 化を進め、storage 直操作を adapter からさらに切り離す
 5. その後に `usecase` / `domain` / `infrastructure` への再配置を検討する
