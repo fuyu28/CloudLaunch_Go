@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-04-29
+最終更新: 2026-05-04
 
 ## 概要
 
@@ -10,11 +10,12 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 
 ## 現在地
 
-- `internal/app` から `db.Repository` への直接依存は解消済み
+- CRUD 系 API は service 経由化が進んでいるが、`internal/app` にはまだ一部 `db.Repository` 直接依存が残っている
 - 主要な service は具象の `*db.Repository` ではなく interface に依存する形へ移行済み
 - 移行済み service には fake repository ベースの単体テストを追加済み
 - `CloudSyncService` は repository 境界化と純粋ロジックの分割を進めている段階
 - `MemoService`, `SessionService`, `GameService`, `ProcessMonitorService` には、リファクタリング前の回帰安全網として副作用・集計・状態遷移テストを追加済み
+- `internal/app` にはまだ `api_memo_cloud.go` や `api_maintenance.go` のような厚い adapter が残っている
 - `services` が `result.ApiResult` を返す構造はまだ残っており、完全な Use Case 層分離は未完了
 
 ## フェーズ別進捗
@@ -29,19 +30,21 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 
 ### Phase 1. 入口層の薄型化
 
-状態: ほぼ完了
+状態: 進行中
 
-完了した内容:
+進んだこと:
 
-- `internal/app` から `db.Repository` の直接参照を除去
-- `App.Database` フィールドを削除
-- `memo` / `cloud` / `session` 関連 API の DB 直参照を service 経由へ移行
+- `ListGames` / `GetGameByID` / `CreateGame` / `UpdateGame` などの基本 API は service 呼び出し中心の薄い形になっている
+- `session` / `memo` / `chapter` など主要 CRUD API も概ね service 経由で統一されている
+- `DeleteSession` や `UpdateSessionName` など、adapter 側で最小限の戻り値整形に寄せる実装が進んだ
 
 残課題:
 
+- `App.Database` フィールドはまだ残っており、`api_maintenance.go` で直接利用している
+- `SyncMemosFromCloud` など一部の API は `app` 層に業務ロジックが残っている
 - `ApiResult` の生成責務はまだ `services` 側にも残っている
 - Wails adapter と Use Case の責務分離をさらに明確にする余地がある
-- `internal/app` の adapter としての薄いテストはまだ不足している
+- `internal/app` の adapter テストは依然として薄く、現状は `api_maintenance_test.go` が中心
 
 ### Phase 2. Port interface の導入
 
@@ -78,12 +81,14 @@ interface 化済み service:
 
 - `services` は徐々に「ユースケース単位の処理」として読める形になってきている
 - `game` / `session` / `memo` / `chapter` / `upload` は責務の輪郭が比較的明確
+- `internal/services/repositories.go` を中心に、ユースケースごとの依存境界が読み取りやすくなった
 - t_wada TDD に倣い、既存の振る舞いを固定するテストを追加してから構造変更する方針に更新
 
 未完了の点:
 
 - package はまだ `internal/services` に集約されたまま
 - `ApiResult` を返しているため、Use Case と adapter の境界がまだ混ざっている
+- `credential` / `cloud` / `memo cloud sync` などはユースケース境界がまだ粗い
 - `usecase` / `domain` / `infrastructure` への物理再配置は未着手
 
 ### Phase 4. 複雑機能の分割
@@ -108,12 +113,14 @@ interface 化済み service:
   - `composeLocalPlaySession`
 - upload / download の表現変換ロジックを I/O なしでテストできるようになった
 - `loadLocalGames` の全件取得・指定ゲームなしの振る舞いをテストで固定
+- S3 ストレージ、画像ファイル書き込み、画像ロードの差し替えポイントを導入済み
 
 まだ重い部分:
 
 - `applyCloudGame` の副作用の塊
 - metadata 保存判断とエラーハンドリングの詳細分岐
 - S3 I/O を伴う分岐の失敗系テスト
+- ファイル全体はまだ 1200 行超で、責務分割は継続が必要
 
 #### ProcessMonitorService
 
@@ -127,6 +134,7 @@ interface 化済み service:
 残課題:
 
 - 監視ループ全体の統合的な振る舞いはまだ十分に押さえられていない
+- `checkProcesses` / `saveAllActiveSessions` を中心に、単一 service へ責務がまだ集中している
 
 #### ScreenshotService
 
@@ -168,6 +176,11 @@ interface 化済み service:
 - `process_monitor_service_test.go`
 - `windows_path_test.go`
 
+`internal/app` 側の現状:
+
+- `api_maintenance_test.go` のみ
+- adapter 層の網羅は限定的で、通常 API の薄さを保証するテストはまだ不足
+
 2026-04-29 に追加した主な回帰テスト:
 
 - Cloud sync:
@@ -190,8 +203,13 @@ interface 化済み service:
 
 現在の coverage:
 
-- `internal/services`: 30.9%
+- `internal/services`: 40.6%
 - `internal/result`: 100.0%
+
+2026-05-04 の確認結果:
+
+- `go test ./...` は通過
+- `./scripts/run-all-lint-format.sh` は通過
 
 ### 現在の評価
 
@@ -201,30 +219,32 @@ interface 化済み service:
 - `CloudSyncService` と `ProcessMonitorService` の pure な判定部分は以前より明確にテストしやすい
 - Windows 実行前提の path 判定を Linux 上のテストで扱えるようになった
 - memo / session / game の副作用と集計更新について、リファクタリング前の安全網が増えた
+- backend 全体の Go テスト、lint、format を通せる状態は維持されている
 
 不足している点:
 
+- `docs` 上では完了扱いだった `App.Database` / `db.Repository` 直接依存が実装にはまだ残っている
 - `CloudSyncService` の副作用を伴う失敗系テストがまだ薄い
 - DB 実装を使う統合テストが不足している
-- `internal/app` の adapter 層のテストはほぼない
+- `internal/app` の adapter 層のテストはまだかなり薄い
 - frontend 側は今回の移行に対応する新規テスト追加は限定的
 
 ## 全体評価
 
 現状は、以下の段階に入っている。
 
-- Phase 1 はほぼ完了
+- Phase 1 は進行中
 - Phase 2 は大部分完了
 - Phase 3 は着手済みだが構造の整理はこれから
 - Phase 4 は `CloudSyncService` を中心に進行中
 - Phase 5 は未着手
 
-要するに、現在の移行は「入口と依存境界の整理」はかなり進んでおり、これからの主戦場は「重いサービスの分割」と「Use Case / adapter の責務分離」である。
+要するに、現在の移行は「service の依存境界整理と回帰テスト追加」はかなり進んでいる。一方で、「`app` 層の薄型化」と「Use Case / adapter の責務分離」はまだ完了しておらず、次の主戦場はそこにある。
 
 ## 次の優先事項
 
-1. `CloudSyncService` の S3 I/O 周辺を port 化し、副作用を fake でテストできるようにする
-2. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
-3. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
+1. `api_maintenance.go` と `api_memo_cloud.go` の業務ロジックを service / usecase 側へ寄せ、`App.Database` 依存を解消する
+2. `services` から `ApiResult` を外し、`app` 層へ戻り値整形を寄せる
+3. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
 4. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
 5. その後に `usecase` / `domain` / `infrastructure` への再配置を検討する
