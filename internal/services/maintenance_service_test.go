@@ -30,12 +30,12 @@ func TestMaintenanceServiceExportGameDataWritesArtifacts(t *testing.T) {
 	game, sessions := seedMaintenanceFixture(t, runtime.repository)
 
 	outputDir := t.TempDir()
-	exported := runtime.service.ExportGameData(context.Background(), outputDir)
-	if !exported.Success {
-		t.Fatalf("ExportGameData failed: %#v", exported.Error)
+	exported, err := runtime.service.ExportGameData(context.Background(), outputDir)
+	if err != nil {
+		t.Fatalf("ExportGameData failed: %v", err)
 	}
 
-	jsonBytes, err := os.ReadFile(exported.Data.JSONPath)
+	jsonBytes, err := os.ReadFile(exported.JSONPath)
 	if err != nil {
 		t.Fatalf("failed to read export json: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestMaintenanceServiceExportGameDataWritesArtifacts(t *testing.T) {
 		t.Fatalf("expected latest session time %v, got %v", sessions[1].PlayedAt, stat.LastSessionAt)
 	}
 
-	csvFile, err := os.Open(exported.Data.CSVPath)
+	csvFile, err := os.Open(exported.CSVPath)
 	if err != nil {
 		t.Fatalf("failed to open export csv: %v", err)
 	}
@@ -86,13 +86,13 @@ func TestMaintenanceServiceCreateFullBackupCapturesDatabaseAndFiles(t *testing.T
 	game, _ := seedMaintenanceFixture(t, runtime.repository)
 	writeMaintenanceFile(t, filepath.Join(runtime.cfg.AppDataDir, "notes", "readme.txt"), "keep me")
 
-	backupResult := runtime.service.CreateFullBackup(t.TempDir())
-	if !backupResult.Success {
-		t.Fatalf("CreateFullBackup failed: %#v", backupResult.Error)
+	backupResult, err := runtime.service.CreateFullBackup(t.TempDir())
+	if err != nil {
+		t.Fatalf("CreateFullBackup failed: %v", err)
 	}
 
 	restoreRoot := t.TempDir()
-	if err := UnzipToDirectory(backupResult.Data, restoreRoot); err != nil {
+	if err := UnzipToDirectory(backupResult, restoreRoot); err != nil {
 		t.Fatalf("failed to unzip backup: %v", err)
 	}
 
@@ -131,9 +131,9 @@ func TestMaintenanceServiceRestoreFullBackupReplacesAppData(t *testing.T) {
 	game, _ := seedMaintenanceFixture(t, source.repository)
 	writeMaintenanceFile(t, filepath.Join(source.cfg.AppDataDir, "screenshots", "latest.txt"), "from backup")
 
-	backupResult := source.service.CreateFullBackup(t.TempDir())
-	if !backupResult.Success {
-		t.Fatalf("CreateFullBackup failed: %#v", backupResult.Error)
+	backupResult, err := source.service.CreateFullBackup(t.TempDir())
+	if err != nil {
+		t.Fatalf("CreateFullBackup failed: %v", err)
 	}
 
 	target := newMaintenanceServiceRuntime(t)
@@ -145,9 +145,8 @@ func TestMaintenanceServiceRestoreFullBackupReplacesAppData(t *testing.T) {
 		PlayStatus: models.PlayStatusUnplayed,
 	})
 
-	restored := target.service.RestoreFullBackup(backupResult.Data)
-	if !restored.Success {
-		t.Fatalf("RestoreFullBackup failed: %#v", restored.Error)
+	if err := target.service.RestoreFullBackup(backupResult); err != nil {
+		t.Fatalf("RestoreFullBackup failed: %v", err)
 	}
 
 	connection, err := db.Open(target.cfg.DatabasePath)

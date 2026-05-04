@@ -16,7 +16,6 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/models"
-	"CloudLaunch_Go/internal/result"
 )
 
 const BackupTypeV1 = "appdata-zip-v1"
@@ -85,20 +84,20 @@ func NewMaintenanceService(
 	}
 }
 
-func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir string) result.ApiResult[GameExportResult] {
+func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir string) (GameExportResult, error) {
 	trimmed := strings.TrimSpace(outputDir)
 	if trimmed == "" {
-		return result.ErrorResult[GameExportResult]("出力先フォルダが不正です", "outputDir is empty")
+		return GameExportResult{}, newServiceError("出力先フォルダが不正です", "outputDir is empty")
 	}
 	if err := os.MkdirAll(trimmed, 0o700); err != nil {
 		service.logger.Error("出力先フォルダの作成に失敗しました", "error", err, "operation", "ExportGameData.mkdir", "outputDir", trimmed)
-		return result.ErrorResult[GameExportResult]("出力先フォルダの作成に失敗しました", err.Error())
+		return GameExportResult{}, newServiceError("出力先フォルダの作成に失敗しました", err.Error())
 	}
 
 	games, err := service.repository.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
 	if err != nil {
 		service.logger.Error("ゲーム一覧の取得に失敗しました", "error", err, "operation", "ExportGameData.listGames")
-		return result.ErrorResult[GameExportResult]("ゲーム一覧の取得に失敗しました", err.Error())
+		return GameExportResult{}, newServiceError("ゲーム一覧の取得に失敗しました", err.Error())
 	}
 
 	stats := make([]GameExportStatistic, 0, len(games))
@@ -107,7 +106,7 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 		sessions, err := service.repository.ListPlaySessionsByGame(ctx, game.ID)
 		if err != nil {
 			service.logger.Error("セッション取得に失敗しました", "error", err, "operation", "ExportGameData.listSessions", "gameId", game.ID)
-			return result.ErrorResult[GameExportResult]("セッション取得に失敗しました", err.Error())
+			return GameExportResult{}, newServiceError("セッション取得に失敗しました", err.Error())
 		}
 		sessionRows = append(sessionRows, sessions...)
 
@@ -148,48 +147,48 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 	jsonData, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		service.logger.Error("JSONの生成に失敗しました", "error", err, "operation", "ExportGameData.marshal")
-		return result.ErrorResult[GameExportResult]("JSONの生成に失敗しました", err.Error())
+		return GameExportResult{}, newServiceError("JSONの生成に失敗しました", err.Error())
 	}
 	if err := os.WriteFile(jsonPath, jsonData, 0o600); err != nil {
 		service.logger.Error("JSONファイルの保存に失敗しました", "error", err, "operation", "ExportGameData.writeJSON", "path", jsonPath)
-		return result.ErrorResult[GameExportResult]("JSONファイルの保存に失敗しました", err.Error())
+		return GameExportResult{}, newServiceError("JSONファイルの保存に失敗しました", err.Error())
 	}
 	if err := writeExportCSV(csvPath, games, stats); err != nil {
 		service.logger.Error("CSVファイルの保存に失敗しました", "error", err, "operation", "ExportGameData.writeCSV", "path", csvPath)
-		return result.ErrorResult[GameExportResult]("CSVファイルの保存に失敗しました", err.Error())
+		return GameExportResult{}, newServiceError("CSVファイルの保存に失敗しました", err.Error())
 	}
 
-	return result.OkResult(GameExportResult{JSONPath: jsonPath, CSVPath: csvPath})
+	return GameExportResult{JSONPath: jsonPath, CSVPath: csvPath}, nil
 }
 
-func (service *MaintenanceService) CreateFullBackup(outputDir string) result.ApiResult[string] {
+func (service *MaintenanceService) CreateFullBackup(outputDir string) (string, error) {
 	trimmed := strings.TrimSpace(outputDir)
 	if trimmed == "" {
-		return result.ErrorResult[string]("出力先フォルダが不正です", "outputDir is empty")
+		return "", newServiceError("出力先フォルダが不正です", "outputDir is empty")
 	}
 	if err := os.MkdirAll(trimmed, 0o700); err != nil {
 		service.logger.Error("出力先フォルダの作成に失敗しました", "error", err, "operation", "CreateFullBackup.mkdir", "outputDir", trimmed)
-		return result.ErrorResult[string]("出力先フォルダの作成に失敗しました", err.Error())
+		return "", newServiceError("出力先フォルダの作成に失敗しました", err.Error())
 	}
 
 	appDataDir := strings.TrimSpace(service.config.AppDataDir)
 	if appDataDir == "" {
-		return result.ErrorResult[string]("バックアップ元ディレクトリが不正です", "AppDataDir is empty")
+		return "", newServiceError("バックアップ元ディレクトリが不正です", "AppDataDir is empty")
 	}
 
 	relDBPath, err := filepath.Rel(appDataDir, service.config.DatabasePath)
 	if err != nil {
 		service.logger.Error("DB相対パスの解決に失敗しました", "error", err, "operation", "CreateFullBackup.relDBPath")
-		return result.ErrorResult[string]("DB相対パスの解決に失敗しました", err.Error())
+		return "", newServiceError("DB相対パスの解決に失敗しました", err.Error())
 	}
 	if strings.HasPrefix(relDBPath, "..") {
-		return result.ErrorResult[string]("バックアップ対象DBが不正です", "database path is outside AppDataDir")
+		return "", newServiceError("バックアップ対象DBが不正です", "database path is outside AppDataDir")
 	}
 
 	stagingDir, err := os.MkdirTemp("", "cloudlaunch-backup-")
 	if err != nil {
 		service.logger.Error("バックアップ準備に失敗しました", "error", err, "operation", "CreateFullBackup.mktemp")
-		return result.ErrorResult[string]("バックアップ準備に失敗しました", err.Error())
+		return "", newServiceError("バックアップ準備に失敗しました", err.Error())
 	}
 	defer func() {
 		_ = os.RemoveAll(stagingDir)
@@ -197,16 +196,16 @@ func (service *MaintenanceService) CreateFullBackup(outputDir string) result.Api
 
 	if err := copyDirectoryTree(appDataDir, stagingDir); err != nil {
 		service.logger.Error("バックアップ準備に失敗しました", "error", err, "operation", "CreateFullBackup.copyAppData")
-		return result.ErrorResult[string]("バックアップ準備に失敗しました", err.Error())
+		return "", newServiceError("バックアップ準備に失敗しました", err.Error())
 	}
 
 	snapshotPath := filepath.Join(stagingDir, relDBPath)
 	if service.hooks.CreateDatabaseSnapshot == nil {
-		return result.ErrorResult[string]("DBスナップショットの取得に失敗しました", "snapshot hook is nil")
+		return "", newServiceError("DBスナップショットの取得に失敗しました", "snapshot hook is nil")
 	}
 	if err := service.hooks.CreateDatabaseSnapshot(snapshotPath); err != nil {
 		service.logger.Error("DBスナップショットの取得に失敗しました", "error", err, "operation", "CreateFullBackup.snapshot")
-		return result.ErrorResult[string]("DBスナップショットの取得に失敗しました", err.Error())
+		return "", newServiceError("DBスナップショットの取得に失敗しました", err.Error())
 	}
 	_ = os.Remove(snapshotPath + "-wal")
 	_ = os.Remove(snapshotPath + "-shm")
@@ -223,28 +222,28 @@ func (service *MaintenanceService) CreateFullBackup(outputDir string) result.Api
 	}
 	if err := writeBackupZip(stagingDir, backupPath, manifest); err != nil {
 		service.logger.Error("バックアップ作成に失敗しました", "error", err, "operation", "CreateFullBackup.writeZip", "path", backupPath)
-		return result.ErrorResult[string]("バックアップ作成に失敗しました", err.Error())
+		return "", newServiceError("バックアップ作成に失敗しました", err.Error())
 	}
-	return result.OkResult(backupPath)
+	return backupPath, nil
 }
 
-func (service *MaintenanceService) RestoreFullBackup(backupPath string) result.ApiResult[bool] {
+func (service *MaintenanceService) RestoreFullBackup(backupPath string) error {
 	trimmed := strings.TrimSpace(backupPath)
 	if trimmed == "" {
-		return result.ErrorResult[bool]("バックアップファイルが不正です", "backupPath is empty")
+		return newServiceError("バックアップファイルが不正です", "backupPath is empty")
 	}
 	if _, err := os.Stat(trimmed); err != nil {
 		if os.IsNotExist(err) {
-			return result.ErrorResult[bool]("バックアップファイルが見つかりません", err.Error())
+			return newServiceError("バックアップファイルが見つかりません", err.Error())
 		}
 		service.logger.Error("バックアップファイルの確認に失敗しました", "error", err, "operation", "RestoreFullBackup.stat", "path", trimmed)
-		return result.ErrorResult[bool]("バックアップファイルの確認に失敗しました", err.Error())
+		return newServiceError("バックアップファイルの確認に失敗しました", err.Error())
 	}
 
 	tmpDir, err := os.MkdirTemp("", "cloudlaunch-restore-")
 	if err != nil {
 		service.logger.Error("復元用一時ディレクトリの作成に失敗しました", "error", err, "operation", "RestoreFullBackup.mktemp")
-		return result.ErrorResult[bool]("復元用一時ディレクトリの作成に失敗しました", err.Error())
+		return newServiceError("復元用一時ディレクトリの作成に失敗しました", err.Error())
 	}
 	defer func() {
 		_ = os.RemoveAll(tmpDir)
@@ -252,15 +251,15 @@ func (service *MaintenanceService) RestoreFullBackup(backupPath string) result.A
 
 	if err := UnzipToDirectory(trimmed, tmpDir); err != nil {
 		service.logger.Error("バックアップ展開に失敗しました", "error", err, "operation", "RestoreFullBackup.unzip", "path", trimmed)
-		return result.ErrorResult[bool]("バックアップ展開に失敗しました", err.Error())
+		return newServiceError("バックアップ展開に失敗しました", err.Error())
 	}
 
 	if err := service.restoreAppDataFrom(tmpDir); err != nil {
 		service.logger.Error("バックアップ復元に失敗しました", "error", err, "operation", "RestoreFullBackup.restore")
-		return result.ErrorResult[bool]("バックアップ復元に失敗しました", err.Error())
+		return newServiceError("バックアップ復元に失敗しました", err.Error())
 	}
 
-	return result.OkResult(true)
+	return nil
 }
 
 func writeExportCSV(path string, games []models.Game, stats []GameExportStatistic) error {

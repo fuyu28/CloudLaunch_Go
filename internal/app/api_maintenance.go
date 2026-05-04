@@ -13,17 +13,22 @@ import (
 
 // ExportGameData はゲーム情報・統計データをCSV/JSONで出力する。
 func (app *App) ExportGameData(outputDir string) result.ApiResult[services.GameExportResult] {
-	return app.MaintenanceService.ExportGameData(app.context(), outputDir)
+	exported, err := app.MaintenanceService.ExportGameData(app.context(), outputDir)
+	return serviceResult(exported, err, "ゲーム一覧の出力に失敗しました")
 }
 
 // CreateFullBackup はアプリデータ一式のバックアップZIPを作成する。
 func (app *App) CreateFullBackup(outputDir string) result.ApiResult[string] {
-	return app.MaintenanceService.CreateFullBackup(outputDir)
+	path, err := app.MaintenanceService.CreateFullBackup(outputDir)
+	return serviceResult(path, err, "バックアップ作成に失敗しました")
 }
 
 // RestoreFullBackup はバックアップZIPから全データを復元する。
 func (app *App) RestoreFullBackup(backupPath string) result.ApiResult[bool] {
-	return app.MaintenanceService.RestoreFullBackup(backupPath)
+	if err := app.MaintenanceService.RestoreFullBackup(backupPath); err != nil {
+		return serviceErrorResult[bool](err, "バックアップ復元に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 func (app *App) createDatabaseSnapshot(destinationPath string) error {
