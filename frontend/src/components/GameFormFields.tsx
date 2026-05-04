@@ -153,10 +153,10 @@ export function GameFormFields({
 
       <div>
         <label className="label" htmlFor="clearedAt">
-          <span className="label-text">クリア日時</span>
+          <span className="label-text">クリア日</span>
         </label>
         <input
-          type="datetime-local"
+          type="date"
           id="clearedAt"
           name="clearedAt"
           value={gameData.clearedAt || ""}

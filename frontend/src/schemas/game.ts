@@ -14,8 +14,8 @@ export const gameSchema = z.object({
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((value) => value === undefined || value === "" || !Number.isNaN(Date.parse(value)), {
-      message: "有効なクリア日時を指定してください",
+    .refine((value) => value === undefined || value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), {
+      message: "有効なクリア日を指定してください",
     }),
 });
 

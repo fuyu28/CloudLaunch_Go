@@ -199,6 +199,7 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 
 	lastPlayed := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	clearedAt := lastPlayed.Add(2 * time.Hour)
+	expectedClearedAt := time.Date(2026, 4, 24, 0, 0, 0, 0, time.UTC)
 	var updatedGame models.Game
 	service := NewGameService(&fakeGameRepository{
 		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
@@ -241,8 +242,42 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 	}
 	if updatedGame.PlayStatus != models.PlayStatusPlaying ||
 		updatedGame.ClearedAt == nil ||
-		!updatedGame.ClearedAt.Equal(clearedAt) {
+		!updatedGame.ClearedAt.Equal(expectedClearedAt) {
 		t.Fatalf("expected progress fields to be updated, got %#v", updatedGame)
+	}
+}
+
+func TestGameServiceCreateGameNormalizesClearedAtToDateOnly(t *testing.T) {
+	t.Parallel()
+
+	var createdGame models.Game
+	clearedAt := time.Date(2026, 5, 5, 18, 30, 0, 0, time.FixedZone("JST", 9*60*60))
+	expectedClearedAt := time.Date(2026, 5, 5, 0, 0, 0, 0, time.FixedZone("JST", 9*60*60))
+	service := NewGameService(&fakeGameRepository{
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return nil, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+			createdGame = game
+			return &game, nil
+		},
+		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	_, err := service.CreateGame(context.Background(), GameInput{
+		Title:     "Game",
+		Publisher: "Publisher",
+		ExePath:   "/games/game.exe",
+		ClearedAt: &clearedAt,
+	})
+
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if createdGame.ClearedAt == nil || !createdGame.ClearedAt.Equal(expectedClearedAt) {
+		t.Fatalf("expected clearedAt to be normalized to date only, got %#v", createdGame.ClearedAt)
 	}
 }
 

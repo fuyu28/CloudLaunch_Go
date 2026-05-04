@@ -48,7 +48,7 @@ const GameInfo = memo(function GameInfo({
   onEditGame,
   onDeleteGame,
 }: GameInfoProps): React.JSX.Element {
-  const { formatSmart, formatDateWithTime } = useTimeFormat();
+  const { formatSmart, formatDate, formatDateWithTime } = useTimeFormat();
   const saveDirectory = game.saveFolderPath?.trim() ?? "";
   const gameDirectory = game.exePath ? getParentDirectory(game.exePath) : "";
 
@@ -125,7 +125,7 @@ const GameInfo = memo(function GameInfo({
                   最終プレイ: {game.lastPlayed ? formatDateWithTime(game.lastPlayed) : "なし"}
                 </span>
                 <span>総プレイ時間: {formatSmart(game.totalPlayTime ?? 0)}</span>
-                {game.clearedAt && <span>クリア日時: {formatDateWithTime(game.clearedAt)}</span>}
+                {game.clearedAt && <span>クリア日: {formatDate(game.clearedAt)}</span>}
               </div>
             </div>
 

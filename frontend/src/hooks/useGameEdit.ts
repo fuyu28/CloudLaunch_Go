@@ -98,7 +98,7 @@ export function useGameEdit(
       imagePath,
       exePath: exePath === UNCONFIGURED_EXE_PATH ? "" : exePath,
       saveFolderPath,
-      clearedAt: clearedAt ? toDateTimeLocalValue(clearedAt) : "",
+      clearedAt: clearedAt ? toDateInputValue(clearedAt) : "",
     };
   }, [game]);
 
@@ -235,11 +235,9 @@ export function useGameEdit(
 
 export default useGameEdit;
 
-function toDateTimeLocalValue(value: Date): string {
+function toDateInputValue(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
-  const hours = String(value.getHours()).padStart(2, "0");
-  const minutes = String(value.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  return `${year}-${month}-${day}`;
 }

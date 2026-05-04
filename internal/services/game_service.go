@@ -63,9 +63,9 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*m
 		SaveFolderPath: input.SaveFolderPath,
 		PlayStatus:     models.PlayStatusUnplayed,
 		TotalPlayTime:  0,
-		ClearedAt:      input.ClearedAt,
+		ClearedAt:      normalizeDateOnly(input.ClearedAt),
 	}
-	if input.ClearedAt != nil {
+	if game.ClearedAt != nil {
 		game.PlayStatus = models.PlayStatusPlayed
 	}
 
@@ -102,7 +102,7 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.ImagePath = input.ImagePath
 	current.ExePath = strings.TrimSpace(input.ExePath)
 	current.SaveFolderPath = input.SaveFolderPath
-	current.ClearedAt = input.ClearedAt
+	current.ClearedAt = normalizeDateOnly(input.ClearedAt)
 
 	updated, error := service.repository.UpdateGame(ctx, *current)
 	if error != nil {
@@ -188,4 +188,14 @@ func validateGameInput(input GameInput) error {
 		return errors.New(detail)
 	}
 	return nil
+}
+
+func normalizeDateOnly(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	year, month, day := value.Date()
+	location := value.Location()
+	normalized := time.Date(year, month, day, 0, 0, 0, 0, location)
+	return &normalized
 }
