@@ -1,6 +1,6 @@
 # CloudLaunch_Go DB見直しメモ
 
-最終更新: 2026-05-04
+最終更新: 2026-06-05
 
 ## 1. 目的
 
@@ -15,20 +15,22 @@
   - `internal/db/migrations/0001_init.sql`
   - `internal/db/migrations/0002_add_updated_at.sql`
   - `internal/db/migrations/0003_add_local_save_hash.sql`
+  - `internal/db/migrations/0004_remove_upload.sql`
+  - `internal/db/migrations/0005_rename_chapter_to_route.sql`
 - 実装参照:
   - `internal/db/repository.go`
   - `internal/services/*`
   - `internal/app/*`
   - `frontend/src/*`
 
-## 3. 実データの概要
+## 3. 実データの概要（2026-05-04 時点）
 
 ### テーブル件数
 
 - `Game`: 19
 - `PlaySession`: 84
-- `Chapter`: 0
-- `Upload`: 0
+- `Route`: 0（旧 `Chapter`、0件のまま再設計）
+- `Upload`: 削除済み（migration 0004）
 - `Memo`: 0
 
 ### `Game` の埋まり方
@@ -37,7 +39,7 @@
 - `saveFolderPath`: 1 / 19
 - `lastPlayed`: 15 / 19
 - `clearedAt`: 0 / 19
-- `currentChapter`: 0 / 19
+- `currentRouteId`: 0 / 19（旧 `currentChapter`、migration 0005 で FK 化）
 - `updatedAt`: 19 / 19
 - `localSaveHash`: 1 / 19
 - `localSaveHashUpdatedAt`: 1 / 19
@@ -45,69 +47,34 @@
 ### `PlaySession` の埋まり方
 
 - `sessionName`: 84 / 84
-- `chapterId`: 0 / 84
-- `uploadId`: 0 / 84
+- `routeId`: 0 / 84（旧 `chapterId`、migration 0005 で FK 先変更）
 - `updatedAt`: 84 / 84
-
-### `Upload` の埋まり方
-
-- `Upload` 自体が 0 件
 
 ## 4. 実装と実データを合わせて見た判断
 
-### 4.1 即削除候補
+### 4.1 `Upload` テーブル — 完了
 
-#### `Upload` テーブル
+**状態: 削除済み（migration 0004）**
 
-理由:
+対応内容:
 
-- 実データが 0 件
-- `PlaySession.uploadId` も 0 件
-- 機能として不要であることを確認済み
+- `Upload` テーブル削除
+- `PlaySession.uploadId` 削除
+- upload 関連 API / service / repository / frontend をすべて除去
+- コミット: `chore(db): remove upload table and related code`
 
-関連削除対象:
+### 4.2 `Chapter` / `PlaySession.chapterId` / `Game.currentChapter` — 完了
 
-- `Upload` テーブル
-- `PlaySession.uploadId`
-- `Upload.clientId`
-- `Upload.comment`
-- upload 関連 API / service / repository / frontend
+**状態: Route へ再設計済み（migration 0005）**
 
-方針:
+対応内容:
 
-- 次回の DB 見直しで削除対象として扱う
-- 削除前にコード参照を先に落とす
-
-### 4.2 再設計候補
-
-#### `Chapter` / `PlaySession.chapterId` / `Game.currentChapter`
-
-背景:
-
-- 当初は「どのキャラのルートにどのぐらい時間がかかったか」を集計するために導入した
-- ただし実データ上は `Chapter` 0 件、`PlaySession.chapterId` 0 件、`Game.currentChapter` 0 件
-
-現状の問題:
-
-- `Chapter` という名前が、「章」なのか「ルート」なのか「進行区分」なのか曖昧
-- `Game.currentChapter` は文字列で保持されており、外部キー整合性がない
-- 実際に欲しいのは「章管理」より「ルート別プレイ時間集計」に近い
-
-現時点の判断:
-
-- 今の `Chapter` 設計は延命より再設計が望ましい
-- 残す場合でも、`Chapter` をそのまま使うより「ルート/区分」概念に置き換える方が自然
-
-有力案:
-
-- `GameRoute` 的なテーブルへ再定義する
-- `PlaySession.routeId` nullable
-- 必要なら `Game.currentRouteId` を持つ
-
-保留事項:
-
-- 本当に「現在の進行位置」を永続化したいか
-- 集計だけで足りるなら、現在値を DB に持たず UI 状態や最新セッションから導出する案もありうる
+- `Chapter` テーブル → `Route` テーブルへリネーム
+- `PlaySession.chapterId` → `routeId`（FK 先を `Route` へ）
+- `Game.currentChapter` (TEXT) → `currentRouteId` (FK → `Route.id`)
+- ゲーム作成時のデフォルトルート名: 「メインルート」
+- `ChapterService` → `RouteService`、関連する全レイヤー（models / services / repository / app / frontend）をリネーム
+- コミット: `refactor(db): rename Chapter to Route across all layers`
 
 ### 4.3 当面維持でよい項目
 
@@ -182,25 +149,17 @@
 
 ## 5. いつやるべきか
 
-現時点では、DB の即時大改修より先に以下を優先する。
+2026-06-05 現在のステータス:
 
-1. `services` から `ApiResult` を外す
-2. use case 境界をもう少し明確にする
-3. その後に DB 見直しへ入る
-4. `sqlx` 移行は schema 見直しの後、または並行でも変更単位を分けて行う
+- `Upload` 削除 → **完了**
+- `Chapter` → `Route` 再設計 → **完了**
+- `services` から `ApiResult` を外す → **完了**
+- Use Case 境界の明確化 → **完了**（Phase 3）
 
-理由:
+次に検討すべき DB 改修:
 
-- いま DB 構造とコード責務を同時に大きく動かすと、回帰原因の切り分けが難しくなる
-- 特にカラム削除は戻しにくいため、Use Case 境界が安定してからの方が安全
-
-実務上の推奨順:
-
-1. 先に棚卸しを完了する
-2. Upload 廃止のコード削除を進める
-3. Chapter を Route 系へ再設計するか判断する
-4. migration で schema を整理する
-5. その後に `internal/db/repository.go` 周辺の実装を `sqlx` ベースへ段階的に移す
+1. `Game.playStatus` / `lastPlayed` / `clearedAt` の意味整理（状態モデルの定義）
+2. `sqlx` 移行（schema 安定後）
 
 ## 6. `sqlx` 移行メモ
 
@@ -218,50 +177,38 @@
 注意点:
 
 - schema 改修と `sqlx` 移行を同時にやると、変更範囲が広がりすぎる
-- 不具合が出た時に、schema 側と access layer 側のどちらが原因か切り分けづらくなる
 
 方針:
 
 - `sqlx` 移行はやりたいこととして明記する
-- ただし、`Upload` 削除や `Chapter` 再設計のような schema 改修とは別の変更単位で進める
-- 先に schema の方向性を固め、その後に DB access 実装を `sqlx` へ寄せる
-
-推奨タイミング:
-
-1. Use Case 境界の整理
-2. 不要カラム / 不要テーブルの削除
-3. `Chapter` 周辺の再設計判断
-4. その後に `sqlx` 移行
+- schema の方向性が固まった後に DB access 実装を `sqlx` へ寄せる
 
 対象候補:
 
 - `internal/db/repository.go`
 - `internal/db/queries/*.sql`
 - model への scan / mapping ロジック
+
 ## 7. 次回の見直し対象
-
-優先度高:
-
-- `Upload`
-- `PlaySession.uploadId`
-- `Chapter`
-- `PlaySession.chapterId`
-- `Game.currentChapter`
 
 優先度中:
 
 - `Game.playStatus`
-- `Game.clearedAt`
+- `Game.clearedAt`（`lastPlayed` との意味整合）
 
 当面維持:
 
 - `Game.localSaveHash`
 - `Game.localSaveHashUpdatedAt`
 
+将来検討:
+
+- `sqlx` 移行（DB schema 安定後）
+
 ## 8. 現時点の結論
 
-- `Upload` は完全に不要なので、次回の schema 改修で削除対象
-- `Chapter` は今のまま維持するより、ルート集計を主目的に再設計した方がよい
-- `localSaveHash` 系は、クラウド同期 skip 判定のために当面 `Game` 直持ちで維持してよい
-- DB の物理削除や分割は、Use Case 境界の整理がもう一段進んだ後に行う
-- `sqlx` 移行はやりたいが、schema 改修と同時には行わず、段階を分けて進める
+- `Upload` は削除済み（migration 0004）
+- `Chapter` は `Route` として再設計済み（migration 0005）、`currentRouteId` FK 化も完了
+- `localSaveHash` 系は、クラウド同期 skip 判定のために当面 `Game` 直持ちで維持
+- `playStatus` / `clearedAt` の意味整合は今後の課題
+- `sqlx` 移行はやりたいが、schema 安定後に段階を分けて進める

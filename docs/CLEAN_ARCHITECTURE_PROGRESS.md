@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-05-04
+最終更新: 2026-06-05
 
 ## 概要
 
@@ -17,7 +17,8 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 - `CloudSyncService` は repository 境界化と純粋ロジックの分割を進めている段階
 - `MemoService`, `SessionService`, `GameService`, `ProcessMonitorService` には、リファクタリング前の回帰安全網として副作用・集計・状態遷移テストを追加済み
 - `api_memo_cloud.go` と `api_maintenance.go` は service 呼び出し中心の薄い adapter へ整理した
-- `services` が `result.ApiResult` を返す構造はまだ残っており、完全な Use Case 層分離は未完了
+- `services` が `result.ApiResult` を返す構造は完全に除去し、Use Case 層は `value + error` / `error` を返す形に統一された
+- DB 整理として `Upload` テーブルの削除（0005 → migration）と `Chapter` → `Route` 再設計（`currentChapter` TEXT → `currentRouteId` FK）が完了した
 
 ## フェーズ別進捗
 
@@ -36,7 +37,7 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 進んだこと:
 
 - `ListGames` / `GetGameByID` / `CreateGame` / `UpdateGame` などの基本 API は service 呼び出し中心の薄い形になっている
-- `session` / `memo` / `chapter` など主要 CRUD API も概ね service 経由で統一されている
+- `session` / `memo` / `route` など主要 CRUD API も概ね service 経由で統一されている
 - `DeleteSession` や `UpdateSessionName` など、adapter 側で最小限の戻り値整形に寄せる実装が進んだ
 - `App.Database` フィールドを削除し、`internal/app` から `db.Repository` 直接参照を除去した
 - `MemoCloudService` / `MaintenanceService` を導入し、厚かった `api_memo_cloud.go` / `api_maintenance.go` の処理を移管した
@@ -44,7 +45,6 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 
 残課題:
 
-- `ApiResult` の生成責務はまだ `services` 側にも残っている
 - Wails adapter と Use Case の責務分離をさらに明確にする余地がある
 - `internal/app` の adapter テストは依然として薄く、現状は `api_maintenance_test.go` が中心
 
@@ -57,8 +57,7 @@ interface 化済み service:
 - `GameService`
 - `SessionService`
 - `MemoService`
-- `ChapterService`
-- `UploadService`
+- `RouteService`
 - `CredentialService`
 - `CloudService`
 - `MemoCloudService`
@@ -88,7 +87,7 @@ interface 化済み service:
 
 - `services` から `result.ApiResult` 依存を除去し、service は `value + error` / `error` を返す形へ移行
 - `app` 側へ API レスポンス整形を戻し、adapter と usecase の責務を分離
-- `game` / `session` / `memo` / `chapter` / `upload` / `credential` / `cloud` / `maintenance` / `memo cloud` の返り値境界を統一
+- `game` / `session` / `memo` / `route` / `credential` / `cloud` / `maintenance` / `memo cloud` の返り値境界を統一
 - `internal/services/repositories.go` を中心に、ユースケースごとの依存境界が読み取りやすくなった
 - t_wada TDD に倣い、既存の振る舞いを固定するテストを追加してから構造変更する方針に更新
 
@@ -117,16 +116,15 @@ interface 化済み service:
   - `composeSyncedLocalGame`
   - `composeCloudGameMetadata`
   - `composeCloudSessions`
-  - `composeLocalPlaySession`
 - upload / download の表現変換ロジックを I/O なしでテストできるようになった
 - `loadLocalGames` の全件取得・指定ゲームなしの振る舞いをテストで固定
 - S3 ストレージ、画像ファイル書き込み、画像ロードの差し替えポイントを導入済み
+- `syncExistingGamePair` の全パス（upload / download / skip）の失敗系テストを追加
+- `sync` レベルの `LoadMetadata` 失敗・`SaveMetadata` 失敗・ループ内失敗をテストで固定
 
 まだ重い部分:
 
-- `applyCloudGame` の副作用の塊
-- metadata 保存判断とエラーハンドリングの詳細分岐
-- S3 I/O を伴う分岐の失敗系テスト
+- `syncExistingGamePair` 内の upload/download/skip 分岐とセッション統合が同一関数に混在している
 - ファイル全体はまだ 1200 行超で、責務分割は継続が必要
 
 #### ProcessMonitorService
@@ -175,8 +173,7 @@ interface 化済み service:
 - `game_service_test.go`
 - `session_service_test.go`
 - `memo_service_test.go`
-- `chapter_service_test.go`
-- `upload_service_test.go`
+- `route_service_test.go`
 - `credential_service_test.go`
 - `cloud_service_test.go`
 - `memo_cloud_service_test.go`
@@ -192,56 +189,40 @@ interface 化済み service:
 - `api_maintenance_test.go` のみ
 - adapter 層の網羅は限定的で、通常 API の薄さを保証するテストはまだ不足
 
-2026-04-29 に追加した主な回帰テスト:
+2026-06-05 に追加した主なテスト:
 
-- Cloud sync:
-  - ローカル全ゲームとセッションをまとめて読み込む
-  - 指定ゲームが存在しない場合に空結果を返す
-- Memo:
-  - メモ作成時に DB とローカルファイルの両方へ反映する
-  - メモ更新時にローカルファイルをリネームして本文を更新する
-  - メモ削除時に DB レコードとローカルファイルを削除する
-- Session:
-  - セッション名更新時に trim し、ゲーム更新時刻 touch と合計時間再計算を行う
-  - セッション章更新時に章を保存し、ゲーム更新時刻 touch と合計時間再計算を行う
-- Game:
-  - ゲーム更新時に入力を trim しつつプレイ集計を保持する
-  - ゲーム一覧検索時に検索文字列を trim する
-- Process monitor:
-  - 自動検出 OFF のときに監視対象を追加しない
-  - hotkey 対象は中断中より現在プレイ中のゲームを優先する
-  - process snapshot は注入した process provider を使う
-
-現在の coverage:
-
-- `internal/services`: 44.5%
-- `internal/result`: 100.0%
-
-2026-05-04 の確認結果:
-
-- `go test ./...` は通過
-- `./scripts/run-all-lint-format.sh` は通過
+- Cloud sync (`syncExistingGamePair` 失敗系):
+  - `loadCloudSessions` 失敗
+  - セッション差分あり時の `upsertMergedLocalSessions` 失敗
+  - upload パスの `buildCloudGame` 失敗（session save error）
+  - download パスのクラウド `SaveSessions` 失敗
+  - download パスの `applyCloudGame` (UpsertGameSync) 失敗
+  - skip パスのクラウド `SaveSessions` 失敗
+  - skip パスの `applyCloudGame` 失敗
+  - skip パスでセッション未変更でもゲームを適用する振る舞いの確認
+- Cloud sync (`sync` レベル):
+  - `LoadMetadata` 非404エラー時の中断
+  - `SaveMetadata` 失敗時のエラー伝播（同期後でもメタデータ保存失敗をエラーとして返す）
+  - `syncSingleGame` ループ内失敗時にメタデータが保存されないことの確認
 
 ### 現在の評価
 
 良い点:
 
 - 移行済み service については、具象 DB 実装なしでユースケースを検証できる
-- `CloudSyncService` と `ProcessMonitorService` の pure な判定部分は以前より明確にテストしやすい
+- `CloudSyncService` の純粋ロジック・失敗系は以前より明確にテストできる
 - Windows 実行前提の path 判定を Linux 上のテストで扱えるようになった
 - memo / session / game の副作用と集計更新について、リファクタリング前の安全網が増えた
 - backend 全体の Go テスト、lint、format を通せる状態は維持されている
 
 不足している点:
 
-- `CloudSyncService` の副作用を伴う失敗系テストがまだ薄い
+- `CloudSyncService` の `syncExistingGamePair` 内の責務分割は未完了
 - DB 実装を使う統合テストが不足している
 - `internal/app` の adapter 層のテストはまだかなり薄い
 - frontend 側は今回の移行に対応する新規テスト追加は限定的
 
 ## 全体評価
-
-現状は、以下の段階に入っている。
 
 - Phase 1 は完了
 - Phase 2 は完了
@@ -249,11 +230,11 @@ interface 化済み service:
 - Phase 4 は `CloudSyncService` を中心に進行中
 - Phase 5 は未着手
 
-要するに、現在の移行は「`app` 層からの direct DB 依存除去」「厚い adapter の service 移管」「`services` からの `ApiResult` 除去」までは完了した。次の主戦場は、重い service をさらに分割して Use Case 境界を明確にすることである。
+要するに、現在の移行は「`app` 層からの direct DB 依存除去」「厚い adapter の service 移管」「`services` からの `ApiResult` 除去」「DB 整理（Upload 削除・Chapter→Route 再設計）」「CloudSyncService 主要失敗系テスト追加」まで完了した。次の主戦場は、CloudSyncService の責務分割と `internal/app` の adapter テスト強化である。
 
 ## 次の優先事項
 
-1. `CloudSyncService` の upload / download / metadata 保存失敗系テストを厚くする
-2. `internal/app` の adapter テストと、必要最小限の DB 統合テストを追加する
+1. `internal/app` の adapter テストを追加し、adapter 層の薄さを保証するテストを整備する
+2. `CloudSyncService` の `syncExistingGamePair` をさらに分割し、責務を明確にする
 3. Screenshot / maintenance 周辺の OS / filesystem 依存を必要に応じてさらに port 化する
 4. `usecase` / `domain` / `infrastructure` への再配置を検討する
