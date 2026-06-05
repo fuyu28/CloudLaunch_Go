@@ -55,12 +55,6 @@ type ChapterRepository interface {
 	UpdateGame(ctx context.Context, game models.Game) (*models.Game, error)
 }
 
-// UploadRepository defines the persistence boundary required by UploadService.
-type UploadRepository interface {
-	CreateUpload(ctx context.Context, upload models.Upload) (*models.Upload, error)
-	ListUploadsByGame(ctx context.Context, gameID string) ([]models.Upload, error)
-}
-
 // CloudSyncRepository defines the persistence boundary required by CloudSyncService.
 type CloudSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)

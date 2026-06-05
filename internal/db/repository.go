@@ -288,9 +288,9 @@ func (repository *Repository) DeleteChapter(ctx context.Context, chapterID strin
 // CreatePlaySession はプレイセッションを作成して返す。
 func (repository *Repository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "PlaySession" (gameId, playedAt, duration, sessionName, chapterId, uploadId)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, session.GameID, session.PlayedAt, session.Duration, session.SessionName, session.ChapterID, session.UploadID)
+		INSERT INTO "PlaySession" (gameId, playedAt, duration, sessionName, chapterId)
+		VALUES (?, ?, ?, ?, ?)
+	`, session.GameID, session.PlayedAt, session.Duration, session.SessionName, session.ChapterID)
 	if error != nil {
 		return nil, error
 	}
@@ -301,7 +301,7 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session mod
 // GetPlaySessionByID はID指定でセッションを取得する。
 func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt
+		SELECT id, gameId, playedAt, duration, sessionName, chapterId, updatedAt
 		FROM "PlaySession" WHERE id = ?
 	`, sessionID)
 	session, error := scanPlaySession(row)
@@ -317,7 +317,7 @@ func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
 func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []models.PlaySession, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt
+		SELECT id, gameId, playedAt, duration, sessionName, chapterId, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
 	`, gameID)
 	if err != nil {
@@ -398,18 +398,17 @@ func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, chapterId, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			gameId = excluded.gameId,
 			playedAt = excluded.playedAt,
 			duration = excluded.duration,
 			sessionName = excluded.sessionName,
 			chapterId = excluded.chapterId,
-			uploadId = excluded.uploadId,
 			updatedAt = excluded.updatedAt
 	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.SessionName,
-		session.ChapterID, session.UploadID, session.UpdatedAt)
+		session.ChapterID, session.UpdatedAt)
 	return error
 }
 
@@ -427,49 +426,6 @@ func (repository *Repository) UpdatePlaySessionName(ctx context.Context, session
 		UPDATE "PlaySession" SET sessionName = ? WHERE id = ?
 	`, sessionName, sessionID)
 	return error
-}
-
-// CreateUpload はアップロード履歴を作成して返す。
-func (repository *Repository) CreateUpload(ctx context.Context, upload models.Upload) (*models.Upload, error) {
-	_, error := repository.connection.ExecContext(ctx, `
-		INSERT INTO "Upload" (clientId, comment, gameId)
-		VALUES (?, ?, ?)
-	`, upload.ClientID, upload.Comment, upload.GameID)
-	if error != nil {
-		return nil, error
-	}
-
-	return repository.findLatestUpload(ctx, upload.GameID)
-}
-
-// ListUploadsByGame はゲームIDでアップロード一覧を取得する。
-func (repository *Repository) ListUploadsByGame(ctx context.Context, gameID string) (uploads []models.Upload, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, clientId, comment, createdAt, gameId
-		FROM "Upload" WHERE gameId = ? ORDER BY createdAt DESC
-	`, gameID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	uploads = make([]models.Upload, 0)
-	for rows.Next() {
-		upload, err := scanUpload(rows)
-		if err != nil {
-			return nil, err
-		}
-		uploads = append(uploads, *upload)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return uploads, nil
 }
 
 // CreateMemo はメモを作成して返す。
@@ -728,7 +684,6 @@ func scanPlaySession(row scanner) (*models.PlaySession, error) {
 	var (
 		sessionName sql.NullString
 		chapterID   sql.NullString
-		uploadID    sql.NullString
 	)
 
 	session := models.PlaySession{}
@@ -739,7 +694,6 @@ func scanPlaySession(row scanner) (*models.PlaySession, error) {
 		&session.Duration,
 		&sessionName,
 		&chapterID,
-		&uploadID,
 		&session.UpdatedAt,
 	)
 	if error != nil {
@@ -748,23 +702,8 @@ func scanPlaySession(row scanner) (*models.PlaySession, error) {
 
 	session.SessionName = nullStringPtr(sessionName)
 	session.ChapterID = nullStringPtr(chapterID)
-	session.UploadID = nullStringPtr(uploadID)
 
 	return &session, nil
-}
-
-// scanUpload は1行分のアップロードデータを読み取る。
-func scanUpload(row scanner) (*models.Upload, error) {
-	var clientID sql.NullString
-
-	upload := models.Upload{}
-	error := row.Scan(&upload.ID, &clientID, &upload.Comment, &upload.CreatedAt, &upload.GameID)
-	if error != nil {
-		return nil, error
-	}
-
-	upload.ClientID = nullStringPtr(clientID)
-	return &upload, nil
 }
 
 // scanMemo は1行分のメモデータを読み取る。
@@ -816,19 +755,10 @@ func (repository *Repository) findLatestChapter(ctx context.Context, gameID stri
 // findLatestPlaySession は直近のプレイセッションを取得する。
 func (repository *Repository) findLatestPlaySession(ctx context.Context, gameID string) (*models.PlaySession, error) {
 	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, chapterId, uploadId, updatedAt
+		SELECT id, gameId, playedAt, duration, sessionName, chapterId, updatedAt
 		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1
 	`, gameID)
 	return scanPlaySession(row)
-}
-
-// findLatestUpload は直近のアップロード履歴を取得する。
-func (repository *Repository) findLatestUpload(ctx context.Context, gameID string) (*models.Upload, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, clientId, comment, createdAt, gameId
-		FROM "Upload" WHERE gameId = ? ORDER BY createdAt DESC LIMIT 1
-	`, gameID)
-	return scanUpload(row)
 }
 
 // findLatestMemo は直近のメモを取得する。

@@ -40,7 +40,6 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 		Duration:    input.Duration,
 		SessionName: input.SessionName,
 		ChapterID:   input.ChapterID,
-		UploadID:    input.UploadID,
 	}
 
 	created, error := service.repository.CreatePlaySession(ctx, session)
@@ -176,7 +175,6 @@ type SessionInput struct {
 	Duration    int64
 	SessionName *string
 	ChapterID   *string
-	UploadID    *string
 }
 
 // validateSessionInput はセッション入力を検証する。
