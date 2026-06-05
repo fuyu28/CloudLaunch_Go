@@ -867,6 +867,192 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 	}
 }
 
+func TestSyncExistingGamePairReturnsLoadSessionsError(t *testing.T) {
+	t.Parallel()
+
+	loadErr := errors.New("load sessions failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = &fakeCloudSyncStorage{loadSessionsErr: loadErr}
+
+	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, loadErr) {
+		t.Fatalf("expected load sessions error, got %v", err)
+	}
+}
+
+func TestSyncExistingGamePairReturnsUpsertSessionErrorWhenSessionsChanged(t *testing.T) {
+	t.Parallel()
+
+	upsertErr := errors.New("upsert session failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	repository := &trackingCloudSyncRepository{upsertSessionErr: upsertErr}
+	cloudStorage := &fakeCloudSyncStorage{
+		loadedSessions: []storage.CloudSessionRecord{
+			{ID: "cloud-session-1", PlayedAt: now, Duration: 30, UpdatedAt: now},
+		},
+	}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+
+	local := localGameBundle{
+		Game:     models.Game{ID: "game-1", UpdatedAt: now},
+		Sessions: []models.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
+	}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, upsertErr) {
+		t.Fatalf("expected upsert session error, got %v", err)
+	}
+}
+
+func TestSyncExistingGamePairUploadReturnsSessionSaveError(t *testing.T) {
+	t.Parallel()
+
+	saveErr := errors.New("save sessions failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = &fakeCloudSyncStorage{saveSessionsErr: saveErr}
+
+	local := localGameBundle{
+		Game: models.Game{ID: "game-1", Title: "Game", Publisher: "Pub", UpdatedAt: now.Add(time.Hour)},
+	}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected session save error on upload path, got %v", err)
+	}
+}
+
+func TestSyncExistingGamePairDownloadReturnsCloudSessionSaveError(t *testing.T) {
+	t.Parallel()
+
+	saveErr := errors.New("cloud save sessions failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	cloudStorage := &fakeCloudSyncStorage{
+		saveSessionsErr: saveErr,
+		loadedSessions: []storage.CloudSessionRecord{
+			{ID: "cloud-session-1", PlayedAt: now, Duration: 30, UpdatedAt: now},
+		},
+	}
+	repository := &trackingCloudSyncRepository{}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+
+	local := localGameBundle{
+		Game:     models.Game{ID: "game-1", UpdatedAt: now},
+		Sessions: []models.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
+	}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now.Add(time.Hour)}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected cloud session save error on download path, got %v", err)
+	}
+	if repository.upsertedGame.ID != "" {
+		t.Fatalf("expected no game upsert before cloud save failure")
+	}
+}
+
+func TestSyncExistingGamePairDownloadReturnsGameUpsertError(t *testing.T) {
+	t.Parallel()
+
+	upsertGameErr := errors.New("upsert game failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	repository := &trackingCloudSyncRepository{upsertGameErr: upsertGameErr}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
+
+	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now.Add(time.Hour)}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, upsertGameErr) {
+		t.Fatalf("expected game upsert error on download path, got %v", err)
+	}
+}
+
+func TestSyncExistingGamePairSkipReturnsCloudSessionSaveError(t *testing.T) {
+	t.Parallel()
+
+	saveErr := errors.New("cloud save sessions failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	cloudStorage := &fakeCloudSyncStorage{
+		saveSessionsErr: saveErr,
+		loadedSessions: []storage.CloudSessionRecord{
+			{ID: "cloud-session-1", PlayedAt: now, Duration: 30, UpdatedAt: now},
+		},
+	}
+	repository := &trackingCloudSyncRepository{}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+
+	local := localGameBundle{
+		Game:     models.Game{ID: "game-1", UpdatedAt: now},
+		Sessions: []models.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
+	}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected cloud session save error on skip path, got %v", err)
+	}
+}
+
+func TestSyncExistingGamePairSkipReturnsGameUpsertError(t *testing.T) {
+	t.Parallel()
+
+	upsertGameErr := errors.New("upsert game failed")
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	repository := &trackingCloudSyncRepository{upsertGameErr: upsertGameErr}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
+
+	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
+
+	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if !errors.Is(err, upsertGameErr) {
+		t.Fatalf("expected game upsert error on skip path, got %v", err)
+	}
+}
+
+func TestSyncExistingGamePairSkipAppliesMergedGameWhenSessionsUnchanged(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	repository := &trackingCloudSyncRepository{}
+	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
+
+	local := localGameBundle{Game: models.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now}}
+	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Cloud Title", UpdatedAt: now}
+
+	iteration, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if iteration.summary.SkippedGames != 1 {
+		t.Fatalf("expected skip summary, got %#v", iteration.summary)
+	}
+	if repository.upsertedGame.ID != "game-1" {
+		t.Fatalf("expected merged game to be applied locally even on skip, got %#v", repository.upsertedGame)
+	}
+}
+
 func TestComposeLocalPlaySessionCopiesCloudFields(t *testing.T) {
 	t.Parallel()
 
