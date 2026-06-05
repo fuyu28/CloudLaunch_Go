@@ -28,7 +28,7 @@ type Game struct {
 	TotalPlayTime          int64      `json:"totalPlayTime"`
 	LastPlayed             *time.Time `json:"lastPlayed,omitempty"`
 	ClearedAt              *time.Time `json:"clearedAt,omitempty"`
-	CurrentChapter         *string    `json:"currentChapter,omitempty"`
+	CurrentRouteID         *string    `json:"currentRouteId,omitempty"`
 }
 
 // PlaySession はプレイセッションを表す。
@@ -38,12 +38,12 @@ type PlaySession struct {
 	PlayedAt    time.Time `json:"playedAt"`
 	Duration    int64     `json:"duration"`
 	SessionName *string   `json:"sessionName,omitempty"`
-	ChapterID   *string   `json:"chapterId,omitempty"`
+	RouteID     *string   `json:"routeId,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// Chapter は章情報を表す。
-type Chapter struct {
+// Route はルート情報を表す。
+type Route struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Order     int64     `json:"order"`
@@ -61,10 +61,10 @@ type Memo struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// ChapterStat は章統計の出力を表す。
-type ChapterStat struct {
-	ChapterID    string  `json:"chapterId"`
-	ChapterName  string  `json:"chapterName"`
+// RouteStat はルート統計の出力を表す。
+type RouteStat struct {
+	RouteID      string  `json:"routeId"`
+	RouteName    string  `json:"routeName"`
 	TotalTime    int64   `json:"totalTime"`
 	SessionCount int64   `json:"sessionCount"`
 	AverageTime  float64 `json:"averageTime"`

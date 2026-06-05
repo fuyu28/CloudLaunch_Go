@@ -74,7 +74,7 @@ export type CloudGameMetadata = {
   totalPlayTime: number;
   lastPlayed?: Date | string | null;
   clearedAt?: Date | string | null;
-  currentChapter?: string | null;
+  currentRouteId?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 };

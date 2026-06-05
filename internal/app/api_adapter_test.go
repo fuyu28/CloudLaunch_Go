@@ -73,7 +73,7 @@ func (noopAppGameRepository) DeleteGame(ctx context.Context, gameID string) erro
 	return nil
 }
 
-func (noopAppGameRepository) CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
+func (noopAppGameRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
 	return nil, nil
 }
 

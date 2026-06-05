@@ -40,9 +40,9 @@ func (repository *fakeSessionRepository) DeletePlaySession(ctx context.Context, 
 	return nil
 }
 
-func (repository *fakeSessionRepository) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
+func (repository *fakeSessionRepository) UpdatePlaySessionRoute(ctx context.Context, sessionID string, chapterID *string) error {
 	if repository.session != nil {
-		repository.session.ChapterID = chapterID
+		repository.session.RouteID = chapterID
 	}
 	return nil
 }
@@ -196,7 +196,7 @@ func TestSessionServiceUpdateSessionNameTrimsNameAndRecalculatesTotal(t *testing
 	}
 }
 
-func TestSessionServiceUpdateSessionChapterStoresChapterAndRecalculatesTotal(t *testing.T) {
+func TestSessionServiceUpdateSessionRouteStoresRouteAndRecalculatesTotal(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
@@ -205,12 +205,12 @@ func TestSessionServiceUpdateSessionChapterStoresChapterAndRecalculatesTotal(t *
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chapterID := "chapter-2"
 
-	_, err := service.UpdateSessionChapter(context.Background(), "session-1", &chapterID)
+	_, err := service.UpdateSessionRoute(context.Background(), "session-1", &chapterID)
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if repository.session.ChapterID == nil || *repository.session.ChapterID != "chapter-2" {
-		t.Fatalf("expected chapter id to be stored")
+	if repository.session.RouteID == nil || *repository.session.RouteID != "chapter-2" {
+		t.Fatalf("expected route id to be stored")
 	}
 	if repository.touchedGameID != "game-1" {
 		t.Fatalf("expected game updated timestamp to be touched")
@@ -248,7 +248,7 @@ func (repository *fakeSessionRepositoryWithError) GetPlaySessionByID(ctx context
 func (repository *fakeSessionRepositoryWithError) DeletePlaySession(ctx context.Context, sessionID string) error {
 	return nil
 }
-func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error {
+func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionRoute(ctx context.Context, sessionID string, chapterID *string) error {
 	return nil
 }
 func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {

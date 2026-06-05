@@ -656,7 +656,7 @@ func composeCloudGameMetadata(game models.Game) storage.CloudGameMetadata {
 		TotalPlayTime:  game.TotalPlayTime,
 		LastPlayed:     game.LastPlayed,
 		ClearedAt:      game.ClearedAt,
-		CurrentChapter: game.CurrentChapter,
+		CurrentRouteID: game.CurrentRouteID,
 		CreatedAt:      game.CreatedAt,
 		UpdatedAt:      game.UpdatedAt,
 	}
@@ -775,7 +775,7 @@ func composeSyncedLocalGame(
 		TotalPlayTime:          cloud.TotalPlayTime,
 		LastPlayed:             cloud.LastPlayed,
 		ClearedAt:              cloud.ClearedAt,
-		CurrentChapter:         cloud.CurrentChapter,
+		CurrentRouteID:         cloud.CurrentRouteID,
 	}
 }
 
@@ -930,7 +930,7 @@ func (service *CloudSyncService) mergeCloudGameMetadata(
 		UpdatedAt:      cloud.UpdatedAt,
 		LastPlayed:     cloud.LastPlayed,
 		ClearedAt:      cloud.ClearedAt,
-		CurrentChapter: cloud.CurrentChapter,
+		CurrentRouteID: cloud.CurrentRouteID,
 	}
 	if local != nil && local.UpdatedAt.After(cloud.UpdatedAt) {
 		base = *local
@@ -960,7 +960,7 @@ func cloudMetadataFromGame(game models.Game, imageKey *string) storage.CloudGame
 		TotalPlayTime:  game.TotalPlayTime,
 		LastPlayed:     game.LastPlayed,
 		ClearedAt:      game.ClearedAt,
-		CurrentChapter: game.CurrentChapter,
+		CurrentRouteID: game.CurrentRouteID,
 		CreatedAt:      game.CreatedAt,
 		UpdatedAt:      game.UpdatedAt,
 	}

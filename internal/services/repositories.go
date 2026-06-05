@@ -14,7 +14,7 @@ type GameRepository interface {
 	CreateGame(ctx context.Context, game models.Game) (*models.Game, error)
 	UpdateGame(ctx context.Context, game models.Game) (*models.Game, error)
 	DeleteGame(ctx context.Context, gameID string) error
-	CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error)
+	CreateRoute(ctx context.Context, route models.Route) (*models.Route, error)
 }
 
 // SessionRepository defines the persistence boundary required by SessionService.
@@ -23,7 +23,7 @@ type SessionRepository interface {
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error)
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error)
 	DeletePlaySession(ctx context.Context, sessionID string) error
-	UpdatePlaySessionChapter(ctx context.Context, sessionID string, chapterID *string) error
+	UpdatePlaySessionRoute(ctx context.Context, sessionID string, routeID *string) error
 	UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error
 	TouchGameUpdatedAt(ctx context.Context, gameID string) error
 	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
@@ -42,15 +42,15 @@ type MemoRepository interface {
 	DeleteMemo(ctx context.Context, memoID string) error
 }
 
-// ChapterRepository defines the persistence boundary required by ChapterService.
-type ChapterRepository interface {
-	ListChaptersByGame(ctx context.Context, gameID string) ([]models.Chapter, error)
-	CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error)
-	GetChapterByID(ctx context.Context, chapterID string) (*models.Chapter, error)
-	UpdateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error)
-	DeleteChapter(ctx context.Context, chapterID string) error
-	UpdateChapterOrder(ctx context.Context, chapterID string, order int64) error
-	GetChapterStats(ctx context.Context, gameID string) ([]models.ChapterStat, error)
+// RouteRepository defines the persistence boundary required by RouteService.
+type RouteRepository interface {
+	ListRoutesByGame(ctx context.Context, gameID string) ([]models.Route, error)
+	CreateRoute(ctx context.Context, route models.Route) (*models.Route, error)
+	GetRouteByID(ctx context.Context, routeID string) (*models.Route, error)
+	UpdateRoute(ctx context.Context, route models.Route) (*models.Route, error)
+	DeleteRoute(ctx context.Context, routeID string) error
+	UpdateRouteOrder(ctx context.Context, routeID string, order int64) error
+	GetRouteStats(ctx context.Context, gameID string) ([]models.RouteStat, error)
 	GetGameByID(ctx context.Context, gameID string) (*models.Game, error)
 	UpdateGame(ctx context.Context, game models.Game) (*models.Game, error)
 }

@@ -12,12 +12,12 @@ import (
 )
 
 type fakeGameRepository struct {
-	listGamesFn        func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
-	getGameByIDFn      func(ctx context.Context, gameID string) (*models.Game, error)
-	createGameFn       func(ctx context.Context, game models.Game) (*models.Game, error)
-	updateGameFn       func(ctx context.Context, game models.Game) (*models.Game, error)
-	deleteGameFn       func(ctx context.Context, gameID string) error
-	createChapterCalls int
+	listGamesFn      func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
+	getGameByIDFn    func(ctx context.Context, gameID string) (*models.Game, error)
+	createGameFn     func(ctx context.Context, game models.Game) (*models.Game, error)
+	updateGameFn     func(ctx context.Context, game models.Game) (*models.Game, error)
+	deleteGameFn     func(ctx context.Context, gameID string) error
+	createRouteCalls int
 }
 
 func (repository fakeGameRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
@@ -40,9 +40,9 @@ func (repository fakeGameRepository) DeleteGame(ctx context.Context, gameID stri
 	return repository.deleteGameFn(ctx, gameID)
 }
 
-func (repository *fakeGameRepository) CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
-	repository.createChapterCalls++
-	return &chapter, nil
+func (repository *fakeGameRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
+	repository.createRouteCalls++
+	return &route, nil
 }
 
 func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
@@ -84,8 +84,8 @@ func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
 	if result == nil || result.ID != "game-1" {
 		t.Fatalf("expected created game id to be returned")
 	}
-	if repository.createChapterCalls != 1 {
-		t.Fatalf("expected initial chapter to be created once")
+	if repository.createRouteCalls != 1 {
+		t.Fatalf("expected initial route to be created once")
 	}
 }
 
@@ -208,7 +208,7 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 
 	lastPlayed := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	clearedAt := lastPlayed.Add(2 * time.Hour)
-	currentChapter := "chapter-3"
+	currentRouteID := "chapter-3"
 	var updatedGame models.Game
 	service := NewGameService(&fakeGameRepository{
 		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
@@ -239,7 +239,7 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 		ExePath:        " /games/new.exe ",
 		PlayStatus:     models.PlayStatusPlayed,
 		ClearedAt:      &clearedAt,
-		CurrentChapter: &currentChapter,
+		CurrentRouteID: &currentRouteID,
 	})
 
 	if err != nil {
@@ -254,8 +254,8 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 	if updatedGame.PlayStatus != models.PlayStatusPlayed ||
 		updatedGame.ClearedAt == nil ||
 		!updatedGame.ClearedAt.Equal(clearedAt) ||
-		updatedGame.CurrentChapter == nil ||
-		*updatedGame.CurrentChapter != "chapter-3" {
+		updatedGame.CurrentRouteID == nil ||
+		*updatedGame.CurrentRouteID != "chapter-3" {
 		t.Fatalf("expected progress fields to be updated, got %#v", updatedGame)
 	}
 }

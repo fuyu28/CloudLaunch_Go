@@ -20,7 +20,7 @@ type CloudGameMetadata struct {
 	TotalPlayTime  int64      `json:"totalPlayTime"`
 	LastPlayed     *time.Time `json:"lastPlayed,omitempty"`
 	ClearedAt      *time.Time `json:"clearedAt,omitempty"`
-	CurrentChapter *string    `json:"currentChapter,omitempty"`
+	CurrentRouteID *string    `json:"currentRouteId,omitempty"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 }

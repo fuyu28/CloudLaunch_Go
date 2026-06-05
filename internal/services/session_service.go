@@ -39,7 +39,7 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 		PlayedAt:    input.PlayedAt,
 		Duration:    input.Duration,
 		SessionName: input.SessionName,
-		ChapterID:   input.ChapterID,
+		RouteID:     input.RouteID,
 	}
 
 	created, error := service.repository.CreatePlaySession(ctx, session)
@@ -89,8 +89,8 @@ func (service *SessionService) DeleteSession(ctx context.Context, sessionID stri
 	return mutation, nil
 }
 
-// UpdateSessionChapter はセッションの章を更新する。
-func (service *SessionService) UpdateSessionChapter(ctx context.Context, sessionID string, chapterID *string) (SessionMutationResult, error) {
+// UpdateSessionRoute はセッションのルートを更新する。
+func (service *SessionService) UpdateSessionRoute(ctx context.Context, sessionID string, chapterID *string) (SessionMutationResult, error) {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
@@ -102,9 +102,9 @@ func (service *SessionService) UpdateSessionChapter(ctx context.Context, session
 		service.logger.Error("セッション取得に失敗", "error", error)
 		return SessionMutationResult{}, newServiceError("セッション取得に失敗しました", error.Error())
 	}
-	if error := service.repository.UpdatePlaySessionChapter(ctx, trimmedID, chapterID); error != nil {
-		service.logger.Error("セッション章更新に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション章更新に失敗しました", error.Error())
+	if error := service.repository.UpdatePlaySessionRoute(ctx, trimmedID, chapterID); error != nil {
+		service.logger.Error("セッションルート更新に失敗", "error", error)
+		return SessionMutationResult{}, newServiceError("セッションルート更新に失敗しました", error.Error())
 	}
 
 	mutation := SessionMutationResult{}
@@ -174,7 +174,7 @@ type SessionInput struct {
 	PlayedAt    time.Time
 	Duration    int64
 	SessionName *string
-	ChapterID   *string
+	RouteID     *string
 }
 
 // validateSessionInput はセッション入力を検証する。

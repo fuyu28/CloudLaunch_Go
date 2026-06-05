@@ -77,50 +77,50 @@ func (app *App) DeleteGame(gameID string) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// ListChaptersByGame は章一覧を取得する。
-func (app *App) ListChaptersByGame(gameID string) result.ApiResult[[]models.Chapter] {
-	chapters, err := app.ChapterService.ListChaptersByGame(app.context(), gameID)
-	return serviceResult(chapters, err, "章取得に失敗しました")
+// ListRoutesByGame はルート一覧を取得する。
+func (app *App) ListRoutesByGame(gameID string) result.ApiResult[[]models.Route] {
+	routes, err := app.RouteService.ListRoutesByGame(app.context(), gameID)
+	return serviceResult(routes, err, "ルート取得に失敗しました")
 }
 
-// CreateChapter は章を作成する。
-func (app *App) CreateChapter(input services.ChapterInput) result.ApiResult[*models.Chapter] {
-	chapter, err := app.ChapterService.CreateChapter(app.context(), input)
-	return serviceResult(chapter, err, "章作成に失敗しました")
+// CreateRoute はルートを作成する。
+func (app *App) CreateRoute(input services.RouteInput) result.ApiResult[*models.Route] {
+	route, err := app.RouteService.CreateRoute(app.context(), input)
+	return serviceResult(route, err, "ルート作成に失敗しました")
 }
 
-// UpdateChapter は章を更新する。
-func (app *App) UpdateChapter(chapterID string, input services.ChapterUpdateInput) result.ApiResult[*models.Chapter] {
-	chapter, err := app.ChapterService.UpdateChapter(app.context(), chapterID, input)
-	return serviceResult(chapter, err, "章更新に失敗しました")
+// UpdateRoute はルートを更新する。
+func (app *App) UpdateRoute(routeID string, input services.RouteUpdateInput) result.ApiResult[*models.Route] {
+	route, err := app.RouteService.UpdateRoute(app.context(), routeID, input)
+	return serviceResult(route, err, "ルート更新に失敗しました")
 }
 
-// UpdateChapterOrders は章の並び順を更新する。
-func (app *App) UpdateChapterOrders(gameID string, orders []services.ChapterOrderUpdate) result.ApiResult[bool] {
-	if err := app.ChapterService.UpdateChapterOrders(app.context(), gameID, orders); err != nil {
-		return serviceErrorResult[bool](err, "章順序更新に失敗しました")
+// UpdateRouteOrders はルートの並び順を更新する。
+func (app *App) UpdateRouteOrders(gameID string, orders []services.RouteOrderUpdate) result.ApiResult[bool] {
+	if err := app.RouteService.UpdateRouteOrders(app.context(), gameID, orders); err != nil {
+		return serviceErrorResult[bool](err, "ルート順序更新に失敗しました")
 	}
 	return result.OkResult(true)
 }
 
-// GetChapterStats は章の統計を取得する。
-func (app *App) GetChapterStats(gameID string) result.ApiResult[[]models.ChapterStat] {
-	stats, err := app.ChapterService.GetChapterStats(app.context(), gameID)
-	return serviceResult(stats, err, "章統計取得に失敗しました")
+// GetRouteStats はルートの統計を取得する。
+func (app *App) GetRouteStats(gameID string) result.ApiResult[[]models.RouteStat] {
+	stats, err := app.RouteService.GetRouteStats(app.context(), gameID)
+	return serviceResult(stats, err, "ルート統計取得に失敗しました")
 }
 
-// SetCurrentChapter はゲームの現在章を設定する。
-func (app *App) SetCurrentChapter(gameID string, chapterID string) result.ApiResult[bool] {
-	if err := app.ChapterService.SetCurrentChapter(app.context(), gameID, chapterID); err != nil {
-		return serviceErrorResult[bool](err, "現在章更新に失敗しました")
+// SetCurrentRoute はゲームの現在ルートを設定する。
+func (app *App) SetCurrentRoute(gameID string, routeID string) result.ApiResult[bool] {
+	if err := app.RouteService.SetCurrentRoute(app.context(), gameID, routeID); err != nil {
+		return serviceErrorResult[bool](err, "現在ルート更新に失敗しました")
 	}
 	return result.OkResult(true)
 }
 
-// DeleteChapter は章を削除する。
-func (app *App) DeleteChapter(chapterID string) result.ApiResult[bool] {
-	if err := app.ChapterService.DeleteChapter(app.context(), chapterID); err != nil {
-		return serviceErrorResult[bool](err, "章削除に失敗しました")
+// DeleteRoute はルートを削除する。
+func (app *App) DeleteRoute(routeID string) result.ApiResult[bool] {
+	if err := app.RouteService.DeleteRoute(app.context(), routeID); err != nil {
+		return serviceErrorResult[bool](err, "ルート削除に失敗しました")
 	}
 	return result.OkResult(true)
 }
@@ -155,11 +155,11 @@ func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// UpdateSessionChapter はセッション章を更新する。
-func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
+// UpdateSessionRoute はセッションのルートを更新する。
+func (app *App) UpdateSessionRoute(sessionID string, routeID *string) result.ApiResult[bool] {
+	updated, err := app.SessionService.UpdateSessionRoute(app.context(), sessionID, routeID)
 	if err != nil {
-		return serviceErrorResult[bool](err, "セッション章更新に失敗しました")
+		return serviceErrorResult[bool](err, "セッションルート更新に失敗しました")
 	}
 	if updated.GameID != "" {
 		app.syncGameAsync(updated.GameID)

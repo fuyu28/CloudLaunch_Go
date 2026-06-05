@@ -792,7 +792,7 @@ func TestComposeCloudGameMetadataCopiesSyncFields(t *testing.T) {
 
 	lastPlayed := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
 	clearedAt := lastPlayed.Add(2 * time.Hour)
-	currentChapter := "chapter-3"
+	currentRouteID := "chapter-3"
 	game := models.Game{
 		ID:             "game-1",
 		Title:          "Game",
@@ -801,7 +801,7 @@ func TestComposeCloudGameMetadataCopiesSyncFields(t *testing.T) {
 		TotalPlayTime:  180,
 		LastPlayed:     &lastPlayed,
 		ClearedAt:      &clearedAt,
-		CurrentChapter: &currentChapter,
+		CurrentRouteID: &currentRouteID,
 		CreatedAt:      lastPlayed.Add(-24 * time.Hour),
 		UpdatedAt:      lastPlayed.Add(time.Hour),
 	}
@@ -820,10 +820,10 @@ func TestComposeCloudGameMetadataCopiesSyncFields(t *testing.T) {
 	if composed.ClearedAt == nil || !composed.ClearedAt.Equal(clearedAt) {
 		t.Fatalf("expected cleared at to be copied")
 	}
-	if composed.CurrentChapter != game.CurrentChapter ||
+	if composed.CurrentRouteID != game.CurrentRouteID ||
 		!composed.CreatedAt.Equal(game.CreatedAt) ||
 		!composed.UpdatedAt.Equal(game.UpdatedAt) {
-		t.Fatalf("expected sync timestamps and chapter to be copied")
+		t.Fatalf("expected sync timestamps and route to be copied")
 	}
 }
 

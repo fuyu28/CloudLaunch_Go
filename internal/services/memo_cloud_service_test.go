@@ -38,7 +38,7 @@ func (repository fakeMemoCloudGameRepository) DeleteGame(ctx context.Context, ga
 	return nil
 }
 
-func (repository fakeMemoCloudGameRepository) CreateChapter(ctx context.Context, chapter models.Chapter) (*models.Chapter, error) {
+func (repository fakeMemoCloudGameRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
 	return nil, nil
 }
 
