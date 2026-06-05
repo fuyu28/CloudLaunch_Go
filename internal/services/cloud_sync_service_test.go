@@ -288,6 +288,99 @@ func TestCloudSyncServiceSyncAllGamesUploadsLocalGamesAndSavesMetadata(t *testin
 	}
 }
 
+func TestCloudSyncServiceSyncAllGamesReturnsLoadMetadataError(t *testing.T) {
+	t.Parallel()
+
+	loadErr := errors.New("metadata load failed")
+	cloudStorage := &fakeCloudSyncStorage{loadMetadataErr: loadErr}
+	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.newClient = func(ctx context.Context, credentialKey string) (*s3.Client, storage.S3Config, string, string, bool) {
+		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
+	}
+
+	_, err := service.SyncAllGames(context.Background(), "default")
+
+	if err == nil {
+		t.Fatalf("expected load metadata error to be propagated")
+	}
+	var svcErr *ServiceError
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+}
+
+func TestCloudSyncServiceSyncAllGamesReturnsSaveMetadataError(t *testing.T) {
+	t.Parallel()
+
+	saveErr := errors.New("metadata save failed")
+	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	cloudStorage := &fakeCloudSyncStorage{saveMetadataErr: saveErr}
+	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return []models.Game{
+				{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: updatedAt},
+			}, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.newClient = func(ctx context.Context, credentialKey string) (*s3.Client, storage.S3Config, string, string, bool) {
+		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
+	}
+
+	_, err := service.SyncAllGames(context.Background(), "default")
+
+	if err == nil {
+		t.Fatalf("expected save metadata error to be propagated")
+	}
+	var svcErr *ServiceError
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+}
+
+func TestCloudSyncServiceSyncAllGamesReturnsSyncSingleGameError(t *testing.T) {
+	t.Parallel()
+
+	syncErr := errors.New("session save failed")
+	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	cloudStorage := &fakeCloudSyncStorage{saveSessionsErr: syncErr}
+	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, fakeCloudSyncRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+			return []models.Game{
+				{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: updatedAt},
+			}, nil
+		},
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
+		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.cloudStorage = cloudStorage
+	service.newClient = func(ctx context.Context, credentialKey string) (*s3.Client, storage.S3Config, string, string, bool) {
+		return nil, storage.S3Config{Bucket: "bucket"}, "", "", true
+	}
+
+	_, err := service.SyncAllGames(context.Background(), "default")
+
+	if err == nil {
+		t.Fatalf("expected sync error to be propagated")
+	}
+	if cloudStorage.savedMetadata != nil {
+		t.Fatalf("expected metadata not to be saved when sync fails")
+	}
+}
+
 func TestCloudSyncServiceDeleteGameFromCloudFailsInOfflineMode(t *testing.T) {
 	t.Parallel()
 

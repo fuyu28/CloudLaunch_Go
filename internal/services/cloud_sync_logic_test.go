@@ -564,6 +564,8 @@ func TestCloudImageLocalPathRejectsKeyWithoutHash(t *testing.T) {
 
 type fakeCloudSyncStorage struct {
 	savedMetadata       *storage.CloudMetadata
+	loadMetadataErr     error
+	saveMetadataErr     error
 	deletedPrefix       string
 	savedSessionsKey    string
 	savedSessionKeys    []string
@@ -628,10 +630,16 @@ func (fake *fakeCloudImageFileStore) WriteFile(path string, payload []byte, perm
 }
 
 func (fake *fakeCloudSyncStorage) LoadMetadata(ctx context.Context, client *s3.Client, bucket string, key string) (*storage.CloudMetadata, error) {
+	if fake.loadMetadataErr != nil {
+		return nil, fake.loadMetadataErr
+	}
 	return fake.savedMetadata, nil
 }
 
 func (fake *fakeCloudSyncStorage) SaveMetadata(ctx context.Context, client *s3.Client, bucket string, key string, metadata storage.CloudMetadata) error {
+	if fake.saveMetadataErr != nil {
+		return fake.saveMetadataErr
+	}
 	stored := metadata
 	fake.savedMetadata = &stored
 	return nil
