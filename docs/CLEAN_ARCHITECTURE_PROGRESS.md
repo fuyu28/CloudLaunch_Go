@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-06-05
+最終更新: 2026-06-05（Phase 5 完了）
 
 ## 概要
 
@@ -154,17 +154,20 @@ interface 化済み service:
 
 ### Phase 5. Infrastructure の再配置
 
-状態: 未着手
+状態: 完了
 
-未着手の内容:
+進んだこと:
 
-- `internal/db` の `infrastructure/db` 相当への再配置
-- `internal/storage` の `infrastructure/storage` 相当への再配置
-- `internal/credentials` や OS依存処理の `infrastructure/*` への再編
+- `internal/db` → `internal/infrastructure/db` へ移動
+- `internal/storage` → `internal/infrastructure/storage` へ移動
+- `internal/credentials` → `internal/infrastructure/credentials` へ移動
+- 全 import パスを一括更新（44ファイル）
+- パッケージ名は維持（`db`, `storage`, `credentials`）、import パスのみ変更
 
-補足:
+残課題:
 
-- 物理移動より依存方向の修正を優先しているため、現時点では未着手で問題ない
+- `internal/memo`（ファイルシステム操作）は現時点では移動せず維持
+- `internal/models` の `domain/` 相当への再配置は未着手（27ファイルへの影響があり、現状は優先度低）
 
 ## テスト進捗
 
@@ -228,13 +231,13 @@ interface 化済み service:
 - Phase 2 は完了
 - Phase 3 は完了
 - Phase 4 は `CloudSyncService` を中心に進行中
-- Phase 5 は未着手
+- Phase 5 は完了
 
-要するに、現在の移行は「`app` 層からの direct DB 依存除去」「厚い adapter の service 移管」「`services` からの `ApiResult` 除去」「DB 整理（Upload 削除・Chapter→Route 再設計）」「CloudSyncService 主要失敗系テスト追加」まで完了した。次の主戦場は、CloudSyncService の責務分割と `internal/app` の adapter テスト強化である。
+要するに、現在の移行は「`app` 層からの direct DB 依存除去」「厚い adapter の service 移管」「`services` からの `ApiResult` 除去」「DB 整理（Upload 削除・Chapter→Route 再設計）」「CloudSyncService 主要失敗系テスト追加と責務分割」「`internal/app` adapter テスト強化」「Screenshot capture の injectable 化」「infrastructure パッケージの物理再配置」まで完了した。
 
 ## 次の優先事項
 
-1. `internal/app` の adapter テストを追加し、adapter 層の薄さを保証するテストを整備する
-2. `CloudSyncService` の `syncExistingGamePair` をさらに分割し、責務を明確にする
-3. Screenshot / maintenance 周辺の OS / filesystem 依存を必要に応じてさらに port 化する
-4. `usecase` / `domain` / `infrastructure` への再配置を検討する
+1. `CloudSyncService` のさらなる責務分割（`syncUploadPath` / `syncDownloadPath` / `syncSkipPath` の個別テスト追加など）
+2. `internal/models` の `domain/` 相当への再配置（現時点では優先度低）
+3. DB 実装を使う統合テストの整備
+4. `Game.playStatus` / `lastPlayed` / `clearedAt` の意味整合（状態モデルの定義）
