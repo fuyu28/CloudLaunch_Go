@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/credentials"
-	"CloudLaunch_Go/internal/db"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/db"
 	"CloudLaunch_Go/internal/logging"
 	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/services"

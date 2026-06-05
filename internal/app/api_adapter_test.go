@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/services"
 )

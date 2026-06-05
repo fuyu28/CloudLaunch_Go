@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/result"
-	"CloudLaunch_Go/internal/storage"
 	"CloudLaunch_Go/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"

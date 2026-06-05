@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"CloudLaunch_Go/internal/credentials"
-	"CloudLaunch_Go/internal/storage"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 )
 
 type cloudObjectStore interface {

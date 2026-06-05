@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
 )
 
 // CredentialService は認証情報管理を提供する。

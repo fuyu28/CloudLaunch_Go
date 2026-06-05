@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/credentials"
-	"CloudLaunch_Go/internal/storage"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/util"
 )
 

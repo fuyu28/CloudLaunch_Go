@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
 )
 
 type fakeCredentialStore struct {

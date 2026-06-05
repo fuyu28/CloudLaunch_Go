@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/logging"
 	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/services"
-	"CloudLaunch_Go/internal/storage"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

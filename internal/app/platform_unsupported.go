@@ -4,7 +4,7 @@ package app
 
 import (
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
 )
 
 func (app *App) startHotkey() error {

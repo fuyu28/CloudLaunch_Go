@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"CloudLaunch_Go/internal/db"
+	"CloudLaunch_Go/internal/infrastructure/db"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/services"
 )
