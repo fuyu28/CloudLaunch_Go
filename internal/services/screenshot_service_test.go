@@ -74,3 +74,79 @@ func TestScreenshotServiceBuildScreenshotPathsUsesConfiguredExtension(t *testing
 		t.Fatalf("expected same output directory")
 	}
 }
+
+func TestScreenshotServiceCaptureGameScreenshotReturnsNotFoundWhenGameMissing(t *testing.T) {
+	t.Parallel()
+
+	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return nil, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	_, err := service.CaptureGameScreenshot(context.Background(), "game-1")
+	if err == nil || err.Error() != "game not found" {
+		t.Fatalf("expected game not found error, got %v", err)
+	}
+}
+
+func TestScreenshotServiceCaptureGameScreenshotPassesThroughErrNoNewScreenshot(t *testing.T) {
+	t.Parallel()
+
+	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return &models.Game{ID: gameID, Title: "Game"}, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.captureFunc = func(ctx context.Context, fullPath, tmpPath string) error {
+		return ErrNoNewScreenshot
+	}
+
+	_, err := service.CaptureGameScreenshot(context.Background(), "game-1")
+	if !errors.Is(err, ErrNoNewScreenshot) {
+		t.Fatalf("expected ErrNoNewScreenshot, got %v", err)
+	}
+}
+
+func TestScreenshotServiceCaptureGameScreenshotReturnsCaptureError(t *testing.T) {
+	t.Parallel()
+
+	captureErr := errors.New("capture failed")
+	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return &models.Game{ID: gameID, Title: "Game"}, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.captureFunc = func(ctx context.Context, fullPath, tmpPath string) error {
+		return captureErr
+	}
+
+	_, err := service.CaptureGameScreenshot(context.Background(), "game-1")
+	if !errors.Is(err, captureErr) {
+		t.Fatalf("expected capture error, got %v", err)
+	}
+}
+
+func TestScreenshotServiceCaptureGameScreenshotReturnsPathOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+			return &models.Game{ID: gameID, Title: "Game"}, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	service.captureFunc = func(ctx context.Context, fullPath, tmpPath string) error {
+		return nil
+	}
+
+	path, err := service.CaptureGameScreenshot(context.Background(), "game-1")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !strings.HasSuffix(path, ".png") {
+		t.Fatalf("expected png path, got %s", path)
+	}
+	if !strings.Contains(path, "game-1") {
+		t.Fatalf("expected path to contain game id, got %s", path)
+	}
+}

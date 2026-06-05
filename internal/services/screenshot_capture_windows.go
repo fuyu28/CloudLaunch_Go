@@ -66,7 +66,7 @@ func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGa
 		"output", fullPath,
 	)
 
-	if err := service.captureWithScreenClip(ctx, fullPath, tmpPath); err != nil {
+	if err := service.captureFunc(ctx, fullPath, tmpPath); err != nil {
 		if errors.Is(err, ErrNoNewScreenshot) {
 			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", gameID)
 			return "", "", err
