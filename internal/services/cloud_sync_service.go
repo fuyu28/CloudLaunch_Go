@@ -480,6 +480,132 @@ func (service *CloudSyncService) syncSingleGame(
 	}
 }
 
+type gameSyncState struct {
+	mergedSessions  mergedSessionsResult
+	mergedGame      models.Game
+	mergedCloudGame storage.CloudGameMetadata
+}
+
+func (service *CloudSyncService) prepareGameSyncState(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+	local localGameBundle,
+	cloud storage.CloudGameMetadata,
+) (gameSyncState, error) {
+	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, gameID)
+	if err != nil {
+		service.logger.Error("クラウドセッション取得に失敗", "operation", "sync.loadCloudSessions", "gameId", gameID, "error", err)
+		return gameSyncState{}, err
+	}
+
+	mergedSessions := mergeSessions(local.Sessions, cloudSessions)
+	if mergedSessions.Changed {
+		if err := service.upsertMergedLocalSessions(ctx, gameID, mergedSessions.Sessions); err != nil {
+			service.logger.Error("ローカルセッション統合に失敗", "operation", "sync.upsertMergedLocalSessions", "gameId", gameID, "error", err)
+			return gameSyncState{}, err
+		}
+	}
+
+	mergedGame := service.mergeCloudGameMetadata(cloud, &local.Game, mergedSessions.Sessions)
+	return gameSyncState{
+		mergedSessions:  mergedSessions,
+		mergedGame:      mergedGame,
+		mergedCloudGame: cloudMetadataFromGame(mergedGame, cloud.ImageKey),
+	}, nil
+}
+
+func (service *CloudSyncService) syncUploadPath(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+	state gameSyncState,
+	originalCloud *storage.CloudGameMetadata,
+) (gameSyncIterationResult, error) {
+	cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, state.mergedGame, state.mergedSessions.Sessions, originalCloud)
+	if err != nil {
+		service.logger.Error("クラウド更新に失敗", "operation", "sync.buildCloudGame", "gameId", gameID, "error", err)
+		return gameSyncIterationResult{}, err
+	}
+	return gameSyncIterationResult{
+		cloudGame: &cloudGame,
+		summary: CloudSyncSummary{
+			UploadedGames:      1,
+			UploadedSessions:   state.mergedSessions.UploadedCount,
+			DownloadedSessions: state.mergedSessions.DownloadedCount,
+			UploadedImages:     uploadedImages,
+		},
+		shouldSaveMetadata: true,
+	}, nil
+}
+
+func (service *CloudSyncService) syncDownloadPath(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+	state gameSyncState,
+	localGame *models.Game,
+) (gameSyncIterationResult, error) {
+	if state.mergedSessions.Changed {
+		if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), state.mergedSessions.Sessions); err != nil {
+			service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.cloudWins", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+	}
+	downloadedImages, err := service.applyCloudGame(ctx, client, bucket, state.mergedCloudGame, localGame, state.mergedSessions.Sessions)
+	if err != nil {
+		service.logger.Error("ローカル更新に失敗", "operation", "sync.applyCloudGame", "gameId", gameID, "error", err)
+		return gameSyncIterationResult{}, err
+	}
+	return gameSyncIterationResult{
+		cloudGame: &state.mergedCloudGame,
+		summary: CloudSyncSummary{
+			UploadedSessions:   state.mergedSessions.UploadedCount,
+			DownloadedGames:    1,
+			DownloadedSessions: state.mergedSessions.DownloadedCount,
+			DownloadedImages:   downloadedImages,
+		},
+		shouldSaveMetadata: state.mergedSessions.Changed,
+	}, nil
+}
+
+func (service *CloudSyncService) syncSkipPath(
+	ctx context.Context,
+	client *s3.Client,
+	bucket string,
+	gameID string,
+	state gameSyncState,
+	localGame *models.Game,
+) (gameSyncIterationResult, error) {
+	if state.mergedSessions.Changed {
+		if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), state.mergedSessions.Sessions); err != nil {
+			service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.sameTimestamp", "gameId", gameID, "error", err)
+			return gameSyncIterationResult{}, err
+		}
+	}
+	downloadedImages, err := service.applyCloudGame(ctx, client, bucket, state.mergedCloudGame, localGame, state.mergedSessions.Sessions)
+	if err != nil {
+		service.logger.Error("ローカル更新に失敗", "operation", "sync.applyMergedCloudGame", "gameId", gameID, "error", err)
+		return gameSyncIterationResult{}, err
+	}
+	summary := CloudSyncSummary{
+		UploadedSessions:   state.mergedSessions.UploadedCount,
+		DownloadedSessions: state.mergedSessions.DownloadedCount,
+		DownloadedImages:   downloadedImages,
+	}
+	if !state.mergedSessions.Changed {
+		summary.SkippedGames = 1
+	}
+	return gameSyncIterationResult{
+		cloudGame:          &state.mergedCloudGame,
+		summary:            summary,
+		shouldSaveMetadata: state.mergedSessions.Changed,
+	}, nil
+}
+
 func (service *CloudSyncService) syncExistingGamePair(
 	ctx context.Context,
 	client *s3.Client,
@@ -488,87 +614,18 @@ func (service *CloudSyncService) syncExistingGamePair(
 	local localGameBundle,
 	cloud storage.CloudGameMetadata,
 ) (gameSyncIterationResult, error) {
-	cloudSessions, err := service.loadCloudSessions(ctx, client, bucket, gameID)
+	state, err := service.prepareGameSyncState(ctx, client, bucket, gameID, local, cloud)
 	if err != nil {
-		service.logger.Error("クラウドセッション取得に失敗", "operation", "sync.loadCloudSessions", "gameId", gameID, "error", err)
 		return gameSyncIterationResult{}, err
 	}
 
-	mergedSessions := mergeSessions(local.Sessions, cloudSessions)
-	if mergedSessions.Changed {
-		if err := service.upsertMergedLocalSessions(ctx, gameID, mergedSessions.Sessions); err != nil {
-			service.logger.Error("ローカルセッション統合に失敗", "operation", "sync.upsertMergedLocalSessions", "gameId", gameID, "error", err)
-			return gameSyncIterationResult{}, err
-		}
-	}
-
-	mergedGame := service.mergeCloudGameMetadata(cloud, &local.Game, mergedSessions.Sessions)
-	mergedCloudGame := cloudMetadataFromGame(mergedGame, cloud.ImageKey)
-
 	switch determineGameSyncAction(local, true, cloud, true) {
 	case gameSyncActionUpload:
-		cloudGame, uploadedImages, err := service.buildCloudGame(ctx, client, bucket, mergedGame, mergedSessions.Sessions, &cloud)
-		if err != nil {
-			service.logger.Error("クラウド更新に失敗", "operation", "sync.buildCloudGame", "gameId", gameID, "error", err)
-			return gameSyncIterationResult{}, err
-		}
-		return gameSyncIterationResult{
-			cloudGame: &cloudGame,
-			summary: CloudSyncSummary{
-				UploadedGames:      1,
-				UploadedSessions:   mergedSessions.UploadedCount,
-				DownloadedSessions: mergedSessions.DownloadedCount,
-				UploadedImages:     uploadedImages,
-			},
-			shouldSaveMetadata: true,
-		}, nil
+		return service.syncUploadPath(ctx, client, bucket, gameID, state, &cloud)
 	case gameSyncActionDownload:
-		if mergedSessions.Changed {
-			if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), mergedSessions.Sessions); err != nil {
-				service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.cloudWins", "gameId", gameID, "error", err)
-				return gameSyncIterationResult{}, err
-			}
-		}
-		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedSessions.Sessions)
-		if err != nil {
-			service.logger.Error("ローカル更新に失敗", "operation", "sync.applyCloudGame", "gameId", gameID, "error", err)
-			return gameSyncIterationResult{}, err
-		}
-		return gameSyncIterationResult{
-			cloudGame: &mergedCloudGame,
-			summary: CloudSyncSummary{
-				UploadedSessions:   mergedSessions.UploadedCount,
-				DownloadedGames:    1,
-				DownloadedSessions: mergedSessions.DownloadedCount,
-				DownloadedImages:   downloadedImages,
-			},
-			shouldSaveMetadata: mergedSessions.Changed,
-		}, nil
+		return service.syncDownloadPath(ctx, client, bucket, gameID, state, &local.Game)
 	default:
-		if mergedSessions.Changed {
-			if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), mergedSessions.Sessions); err != nil {
-				service.logger.Error("クラウドセッション更新に失敗", "operation", "sync.saveMergedSessions.sameTimestamp", "gameId", gameID, "error", err)
-				return gameSyncIterationResult{}, err
-			}
-		}
-		downloadedImages, err := service.applyCloudGame(ctx, client, bucket, mergedCloudGame, &local.Game, mergedSessions.Sessions)
-		if err != nil {
-			service.logger.Error("ローカル更新に失敗", "operation", "sync.applyMergedCloudGame", "gameId", gameID, "error", err)
-			return gameSyncIterationResult{}, err
-		}
-		summary := CloudSyncSummary{
-			UploadedSessions:   mergedSessions.UploadedCount,
-			DownloadedSessions: mergedSessions.DownloadedCount,
-			DownloadedImages:   downloadedImages,
-		}
-		if !mergedSessions.Changed {
-			summary.SkippedGames = 1
-		}
-		return gameSyncIterationResult{
-			cloudGame:          &mergedCloudGame,
-			summary:            summary,
-			shouldSaveMetadata: mergedSessions.Changed,
-		}, nil
+		return service.syncSkipPath(ctx, client, bucket, gameID, state, &local.Game)
 	}
 }
 
