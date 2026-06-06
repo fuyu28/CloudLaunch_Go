@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-06-05（Phase 5 完了）
+最終更新: 2026-06-06（Phase 5 完了・残課題の記述を実装に合わせて更新）
 
 ## 概要
 
@@ -42,11 +42,11 @@ Clean Architecture への移行は、`internal/app` の薄型化、`internal/ser
 - `App.Database` フィールドを削除し、`internal/app` から `db.Repository` 直接参照を除去した
 - `MemoCloudService` / `MaintenanceService` を導入し、厚かった `api_memo_cloud.go` / `api_maintenance.go` の処理を移管した
 - サービス再構築処理を `configureServices` に集約し、起動時と復元後の結線を統一した
+- `api_adapter_test.go` に game / session / route / credential のサービスエラー変換テストを追加し、adapter 層の検証範囲を広げた（cloud-sync / memo-cloud と合わせて計13テスト）
 
 残課題:
 
 - Wails adapter と Use Case の責務分離をさらに明確にする余地がある
-- `internal/app` の adapter テストは依然として薄く、現状は `api_maintenance_test.go` が中心
 
 ### Phase 2. Port interface の導入
 
@@ -77,7 +77,7 @@ interface 化済み service:
 残課題:
 
 - DB 実装と service の結線を確認する統合テストはまだ薄い
-- Screenshot / maintenance 周辺など、一部 OS / filesystem 依存の port 化は今後の整理余地がある
+- ScreenshotService の capture 処理は `captureFunc` 注入でテスト可能になったが、保存パス組み立てやログなど周辺の OS / filesystem 依存 port 化は引き続き整理余地がある
 
 ### Phase 3. Use Case 層の明確化
 
@@ -95,7 +95,7 @@ interface 化済み service:
 
 - package はまだ `internal/services` に集約されたまま
 - `credential` / `cloud` などはユースケース境界がまだ粗い
-- `usecase` / `domain` / `infrastructure` への物理再配置は未着手
+- `infrastructure` への物理再配置は Phase 5 で完了。`usecase` / `domain` 相当の再配置はまだ未着手
 
 ### Phase 4. 複雑機能の分割
 
@@ -116,16 +116,19 @@ interface 化済み service:
   - `composeSyncedLocalGame`
   - `composeCloudGameMetadata`
   - `composeCloudSessions`
+  - `prepareGameSyncState`（セッション統合とマージ済みゲーム情報の準備を集約）
+  - `syncUploadPath` / `syncDownloadPath` / `syncSkipPath`（同期方向ごとの処理を分離）
 - upload / download の表現変換ロジックを I/O なしでテストできるようになった
 - `loadLocalGames` の全件取得・指定ゲームなしの振る舞いをテストで固定
 - S3 ストレージ、画像ファイル書き込み、画像ロードの差し替えポイントを導入済み
 - `syncExistingGamePair` の全パス（upload / download / skip）の失敗系テストを追加
 - `sync` レベルの `LoadMetadata` 失敗・`SaveMetadata` 失敗・ループ内失敗をテストで固定
+- `syncExistingGamePair` を `prepareGameSyncState` + `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` に分割し、upload/download/skip 分岐とセッション統合の混在を解消した
 
 まだ重い部分:
 
-- `syncExistingGamePair` 内の upload/download/skip 分岐とセッション統合が同一関数に混在している
-- ファイル全体はまだ 1200 行超で、責務分割は継続が必要
+- ファイル全体はまだ 1200 行超（1272 行）で、責務分割は継続が必要
+- 新設した `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` 単体のユニットテストはまだなく、現状は `syncExistingGamePair` 経由の検証が中心
 
 #### ProcessMonitorService
 
@@ -147,10 +150,11 @@ interface 化済み service:
 
 - repository 境界を interface 化
 - 基本的な異常系とパス生成のテストを追加
+- capture 処理を `captureFunc` として注入可能にし、`CaptureGameScreenshot` の正常系・異常系（game not found / `ErrNoNewScreenshot` / capture error / 成功時のパス）をテストで固定した
 
 残課題:
 
-- 保存や同期を含む周辺責務のさらなる分離
+- 保存パスの組み立てやログ出力など、capture 以外の周辺責務のさらなる分離
 
 ### Phase 5. Infrastructure の再配置
 
@@ -189,8 +193,8 @@ interface 化済み service:
 
 `internal/app` 側の現状:
 
-- `api_maintenance_test.go` のみ
-- adapter 層の網羅は限定的で、通常 API の薄さを保証するテストはまだ不足
+- `api_maintenance_test.go` に加えて `api_adapter_test.go` を整備し、game / session / route / credential / cloud-sync / memo-cloud のサービスエラー変換テストを計13本追加した
+- adapter 層のエラー変換は概ねカバーできたが、成功系の戻り値整形や通常 API 全体の網羅はまだ限定的
 
 2026-06-05 に追加した主なテスト:
 
@@ -220,9 +224,8 @@ interface 化済み service:
 
 不足している点:
 
-- `CloudSyncService` の `syncExistingGamePair` 内の責務分割は未完了
-- DB 実装を使う統合テストが不足している
-- `internal/app` の adapter 層のテストはまだかなり薄い
+- `CloudSyncService` の `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` 個別のユニットテストがまだない
+- DB 実装を使う統合テストが不足している（`MaintenanceService` 以外は概ね fake repository 中心）
 - frontend 側は今回の移行に対応する新規テスト追加は限定的
 
 ## 全体評価
@@ -237,7 +240,7 @@ interface 化済み service:
 
 ## 次の優先事項
 
-1. `CloudSyncService` のさらなる責務分割（`syncUploadPath` / `syncDownloadPath` / `syncSkipPath` の個別テスト追加など）
+1. `CloudSyncService`: 新設した `prepareGameSyncState` / `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` の個別ユニットテスト追加と、引き続き 1200 行超のファイルの分割
 2. `internal/models` の `domain/` 相当への再配置（現時点では優先度低）
 3. DB 実装を使う統合テストの整備
 4. `Game.playStatus` / `lastPlayed` / `clearedAt` の意味整合（状態モデルの定義）
