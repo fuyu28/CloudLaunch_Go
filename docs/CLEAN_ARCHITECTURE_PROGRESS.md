@@ -124,11 +124,11 @@ interface 化済み service:
 - `syncExistingGamePair` の全パス（upload / download / skip）の失敗系テストを追加
 - `sync` レベルの `LoadMetadata` 失敗・`SaveMetadata` 失敗・ループ内失敗をテストで固定
 - `syncExistingGamePair` を `prepareGameSyncState` + `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` に分割し、upload/download/skip 分岐とセッション統合の混在を解消した
+- `cloud_sync_paths_test.go` を新設し、`prepareGameSyncState` / `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` を `syncExistingGamePair` を経由せず直接呼び出す単体テストを追加（`shouldSaveMetadata` の切り替わりや `SkippedGames` 集計、セッション未変更時の `SaveSessions` スキップなど、各関数固有の分岐を計14テストで固定）
 
 まだ重い部分:
 
 - ファイル全体はまだ 1200 行超（1272 行）で、責務分割は継続が必要
-- 新設した `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` 単体のユニットテストはまだなく、現状は `syncExistingGamePair` 経由の検証が中心
 
 #### ProcessMonitorService
 
@@ -224,7 +224,6 @@ interface 化済み service:
 
 不足している点:
 
-- `CloudSyncService` の `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` 個別のユニットテストがまだない
 - DB 実装を使う統合テストが不足している（`MaintenanceService` 以外は概ね fake repository 中心）
 - frontend 側は今回の移行に対応する新規テスト追加は限定的
 
@@ -240,7 +239,7 @@ interface 化済み service:
 
 ## 次の優先事項
 
-1. `CloudSyncService`: 新設した `prepareGameSyncState` / `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` の個別ユニットテスト追加と、引き続き 1200 行超のファイルの分割
+1. `CloudSyncService`: 引き続き 1200 行超のファイルの分割（`syncSingleGame` / `sync` / `buildCloudGame` 周辺など、まだ大きな関数が残る）
 2. `internal/models` の `domain/` 相当への再配置（現時点では優先度低）
 3. DB 実装を使う統合テストの整備
 4. `Game.playStatus` / `lastPlayed` / `clearedAt` の意味整合（状態モデルの定義）
