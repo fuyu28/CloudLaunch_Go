@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-06-06（Phase 5 完了・残課題の記述を実装に合わせて更新）
+最終更新: 2026-06-07（CloudSyncService のファイル分割を実施）
 
 ## 概要
 
@@ -125,10 +125,15 @@ interface 化済み service:
 - `sync` レベルの `LoadMetadata` 失敗・`SaveMetadata` 失敗・ループ内失敗をテストで固定
 - `syncExistingGamePair` を `prepareGameSyncState` + `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` に分割し、upload/download/skip 分岐とセッション統合の混在を解消した
 - `cloud_sync_paths_test.go` を新設し、`prepareGameSyncState` / `syncUploadPath` / `syncDownloadPath` / `syncSkipPath` を `syncExistingGamePair` を経由せず直接呼び出す単体テストを追加（`shouldSaveMetadata` の切り替わりや `SkippedGames` 集計、セッション未変更時の `SaveSessions` スキップなど、各関数固有の分岐を計14テストで固定）
+- `cloud_sync_service.go`（1272 行）を責務ごとに4ファイルへ物理分割した（挙動・公開APIは無変更）:
+  - `cloud_sync_service.go`（750行）: 同期オーケストレーション本体（`sync` / `syncSingleGame` / `syncExistingGamePair` 系 / repository 連携など）
+  - `cloud_sync_storage_adapter.go`（87行）: `cloudSyncStorage` / `cloudImageFileStore` / `cloudImageLoader` の port interface とデフォルト実装
+  - `cloud_sync_transform.go`（226行）: `composeCloudGameMetadata` 系・`mergeSessions` 系・`mergeCloudGameMetadata` などの純粋な変換・マージ関数群
+  - `cloud_sync_image.go`（244行）: サムネイル画像のアップロード・ダウンロード・URL検証など画像まわりの処理
 
 まだ重い部分:
 
-- ファイル全体はまだ 1200 行超（1272 行）で、責務分割は継続が必要
+- 中心ファイルは 750 行まで縮小したが、`sync` / `syncSingleGame` など同期オーケストレーションの中核はまだ大きく、さらなる分割の余地がある
 
 #### ProcessMonitorService
 
@@ -239,7 +244,7 @@ interface 化済み service:
 
 ## 次の優先事項
 
-1. `CloudSyncService`: 引き続き 1200 行超のファイルの分割（`syncSingleGame` / `sync` / `buildCloudGame` 周辺など、まだ大きな関数が残る）
+1. `CloudSyncService`: storage adapter / transform / image を別ファイルへ切り出し済み。残るオーケストレーション中核（`sync` / `syncSingleGame` 周辺）のさらなる整理は今後の余地
 2. `internal/models` の `domain/` 相当への再配置（現時点では優先度低）
 3. DB 実装を使う統合テストの整備
 4. `Game.playStatus` / `lastPlayed` / `clearedAt` の意味整合（状態モデルの定義）
