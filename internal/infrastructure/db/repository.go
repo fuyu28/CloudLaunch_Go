@@ -26,7 +26,7 @@ func NewRepository(connection *sql.DB) *Repository {
 func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game" WHERE id = ?
 	`, gameID)
@@ -49,7 +49,7 @@ func (repository *Repository) GetGameByExePath(ctx context.Context, exePath stri
 	}
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game" WHERE lower(exePath) = lower(?)
 	`, trimmed)
@@ -75,7 +75,7 @@ func (repository *Repository) ListGames(
 	queryBuilder := strings.Builder{}
 	queryBuilder.WriteString(`
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game"
 	`)
@@ -396,6 +396,35 @@ func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
 	return error
 }
 
+// SetLocalSyncHead はゲームの localSyncHead を更新する。
+func (repository *Repository) SetLocalSyncHead(ctx context.Context, gameID, hash string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		UPDATE "Game" SET localSyncHead = ? WHERE id = ?
+	`, hash, gameID)
+	return err
+}
+
+// GetSetting は Settings テーブルから値を取得する。存在しない場合は "" を返す。
+func (repository *Repository) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := repository.connection.QueryRowContext(ctx, `
+		SELECT value FROM "Settings" WHERE key = ?
+	`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+// UpsertSetting は Settings テーブルに値を追加または更新する。
+func (repository *Repository) UpsertSetting(ctx context.Context, key, value string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "Settings" (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, key, value)
+	return err
+}
+
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `
@@ -632,6 +661,7 @@ func scanGame(row scanner) (*domain.Game, error) {
 		saveFolderPath         sql.NullString
 		localSaveHash          sql.NullString
 		localSaveHashUpdatedAt sql.NullTime
+		localSyncHead          sql.NullString
 		lastPlayed             sql.NullTime
 		clearedAt              sql.NullTime
 		currentRouteId         sql.NullString
@@ -649,6 +679,7 @@ func scanGame(row scanner) (*domain.Game, error) {
 		&game.UpdatedAt,
 		&localSaveHash,
 		&localSaveHashUpdatedAt,
+		&localSyncHead,
 		&game.TotalPlayTime,
 		&lastPlayed,
 		&clearedAt,
@@ -663,6 +694,7 @@ func scanGame(row scanner) (*domain.Game, error) {
 	game.SaveFolderPath = nullStringPtr(saveFolderPath)
 	game.LocalSaveHash = nullStringPtr(localSaveHash)
 	game.LocalSaveHashUpdatedAt = nullTimePtr(localSaveHashUpdatedAt)
+	game.LocalSyncHead = nullStringPtr(localSyncHead)
 	game.LastPlayed = nullTimePtr(lastPlayed)
 	game.ClearedAt = nullTimePtr(clearedAt)
 	game.CurrentRouteID = nullStringPtr(currentRouteId)
@@ -737,7 +769,7 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 func (repository *Repository) findLatestGame(ctx context.Context, title string, exePath string) (*domain.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
 	`, title, exePath)

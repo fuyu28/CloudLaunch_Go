@@ -14,44 +14,6 @@ import (
 	"CloudLaunch_Go/internal/services"
 )
 
-type noopAppCloudSyncRepository struct{}
-
-func (noopAppCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
-	return nil, nil
-}
-
-func (noopAppCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
-	return nil, nil
-}
-
-func (noopAppCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
-	return nil, nil
-}
-
-func (noopAppCloudSyncRepository) UpsertGameSync(ctx context.Context, game domain.Game) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) DeletePlaySessionsByGame(ctx context.Context, gameID string) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
-	return 0, nil
-}
-
-func (noopAppCloudSyncRepository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
-	return nil
-}
-
 type noopAppGameRepository struct {
 	listErr   error
 	createErr error
@@ -219,46 +181,6 @@ func (store *adapterTestCredentialStore) Delete(ctx context.Context, key string)
 
 func newAdapterTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
-func TestAppSyncAllGamesConvertsServiceError(t *testing.T) {
-	t.Parallel()
-
-	cloudSync := services.NewCloudSyncService(config.Config{}, nil, noopAppCloudSyncRepository{}, newAdapterTestLogger())
-	cloudSync.SetOfflineMode(true)
-	app := &App{
-		Logger:           newAdapterTestLogger(),
-		CloudSyncService: cloudSync,
-	}
-
-	result := app.SyncAllGames()
-
-	if result.Success {
-		t.Fatalf("expected sync failure, got success: %#v", result)
-	}
-	if result.Error == nil || result.Error.Message != "オフラインモードのため同期できません" {
-		t.Fatalf("expected converted service error, got %#v", result.Error)
-	}
-}
-
-func TestAppDeleteCloudGameConvertsServiceError(t *testing.T) {
-	t.Parallel()
-
-	cloudSync := services.NewCloudSyncService(config.Config{}, nil, noopAppCloudSyncRepository{}, newAdapterTestLogger())
-	cloudSync.SetOfflineMode(true)
-	app := &App{
-		Logger:           newAdapterTestLogger(),
-		CloudSyncService: cloudSync,
-	}
-
-	result := app.DeleteCloudGame("game-1")
-
-	if result.Success {
-		t.Fatalf("expected delete failure, got success: %#v", result)
-	}
-	if result.Error == nil || result.Error.Message != "オフラインモードのため削除できません" {
-		t.Fatalf("expected converted service error, got %#v", result.Error)
-	}
 }
 
 func TestAppGetCloudMemosConvertsServiceError(t *testing.T) {

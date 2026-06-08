@@ -1,77 +1,99 @@
-// @fileoverview クラウド同期関連のAPIを提供する。
+// @fileoverview コンテンツアドレッシング同期関連の API を提供する。
 package app
 
 import (
 	"strings"
 
+	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/result"
-	"CloudLaunch_Go/internal/services"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// SyncAllGames は全ゲームのクラウド同期を行う。
-func (app *App) SyncAllGames() result.ApiResult[services.CloudSyncSummary] {
-	if app.CloudSyncService == nil {
-		app.Logger.Error("同期機能が利用できません", "operation", "SyncAllGames", "reason", "CloudSyncService is nil")
-		return result.ErrorResult[services.CloudSyncSummary]("同期機能が利用できません", "CloudSyncServiceが未初期化です")
+// SyncStatus は指定ゲームの同期状態を返す。
+func (app *App) SyncStatus(gameID string) result.ApiResult[domain.SyncStatusDetail] {
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[domain.SyncStatusDetail]("ゲームIDが不正です", "gameID is empty")
 	}
-	app.Logger.Info("クラウド同期を開始", "operation", "SyncAllGames")
-	summary, err := app.CloudSyncService.SyncAllGames(app.context(), "default")
+	detail, err := app.ContentSyncService.Status(app.context(), trimmed)
 	if err != nil {
-		app.Logger.Warn("クラウド同期が失敗", "operation", "SyncAllGames", "detail", err)
-		return serviceErrorResult[services.CloudSyncSummary](err, "クラウド同期に失敗しました")
+		return serviceErrorResult[domain.SyncStatusDetail](err, "同期状態の取得に失敗しました")
 	}
-	app.Logger.Info("クラウド同期が完了", "operation", "SyncAllGames", "summary", summary)
-	return result.OkResult(summary)
+	return result.OkResult(detail)
 }
 
-// SyncGame は指定ゲームのクラウド同期を行う。
-func (app *App) SyncGame(gameID string) result.ApiResult[services.CloudSyncSummary] {
-	if app.CloudSyncService == nil {
-		app.Logger.Error("同期機能が利用できません", "operation", "SyncGame", "reason", "CloudSyncService is nil")
-		return result.ErrorResult[services.CloudSyncSummary]("同期機能が利用できません", "CloudSyncServiceが未初期化です")
+// PushSync は指定ゲームのデータをリモートへアップロードする。
+func (app *App) PushSync(gameID string) result.ApiResult[any] {
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
 	}
-	trimmedID := strings.TrimSpace(gameID)
-	app.Logger.Info("ゲーム単位クラウド同期を開始", "operation", "SyncGame", "gameId", trimmedID)
-	summary, err := app.CloudSyncService.SyncGame(app.context(), "default", gameID)
-	if err != nil {
-		app.Logger.Warn("ゲーム単位クラウド同期が失敗", "operation", "SyncGame", "gameId", trimmedID, "detail", err)
-		return serviceErrorResult[services.CloudSyncSummary](err, "クラウド同期に失敗しました")
+	ctx := app.context()
+	onProgress := func(current, total int) {
+		wailsruntime.EventsEmit(ctx, "sync:progress", map[string]any{
+			"operation": "push",
+			"current":   current,
+			"total":     total,
+		})
 	}
-	app.Logger.Info("ゲーム単位クラウド同期が完了", "operation", "SyncGame", "gameId", trimmedID, "summary", summary)
-	return result.OkResult(summary)
+	if err := app.ContentSyncService.Push(ctx, trimmed, onProgress); err != nil {
+		return serviceErrorResult[any](err, "アップロードに失敗しました")
+	}
+	return result.OkResult[any](nil)
 }
 
-// DeleteCloudGame は指定ゲームのクラウドデータを削除する。
-func (app *App) DeleteCloudGame(gameID string) result.ApiResult[bool] {
-	if app.CloudSyncService == nil {
-		app.Logger.Error("削除機能が利用できません", "operation", "DeleteCloudGame", "reason", "CloudSyncService is nil")
-		return result.ErrorResult[bool]("削除機能が利用できません", "CloudSyncServiceが未初期化です")
+// PullSync は指定ゲームのデータをリモートからダウンロードする。
+func (app *App) PullSync(gameID string) result.ApiResult[any] {
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
 	}
-	trimmedID := strings.TrimSpace(gameID)
-	app.Logger.Info("クラウドゲーム削除を開始", "operation", "DeleteCloudGame", "gameId", trimmedID)
-	if err := app.CloudSyncService.DeleteGameFromCloud(app.context(), "default", gameID); err != nil {
-		app.Logger.Warn("クラウドゲーム削除が失敗", "operation", "DeleteCloudGame", "gameId", trimmedID, "detail", err)
-		return serviceErrorResult[bool](err, "クラウドゲーム削除に失敗しました")
+	ctx := app.context()
+	onProgress := func(current, total int) {
+		wailsruntime.EventsEmit(ctx, "sync:progress", map[string]any{
+			"operation": "pull",
+			"current":   current,
+			"total":     total,
+		})
 	}
-	return result.OkResult(true)
+	if err := app.ContentSyncService.Pull(ctx, trimmed, onProgress); err != nil {
+		return serviceErrorResult[any](err, "ダウンロードに失敗しました")
+	}
+	return result.OkResult[any](nil)
 }
 
-// UpdateOfflineMode はオフラインモードを更新する。
-func (app *App) UpdateOfflineMode(enabled bool) result.ApiResult[bool] {
-	if app.CloudSyncService != nil {
-		app.CloudSyncService.SetOfflineMode(enabled)
+// ResolveConflict はコンフリクトを解決する。
+func (app *App) ResolveConflict(gameID string, useLocal bool) result.ApiResult[any] {
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
 	}
-	app.Logger.Info("オフラインモードを更新", "enabled", enabled)
-	return result.OkResult(true)
+	if err := app.ContentSyncService.ResolveConflict(app.context(), trimmed, useLocal); err != nil {
+		return serviceErrorResult[any](err, "コンフリクト解決に失敗しました")
+	}
+	return result.OkResult[any](nil)
 }
 
 func (app *App) syncGameAsync(gameID string) {
-	if app.CloudSyncService == nil || strings.TrimSpace(gameID) == "" {
+	if app.ContentSyncService == nil || strings.TrimSpace(gameID) == "" {
 		return
 	}
-	go func(targetID string) {
-		if _, err := app.CloudSyncService.SyncGame(app.context(), "default", targetID); err != nil {
-			app.Logger.Warn("クラウド同期に失敗", "gameId", targetID, "detail", err)
+	go func(id string) {
+		if err := app.ContentSyncService.Push(app.context(), id, nil); err != nil {
+			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
 		}
 	}(gameID)
+}
+
+// DeleteGameFromCloud は指定ゲームのクラウドデータを削除する。
+func (app *App) DeleteGameFromCloud(gameID string) result.ApiResult[any] {
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
+	}
+	if err := app.ContentSyncService.DeleteFromCloud(app.context(), trimmed); err != nil {
+		return serviceErrorResult[any](err, "クラウドデータ削除に失敗しました")
+	}
+	return result.OkResult[any](nil)
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -16,7 +17,6 @@ import (
 	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/domain"
-	"CloudLaunch_Go/internal/infrastructure/storage"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/unicode"
@@ -54,11 +54,16 @@ type normalizedProcess struct {
 	normalizedCmd string
 }
 
+// afterPlaySyncer はプレイ終了後の自動 Push を抽象化するインターフェース。
+type afterPlaySyncer interface {
+	Push(ctx context.Context, gameID string, onProgress ProgressFunc) error
+}
+
 // ProcessMonitorService はゲームプロセス監視を提供する。
 type ProcessMonitorService struct {
 	repository         ProcessMonitorRepository
 	logger             *slog.Logger
-	cloudSync          *CloudSyncService
+	cloudSync          afterPlaySyncer
 	processProvider    func() ([]ProcessInfo, string)
 	monitoredGames     map[string]*MonitoringGame
 	autoTracking       bool
@@ -71,7 +76,7 @@ type ProcessMonitorService struct {
 }
 
 // NewProcessMonitorService は ProcessMonitorService を生成する。
-func NewProcessMonitorService(repository ProcessMonitorRepository, logger *slog.Logger, cloudSync *CloudSyncService) *ProcessMonitorService {
+func NewProcessMonitorService(repository ProcessMonitorRepository, logger *slog.Logger, cloudSync afterPlaySyncer) *ProcessMonitorService {
 	return &ProcessMonitorService{
 		repository:         repository,
 		logger:             logger,
@@ -503,11 +508,11 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	if current.SaveFolderPath != nil {
 		saveFolderPath := strings.TrimSpace(*current.SaveFolderPath)
 		if saveFolderPath != "" {
-			hash, hashErr := storage.HashDirectory(saveFolderPath)
-			if hashErr != nil {
+			if snap, _, hashErr := buildSaveSnapshot(saveFolderPath); hashErr != nil {
 				service.logger.Warn("ローカルセーブハッシュの計算に失敗", "error", hashErr)
-			} else {
-				current.LocalSaveHash = &hash
+			} else if snapJSON, merr := json.Marshal(snap); merr == nil {
+				h := hashBytes(snapJSON)
+				current.LocalSaveHash = &h
 				current.LocalSaveHashUpdatedAt = &endedAt
 			}
 		}
@@ -521,7 +526,7 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
 	if service.cloudSync != nil {
 		go func(gameID string) {
-			if _, err := service.cloudSync.SyncGame(context.Background(), "default", gameID); err != nil {
+			if err := service.cloudSync.Push(context.Background(), gameID, nil); err != nil {
 				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
 		}(game.GameID)

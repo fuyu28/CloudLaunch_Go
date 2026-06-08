@@ -27,8 +27,7 @@ type App struct {
 	MemoService         *services.MemoService
 	MemoFiles           *memo.FileManager
 	CredentialService   *services.CredentialService
-	CloudService        *services.CloudService
-	CloudSyncService    *services.CloudSyncService
+	ContentSyncService  *services.ContentSyncService
 	ErogameScapeService *services.ErogameScapeService
 	ProcessMonitor      *services.ProcessMonitorService
 	ScreenshotService   *services.ScreenshotService
@@ -126,10 +125,9 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.RouteService = services.NewRouteService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
-	app.CloudService = services.NewCloudService(app.Config, credentialStore, app.Logger)
-	app.CloudSyncService = services.NewCloudSyncService(app.Config, credentialStore, repository, app.Logger)
+	app.ContentSyncService = services.NewContentSyncService(app.Config, credentialStore, repository, app.Logger)
 	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
-	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.CloudSyncService)
+	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.ContentSyncService)
 	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)
 	app.MemoCloudService = services.NewMemoCloudService(app.Config, credentialStore, app.GameService, app.MemoService, app.Logger)
 	app.MaintenanceService = services.NewMaintenanceService(

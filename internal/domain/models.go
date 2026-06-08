@@ -29,6 +29,7 @@ type Game struct {
 	UpdatedAt              time.Time  `json:"updatedAt"`
 	LocalSaveHash          *string    `json:"localSaveHash,omitempty"`
 	LocalSaveHashUpdatedAt *time.Time `json:"localSaveHashUpdatedAt,omitempty"`
+	LocalSyncHead          *string    `json:"localSyncHead,omitempty"`
 	PlayStatus             PlayStatus `json:"playStatus"`
 	TotalPlayTime          int64      `json:"totalPlayTime"`
 	LastPlayed             *time.Time `json:"lastPlayed,omitempty"`

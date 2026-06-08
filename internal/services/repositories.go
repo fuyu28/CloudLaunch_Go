@@ -68,6 +68,18 @@ type CloudSyncRepository interface {
 	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
+// ContentSyncRepository defines the persistence boundary required by ContentSyncService.
+type ContentSyncRepository interface {
+	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
+	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
+	SetLocalSyncHead(ctx context.Context, gameID, hash string) error
+	UpsertGameSync(ctx context.Context, game domain.Game) error
+	DeletePlaySessionsByGame(ctx context.Context, gameID string) error
+	UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error
+	GetSetting(ctx context.Context, key string) (string, error)
+	UpsertSetting(ctx context.Context, key, value string) error
+}
+
 // ScreenshotRepository defines the persistence boundary required by ScreenshotService.
 type ScreenshotRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)

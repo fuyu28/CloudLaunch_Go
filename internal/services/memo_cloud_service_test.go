@@ -75,6 +75,30 @@ func (repository fakeMemoCloudMemoRepository) DeleteMemo(ctx context.Context, me
 	return nil
 }
 
+type fakeCloudObjectStore struct {
+	listObjects    []storage.ObjectInfo
+	uploadedKeys   []string
+	downloadedKeys []string
+	downloadData   []byte
+}
+
+func (f *fakeCloudObjectStore) ListObjects(_ context.Context, _ storage.S3Config, _ credentials.Credential, _ string) ([]storage.ObjectInfo, error) {
+	return f.listObjects, nil
+}
+
+func (f *fakeCloudObjectStore) UploadBytes(_ context.Context, _ storage.S3Config, _ credentials.Credential, key string, _ []byte, _ string) error {
+	f.uploadedKeys = append(f.uploadedKeys, key)
+	return nil
+}
+
+func (f *fakeCloudObjectStore) DownloadObject(_ context.Context, _ storage.S3Config, _ credentials.Credential, key string) ([]byte, error) {
+	f.downloadedKeys = append(f.downloadedKeys, key)
+	if f.downloadData != nil {
+		return f.downloadData, nil
+	}
+	return []byte("content"), nil
+}
+
 func TestMemoCloudServiceGetCloudMemosUsesObjectStorePort(t *testing.T) {
 	t.Parallel()
 
@@ -140,7 +164,7 @@ func TestMemoCloudServiceUploadMemoToCloudUsesObjectStorePort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if objectStore.uploadedKey == "" {
+	if len(objectStore.uploadedKeys) == 0 {
 		t.Fatal("expected upload key to be recorded")
 	}
 }

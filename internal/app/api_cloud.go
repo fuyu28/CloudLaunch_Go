@@ -252,78 +252,6 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 	return result.OkResult(CloudFileDetailsResult{Exists: len(files) > 0, TotalSize: total, Files: files})
 }
 
-// GetCloudSaveHash はクラウド上のセーブデータハッシュを取得する。
-func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHashMetadata] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		app.Logger.Warn("ゲームIDが不正です", "operation", "GetCloudSaveHash", "gameId", gameID)
-		return result.ErrorResult[*storage.SaveHashMetadata]("ゲームIDが不正です", "gameID is empty")
-	}
-	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[*storage.SaveHashMetadata](app, "取得に失敗しました", error, "operation", "GetCloudSaveHash.getDefaultS3Client", "gameId", trimmed)
-	}
-	key := createSaveHashPath(trimmed)
-	metadata, error := storage.LoadSaveHash(ctx, client, bucket, key)
-	if error != nil {
-		if storage.IsNotFoundError(error) {
-			return result.OkResult[*storage.SaveHashMetadata](nil)
-		}
-		return errorResultWithLog[*storage.SaveHashMetadata](app, "取得に失敗しました", error, "operation", "GetCloudSaveHash.loadSaveHash", "key", key)
-	}
-	return result.OkResult(metadata)
-}
-
-func resolveSaveHashUpdatedAt(raw string, now func() time.Time) (time.Time, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return now(), nil
-	}
-
-	updatedAt, err := time.Parse(time.RFC3339Nano, trimmed)
-	if err == nil {
-		return updatedAt, nil
-	}
-
-	updatedAt, fallbackErr := time.Parse(time.RFC3339, trimmed)
-	if fallbackErr == nil {
-		return updatedAt, nil
-	}
-
-	return time.Time{}, err
-}
-
-// SaveCloudSaveHash はクラウドにセーブデータハッシュを保存する。
-func (app *App) SaveCloudSaveHash(gameID string, hash string, updatedAtRaw string) result.ApiResult[bool] {
-	trimmed := strings.TrimSpace(gameID)
-	trimmedHash := strings.TrimSpace(hash)
-	if trimmed == "" || trimmedHash == "" {
-		app.Logger.Warn("入力が不正です", "operation", "SaveCloudSaveHash", "gameId", gameID)
-		return result.ErrorResult[bool]("入力が不正です", "gameID or hash is empty")
-	}
-
-	updatedAt, err := resolveSaveHashUpdatedAt(updatedAtRaw, time.Now)
-	if err != nil {
-		app.Logger.Warn("日時の形式が不正です", "operation", "SaveCloudSaveHash", "updatedAt", updatedAtRaw)
-		return result.ErrorResult[bool]("入力が不正です", "updatedAt must be RFC3339")
-	}
-	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.getDefaultS3Client", "gameId", trimmed)
-	}
-	key := createSaveHashPath(trimmed)
-	metadata := storage.SaveHashMetadata{
-		Hash:      trimmedHash,
-		UpdatedAt: updatedAt,
-	}
-	if error := storage.SaveSaveHash(ctx, client, bucket, key, metadata); error != nil {
-		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.saveSaveHash", "key", key)
-	}
-	return result.OkResult(true)
-}
-
 // DownloadSaveData はクラウドからダウンロードする。
 func (app *App) DownloadSaveData(localPath string, remotePath string) result.ApiResult[bool] {
 	ctx := app.context()
@@ -458,10 +386,6 @@ func flattenDirectoryBuilders(nodes map[string]*directoryNodeBuilder) []CloudDir
 
 func createGamePrefix(gameID string) string {
 	return "games/" + strings.TrimSpace(gameID) + "/"
-}
-
-func createSaveHashPath(gameID string) string {
-	return "games/" + strings.TrimSpace(gameID) + "/save_hash.json"
 }
 
 func detectImageMime(path string) string {
