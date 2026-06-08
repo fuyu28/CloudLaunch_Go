@@ -149,7 +149,6 @@ export type WindowApi = {
     updatePlayStatus: (
       gameId: string,
       playStatus: PlayStatus,
-      clearedAt?: Date,
     ) => Promise<ApiResult<GameType>>;
     createSession: (
       duration: number,
@@ -499,7 +498,6 @@ export const createWailsBridge = (): WindowApi => {
           ImagePath: game.imagePath ?? null,
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
-          PlayStatus: game.playStatus ?? "unplayed",
           ClearedAt: null,
           CurrentRouteID: null,
         };
@@ -514,20 +512,20 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      updatePlayStatus: async (gameId, playStatus, clearedAt) => {
+      updatePlayStatus: async (gameId, playStatus) => {
         const current = await GetGameByID(gameId);
         if (!current.success || !current.data) {
           return { success: false, message: current.error?.message ?? "ゲーム取得に失敗しました" };
         }
         const game = current.data as GameType;
+        const clearedAt = playStatus === "played" ? new Date() : null;
         const updatePayload = {
           Title: game.title,
           Publisher: game.publisher,
           ImagePath: game.imagePath ?? null,
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
-          PlayStatus: playStatus,
-          ClearedAt: clearedAt ?? null,
+          ClearedAt: clearedAt,
           CurrentRouteID: game.currentRouteId ?? null,
         };
         const result = await UpdateGame(gameId, updatePayload);

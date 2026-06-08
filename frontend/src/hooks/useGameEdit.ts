@@ -91,14 +91,13 @@ export function useGameEdit(
   // 編集データをメモ化
   const editData = useMemo(() => {
     if (!game) return undefined;
-    const { title, publisher, imagePath, exePath, saveFolderPath, playStatus } = game;
+    const { title, publisher, imagePath, exePath, saveFolderPath } = game;
     return {
       title,
       publisher,
       imagePath,
       exePath: exePath === UNCONFIGURED_EXE_PATH ? "" : exePath,
       saveFolderPath,
-      playStatus,
     };
   }, [game]);
 

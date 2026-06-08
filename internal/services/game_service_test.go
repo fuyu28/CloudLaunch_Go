@@ -237,7 +237,6 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 		Title:          " New Title ",
 		Publisher:      " New Publisher ",
 		ExePath:        " /games/new.exe ",
-		PlayStatus:     models.PlayStatusPlayed,
 		ClearedAt:      &clearedAt,
 		CurrentRouteID: &currentRouteID,
 	})
@@ -251,8 +250,7 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 	if updatedGame.TotalPlayTime != 360 || updatedGame.LastPlayed == nil || !updatedGame.LastPlayed.Equal(lastPlayed) {
 		t.Fatalf("expected play totals to be preserved, got %#v", updatedGame)
 	}
-	if updatedGame.PlayStatus != models.PlayStatusPlayed ||
-		updatedGame.ClearedAt == nil ||
+	if updatedGame.ClearedAt == nil ||
 		!updatedGame.ClearedAt.Equal(clearedAt) ||
 		updatedGame.CurrentRouteID == nil ||
 		*updatedGame.CurrentRouteID != "chapter-3" {

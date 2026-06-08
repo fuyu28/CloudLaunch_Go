@@ -41,7 +41,6 @@ const initialValues: InputGameData = {
   saveFolderPath: "",
   exePath: "",
   imagePath: "",
-  playStatus: "unplayed",
 };
 
 const modeMap: Record<string, string> = {

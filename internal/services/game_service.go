@@ -106,9 +106,6 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.ImagePath = input.ImagePath
 	current.ExePath = strings.TrimSpace(input.ExePath)
 	current.SaveFolderPath = input.SaveFolderPath
-	if input.PlayStatus != "" {
-		current.PlayStatus = input.PlayStatus
-	}
 	current.ClearedAt = input.ClearedAt
 	current.CurrentRouteID = input.CurrentRouteID
 
@@ -180,7 +177,6 @@ type GameUpdateInput struct {
 	ImagePath      *string
 	ExePath        string
 	SaveFolderPath *string
-	PlayStatus     models.PlayStatus
 	ClearedAt      *time.Time
 	CurrentRouteID *string
 }

@@ -1,6 +1,6 @@
 # CloudLaunch_Go Clean Architecture 進捗状況
 
-最終更新: 2026-06-07（CloudSyncService のファイル分割を実施）
+最終更新: 2026-06-08（playStatus を clearedAt / lastPlayed から導出する形に移行）
 
 ## 概要
 
@@ -242,9 +242,24 @@ interface 化済み service:
 
 要するに、現在の移行は「`app` 層からの direct DB 依存除去」「厚い adapter の service 移管」「`services` からの `ApiResult` 除去」「DB 整理（Upload 削除・Chapter→Route 再設計）」「CloudSyncService 主要失敗系テスト追加と責務分割」「`internal/app` adapter テスト強化」「Screenshot capture の injectable 化」「infrastructure パッケージの物理再配置」まで完了した。
 
+## 状態モデルの整合（2026-06-08 完了）
+
+`playStatus` を DB カラムから削除し、`clearedAt` / `lastPlayed` から導出するモデルに移行した。
+
+導出ルール（`models.ComputePlayStatus`）:
+- `clearedAt != nil` → `"played"`（クリア済み）
+- `clearedAt == nil && lastPlayed != nil` → `"playing"`（プレイ中）
+- `clearedAt == nil && lastPlayed == nil` → `"unplayed"`（未プレイ）
+
+変更範囲:
+- DB migration `0006_remove_play_status.sql`（テーブル再作成、CHECK 制約・インデックス削除）
+- `models.ComputePlayStatus()` を追加、`scanGame` で読み取り時に自動セット
+- `ListGames` フィルタを `clearedAt`・`lastPlayed` の IS NULL / IS NOT NULL 条件に変更
+- `GameUpdateInput` から `PlayStatus` フィールドを除去
+- フロントエンド: ステータス変更 → `updatePlayStatus` → `clearedAt` を set/clear する形に変更
+
 ## 次の優先事項
 
 1. `CloudSyncService`: storage adapter / transform / image を別ファイルへ切り出し済み。残るオーケストレーション中核（`sync` / `syncSingleGame` 周辺）のさらなる整理は今後の余地
 2. `internal/models` の `domain/` 相当への再配置（現時点では優先度低）
 3. DB 実装を使う統合テストの整備
-4. `Game.playStatus` / `lastPlayed` / `clearedAt` の意味整合（状態モデルの定義）

@@ -27,7 +27,7 @@ func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentRouteId
+		       totalPlayTime, lastPlayed, clearedAt, currentRouteId
 		FROM "Game" WHERE id = ?
 	`, gameID)
 
@@ -50,7 +50,7 @@ func (repository *Repository) GetGameByExePath(ctx context.Context, exePath stri
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentRouteId
+		       totalPlayTime, lastPlayed, clearedAt, currentRouteId
 		FROM "Game" WHERE lower(exePath) = lower(?)
 	`, trimmed)
 
@@ -76,7 +76,7 @@ func (repository *Repository) ListGames(
 	queryBuilder.WriteString(`
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentRouteId
+		       totalPlayTime, lastPlayed, clearedAt, currentRouteId
 		FROM "Game"
 	`)
 
@@ -87,9 +87,13 @@ func (repository *Repository) ListGames(
 		pattern := fmt.Sprintf("%%%s%%", searchText)
 		args = append(args, pattern, pattern)
 	}
-	if filter != "" {
-		whereClauses = append(whereClauses, "playStatus = ?")
-		args = append(args, filter)
+	switch filter {
+	case models.PlayStatusPlayed:
+		whereClauses = append(whereClauses, "clearedAt IS NOT NULL")
+	case models.PlayStatusPlaying:
+		whereClauses = append(whereClauses, "lastPlayed IS NOT NULL AND clearedAt IS NULL")
+	case models.PlayStatusUnplayed:
+		whereClauses = append(whereClauses, "lastPlayed IS NULL AND clearedAt IS NULL")
 	}
 	if len(whereClauses) > 0 {
 		queryBuilder.WriteString(" WHERE ")
@@ -129,11 +133,11 @@ func (repository *Repository) ListGames(
 func (repository *Repository) CreateGame(ctx context.Context, game models.Game) (*models.Game, error) {
 	_, error := repository.connection.ExecContext(ctx, `
 		INSERT INTO "Game" (title, publisher, imagePath, exePath, saveFolderPath, localSaveHash, localSaveHashUpdatedAt,
-			playStatus, totalPlayTime, lastPlayed, clearedAt, currentRouteId)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			totalPlayTime, lastPlayed, clearedAt, currentRouteId)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
 		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentRouteID)
+		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentRouteID)
 	if error != nil {
 		return nil, error
 	}
@@ -146,11 +150,11 @@ func (repository *Repository) UpdateGame(ctx context.Context, game models.Game) 
 	_, error := repository.connection.ExecContext(ctx, `
 		UPDATE "Game" SET title = ?, publisher = ?, imagePath = ?, exePath = ?, saveFolderPath = ?,
 			localSaveHash = ?, localSaveHashUpdatedAt = ?,
-			playStatus = ?, totalPlayTime = ?, lastPlayed = ?, clearedAt = ?, currentRouteId = ?
+			totalPlayTime = ?, lastPlayed = ?, clearedAt = ?, currentRouteId = ?
 		WHERE id = ?
 	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
 		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentRouteID, game.ID)
+		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentRouteID, game.ID)
 	if error != nil {
 		return nil, error
 	}
@@ -164,8 +168,8 @@ func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Ga
 		INSERT INTO "Game" (
 			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 			localSaveHash, localSaveHashUpdatedAt,
-			playStatus, totalPlayTime, lastPlayed, clearedAt, currentRouteId
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			totalPlayTime, lastPlayed, clearedAt, currentRouteId
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			title = excluded.title,
 			publisher = excluded.publisher,
@@ -176,14 +180,13 @@ func (repository *Repository) UpsertGameSync(ctx context.Context, game models.Ga
 			updatedAt = excluded.updatedAt,
 			localSaveHash = excluded.localSaveHash,
 			localSaveHashUpdatedAt = excluded.localSaveHashUpdatedAt,
-			playStatus = excluded.playStatus,
 			totalPlayTime = excluded.totalPlayTime,
 			lastPlayed = excluded.lastPlayed,
 			clearedAt = excluded.clearedAt,
 			currentRouteId = excluded.currentRouteId
 	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
 		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.PlayStatus, game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentRouteID)
+		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.CurrentRouteID)
 	return error
 }
 
@@ -648,7 +651,6 @@ func scanGame(row scanner) (*models.Game, error) {
 		&game.UpdatedAt,
 		&localSaveHash,
 		&localSaveHashUpdatedAt,
-		&game.PlayStatus,
 		&game.TotalPlayTime,
 		&lastPlayed,
 		&clearedAt,
@@ -665,6 +667,7 @@ func scanGame(row scanner) (*models.Game, error) {
 	game.LastPlayed = nullTimePtr(lastPlayed)
 	game.ClearedAt = nullTimePtr(clearedAt)
 	game.CurrentRouteID = nullStringPtr(currentRouteId)
+	game.PlayStatus = models.ComputePlayStatus(game.ClearedAt, game.LastPlayed)
 
 	return &game, nil
 }
@@ -737,7 +740,7 @@ func (repository *Repository) findLatestGame(ctx context.Context, title string, 
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
 		       localSaveHash, localSaveHashUpdatedAt,
-		       playStatus, totalPlayTime, lastPlayed, clearedAt, currentRouteId
+		       totalPlayTime, lastPlayed, clearedAt, currentRouteId
 		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
 	`, title, exePath)
 	return scanGame(row)

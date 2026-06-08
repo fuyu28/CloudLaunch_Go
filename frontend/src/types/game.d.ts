@@ -23,7 +23,6 @@ export type InputGameData = {
   imagePath?: string;
   exePath: string;
   saveFolderPath?: string;
-  playStatus: PlayStatus;
 };
 
 export type GameImport = {
