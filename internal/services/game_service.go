@@ -108,6 +108,10 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.SaveFolderPath = input.SaveFolderPath
 	current.ClearedAt = input.ClearedAt
 	current.CurrentRouteID = input.CurrentRouteID
+	current.PlayStatus = input.PlayStatus
+	if input.ClearedAt != nil {
+		current.PlayStatus = domain.PlayStatusPlayed
+	}
 
 	updated, error := service.repository.UpdateGame(ctx, *current)
 	if error != nil {
@@ -177,6 +181,7 @@ type GameUpdateInput struct {
 	ImagePath      *string
 	ExePath        string
 	SaveFolderPath *string
+	PlayStatus     domain.PlayStatus
 	ClearedAt      *time.Time
 	CurrentRouteID *string
 }

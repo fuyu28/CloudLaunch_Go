@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/memo"
 )
 
 type fakeMemoRepository struct {

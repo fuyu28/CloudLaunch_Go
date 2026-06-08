@@ -12,18 +12,6 @@ const (
 	PlayStatusPlayed   PlayStatus = "played"
 )
 
-// ComputePlayStatus は clearedAt と lastPlayed からプレイ状態を導出する。
-// clearedAt != nil → "played", lastPlayed != nil → "playing", それ以外 → "unplayed"。
-func ComputePlayStatus(clearedAt *time.Time, lastPlayed *time.Time) PlayStatus {
-	if clearedAt != nil {
-		return PlayStatusPlayed
-	}
-	if lastPlayed != nil {
-		return PlayStatusPlaying
-	}
-	return PlayStatusUnplayed
-}
-
 // Game はゲーム基本情報を表す。
 type Game struct {
 	ID                     string     `json:"id"`

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 )
 
 func composeCloudGameMetadata(game domain.Game) storage.CloudGameMetadata {

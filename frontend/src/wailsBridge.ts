@@ -146,10 +146,7 @@ export type WindowApi = {
     createGame: (game: InputGameData) => Promise<ApiResult<void>>;
     updateGame: (id: string, game: InputGameData) => Promise<ApiResult<void>>;
     deleteGame: (id: string) => Promise<ApiResult<void>>;
-    updatePlayStatus: (
-      gameId: string,
-      playStatus: PlayStatus,
-    ) => Promise<ApiResult<GameType>>;
+    updatePlayStatus: (gameId: string, playStatus: PlayStatus) => Promise<ApiResult<GameType>>;
     createSession: (
       duration: number,
       gameId: string,
@@ -525,6 +522,7 @@ export const createWailsBridge = (): WindowApi => {
           ImagePath: game.imagePath ?? null,
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
+          PlayStatus: playStatus,
           ClearedAt: clearedAt,
           CurrentRouteID: game.currentRouteId ?? null,
         };

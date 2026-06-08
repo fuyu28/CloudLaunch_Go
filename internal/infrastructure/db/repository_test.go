@@ -27,24 +27,18 @@ func newGame(title, exePath string) domain.Game {
 	return domain.Game{Title: title, Publisher: "Pub", ExePath: exePath}
 }
 
-// --- playStatus 導出 ---
+// --- playStatus 保存・読み取り ---
 
-func TestRepositoryPlayStatusDerivedOnRead(t *testing.T) {
+func TestRepositoryPlayStatusStoredAndRead(t *testing.T) {
 	t.Parallel()
-
-	lastPlayed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	clearedAt := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 
 	cases := []struct {
 		name       string
-		lastPlayed *time.Time
-		clearedAt  *time.Time
-		want       domain.PlayStatus
+		playStatus domain.PlayStatus
 	}{
-		{"unplayed when both nil", nil, nil, domain.PlayStatusUnplayed},
-		{"playing when lastPlayed set", &lastPlayed, nil, domain.PlayStatusPlaying},
-		{"played when clearedAt set", nil, &clearedAt, domain.PlayStatusPlayed},
-		{"played takes priority over lastPlayed", &lastPlayed, &clearedAt, domain.PlayStatusPlayed},
+		{"unplayed", domain.PlayStatusUnplayed},
+		{"playing", domain.PlayStatusPlaying},
+		{"played", domain.PlayStatusPlayed},
 	}
 
 	for _, tc := range cases {
@@ -54,8 +48,7 @@ func TestRepositoryPlayStatusDerivedOnRead(t *testing.T) {
 			ctx := context.Background()
 
 			g := newGame("Game", "/game.exe")
-			g.LastPlayed = tc.lastPlayed
-			g.ClearedAt = tc.clearedAt
+			g.PlayStatus = tc.playStatus
 
 			created, err := repo.CreateGame(ctx, g)
 			if err != nil {
@@ -66,8 +59,8 @@ func TestRepositoryPlayStatusDerivedOnRead(t *testing.T) {
 			if err != nil || got == nil {
 				t.Fatalf("GetGameByID: %v", err)
 			}
-			if got.PlayStatus != tc.want {
-				t.Errorf("PlayStatus = %q, want %q", got.PlayStatus, tc.want)
+			if got.PlayStatus != tc.playStatus {
+				t.Errorf("PlayStatus = %q, want %q", got.PlayStatus, tc.playStatus)
 			}
 		})
 	}
@@ -81,12 +74,9 @@ func TestRepositoryListGamesFilterByPlayStatus(t *testing.T) {
 	ctx := context.Background()
 	repo := newTestRepo(t)
 
-	lastPlayed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	clearedAt := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-
-	unplayed, _ := repo.CreateGame(ctx, newGame("Unplayed", "/a.exe"))
-	playing, _ := repo.CreateGame(ctx, domain.Game{Title: "Playing", Publisher: "Pub", ExePath: "/b.exe", LastPlayed: &lastPlayed})
-	played, _ := repo.CreateGame(ctx, domain.Game{Title: "Played", Publisher: "Pub", ExePath: "/c.exe", ClearedAt: &clearedAt})
+	unplayed, _ := repo.CreateGame(ctx, domain.Game{Title: "Unplayed", Publisher: "Pub", ExePath: "/a.exe", PlayStatus: domain.PlayStatusUnplayed})
+	playing, _ := repo.CreateGame(ctx, domain.Game{Title: "Playing", Publisher: "Pub", ExePath: "/b.exe", PlayStatus: domain.PlayStatusPlaying})
+	played, _ := repo.CreateGame(ctx, domain.Game{Title: "Played", Publisher: "Pub", ExePath: "/c.exe", PlayStatus: domain.PlayStatusPlayed})
 
 	cases := []struct {
 		name    string

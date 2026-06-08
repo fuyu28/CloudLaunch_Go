@@ -20,10 +20,13 @@ CREATE TABLE "Game_new" (
   CHECK ("totalPlayTime" >= 0)
 );
 
+-- playStatus = 'played' だが clearedAt が未設定の行は updatedAt で補完する
 INSERT INTO "Game_new" (id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
   localSaveHash, localSaveHashUpdatedAt, totalPlayTime, lastPlayed, clearedAt, currentRouteId)
 SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-  localSaveHash, localSaveHashUpdatedAt, totalPlayTime, lastPlayed, clearedAt, currentRouteId
+  localSaveHash, localSaveHashUpdatedAt, totalPlayTime, lastPlayed,
+  CASE WHEN playStatus = 'played' AND clearedAt IS NULL THEN updatedAt ELSE clearedAt END,
+  currentRouteId
 FROM "Game";
 
 DROP TABLE "Game";

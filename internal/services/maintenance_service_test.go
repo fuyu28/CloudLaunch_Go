@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/infrastructure/db"
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/infrastructure/db"
 )
 
 type maintenanceTestRuntime struct {
