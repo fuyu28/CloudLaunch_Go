@@ -101,6 +101,11 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 		return nil, newServiceError("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
+	if input.PlayStatus != "" && !domain.IsValidPlayStatus(input.PlayStatus) {
+		service.logger.Warn("playStatus が不正です", "playStatus", input.PlayStatus)
+		return nil, newServiceError("playStatus が不正です", string(input.PlayStatus))
+	}
+
 	current.Title = strings.TrimSpace(input.Title)
 	current.Publisher = strings.TrimSpace(input.Publisher)
 	current.ImagePath = input.ImagePath
@@ -108,7 +113,9 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.SaveFolderPath = input.SaveFolderPath
 	current.ClearedAt = input.ClearedAt
 	current.CurrentRouteID = input.CurrentRouteID
-	current.PlayStatus = input.PlayStatus
+	if input.PlayStatus != "" {
+		current.PlayStatus = input.PlayStatus
+	}
 	if input.ClearedAt != nil {
 		current.PlayStatus = domain.PlayStatusPlayed
 	}

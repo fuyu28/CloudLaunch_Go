@@ -244,19 +244,21 @@ interface 化済み service:
 
 ## 状態モデルの整合（2026-06-08 完了）
 
-`playStatus` を DB カラムから削除し、`clearedAt` / `lastPlayed` から導出するモデルに移行した。
+`playStatus` は DB カラムとして手動管理する方式を採用している。
+ユーザーが任意のステータスに変更できるが、`clearedAt` がセットされた場合は
+サービス層で強制的に `"played"` にする（唯一の自動連動ルール）。
 
-導出ルール（`models.ComputePlayStatus`）:
-- `clearedAt != nil` → `"played"`（クリア済み）
-- `clearedAt == nil && lastPlayed != nil` → `"playing"`（プレイ中）
-- `clearedAt == nil && lastPlayed == nil` → `"unplayed"`（未プレイ）
+ルール:
+- `clearedAt != nil` → サービス層で `playStatus = "played"` に強制
+- それ以外は `playStatus` をそのまま保存（`"unplayed"` / `"playing"` / `"played"` の手動選択）
 
 変更範囲:
-- DB migration `0006_remove_play_status.sql`（テーブル再作成、CHECK 制約・インデックス削除）
-- `models.ComputePlayStatus()` を追加、`scanGame` で読み取り時に自動セット
-- `ListGames` フィルタを `clearedAt`・`lastPlayed` の IS NULL / IS NOT NULL 条件に変更
-- `GameUpdateInput` から `PlayStatus` フィールドを除去
-- フロントエンド: ステータス変更 → `updatePlayStatus` → `clearedAt` を set/clear する形に変更
+- DB migration `0006_remove_play_status.sql`（`playStatus` 列削除、`clearedAt` バックフィル）
+- DB migration `0007_restore_play_status.sql`（`playStatus` 列復元、CHECK 制約・インデックス追加）
+- `domain.IsValidPlayStatus()` でサービス層バリデーション
+- `ListGames` フィルタを `playStatus = ?` に変更
+- `GameUpdateInput` に `PlayStatus` フィールドを復元
+- フロントエンド: `updatePlayStatus` → `PlayStatus` + `clearedAt` をペイロードに含める
 
 ## 次の優先事項
 

@@ -12,6 +12,11 @@ const (
 	PlayStatusPlayed   PlayStatus = "played"
 )
 
+// IsValidPlayStatus は有効なプレイ状態かを返す。
+func IsValidPlayStatus(s PlayStatus) bool {
+	return s == PlayStatusUnplayed || s == PlayStatusPlaying || s == PlayStatusPlayed
+}
+
 // Game はゲーム基本情報を表す。
 type Game struct {
 	ID                     string     `json:"id"`

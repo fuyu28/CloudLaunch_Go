@@ -24,7 +24,7 @@ func newTestRepo(t *testing.T) *db.Repository {
 }
 
 func newGame(title, exePath string) domain.Game {
-	return domain.Game{Title: title, Publisher: "Pub", ExePath: exePath}
+	return domain.Game{Title: title, Publisher: "Pub", ExePath: exePath, PlayStatus: domain.PlayStatusUnplayed}
 }
 
 // --- playStatus 保存・読み取り ---
