@@ -1,10 +1,10 @@
--- playStatus 列を手動管理方式として復元する。
+-- Game テーブルを再作成して以下を適用する:
+-- 1. playStatus に CHECK 制約とインデックスを追加
+-- 2. playStatus = 'played' かつ clearedAt が未設定の行は updatedAt で補完する
 --
 -- 【既知の制限】
--- 0006 で playStatus 列を削除済みのため、元の値を完全には復元できない。
--- 旧DBで playStatus = 'playing' かつ lastPlayed IS NULL だった行（手動設定状態）は
--- 復元不能であり、本マイグレーション適用後は 'unplayed' になる。
--- アプリ未配布のため、本制限は許容する。
+-- 元の playStatus が 'playing' かつ lastPlayed IS NULL の場合（手動設定状態）は
+-- 復元不能なため 'unplayed' になる。アプリ未配布のため許容する。
 
 CREATE TABLE "Game_new" (
   "id" TEXT NOT NULL PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -33,10 +33,10 @@ CREATE TABLE "Game_new" (
 INSERT INTO "Game_new" (id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
   localSaveHash, localSaveHashUpdatedAt, totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId)
 SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-  localSaveHash, localSaveHashUpdatedAt, totalPlayTime, lastPlayed, clearedAt,
+  localSaveHash, localSaveHashUpdatedAt, totalPlayTime, lastPlayed,
+  CASE WHEN playStatus = 'played' AND clearedAt IS NULL THEN updatedAt ELSE clearedAt END,
   CASE
-    WHEN clearedAt IS NOT NULL THEN 'played'
-    WHEN lastPlayed IS NOT NULL THEN 'playing'
+    WHEN playStatus IN ('unplayed', 'playing', 'played') THEN playStatus
     ELSE 'unplayed'
   END,
   currentRouteId
