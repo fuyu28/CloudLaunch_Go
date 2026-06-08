@@ -1,0 +1,6 @@
+ALTER TABLE "Game" ADD COLUMN "localSyncHead" TEXT;
+
+CREATE TABLE IF NOT EXISTS "Settings" (
+  "key"   TEXT NOT NULL PRIMARY KEY,
+  "value" TEXT NOT NULL
+);
