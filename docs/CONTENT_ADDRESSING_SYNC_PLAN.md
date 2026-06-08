@@ -213,9 +213,13 @@ buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName) (MetaSnapsho
 **`internal/services/content_sync_service.go`**（既存 `CloudSyncService` を置き換え）
 
 ```go
+// ProgressFunc はセーブファイルの転送進捗を報告するコールバック。
+// current: 完了件数, total: 総件数（セーブファイルのみカウント）
+type ProgressFunc func(current, total int)
+
 func (s *ContentSyncService) Status(ctx, gameId) (domain.SyncStatusDetail, error)
-func (s *ContentSyncService) Push(ctx, gameId) error
-func (s *ContentSyncService) Pull(ctx, gameId) error
+func (s *ContentSyncService) Push(ctx, gameId string, onProgress ProgressFunc) error
+func (s *ContentSyncService) Pull(ctx, gameId string, onProgress ProgressFunc) error
 func (s *ContentSyncService) ResolveConflict(ctx, gameId string, useLocal bool) error
 func (s *ContentSyncService) DeleteFromCloud(ctx, gameId) error
 ```
@@ -228,17 +232,19 @@ func (s *ContentSyncService) DeleteFromCloud(ctx, gameId) error
 
 **Push の流れ**
 1. ゲーム情報・セッション・セーブフォルダをハッシュ化
-2. 変更オブジェクトのみ S3 へアップロード（`BlobExists` でスキップ）
-3. MetaSnapshot を生成してオブジェクトとして保存
-4. `games/{gameId}/HEAD` を新 hash で更新
-5. SQLite の `localSyncHead` を更新
+2. 新規セーブファイル数を集計して `onProgress(0, total)` を呼ぶ
+3. セーブファイルを1件ずつアップロードし `onProgress(current, total)` を呼ぶ
+4. game.json / sessions.json / SaveSnapshot / MetaSnapshot をアップロード
+5. `games/{gameId}/HEAD` を新 hash で更新
+6. SQLite の `localSyncHead` を更新
 
 **Pull の流れ**
 1. remote HEAD を取得
 2. MetaSnapshot を取得・デコード
-3. 差分オブジェクトをダウンロード
-4. ローカルのゲーム情報・セッション・セーブフォルダを上書き
-5. SQLite の `localSyncHead` を更新
+3. SaveSnapshot を取得し必要なセーブファイル数を集計して `onProgress(0, total)` を呼ぶ
+4. セーブファイルを1件ずつダウンロードし `onProgress(current, total)` を呼ぶ
+5. ローカルのゲーム情報・セッション・セーブフォルダを上書き
+6. SQLite の `localSyncHead` を更新
 
 **DeleteFromCloud の流れ**
 1. S3 の `games/{gameId}/` を一括削除
@@ -274,8 +280,33 @@ ResolveConflict(gameId string, useLocal bool) ApiResult[any]
 DeleteGameFromCloud(gameId string) ApiResult[any]
 ```
 
+`PushSync` / `PullSync` は `ProgressFunc` のコールバック内で `runtime.EventsEmit` を呼び、
+進捗をフロントエンドにストリームする。
+
+```go
+// App 層でのコールバック組み立てイメージ
+onProgress := func(current, total int) {
+    runtime.EventsEmit(ctx, "sync:progress", map[string]any{
+        "operation": "push", // or "pull"
+        "current":   current,
+        "total":     total,
+    })
+}
+app.ContentSyncService.Push(ctx, gameId, onProgress)
+```
+
 **`frontend/src/wailsBridge.ts`**
 - 上記 5 メソッドを `window.api` に追加
+- `window.api.onSyncProgress(callback)` — `"sync:progress"` イベントをサブスクライブ
+
+**イベントペイロード**
+```ts
+type SyncProgressEvent = {
+  operation: "push" | "pull"
+  current: number   // 完了したセーブファイル数
+  total: number     // 転送対象セーブファイルの総数
+}
+```
 
 **ゲーム削除 UI**
 - **表示のみ削除** — ローカル DB からのみ削除。S3 は残す。
