@@ -24,7 +24,34 @@ import (
 
 const maxRemoteImageBytes = 10 << 20
 
-var remoteImageHTTPClient = &http.Client{Timeout: 15 * time.Second}
+// remoteImageHTTPClient は DialContext でIPを検証することで DNS rebinding を防ぐ。
+var remoteImageHTTPClient = newSSRFSafeHTTPClient()
+
+func newSSRFSafeHTTPClient() *http.Client {
+	baseDialer := &net.Dialer{Timeout: 10 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+			if err != nil {
+				return nil, err
+			}
+			for _, ip := range addrs {
+				if isPrivateOrLocalAddr(ip) {
+					return nil, fmt.Errorf("private or local address is not allowed: %s", ip)
+				}
+			}
+			if len(addrs) == 0 {
+				return nil, fmt.Errorf("no addresses resolved for %s", host)
+			}
+			return baseDialer.DialContext(ctx, network, net.JoinHostPort(addrs[0].String(), port))
+		},
+	}
+	return &http.Client{Timeout: 15 * time.Second, Transport: transport}
+}
 
 func (service *CloudSyncService) downloadCloudImagePath(
 	ctx context.Context,
@@ -208,6 +235,8 @@ func isURL(value string) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
+// validateRemoteImageURL はURLの形式チェックのみ行う。
+// IPアドレスの検証は DialContext で接続直前に行うことで DNS rebinding を防ぐ。
 func validateRemoteImageURL(parsed *url.URL) error {
 	if parsed == nil {
 		return errors.New("url is nil")
@@ -218,18 +247,6 @@ func validateRemoteImageURL(parsed *url.URL) error {
 	}
 	if strings.EqualFold(host, "localhost") {
 		return errors.New("localhost is not allowed")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-	if err != nil {
-		return err
-	}
-	for _, addr := range addrs {
-		if isPrivateOrLocalAddr(addr) {
-			return fmt.Errorf("private or local address is not allowed: %s", addr.String())
-		}
 	}
 	return nil
 }
