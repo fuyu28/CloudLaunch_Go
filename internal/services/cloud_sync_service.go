@@ -14,7 +14,7 @@ import (
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -229,8 +229,8 @@ func (service *CloudSyncService) sync(ctx context.Context, credentialKey string,
 }
 
 type localGameBundle struct {
-	Game     models.Game
-	Sessions []models.PlaySession
+	Game     domain.Game
+	Sessions []domain.PlaySession
 }
 
 type gameSyncAction int
@@ -354,7 +354,7 @@ func (service *CloudSyncService) syncSingleGame(
 			shouldSaveMetadata: true,
 		}, nil
 	case gameSyncActionDownload:
-		var currentLocal *models.Game
+		var currentLocal *domain.Game
 		operation := "sync.createLocalGame"
 		if hasLocal {
 			currentLocal = &local.Game
@@ -393,7 +393,7 @@ func (service *CloudSyncService) syncSingleGame(
 
 type gameSyncState struct {
 	mergedSessions  mergedSessionsResult
-	mergedGame      models.Game
+	mergedGame      domain.Game
 	mergedCloudGame storage.CloudGameMetadata
 }
 
@@ -458,7 +458,7 @@ func (service *CloudSyncService) syncDownloadPath(
 	bucket string,
 	gameID string,
 	state gameSyncState,
-	localGame *models.Game,
+	localGame *domain.Game,
 ) (gameSyncIterationResult, error) {
 	if state.mergedSessions.Changed {
 		if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), state.mergedSessions.Sessions); err != nil {
@@ -489,7 +489,7 @@ func (service *CloudSyncService) syncSkipPath(
 	bucket string,
 	gameID string,
 	state gameSyncState,
-	localGame *models.Game,
+	localGame *domain.Game,
 ) (gameSyncIterationResult, error) {
 	if state.mergedSessions.Changed {
 		if err := service.cloudStorage.SaveSessions(ctx, client, bucket, cloudSessionsKey(gameID), state.mergedSessions.Sessions); err != nil {
@@ -568,7 +568,7 @@ func (service *CloudSyncService) loadLocalGames(ctx context.Context, gameID stri
 		return result, nil
 	}
 
-	games, err := service.repository.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
+	games, err := service.repository.ListGames(ctx, "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +586,7 @@ func (service *CloudSyncService) buildCloudGame(
 	ctx context.Context,
 	client *s3.Client,
 	bucket string,
-	game models.Game,
+	game domain.Game,
 	sessions []storage.CloudSessionRecord,
 	existing *storage.CloudGameMetadata,
 ) (storage.CloudGameMetadata, int, error) {
@@ -620,7 +620,7 @@ func (service *CloudSyncService) applyCloudGame(
 	client *s3.Client,
 	bucket string,
 	cloud storage.CloudGameMetadata,
-	local *models.Game,
+	local *domain.Game,
 	cloudSessions []storage.CloudSessionRecord,
 ) (int, error) {
 	imagePath, downloadedImages, err := service.downloadCloudImagePath(ctx, client, bucket, cloud)
@@ -642,7 +642,7 @@ func (service *CloudSyncService) applyCloudGame(
 func (service *CloudSyncService) upsertSyncedLocalGame(
 	ctx context.Context,
 	cloud storage.CloudGameMetadata,
-	local *models.Game,
+	local *domain.Game,
 	imagePath *string,
 ) error {
 	game := composeSyncedLocalGame(cloud, local, imagePath)
@@ -674,7 +674,7 @@ func (service *CloudSyncService) upsertMergedLocalSessions(
 	var lastPlayed *time.Time
 	var total int64
 	for _, session := range sessions {
-		playSession := models.PlaySession{
+		playSession := domain.PlaySession{
 			ID:          session.ID,
 			GameID:      gameID,
 			PlayedAt:    session.PlayedAt,

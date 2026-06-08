@@ -8,31 +8,31 @@ import (
 	"testing"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type fakeGameRepository struct {
-	listGamesFn      func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
-	getGameByIDFn    func(ctx context.Context, gameID string) (*models.Game, error)
-	createGameFn     func(ctx context.Context, game models.Game) (*models.Game, error)
-	updateGameFn     func(ctx context.Context, game models.Game) (*models.Game, error)
+	listGamesFn      func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	getGameByIDFn    func(ctx context.Context, gameID string) (*domain.Game, error)
+	createGameFn     func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	updateGameFn     func(ctx context.Context, game domain.Game) (*domain.Game, error)
 	deleteGameFn     func(ctx context.Context, gameID string) error
 	createRouteCalls int
 }
 
-func (repository fakeGameRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (repository fakeGameRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return repository.listGamesFn(ctx, searchText, filter, sortBy, sortDirection)
 }
 
-func (repository fakeGameRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (repository fakeGameRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return repository.getGameByIDFn(ctx, gameID)
 }
 
-func (repository fakeGameRepository) CreateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (repository fakeGameRepository) CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return repository.createGameFn(ctx, game)
 }
 
-func (repository fakeGameRepository) UpdateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (repository fakeGameRepository) UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return repository.updateGameFn(ctx, game)
 }
 
@@ -40,7 +40,7 @@ func (repository fakeGameRepository) DeleteGame(ctx context.Context, gameID stri
 	return repository.deleteGameFn(ctx, gameID)
 }
 
-func (repository *fakeGameRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
+func (repository *fakeGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
 	repository.createRouteCalls++
 	return &route, nil
 }
@@ -49,21 +49,21 @@ func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
-		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
-			return &models.Game{
+		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
+			return &domain.Game{
 				ID:        "game-1",
 				Title:     game.Title,
 				Publisher: game.Publisher,
 				ExePath:   game.ExePath,
 			}, nil
 		},
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
 			return &game, nil
 		},
 		deleteGameFn: func(ctx context.Context, gameID string) error {
@@ -92,20 +92,20 @@ func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
 func TestGameServiceListGetDeleteUseRepositoryBoundary(t *testing.T) {
 	t.Parallel()
 
-	game := models.Game{ID: "game-1", Title: "Game"}
+	game := domain.Game{ID: "game-1", Title: "Game"}
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{game}, nil
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{game}, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &game, nil
 		},
-		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	listed, err := service.ListGames(context.Background(), " game ", models.PlayStatus(""), "title", "asc")
+	listed, err := service.ListGames(context.Background(), " game ", domain.PlayStatus(""), "title", "asc")
 	if err != nil || len(listed) != 1 || listed[0].ID != "game-1" {
 		t.Fatalf("unexpected list result: %#v", listed)
 	}
@@ -124,16 +124,16 @@ func TestGameServiceUpdateGameHandlesRepositoryError(t *testing.T) {
 	t.Parallel()
 
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, errors.New("db down")
 		},
-		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
 			return nil, nil
 		},
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
 			return nil, nil
 		},
 		deleteGameFn: func(ctx context.Context, gameID string) error {
@@ -159,12 +159,12 @@ func TestGameServiceCreateGameRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		createGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		createGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -183,12 +183,12 @@ func TestGameServiceUpdateGameReturnsNotFoundWhenMissing(t *testing.T) {
 	t.Parallel()
 
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		createGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		createGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -209,24 +209,24 @@ func TestGameServiceUpdateGameTrimsInputAndPreservesPlayTotals(t *testing.T) {
 	lastPlayed := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	clearedAt := lastPlayed.Add(2 * time.Hour)
 	currentRouteID := "chapter-3"
-	var updatedGame models.Game
+	var updatedGame domain.Game
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{
 				ID:            gameID,
 				Title:         "Old",
 				Publisher:     "Old Publisher",
 				ExePath:       "/old/game.exe",
-				PlayStatus:    models.PlayStatusPlaying,
+				PlayStatus:    domain.PlayStatusPlaying,
 				TotalPlayTime: 360,
 				LastPlayed:    &lastPlayed,
 			}, nil
 		},
-		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
 			updatedGame = game
 			return &game, nil
 		},
@@ -263,17 +263,17 @@ func TestGameServiceListGamesTrimsSearchText(t *testing.T) {
 
 	var capturedSearch string
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			capturedSearch = searchText
-			return []models.Game{{ID: "game-1", Title: "Game"}}, nil
+			return []domain.Game{{ID: "game-1", Title: "Game"}}, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		createGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		createGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	_, err := service.ListGames(context.Background(), "  Game  ", models.PlayStatus(""), "title", "asc")
+	_, err := service.ListGames(context.Background(), "  Game  ", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -285,17 +285,17 @@ func TestGameServiceListGamesTrimsSearchText(t *testing.T) {
 func TestGameServiceUpdatePlayTimeStoresLastPlayed(t *testing.T) {
 	t.Parallel()
 
-	var updatedGame models.Game
+	var updatedGame domain.Game
 	lastPlayed := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game"}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
-		createGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
 			updatedGame = game
 			return &game, nil
 		},

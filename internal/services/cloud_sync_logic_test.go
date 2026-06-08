@@ -13,7 +13,7 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -34,7 +34,7 @@ func TestDetermineGameSyncAction(t *testing.T) {
 	}{
 		{
 			name:     "upload when only local exists",
-			local:    localGameBundle{Game: models.Game{UpdatedAt: later}},
+			local:    localGameBundle{Game: domain.Game{UpdatedAt: later}},
 			hasLocal: true,
 			want:     gameSyncActionUpload,
 		},
@@ -46,7 +46,7 @@ func TestDetermineGameSyncAction(t *testing.T) {
 		},
 		{
 			name:     "upload when local is newer",
-			local:    localGameBundle{Game: models.Game{UpdatedAt: later}},
+			local:    localGameBundle{Game: domain.Game{UpdatedAt: later}},
 			hasLocal: true,
 			cloud:    storage.CloudGameMetadata{UpdatedAt: now},
 			hasCloud: true,
@@ -54,7 +54,7 @@ func TestDetermineGameSyncAction(t *testing.T) {
 		},
 		{
 			name:     "download when cloud is newer",
-			local:    localGameBundle{Game: models.Game{UpdatedAt: now}},
+			local:    localGameBundle{Game: domain.Game{UpdatedAt: now}},
 			hasLocal: true,
 			cloud:    storage.CloudGameMetadata{UpdatedAt: later},
 			hasCloud: true,
@@ -62,7 +62,7 @@ func TestDetermineGameSyncAction(t *testing.T) {
 		},
 		{
 			name:     "skip when timestamps are equal",
-			local:    localGameBundle{Game: models.Game{UpdatedAt: now}},
+			local:    localGameBundle{Game: domain.Game{UpdatedAt: now}},
 			hasLocal: true,
 			cloud:    storage.CloudGameMetadata{UpdatedAt: now},
 			hasCloud: true,
@@ -170,21 +170,21 @@ func TestCloudSyncServiceSyncSingleGameSkipKeepsCloudMetadata(t *testing.T) {
 
 	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
 
 	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Game", UpdatedAt: now}
-	local := localGameBundle{Game: models.Game{ID: "game-1", Title: "Game", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", Title: "Game", UpdatedAt: now}}
 
 	iteration, err := service.syncSingleGame(context.Background(), nil, "", "game-1", local, true, cloud, true)
 	if err != nil {
@@ -209,17 +209,17 @@ func TestCloudSyncServiceSyncSingleGameUploadSavesSessions(t *testing.T) {
 	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = cloudStorage
 	local := localGameBundle{
-		Game: models.Game{
+		Game: domain.Game{
 			ID:            "game-1",
 			Title:         "Game",
 			Publisher:     "Publisher",
-			PlayStatus:    models.PlayStatusPlaying,
+			PlayStatus:    domain.PlayStatusPlaying,
 			UpdatedAt:     playedAt.Add(time.Hour),
 			CreatedAt:     playedAt,
 			LastPlayed:    &playedAt,
 			TotalPlayTime: 90,
 		},
-		Sessions: []models.PlaySession{
+		Sessions: []domain.PlaySession{
 			{ID: "session-1", GameID: "game-1", PlayedAt: playedAt, Duration: 30, UpdatedAt: playedAt},
 			{ID: "session-2", GameID: "game-1", PlayedAt: playedAt.Add(time.Hour), Duration: 60, UpdatedAt: playedAt.Add(time.Hour)},
 		},
@@ -255,7 +255,7 @@ func TestCloudSyncServiceSyncSingleGameUploadReturnsSessionSaveError(t *testing.
 	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = cloudStorage
 	local := localGameBundle{
-		Game: models.Game{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: time.Now()},
+		Game: domain.Game{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: time.Now()},
 	}
 
 	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, storage.CloudGameMetadata{}, false)
@@ -282,7 +282,7 @@ func TestCloudSyncServiceSyncSingleGameDownloadAppliesGameAndSessions(t *testing
 		ID:            "game-1",
 		Title:         "Cloud Game",
 		Publisher:     "Cloud Publisher",
-		PlayStatus:    string(models.PlayStatusPlayed),
+		PlayStatus:    string(domain.PlayStatusPlayed),
 		TotalPlayTime: 75,
 		CreatedAt:     playedAt.Add(-24 * time.Hour),
 		UpdatedAt:     playedAt,
@@ -358,7 +358,7 @@ func TestComposeSyncedLocalGamePreservesLocalWindowsSpecificFields(t *testing.T)
 	hashTime := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
 	saveFolder := `C:\Users\fuyu\Saved Games\Game`
 	imagePath := `C:\CloudLaunch\thumbs\game.png`
-	local := &models.Game{
+	local := &domain.Game{
 		ID:                     "game-1",
 		ExePath:                `C:\Games\game.exe`,
 		SaveFolderPath:         &saveFolder,
@@ -369,7 +369,7 @@ func TestComposeSyncedLocalGamePreservesLocalWindowsSpecificFields(t *testing.T)
 		ID:            "game-1",
 		Title:         "Game",
 		Publisher:     "Publisher",
-		PlayStatus:    string(models.PlayStatusPlaying),
+		PlayStatus:    string(domain.PlayStatusPlaying),
 		TotalPlayTime: 120,
 		UpdatedAt:     hashTime.Add(time.Hour),
 	}
@@ -680,9 +680,9 @@ func (fake *fakeCloudSyncStorage) DownloadObject(ctx context.Context, client *s3
 }
 
 type trackingCloudSyncRepository struct {
-	upsertedGame          models.Game
+	upsertedGame          domain.Game
 	deletedSessionsGameID string
-	upsertedSessions      []models.PlaySession
+	upsertedSessions      []domain.PlaySession
 	updatedTotalGameID    string
 	updatedTotalPlayTime  int64
 	updatedLastPlayed     time.Time
@@ -695,32 +695,32 @@ type trackingCloudSyncRepository struct {
 
 func newNoopCloudSyncRepository() fakeCloudSyncRepository {
 	return fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}
 }
 
-func (repository *trackingCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (repository *trackingCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return nil, nil
 }
 
-func (repository *trackingCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (repository *trackingCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return nil, nil
 }
 
-func (repository *trackingCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (repository *trackingCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	return nil, nil
 }
 
-func (repository *trackingCloudSyncRepository) UpsertGameSync(ctx context.Context, game models.Game) error {
+func (repository *trackingCloudSyncRepository) UpsertGameSync(ctx context.Context, game domain.Game) error {
 	if repository.upsertGameErr != nil {
 		return repository.upsertGameErr
 	}
@@ -736,7 +736,7 @@ func (repository *trackingCloudSyncRepository) DeletePlaySessionsByGame(ctx cont
 	return nil
 }
 
-func (repository *trackingCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+func (repository *trackingCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
 	if repository.upsertSessionErr != nil {
 		return repository.upsertSessionErr
 	}
@@ -781,7 +781,7 @@ func TestComposeSyncedLocalGameUsesFallbacksWithoutLocalGame(t *testing.T) {
 		ID:            "game-1",
 		Title:         "Game",
 		Publisher:     "Publisher",
-		PlayStatus:    string(models.PlayStatusPlayed),
+		PlayStatus:    string(domain.PlayStatusPlayed),
 		TotalPlayTime: 240,
 	}
 
@@ -801,11 +801,11 @@ func TestComposeCloudGameMetadataCopiesSyncFields(t *testing.T) {
 	lastPlayed := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
 	clearedAt := lastPlayed.Add(2 * time.Hour)
 	currentRouteID := "chapter-3"
-	game := models.Game{
+	game := domain.Game{
 		ID:             "game-1",
 		Title:          "Game",
 		Publisher:      "Publisher",
-		PlayStatus:     models.PlayStatusPlayed,
+		PlayStatus:     domain.PlayStatusPlayed,
 		TotalPlayTime:  180,
 		LastPlayed:     &lastPlayed,
 		ClearedAt:      &clearedAt,
@@ -842,7 +842,7 @@ func TestComposeCloudSessionsCopiesOrderAndSessionFields(t *testing.T) {
 	updatedAt := playedAt.Add(30 * time.Minute)
 	sessionName1 := "Chapter 1"
 	sessionName2 := "Chapter 2"
-	sessions := []models.PlaySession{
+	sessions := []domain.PlaySession{
 		{
 			ID:          "session-1",
 			PlayedAt:    playedAt,
@@ -883,7 +883,7 @@ func TestSyncExistingGamePairReturnsLoadSessionsError(t *testing.T) {
 	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{loadSessionsErr: loadErr}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
 	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
@@ -908,8 +908,8 @@ func TestSyncExistingGamePairReturnsUpsertSessionErrorWhenSessionsChanged(t *tes
 	service.cloudStorage = cloudStorage
 
 	local := localGameBundle{
-		Game:     models.Game{ID: "game-1", UpdatedAt: now},
-		Sessions: []models.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
+		Game:     domain.Game{ID: "game-1", UpdatedAt: now},
+		Sessions: []domain.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
 	}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
@@ -929,7 +929,7 @@ func TestSyncExistingGamePairUploadReturnsSessionSaveError(t *testing.T) {
 	service.cloudStorage = &fakeCloudSyncStorage{saveSessionsErr: saveErr}
 
 	local := localGameBundle{
-		Game: models.Game{ID: "game-1", Title: "Game", Publisher: "Pub", UpdatedAt: now.Add(time.Hour)},
+		Game: domain.Game{ID: "game-1", Title: "Game", Publisher: "Pub", UpdatedAt: now.Add(time.Hour)},
 	}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
@@ -956,8 +956,8 @@ func TestSyncExistingGamePairDownloadReturnsCloudSessionSaveError(t *testing.T) 
 	service.cloudStorage = cloudStorage
 
 	local := localGameBundle{
-		Game:     models.Game{ID: "game-1", UpdatedAt: now},
-		Sessions: []models.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
+		Game:     domain.Game{ID: "game-1", UpdatedAt: now},
+		Sessions: []domain.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
 	}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now.Add(time.Hour)}
 
@@ -980,7 +980,7 @@ func TestSyncExistingGamePairDownloadReturnsGameUpsertError(t *testing.T) {
 	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now.Add(time.Hour)}
 
 	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
@@ -1006,8 +1006,8 @@ func TestSyncExistingGamePairSkipReturnsCloudSessionSaveError(t *testing.T) {
 	service.cloudStorage = cloudStorage
 
 	local := localGameBundle{
-		Game:     models.Game{ID: "game-1", UpdatedAt: now},
-		Sessions: []models.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
+		Game:     domain.Game{ID: "game-1", UpdatedAt: now},
+		Sessions: []domain.PlaySession{{ID: "local-session-1", GameID: "game-1", PlayedAt: now.Add(-time.Hour), Duration: 20, UpdatedAt: now.Add(-time.Hour)}},
 	}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
@@ -1027,7 +1027,7 @@ func TestSyncExistingGamePairSkipReturnsGameUpsertError(t *testing.T) {
 	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
 	_, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)
@@ -1045,7 +1045,7 @@ func TestSyncExistingGamePairSkipAppliesMergedGameWhenSessionsUnchanged(t *testi
 	service := NewCloudSyncService(config.Config{}, nil, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{loadedSessions: []storage.CloudSessionRecord{}}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", Title: "Cloud Title", UpdatedAt: now}
 
 	iteration, err := service.syncSingleGame(context.Background(), nil, "bucket", "game-1", local, true, cloud, true)

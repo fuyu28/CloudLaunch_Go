@@ -1,2 +1,2 @@
 // Package models defines core domain models.
-package models
+package domain

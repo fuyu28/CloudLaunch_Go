@@ -1,5 +1,5 @@
 // @fileoverview 批評空間の検索結果モデルを定義する。
-package models
+package domain
 
 // ErogameScapeSearchItem は検索結果のゲーム情報を表す。
 type ErogameScapeSearchItem struct {

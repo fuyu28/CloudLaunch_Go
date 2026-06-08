@@ -8,31 +8,31 @@ import (
 	"testing"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type fakeSessionRepository struct {
-	session               *models.PlaySession
+	session               *domain.PlaySession
 	totalDuration         int64
 	touchedGameID         string
 	updatedWithLastPlayed *time.Time
 	updateTotalCalls      int
 }
 
-func (repository *fakeSessionRepository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+func (repository *fakeSessionRepository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 	session.ID = "session-1"
 	repository.session = &session
 	return &session, nil
 }
 
-func (repository *fakeSessionRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (repository *fakeSessionRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	if repository.session == nil {
 		return nil, nil
 	}
-	return []models.PlaySession{*repository.session}, nil
+	return []domain.PlaySession{*repository.session}, nil
 }
 
-func (repository *fakeSessionRepository) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
+func (repository *fakeSessionRepository) GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error) {
 	return repository.session, nil
 }
 
@@ -85,7 +85,7 @@ func TestSessionServiceDeleteSessionReturnsGameIDForAdapterUse(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
-		session: &models.PlaySession{
+		session: &domain.PlaySession{
 			ID:       "session-1",
 			GameID:   "game-1",
 			PlayedAt: time.Now(),
@@ -113,9 +113,9 @@ func TestSessionServiceListSessionsByGameUsesRepositoryBoundary(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
-		session: func() *models.PlaySession {
+		session: func() *domain.PlaySession {
 			name := "Session 1"
-			return &models.PlaySession{
+			return &domain.PlaySession{
 				ID:          "session-1",
 				GameID:      "game-1",
 				PlayedAt:    time.Now(),
@@ -160,7 +160,7 @@ func TestSessionServiceUpdateSessionNameRejectsInvalidName(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
-		session: &models.PlaySession{ID: "session-1", GameID: "game-1"},
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1"},
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -174,7 +174,7 @@ func TestSessionServiceUpdateSessionNameTrimsNameAndRecalculatesTotal(t *testing
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
-		session: &models.PlaySession{ID: "session-1", GameID: "game-1", Duration: 120},
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1", Duration: 120},
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -200,7 +200,7 @@ func TestSessionServiceUpdateSessionRouteStoresRouteAndRecalculatesTotal(t *test
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
-		session: &models.PlaySession{ID: "session-1", GameID: "game-1", Duration: 180},
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1", Duration: 180},
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chapterID := "chapter-2"
@@ -236,13 +236,13 @@ type fakeSessionRepositoryWithError struct {
 	getErr error
 }
 
-func (repository *fakeSessionRepositoryWithError) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+func (repository *fakeSessionRepositoryWithError) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 	return &session, nil
 }
-func (repository *fakeSessionRepositoryWithError) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (repository *fakeSessionRepositoryWithError) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	return nil, nil
 }
-func (repository *fakeSessionRepositoryWithError) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
+func (repository *fakeSessionRepositoryWithError) GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error) {
 	return nil, repository.getErr
 }
 func (repository *fakeSessionRepositoryWithError) DeletePlaySession(ctx context.Context, sessionID string) error {

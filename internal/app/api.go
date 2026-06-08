@@ -18,7 +18,7 @@ import (
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/logging"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/services"
 
@@ -26,7 +26,7 @@ import (
 )
 
 // ListGames はゲーム一覧を取得する。
-func (app *App) ListGames(searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]models.Game] {
+func (app *App) ListGames(searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]domain.Game] {
 	ctx := app.context()
 	status := normalizePlayStatus(filter)
 	games, err := app.GameService.ListGames(ctx, searchText, status, sortBy, sortDirection)
@@ -34,16 +34,16 @@ func (app *App) ListGames(searchText string, filter string, sortBy string, sortD
 }
 
 // GetGameByID はゲームを取得する。
-func (app *App) GetGameByID(gameID string) result.ApiResult[*models.Game] {
+func (app *App) GetGameByID(gameID string) result.ApiResult[*domain.Game] {
 	game, err := app.GameService.GetGameByID(app.context(), gameID)
 	return serviceResult(game, err, "ゲーム取得に失敗しました")
 }
 
 // CreateGame はゲームを作成する。
-func (app *App) CreateGame(input services.GameInput) result.ApiResult[*models.Game] {
+func (app *App) CreateGame(input services.GameInput) result.ApiResult[*domain.Game] {
 	created, err := app.GameService.CreateGame(app.context(), input)
 	if err != nil {
-		return serviceErrorResult[*models.Game](err, "ゲーム作成に失敗しました")
+		return serviceErrorResult[*domain.Game](err, "ゲーム作成に失敗しました")
 	}
 	if created != nil {
 		app.syncGameAsync(created.ID)
@@ -52,10 +52,10 @@ func (app *App) CreateGame(input services.GameInput) result.ApiResult[*models.Ga
 }
 
 // UpdateGame はゲームを更新する。
-func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result.ApiResult[*models.Game] {
+func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result.ApiResult[*domain.Game] {
 	updated, err := app.GameService.UpdateGame(app.context(), gameID, input)
 	if err != nil {
-		return serviceErrorResult[*models.Game](err, "ゲーム更新に失敗しました")
+		return serviceErrorResult[*domain.Game](err, "ゲーム更新に失敗しました")
 	}
 	if updated != nil {
 		app.syncGameAsync(updated.ID)
@@ -64,7 +64,7 @@ func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result
 }
 
 // UpdatePlayTime はプレイ時間を更新する。
-func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
+func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*domain.Game] {
 	game, err := app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
 	return serviceResult(game, err, "プレイ時間更新に失敗しました")
 }
@@ -78,19 +78,19 @@ func (app *App) DeleteGame(gameID string) result.ApiResult[bool] {
 }
 
 // ListRoutesByGame はルート一覧を取得する。
-func (app *App) ListRoutesByGame(gameID string) result.ApiResult[[]models.Route] {
+func (app *App) ListRoutesByGame(gameID string) result.ApiResult[[]domain.Route] {
 	routes, err := app.RouteService.ListRoutesByGame(app.context(), gameID)
 	return serviceResult(routes, err, "ルート取得に失敗しました")
 }
 
 // CreateRoute はルートを作成する。
-func (app *App) CreateRoute(input services.RouteInput) result.ApiResult[*models.Route] {
+func (app *App) CreateRoute(input services.RouteInput) result.ApiResult[*domain.Route] {
 	route, err := app.RouteService.CreateRoute(app.context(), input)
 	return serviceResult(route, err, "ルート作成に失敗しました")
 }
 
 // UpdateRoute はルートを更新する。
-func (app *App) UpdateRoute(routeID string, input services.RouteUpdateInput) result.ApiResult[*models.Route] {
+func (app *App) UpdateRoute(routeID string, input services.RouteUpdateInput) result.ApiResult[*domain.Route] {
 	route, err := app.RouteService.UpdateRoute(app.context(), routeID, input)
 	return serviceResult(route, err, "ルート更新に失敗しました")
 }
@@ -104,7 +104,7 @@ func (app *App) UpdateRouteOrders(gameID string, orders []services.RouteOrderUpd
 }
 
 // GetRouteStats はルートの統計を取得する。
-func (app *App) GetRouteStats(gameID string) result.ApiResult[[]models.RouteStat] {
+func (app *App) GetRouteStats(gameID string) result.ApiResult[[]domain.RouteStat] {
 	stats, err := app.RouteService.GetRouteStats(app.context(), gameID)
 	return serviceResult(stats, err, "ルート統計取得に失敗しました")
 }
@@ -126,10 +126,10 @@ func (app *App) DeleteRoute(routeID string) result.ApiResult[bool] {
 }
 
 // CreateSession はセッションを作成する。
-func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*models.PlaySession] {
+func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*domain.PlaySession] {
 	created, err := app.SessionService.CreateSession(app.context(), input)
 	if err != nil {
-		return serviceErrorResult[*models.PlaySession](err, "セッション作成に失敗しました")
+		return serviceErrorResult[*domain.PlaySession](err, "セッション作成に失敗しました")
 	}
 	if created != nil {
 		app.syncGameAsync(created.GameID)
@@ -138,7 +138,7 @@ func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*mod
 }
 
 // ListSessionsByGame はセッション一覧を取得する。
-func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]models.PlaySession] {
+func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]domain.PlaySession] {
 	sessions, err := app.SessionService.ListSessionsByGame(app.context(), gameID)
 	return serviceResult(sessions, err, "セッション取得に失敗しました")
 }
@@ -180,31 +180,31 @@ func (app *App) UpdateSessionName(sessionID string, sessionName string) result.A
 }
 
 // CreateMemo はメモを作成する。
-func (app *App) CreateMemo(input services.MemoInput) result.ApiResult[*models.Memo] {
+func (app *App) CreateMemo(input services.MemoInput) result.ApiResult[*domain.Memo] {
 	memo, err := app.MemoService.CreateMemo(app.context(), input)
 	return serviceResult(memo, err, "メモ作成に失敗しました")
 }
 
 // UpdateMemo はメモを更新する。
-func (app *App) UpdateMemo(memoID string, input services.MemoUpdateInput) result.ApiResult[*models.Memo] {
+func (app *App) UpdateMemo(memoID string, input services.MemoUpdateInput) result.ApiResult[*domain.Memo] {
 	memo, err := app.MemoService.UpdateMemo(app.context(), memoID, input)
 	return serviceResult(memo, err, "メモ更新に失敗しました")
 }
 
 // GetMemoByID はメモを取得する。
-func (app *App) GetMemoByID(memoID string) result.ApiResult[*models.Memo] {
+func (app *App) GetMemoByID(memoID string) result.ApiResult[*domain.Memo] {
 	memo, err := app.MemoService.GetMemoByID(app.context(), memoID)
 	return serviceResult(memo, err, "メモ取得に失敗しました")
 }
 
 // ListAllMemos は全メモを取得する。
-func (app *App) ListAllMemos() result.ApiResult[[]models.Memo] {
+func (app *App) ListAllMemos() result.ApiResult[[]domain.Memo] {
 	memos, err := app.MemoService.ListAllMemos(app.context())
 	return serviceResult(memos, err, "メモ取得に失敗しました")
 }
 
 // ListMemosByGame はメモ一覧を取得する。
-func (app *App) ListMemosByGame(gameID string) result.ApiResult[[]models.Memo] {
+func (app *App) ListMemosByGame(gameID string) result.ApiResult[[]domain.Memo] {
 	memos, err := app.MemoService.ListMemosByGame(app.context(), gameID)
 	return serviceResult(memos, err, "メモ取得に失敗しました")
 }
@@ -436,18 +436,18 @@ func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool
 }
 
 // GetMonitoringStatus は監視状態を取得する。
-func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
+func (app *App) GetMonitoringStatus() result.ApiResult[[]domain.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {
-		return result.OkResult([]models.MonitoringGameStatus{})
+		return result.OkResult([]domain.MonitoringGameStatus{})
 	}
 	status := app.ProcessMonitor.GetMonitoringStatus()
 	return result.OkResult(status)
 }
 
 // GetProcessSnapshot はプロセス一覧のデバッグ情報を取得する。
-func (app *App) GetProcessSnapshot() result.ApiResult[models.ProcessSnapshot] {
+func (app *App) GetProcessSnapshot() result.ApiResult[domain.ProcessSnapshot] {
 	if app.ProcessMonitor == nil {
-		return result.OkResult(models.ProcessSnapshot{Source: "none", Items: []models.ProcessSnapshotItem{}})
+		return result.OkResult(domain.ProcessSnapshot{Source: "none", Items: []domain.ProcessSnapshotItem{}})
 	}
 	snapshot := app.ProcessMonitor.GetProcessSnapshot()
 	return result.OkResult(snapshot)
@@ -780,15 +780,15 @@ func openPath(path string) error {
 }
 
 // normalizePlayStatus はUIのフィルタ文字列をモデル値へ変換する。
-func normalizePlayStatus(filter string) models.PlayStatus {
+func normalizePlayStatus(filter string) domain.PlayStatus {
 	value := strings.ToLower(strings.TrimSpace(filter))
 	switch value {
 	case "unplayed":
-		return models.PlayStatusUnplayed
+		return domain.PlayStatusUnplayed
 	case "playing":
-		return models.PlayStatusPlaying
+		return domain.PlayStatusPlaying
 	case "played":
-		return models.PlayStatusPlayed
+		return domain.PlayStatusPlayed
 	default:
 		return ""
 	}

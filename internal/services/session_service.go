@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 // SessionService はプレイセッション関連操作を提供する。
@@ -28,13 +28,13 @@ type SessionMutationResult struct {
 }
 
 // CreateSession は新しいセッションを作成する。
-func (service *SessionService) CreateSession(ctx context.Context, input SessionInput) (*models.PlaySession, error) {
+func (service *SessionService) CreateSession(ctx context.Context, input SessionInput) (*domain.PlaySession, error) {
 	if error := validateSessionInput(input); error != nil {
 		service.logger.Warn("セッション入力が不正です", "error", error)
 		return nil, newServiceError("セッション入力が不正です", error.Error())
 	}
 
-	session := models.PlaySession{
+	session := domain.PlaySession{
 		GameID:      strings.TrimSpace(input.GameID),
 		PlayedAt:    input.PlayedAt,
 		Duration:    input.Duration,
@@ -54,7 +54,7 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 }
 
 // ListSessionsByGame はゲームIDでセッション一覧を取得する。
-func (service *SessionService) ListSessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (service *SessionService) ListSessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	sessions, error := service.repository.ListPlaySessionsByGame(ctx, strings.TrimSpace(gameID))
 	if error != nil {
 		service.logger.Error("セッション取得に失敗", "error", error)

@@ -12,7 +12,7 @@ import (
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/memo"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type CloudMemoInfo struct {
@@ -170,7 +170,7 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		cloudMemos = []CloudMemoInfo{}
 	}
 
-	var targetGame *models.Game
+	var targetGame *domain.Game
 	if strings.TrimSpace(gameID) != "" {
 		game, err := service.gameService.GetGameByID(ctx, strings.TrimSpace(gameID))
 		if err != nil {
@@ -188,11 +188,11 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		cloudMap[fmt.Sprintf("%s:%s", cloudMemo.GameID, cloudMemo.MemoID)] = cloudMemo
 	}
 
-	games, err := service.gameService.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
+	games, err := service.gameService.ListGames(ctx, "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		return MemoSyncResult{}, wrapServiceError(err, "メモ同期に失敗しました")
 	}
-	gameByID := map[string]models.Game{}
+	gameByID := map[string]domain.Game{}
 	for _, game := range games {
 		gameByID[game.ID] = game
 	}
@@ -350,15 +350,15 @@ func (service *MemoCloudService) uploadMemoContent(
 	ctx context.Context,
 	cfg storage.S3Config,
 	credential credentials.Credential,
-	game models.Game,
-	memoData models.Memo,
+	game domain.Game,
+	memoData domain.Memo,
 ) error {
 	key := memo.BuildMemoPath(game.ID, memoData.Title, memoData.ID)
 	payload := memo.GenerateCloudMemoFileContent(memoData.Title, memoData.Content, game.Title)
 	return service.objectStore.UploadBytes(ctx, cfg, credential, key, []byte(payload), "text/markdown")
 }
 
-func (service *MemoCloudService) fetchLocalMemos(ctx context.Context, gameID string) ([]models.Memo, error) {
+func (service *MemoCloudService) fetchLocalMemos(ctx context.Context, gameID string) ([]domain.Memo, error) {
 	if strings.TrimSpace(gameID) == "" {
 		return service.memoService.ListAllMemos(ctx)
 	}

@@ -14,7 +14,7 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/db"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type maintenanceTestRuntime struct {
@@ -115,7 +115,7 @@ func TestMaintenanceServiceCreateFullBackupCapturesDatabaseAndFiles(t *testing.T
 	}()
 
 	repository := db.NewRepository(connection)
-	games, err := repository.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	games, err := repository.ListGames(context.Background(), "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		t.Fatalf("failed to list backup games: %v", err)
 	}
@@ -138,11 +138,11 @@ func TestMaintenanceServiceRestoreFullBackupReplacesAppData(t *testing.T) {
 
 	target := newMaintenanceServiceRuntime(t)
 	writeMaintenanceFile(t, filepath.Join(target.cfg.AppDataDir, "obsolete.txt"), "remove me")
-	createMaintenanceGame(t, target.repository, models.Game{
+	createMaintenanceGame(t, target.repository, domain.Game{
 		Title:      "Old Game",
 		Publisher:  "Legacy",
 		ExePath:    "/games/old.exe",
-		PlayStatus: models.PlayStatusUnplayed,
+		PlayStatus: domain.PlayStatusUnplayed,
 	})
 
 	if err := target.service.RestoreFullBackup(backupResult); err != nil {
@@ -157,7 +157,7 @@ func TestMaintenanceServiceRestoreFullBackupReplacesAppData(t *testing.T) {
 		_ = connection.Close()
 	}()
 	repository := db.NewRepository(connection)
-	games, err := repository.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	games, err := repository.ListGames(context.Background(), "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		t.Fatalf("failed to list restored games: %v", err)
 	}
@@ -278,36 +278,36 @@ func newMaintenanceServiceRuntime(t *testing.T) *maintenanceTestRuntime {
 	return runtime
 }
 
-func seedMaintenanceFixture(t *testing.T, repository *db.Repository) (*models.Game, []models.PlaySession) {
+func seedMaintenanceFixture(t *testing.T, repository *db.Repository) (*domain.Game, []domain.PlaySession) {
 	t.Helper()
 
 	lastPlayed := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
-	game := createMaintenanceGame(t, repository, models.Game{
+	game := createMaintenanceGame(t, repository, domain.Game{
 		Title:         "Test Game",
 		Publisher:     "Test Publisher",
 		ExePath:       "/games/test.exe",
-		PlayStatus:    models.PlayStatusPlaying,
+		PlayStatus:    domain.PlayStatusPlaying,
 		TotalPlayTime: 5400,
 		LastPlayed:    &lastPlayed,
 	})
 
 	firstPlayedAt := time.Date(2026, 4, 27, 20, 0, 0, 0, time.UTC)
 	secondPlayedAt := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
-	session1 := createMaintenanceSession(t, repository, models.PlaySession{
+	session1 := createMaintenanceSession(t, repository, domain.PlaySession{
 		GameID:   game.ID,
 		PlayedAt: firstPlayedAt,
 		Duration: 1800,
 	})
-	session2 := createMaintenanceSession(t, repository, models.PlaySession{
+	session2 := createMaintenanceSession(t, repository, domain.PlaySession{
 		GameID:   game.ID,
 		PlayedAt: secondPlayedAt,
 		Duration: 3600,
 	})
 
-	return game, []models.PlaySession{*session1, *session2}
+	return game, []domain.PlaySession{*session1, *session2}
 }
 
-func createMaintenanceGame(t *testing.T, repository *db.Repository, game models.Game) *models.Game {
+func createMaintenanceGame(t *testing.T, repository *db.Repository, game domain.Game) *domain.Game {
 	t.Helper()
 
 	created, err := repository.CreateGame(context.Background(), game)
@@ -317,7 +317,7 @@ func createMaintenanceGame(t *testing.T, repository *db.Repository, game models.
 	return created
 }
 
-func createMaintenanceSession(t *testing.T, repository *db.Repository, session models.PlaySession) *models.PlaySession {
+func createMaintenanceSession(t *testing.T, repository *db.Repository, session domain.PlaySession) *domain.PlaySession {
 	t.Helper()
 
 	created, err := repository.CreatePlaySession(context.Background(), session)

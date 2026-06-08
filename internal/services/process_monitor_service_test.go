@@ -7,29 +7,29 @@ import (
 	"testing"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type fakeProcessMonitorRepository struct {
-	createPlaySessionFn func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error)
-	getGameByIDFn       func(ctx context.Context, gameID string) (*models.Game, error)
-	updateGameFn        func(ctx context.Context, game models.Game) (*models.Game, error)
-	listGamesFn         func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
+	createPlaySessionFn func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
+	getGameByIDFn       func(ctx context.Context, gameID string) (*domain.Game, error)
+	updateGameFn        func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	listGamesFn         func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
 }
 
-func (repository fakeProcessMonitorRepository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+func (repository fakeProcessMonitorRepository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 	return repository.createPlaySessionFn(ctx, session)
 }
 
-func (repository fakeProcessMonitorRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (repository fakeProcessMonitorRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return repository.getGameByIDFn(ctx, gameID)
 }
 
-func (repository fakeProcessMonitorRepository) UpdateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (repository fakeProcessMonitorRepository) UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return repository.updateGameFn(ctx, game)
 }
 
-func (repository fakeProcessMonitorRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (repository fakeProcessMonitorRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return repository.listGamesFn(ctx, searchText, filter, sortBy, sortDirection)
 }
 
@@ -37,13 +37,13 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseAddsMatchingGame(t *testin
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{{
 				ID:      "game-1",
 				Title:   "Game",
 				ExePath: `C:\games\game.exe`,
@@ -69,13 +69,13 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseRespectsDisabledAutoTracki
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{{ID: "game-1", Title: "Game", ExePath: `C:\games\game.exe`}}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{{ID: "game-1", Title: "Game", ExePath: `C:\games\game.exe`}}, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	service.UpdateAutoTracking(false)
@@ -97,19 +97,19 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseRespectsDisabledAutoTracki
 func TestProcessMonitorServiceSaveSessionUpdatesGameTotals(t *testing.T) {
 	t.Parallel()
 
-	var updatedGame models.Game
+	var updatedGame domain.Game
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game", TotalPlayTime: 100}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game", TotalPlayTime: 100}, nil
 		},
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) {
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
 			updatedGame = game
 			return &game, nil
 		},
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -134,12 +134,12 @@ func TestProcessMonitorServicePauseSessionMarksGamePaused(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -167,12 +167,12 @@ func TestProcessMonitorServiceGetHotkeyTargetGameIDPrefersCurrentPlayingGame(t *
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -198,14 +198,14 @@ func TestProcessMonitorServiceEndSessionResetsAccumulatedTime(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game"}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
-		updateGameFn: func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -234,12 +234,12 @@ func TestProcessMonitorServiceMatchGameProcess(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -267,12 +267,12 @@ func TestProcessMonitorServiceIsGameProcessRunning(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -302,12 +302,12 @@ func TestProcessMonitorServiceResumeSessionUsesInjectedProcesses(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -338,12 +338,12 @@ func TestProcessMonitorServiceGetProcessSnapshotUsesInjectedProcesses(t *testing
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -368,12 +368,12 @@ func TestProcessMonitorServiceFindProcessIDsByExeUsesInjectedProcesses(t *testin
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game models.Game) (*models.Game, error) { return &game, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)

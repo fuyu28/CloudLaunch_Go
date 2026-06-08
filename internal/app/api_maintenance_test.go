@@ -14,7 +14,7 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/db"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/services"
 )
 
@@ -144,7 +144,7 @@ func TestAppCreateFullBackup_CapturesDatabaseAndFiles(t *testing.T) {
 	}()
 
 	backupRepository := db.NewRepository(connection)
-	games, err := backupRepository.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	games, err := backupRepository.ListGames(context.Background(), "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		t.Fatalf("failed to list games from backup database: %v", err)
 	}
@@ -170,11 +170,11 @@ func TestAppRestoreFullBackup_ReplacesAppDataWithBackupContents(t *testing.T) {
 
 	targetApp, targetRepository := newMaintenanceTestApp(t)
 	writeTestFile(t, filepath.Join(targetApp.Config.AppDataDir, "obsolete.txt"), "remove me")
-	createGameForTest(t, targetRepository, models.Game{
+	createGameForTest(t, targetRepository, domain.Game{
 		Title:      "Old Game",
 		Publisher:  "Legacy",
 		ExePath:    "/games/old.exe",
-		PlayStatus: models.PlayStatusUnplayed,
+		PlayStatus: domain.PlayStatusUnplayed,
 	})
 
 	restored := targetApp.RestoreFullBackup(backupPath.Data)
@@ -182,7 +182,7 @@ func TestAppRestoreFullBackup_ReplacesAppDataWithBackupContents(t *testing.T) {
 		t.Fatalf("RestoreFullBackup failed: %#v", restored.Error)
 	}
 
-	games, err := targetApp.GameService.ListGames(context.Background(), "", models.PlayStatus(""), "title", "asc")
+	games, err := targetApp.GameService.ListGames(context.Background(), "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		t.Fatalf("failed to list restored games: %v", err)
 	}
@@ -265,36 +265,36 @@ func newMaintenanceTestApp(t *testing.T) (*App, *db.Repository) {
 	return app, repository
 }
 
-func seedExportFixture(t *testing.T, repository *db.Repository) (*models.Game, []models.PlaySession) {
+func seedExportFixture(t *testing.T, repository *db.Repository) (*domain.Game, []domain.PlaySession) {
 	t.Helper()
 
 	lastPlayed := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
-	game := createGameForTest(t, repository, models.Game{
+	game := createGameForTest(t, repository, domain.Game{
 		Title:         "Test Game",
 		Publisher:     "Test Publisher",
 		ExePath:       "/games/test.exe",
-		PlayStatus:    models.PlayStatusPlaying,
+		PlayStatus:    domain.PlayStatusPlaying,
 		TotalPlayTime: 5400,
 		LastPlayed:    &lastPlayed,
 	})
 
 	firstPlayedAt := time.Date(2026, 4, 27, 20, 0, 0, 0, time.UTC)
 	secondPlayedAt := time.Date(2026, 4, 28, 21, 0, 0, 0, time.UTC)
-	session1 := createSessionForTest(t, repository, models.PlaySession{
+	session1 := createSessionForTest(t, repository, domain.PlaySession{
 		GameID:   game.ID,
 		PlayedAt: firstPlayedAt,
 		Duration: 1800,
 	})
-	session2 := createSessionForTest(t, repository, models.PlaySession{
+	session2 := createSessionForTest(t, repository, domain.PlaySession{
 		GameID:   game.ID,
 		PlayedAt: secondPlayedAt,
 		Duration: 3600,
 	})
 
-	return game, []models.PlaySession{*session1, *session2}
+	return game, []domain.PlaySession{*session1, *session2}
 }
 
-func createGameForTest(t *testing.T, repository *db.Repository, game models.Game) *models.Game {
+func createGameForTest(t *testing.T, repository *db.Repository, game domain.Game) *domain.Game {
 	t.Helper()
 
 	created, err := repository.CreateGame(context.Background(), game)
@@ -304,7 +304,7 @@ func createGameForTest(t *testing.T, repository *db.Repository, game models.Game
 	return created
 }
 
-func createSessionForTest(t *testing.T, repository *db.Repository, session models.PlaySession) *models.PlaySession {
+func createSessionForTest(t *testing.T, repository *db.Repository, session domain.PlaySession) *domain.PlaySession {
 	t.Helper()
 
 	created, err := repository.CreatePlaySession(context.Background(), session)

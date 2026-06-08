@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
-func composeCloudGameMetadata(game models.Game) storage.CloudGameMetadata {
+func composeCloudGameMetadata(game domain.Game) storage.CloudGameMetadata {
 	return storage.CloudGameMetadata{
 		ID:             game.ID,
 		Title:          game.Title,
@@ -24,7 +24,7 @@ func composeCloudGameMetadata(game models.Game) storage.CloudGameMetadata {
 	}
 }
 
-func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionRecord {
+func composeCloudSessions(sessions []domain.PlaySession) []storage.CloudSessionRecord {
 	records := make([]storage.CloudSessionRecord, 0, len(sessions))
 	for _, session := range sessions {
 		records = append(records, storage.CloudSessionRecord{
@@ -38,8 +38,8 @@ func composeCloudSessions(sessions []models.PlaySession) []storage.CloudSessionR
 	return records
 }
 
-func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) models.PlaySession {
-	return models.PlaySession{
+func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) domain.PlaySession {
+	return domain.PlaySession{
 		ID:          session.ID,
 		GameID:      gameID,
 		PlayedAt:    session.PlayedAt,
@@ -51,9 +51,9 @@ func composeLocalPlaySession(gameID string, session storage.CloudSessionRecord) 
 
 func composeSyncedLocalGame(
 	cloud storage.CloudGameMetadata,
-	local *models.Game,
+	local *domain.Game,
 	imagePath *string,
-) models.Game {
+) domain.Game {
 	exePath := UnconfiguredExePath
 	saveFolder := (*string)(nil)
 	localSaveHash := (*string)(nil)
@@ -67,7 +67,7 @@ func composeSyncedLocalGame(
 		localSaveHashUpdatedAt = local.LocalSaveHashUpdatedAt
 	}
 
-	return models.Game{
+	return domain.Game{
 		ID:                     cloud.ID,
 		Title:                  cloud.Title,
 		Publisher:              cloud.Publisher,
@@ -78,7 +78,7 @@ func composeSyncedLocalGame(
 		UpdatedAt:              cloud.UpdatedAt,
 		LocalSaveHash:          localSaveHash,
 		LocalSaveHashUpdatedAt: localSaveHashUpdatedAt,
-		PlayStatus:             models.PlayStatus(cloud.PlayStatus),
+		PlayStatus:             domain.PlayStatus(cloud.PlayStatus),
 		TotalPlayTime:          cloud.TotalPlayTime,
 		LastPlayed:             cloud.LastPlayed,
 		ClearedAt:              cloud.ClearedAt,
@@ -86,9 +86,9 @@ func composeSyncedLocalGame(
 	}
 }
 
-func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.CloudSessionRecord) mergedSessionsResult {
+func mergeSessions(localSessions []domain.PlaySession, cloudSessions []storage.CloudSessionRecord) mergedSessionsResult {
 	merged := make(map[string]storage.CloudSessionRecord, len(localSessions)+len(cloudSessions))
-	localMap := make(map[string]models.PlaySession, len(localSessions))
+	localMap := make(map[string]domain.PlaySession, len(localSessions))
 	cloudMap := make(map[string]storage.CloudSessionRecord, len(cloudSessions))
 	uploadedCount := 0
 	downloadedCount := 0
@@ -160,7 +160,7 @@ func mergeSessions(localSessions []models.PlaySession, cloudSessions []storage.C
 	}
 }
 
-func sessionsEquivalent(local models.PlaySession, cloud storage.CloudSessionRecord) bool {
+func sessionsEquivalent(local domain.PlaySession, cloud storage.CloudSessionRecord) bool {
 	return local.ID == cloud.ID &&
 		local.PlayedAt.Equal(cloud.PlayedAt) &&
 		local.Duration == cloud.Duration &&
@@ -177,14 +177,14 @@ func stringValue(value *string) string {
 
 func (service *CloudSyncService) mergeCloudGameMetadata(
 	cloud storage.CloudGameMetadata,
-	local *models.Game,
+	local *domain.Game,
 	sessions []storage.CloudSessionRecord,
-) models.Game {
-	base := models.Game{
+) domain.Game {
+	base := domain.Game{
 		ID:             cloud.ID,
 		Title:          cloud.Title,
 		Publisher:      cloud.Publisher,
-		PlayStatus:     models.PlayStatus(cloud.PlayStatus),
+		PlayStatus:     domain.PlayStatus(cloud.PlayStatus),
 		CreatedAt:      cloud.CreatedAt,
 		UpdatedAt:      cloud.UpdatedAt,
 		LastPlayed:     cloud.LastPlayed,
@@ -209,7 +209,7 @@ func (service *CloudSyncService) mergeCloudGameMetadata(
 	return base
 }
 
-func cloudMetadataFromGame(game models.Game, imageKey *string) storage.CloudGameMetadata {
+func cloudMetadataFromGame(game domain.Game, imageKey *string) storage.CloudGameMetadata {
 	return storage.CloudGameMetadata{
 		ID:             game.ID,
 		Title:          game.Title,

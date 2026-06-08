@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 const BackupTypeV1 = "appdata-zip-v1"
@@ -31,9 +31,9 @@ type GameExportStatistic struct {
 
 type GameExportPayload struct {
 	ExportedAt  time.Time             `json:"exportedAt"`
-	Games       []models.Game         `json:"games"`
+	Games       []domain.Game         `json:"games"`
 	Statistics  []GameExportStatistic `json:"statistics"`
-	SessionRows []models.PlaySession  `json:"sessions"`
+	SessionRows []domain.PlaySession  `json:"sessions"`
 }
 
 type GameExportResult struct {
@@ -51,8 +51,8 @@ type BackupManifest struct {
 }
 
 type MaintenanceRepository interface {
-	ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
-	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error)
+	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
 }
 
 type MaintenanceRuntimeHooks struct {
@@ -94,14 +94,14 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 		return GameExportResult{}, newServiceError("出力先フォルダの作成に失敗しました", err.Error())
 	}
 
-	games, err := service.repository.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
+	games, err := service.repository.ListGames(ctx, "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
 		service.logger.Error("ゲーム一覧の取得に失敗しました", "error", err, "operation", "ExportGameData.listGames")
 		return GameExportResult{}, newServiceError("ゲーム一覧の取得に失敗しました", err.Error())
 	}
 
 	stats := make([]GameExportStatistic, 0, len(games))
-	sessionRows := make([]models.PlaySession, 0, len(games)*2)
+	sessionRows := make([]domain.PlaySession, 0, len(games)*2)
 	for _, game := range games {
 		sessions, err := service.repository.ListPlaySessionsByGame(ctx, game.ID)
 		if err != nil {
@@ -262,7 +262,7 @@ func (service *MaintenanceService) RestoreFullBackup(backupPath string) error {
 	return nil
 }
 
-func writeExportCSV(path string, games []models.Game, stats []GameExportStatistic) error {
+func writeExportCSV(path string, games []domain.Game, stats []GameExportStatistic) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err

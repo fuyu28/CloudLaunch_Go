@@ -16,7 +16,7 @@ import (
 	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/unicode"
@@ -147,18 +147,18 @@ func (service *ProcessMonitorService) UpdateAutoTracking(enabled bool) {
 }
 
 // GetMonitoringStatus は監視状態を返す。
-func (service *ProcessMonitorService) GetMonitoringStatus() []models.MonitoringGameStatus {
+func (service *ProcessMonitorService) GetMonitoringStatus() []domain.MonitoringGameStatus {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
-	status := make([]models.MonitoringGameStatus, 0, len(service.monitoredGames))
+	status := make([]domain.MonitoringGameStatus, 0, len(service.monitoredGames))
 	now := time.Now()
 	for _, game := range service.monitoredGames {
 		playTime := game.AccumulatedTime
 		if game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd {
 			playTime += int64(now.Sub(*game.PlayStartTime).Seconds())
 		}
-		status = append(status, models.MonitoringGameStatus{
+		status = append(status, domain.MonitoringGameStatus{
 			GameID:            game.GameID,
 			GameTitle:         game.GameTitle,
 			ExeName:           game.ExeName,
@@ -241,12 +241,12 @@ func latestGameActivityAt(game *MonitoringGame) *time.Time {
 }
 
 // GetProcessSnapshot は現在のプロセス一覧と正規化後の値を取得する。
-func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapshot {
+func (service *ProcessMonitorService) GetProcessSnapshot() domain.ProcessSnapshot {
 	processes, source := service.getProcesses()
 
-	items := make([]models.ProcessSnapshotItem, 0, len(processes))
+	items := make([]domain.ProcessSnapshotItem, 0, len(processes))
 	for _, proc := range processes {
-		items = append(items, models.ProcessSnapshotItem{
+		items = append(items, domain.ProcessSnapshotItem{
 			Name:           proc.Name,
 			Pid:            proc.Pid,
 			Cmd:            proc.Cmd,
@@ -255,7 +255,7 @@ func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapsho
 		})
 	}
 
-	return models.ProcessSnapshot{
+	return domain.ProcessSnapshot{
 		Source: source,
 		Items:  items,
 	}
@@ -482,7 +482,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
 	sessionName := "自動記録 - " + game.ExeName
 	ctx := context.Background()
-	_, err := service.repository.CreatePlaySession(ctx, models.PlaySession{
+	_, err := service.repository.CreatePlaySession(ctx, domain.PlaySession{
 		GameID:      game.GameID,
 		PlayedAt:    endedAt,
 		Duration:    game.AccumulatedTime,
@@ -566,7 +566,7 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 	}
 
 	ctx := context.Background()
-	games, err := service.repository.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
+	games, err := service.repository.ListGames(ctx, "", domain.PlayStatus(""), "title", "asc")
 	if err != nil || len(games) == 0 {
 		return
 	}

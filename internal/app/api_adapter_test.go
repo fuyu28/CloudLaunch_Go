@@ -10,25 +10,25 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/services"
 )
 
 type noopAppCloudSyncRepository struct{}
 
-func (noopAppCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (noopAppCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return nil, nil
 }
 
-func (noopAppCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (noopAppCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return nil, nil
 }
 
-func (noopAppCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (noopAppCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	return nil, nil
 }
 
-func (noopAppCloudSyncRepository) UpsertGameSync(ctx context.Context, game models.Game) error {
+func (noopAppCloudSyncRepository) UpsertGameSync(ctx context.Context, game domain.Game) error {
 	return nil
 }
 
@@ -36,7 +36,7 @@ func (noopAppCloudSyncRepository) DeletePlaySessionsByGame(ctx context.Context, 
 	return nil
 }
 
-func (noopAppCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+func (noopAppCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
 	return nil
 }
 
@@ -56,18 +56,18 @@ type noopAppGameRepository struct {
 	listErr   error
 	createErr error
 	deleteErr error
-	created   *models.Game
+	created   *domain.Game
 }
 
-func (r noopAppGameRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (r noopAppGameRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return nil, r.listErr
 }
 
-func (r noopAppGameRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (r noopAppGameRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return nil, nil
 }
 
-func (r noopAppGameRepository) CreateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (r noopAppGameRepository) CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	if r.createErr != nil {
 		return nil, r.createErr
 	}
@@ -77,7 +77,7 @@ func (r noopAppGameRepository) CreateGame(ctx context.Context, game models.Game)
 	return &game, nil
 }
 
-func (r noopAppGameRepository) UpdateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (r noopAppGameRepository) UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return &game, nil
 }
 
@@ -85,7 +85,7 @@ func (r noopAppGameRepository) DeleteGame(ctx context.Context, gameID string) er
 	return r.deleteErr
 }
 
-func (r noopAppGameRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
+func (r noopAppGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
 	return &route, nil
 }
 
@@ -94,10 +94,10 @@ type noopAppSessionRepository struct {
 	getErr    error
 	deleteErr error
 	updateErr error
-	session   *models.PlaySession
+	session   *domain.PlaySession
 }
 
-func (r noopAppSessionRepository) CreatePlaySession(ctx context.Context, session models.PlaySession) (*models.PlaySession, error) {
+func (r noopAppSessionRepository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 	if r.createErr != nil {
 		return nil, r.createErr
 	}
@@ -106,17 +106,17 @@ func (r noopAppSessionRepository) CreatePlaySession(ctx context.Context, session
 	}
 	return &session, nil
 }
-func (r noopAppSessionRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (r noopAppSessionRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	return nil, nil
 }
-func (r noopAppSessionRepository) GetPlaySessionByID(ctx context.Context, sessionID string) (*models.PlaySession, error) {
+func (r noopAppSessionRepository) GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error) {
 	if r.getErr != nil {
 		return nil, r.getErr
 	}
 	if r.session != nil {
 		return r.session, nil
 	}
-	return &models.PlaySession{ID: sessionID, GameID: "game-1"}, nil
+	return &domain.PlaySession{ID: sessionID, GameID: "game-1"}, nil
 }
 func (r noopAppSessionRepository) DeletePlaySession(ctx context.Context, sessionID string) error {
 	return r.deleteErr
@@ -144,55 +144,55 @@ type noopAppRouteRepository struct {
 	listErr error
 }
 
-func (r noopAppRouteRepository) ListRoutesByGame(ctx context.Context, gameID string) ([]models.Route, error) {
+func (r noopAppRouteRepository) ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error) {
 	return nil, r.listErr
 }
-func (r noopAppRouteRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
+func (r noopAppRouteRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
 	return &route, nil
 }
-func (r noopAppRouteRepository) GetRouteByID(ctx context.Context, routeID string) (*models.Route, error) {
+func (r noopAppRouteRepository) GetRouteByID(ctx context.Context, routeID string) (*domain.Route, error) {
 	return nil, nil
 }
-func (r noopAppRouteRepository) UpdateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
+func (r noopAppRouteRepository) UpdateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
 	return &route, nil
 }
 func (r noopAppRouteRepository) DeleteRoute(ctx context.Context, routeID string) error { return nil }
 func (r noopAppRouteRepository) UpdateRouteOrder(ctx context.Context, routeID string, order int64) error {
 	return nil
 }
-func (r noopAppRouteRepository) GetRouteStats(ctx context.Context, gameID string) ([]models.RouteStat, error) {
+func (r noopAppRouteRepository) GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error) {
 	return nil, nil
 }
-func (r noopAppRouteRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (r noopAppRouteRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return nil, nil
 }
-func (r noopAppRouteRepository) UpdateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (r noopAppRouteRepository) UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return &game, nil
 }
 
 type noopAppMemoRepository struct{}
 
-func (noopAppMemoRepository) CreateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (noopAppMemoRepository) CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return &memo, nil
 }
 
-func (noopAppMemoRepository) UpdateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (noopAppMemoRepository) UpdateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return &memo, nil
 }
 
-func (noopAppMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*models.Memo, error) {
+func (noopAppMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*domain.Memo, error) {
 	return nil, nil
 }
 
-func (noopAppMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+func (noopAppMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 	return nil, nil
 }
 
-func (noopAppMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
+func (noopAppMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]domain.Memo, error) {
 	return nil, nil
 }
 
-func (noopAppMemoRepository) ListAllMemos(ctx context.Context) ([]models.Memo, error) {
+func (noopAppMemoRepository) ListAllMemos(ctx context.Context) ([]domain.Memo, error) {
 	return nil, nil
 }
 
@@ -357,7 +357,7 @@ func TestAppCreateGameConvertsServiceError(t *testing.T) {
 func TestAppCreateGameReturnsGameOnSuccess(t *testing.T) {
 	t.Parallel()
 
-	created := &models.Game{ID: "game-1", Title: "Game", Publisher: "Pub", ExePath: "/game.exe"}
+	created := &domain.Game{ID: "game-1", Title: "Game", Publisher: "Pub", ExePath: "/game.exe"}
 	app := &App{
 		Logger:      newAdapterTestLogger(),
 		GameService: services.NewGameService(noopAppGameRepository{created: created}, newAdapterTestLogger()),

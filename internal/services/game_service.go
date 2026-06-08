@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 // GameService はゲーム関連の操作を提供する。
@@ -26,10 +26,10 @@ func NewGameService(repository GameRepository, logger *slog.Logger) *GameService
 func (service *GameService) ListGames(
 	ctx context.Context,
 	searchText string,
-	filter models.PlayStatus,
+	filter domain.PlayStatus,
 	sortBy string,
 	sortDirection string,
-) ([]models.Game, error) {
+) ([]domain.Game, error) {
 	games, error := service.repository.ListGames(ctx, strings.TrimSpace(searchText), filter, sortBy, sortDirection)
 	if error != nil {
 		service.logger.Error("ゲーム一覧取得に失敗", "error", error)
@@ -39,7 +39,7 @@ func (service *GameService) ListGames(
 }
 
 // GetGameByID はID指定でゲームを取得する。
-func (service *GameService) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (service *GameService) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	game, error := service.repository.GetGameByID(ctx, strings.TrimSpace(gameID))
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
@@ -49,19 +49,19 @@ func (service *GameService) GetGameByID(ctx context.Context, gameID string) (*mo
 }
 
 // CreateGame はゲームを新規作成する。
-func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*models.Game, error) {
+func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*domain.Game, error) {
 	if error := validateGameInput(input); error != nil {
 		service.logger.Warn("ゲーム入力が不正です", "error", error)
 		return nil, newServiceError("ゲーム入力が不正です", error.Error())
 	}
 
-	game := models.Game{
+	game := domain.Game{
 		Title:          strings.TrimSpace(input.Title),
 		Publisher:      strings.TrimSpace(input.Publisher),
 		ImagePath:      input.ImagePath,
 		ExePath:        strings.TrimSpace(input.ExePath),
 		SaveFolderPath: input.SaveFolderPath,
-		PlayStatus:     models.PlayStatusUnplayed,
+		PlayStatus:     domain.PlayStatusUnplayed,
 		TotalPlayTime:  0,
 	}
 
@@ -72,7 +72,7 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*m
 	}
 
 	if created != nil {
-		_, _ = service.repository.CreateRoute(ctx, models.Route{
+		_, _ = service.repository.CreateRoute(ctx, domain.Route{
 			Name:   "メインルート",
 			Order:  1,
 			GameID: created.ID,
@@ -84,7 +84,7 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*m
 }
 
 // UpdateGame はゲーム情報を更新する。
-func (service *GameService) UpdateGame(ctx context.Context, gameID string, input GameUpdateInput) (*models.Game, error) {
+func (service *GameService) UpdateGame(ctx context.Context, gameID string, input GameUpdateInput) (*domain.Game, error) {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
@@ -118,7 +118,7 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 }
 
 // UpdatePlayTime はプレイ時間と最終プレイ日時を更新する。
-func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) (*models.Game, error) {
+func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) (*domain.Game, error) {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)

@@ -1,5 +1,5 @@
 // @fileoverview 外部サイトからのゲーム取り込み情報を定義する。
-package models
+package domain
 
 // GameImport は外部サイトから取得したゲーム情報を表す。
 type GameImport struct {

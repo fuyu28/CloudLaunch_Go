@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -18,9 +18,9 @@ func (service *ErogameScapeService) SearchErogameScape(
 	ctx context.Context,
 	query string,
 	pageURL string,
-) (models.ErogameScapeSearchResult, error) {
+) (domain.ErogameScapeSearchResult, error) {
 	if strings.TrimSpace(query) == "" && strings.TrimSpace(pageURL) == "" {
-		return models.ErogameScapeSearchResult{}, InvalidUrlError{URL: "empty query"}
+		return domain.ErogameScapeSearchResult{}, InvalidUrlError{URL: "empty query"}
 	}
 
 	targetURL := pageURL
@@ -35,15 +35,15 @@ func (service *ErogameScapeService) SearchErogameScape(
 
 	html, error := service.fetchHTML(ctx, targetURL)
 	if error != nil {
-		return models.ErogameScapeSearchResult{}, error
+		return domain.ErogameScapeSearchResult{}, error
 	}
 
 	doc, error := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if error != nil {
-		return models.ErogameScapeSearchResult{}, ParseError{Field: "searchDocument", Err: error}
+		return domain.ErogameScapeSearchResult{}, ParseError{Field: "searchDocument", Err: error}
 	}
 
-	items := make([]models.ErogameScapeSearchItem, 0, 50)
+	items := make([]domain.ErogameScapeSearchItem, 0, 50)
 	doc.Find("table tr").Each(func(_ int, row *goquery.Selection) {
 		link := row.Find("a[href*=\"game.php?game=\"]").First()
 		if link.Length() == 0 {
@@ -71,7 +71,7 @@ func (service *ErogameScapeService) SearchErogameScape(
 			return
 		}
 		brand := strings.TrimSpace(row.Find("td").Eq(2).Text())
-		items = append(items, models.ErogameScapeSearchItem{
+		items = append(items, domain.ErogameScapeSearchItem{
 			ErogameScapeID: gameID,
 			Title:          title,
 			Brand:          brand,
@@ -87,7 +87,7 @@ func (service *ErogameScapeService) SearchErogameScape(
 		}
 	}
 
-	return models.ErogameScapeSearchResult{
+	return domain.ErogameScapeSearchResult{
 		Items:       items,
 		NextPageURL: nextURL,
 	}, nil

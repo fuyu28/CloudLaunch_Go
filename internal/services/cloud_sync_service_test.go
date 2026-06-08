@@ -10,36 +10,36 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type fakeCloudSyncRepository struct {
-	getGameByIDFn              func(ctx context.Context, gameID string) (*models.Game, error)
-	listGamesFn                func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error)
-	listPlaySessionsByGameFn   func(ctx context.Context, gameID string) ([]models.PlaySession, error)
-	upsertGameSyncFn           func(ctx context.Context, game models.Game) error
+	getGameByIDFn              func(ctx context.Context, gameID string) (*domain.Game, error)
+	listGamesFn                func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	listPlaySessionsByGameFn   func(ctx context.Context, gameID string) ([]domain.PlaySession, error)
+	upsertGameSyncFn           func(ctx context.Context, game domain.Game) error
 	deletePlaySessionsByGameFn func(ctx context.Context, gameID string) error
-	upsertPlaySessionSyncFn    func(ctx context.Context, session models.PlaySession) error
+	upsertPlaySessionSyncFn    func(ctx context.Context, session domain.PlaySession) error
 	sumPlaySessionDurationsFn  func(ctx context.Context, gameID string) (int64, error)
 	updateGameTotalPlayTimeFn  func(ctx context.Context, gameID string, totalPlayTime int64) error
 	updateGameTotalWithLastFn  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
-func (repository fakeCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (repository fakeCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return repository.getGameByIDFn(ctx, gameID)
 }
 
-func (repository fakeCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (repository fakeCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return repository.listGamesFn(ctx, searchText, filter, sortBy, sortDirection)
 }
 
-func (repository fakeCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]models.PlaySession, error) {
+func (repository fakeCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
 	return repository.listPlaySessionsByGameFn(ctx, gameID)
 }
 
-func (repository fakeCloudSyncRepository) UpsertGameSync(ctx context.Context, game models.Game) error {
+func (repository fakeCloudSyncRepository) UpsertGameSync(ctx context.Context, game domain.Game) error {
 	return repository.upsertGameSyncFn(ctx, game)
 }
 
@@ -47,7 +47,7 @@ func (repository fakeCloudSyncRepository) DeletePlaySessionsByGame(ctx context.C
 	return repository.deletePlaySessionsByGameFn(ctx, gameID)
 }
 
-func (repository fakeCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session models.PlaySession) error {
+func (repository fakeCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
 	return repository.upsertPlaySessionSyncFn(ctx, session)
 }
 
@@ -73,18 +73,18 @@ func TestCloudSyncServiceLoadLocalGamesUsesRepositoryBoundary(t *testing.T) {
 	t.Parallel()
 
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game"}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]models.PlaySession, error) {
-			return []models.PlaySession{{ID: "session-1", GameID: gameID, PlayedAt: time.Now(), Duration: 10}}, nil
+		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
+			return []domain.PlaySession{{ID: "session-1", GameID: gameID, PlayedAt: time.Now(), Duration: 10}}, nil
 		},
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 		updateGameTotalWithLastFn:  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error { return nil },
@@ -106,16 +106,16 @@ func TestCloudSyncServiceLoadLocalGamesReturnsRepositoryError(t *testing.T) {
 	t.Parallel()
 
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, errors.New("db down")
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 		updateGameTotalWithLastFn:  func(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error { return nil },
@@ -132,21 +132,21 @@ func TestCloudSyncServiceLoadLocalGamesLoadsAllGamesWithSessions(t *testing.T) {
 
 	playedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{
 				{ID: "game-2", Title: "Second"},
 				{ID: "game-1", Title: "First"},
 			}, nil
 		},
-		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]models.PlaySession, error) {
-			return []models.PlaySession{{ID: "session-" + gameID, GameID: gameID, PlayedAt: playedAt, Duration: 30}}, nil
+		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
+			return []domain.PlaySession{{ID: "session-" + gameID, GameID: gameID, PlayedAt: playedAt, Duration: 30}}, nil
 		},
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -170,16 +170,16 @@ func TestCloudSyncServiceLoadLocalGamesReturnsEmptyWhenRequestedGameIsMissing(t 
 	t.Parallel()
 
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -197,14 +197,14 @@ func TestCloudSyncServiceSyncGameRejectsInvalidGameID(t *testing.T) {
 	t.Parallel()
 
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -219,14 +219,14 @@ func TestCloudSyncServiceSyncAllGamesFailsInOfflineMode(t *testing.T) {
 	t.Parallel()
 
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -244,21 +244,21 @@ func TestCloudSyncServiceSyncAllGamesUploadsLocalGamesAndSavesMetadata(t *testin
 	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	cloudStorage := &fakeCloudSyncStorage{}
 	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{
 				{ID: "game-b", Title: "Beta", Publisher: "Publisher", UpdatedAt: updatedAt},
 				{ID: "game-a", Title: "Alpha", Publisher: "Publisher", UpdatedAt: updatedAt.Add(time.Hour)},
 			}, nil
 		},
-		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]models.PlaySession, error) {
-			return []models.PlaySession{{ID: "session-" + gameID, GameID: gameID, PlayedAt: updatedAt, Duration: 30, UpdatedAt: updatedAt}}, nil
+		listPlaySessionsByGameFn: func(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
+			return []domain.PlaySession{{ID: "session-" + gameID, GameID: gameID, PlayedAt: updatedAt, Duration: 30, UpdatedAt: updatedAt}}, nil
 		},
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -317,16 +317,16 @@ func TestCloudSyncServiceSyncAllGamesReturnsSaveMetadataError(t *testing.T) {
 	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	cloudStorage := &fakeCloudSyncStorage{saveMetadataErr: saveErr}
 	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{
 				{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: updatedAt},
 			}, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -353,16 +353,16 @@ func TestCloudSyncServiceSyncAllGamesReturnsSyncSingleGameError(t *testing.T) {
 	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	cloudStorage := &fakeCloudSyncStorage{saveSessionsErr: syncErr}
 	service := NewCloudSyncService(config.Config{CloudMetadataKey: "metadata.json"}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
-			return []models.Game{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return []domain.Game{
 				{ID: "game-1", Title: "Game", Publisher: "Publisher", UpdatedAt: updatedAt},
 			}, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -385,14 +385,14 @@ func TestCloudSyncServiceDeleteGameFromCloudFailsInOfflineMode(t *testing.T) {
 	t.Parallel()
 
 	service := NewCloudSyncService(config.Config{}, nil, fakeCloudSyncRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) { return nil, nil },
-		listGamesFn: func(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
-		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]models.PlaySession, error) { return nil, nil },
-		upsertGameSyncFn:           func(ctx context.Context, game models.Game) error { return nil },
+		listPlaySessionsByGameFn:   func(ctx context.Context, gameID string) ([]domain.PlaySession, error) { return nil, nil },
+		upsertGameSyncFn:           func(ctx context.Context, game domain.Game) error { return nil },
 		deletePlaySessionsByGameFn: func(ctx context.Context, gameID string) error { return nil },
-		upsertPlaySessionSyncFn:    func(ctx context.Context, session models.PlaySession) error { return nil },
+		upsertPlaySessionSyncFn:    func(ctx context.Context, session domain.PlaySession) error { return nil },
 		sumPlaySessionDurationsFn:  func(ctx context.Context, gameID string) (int64, error) { return 0, nil },
 		updateGameTotalPlayTimeFn:  func(ctx context.Context, gameID string, totalPlayTime int64) error { return nil },
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -443,7 +443,7 @@ func TestCloudSyncServiceDeleteGameFromCloudDeletesObjectsAndMetadata(t *testing
 func TestMergeSessions_PreservesUniqueSessionsOnBothSides(t *testing.T) {
 	localUpdatedAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
 	cloudUpdatedAt := time.Date(2026, 4, 30, 11, 0, 0, 0, time.UTC)
-	local := []models.PlaySession{
+	local := []domain.PlaySession{
 		{
 			ID:        "local-only",
 			PlayedAt:  time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
@@ -479,7 +479,7 @@ func TestMergeSessions_PreservesUniqueSessionsOnBothSides(t *testing.T) {
 func TestMergeSessions_PrefersNewerUpdatedSession(t *testing.T) {
 	oldName := "old"
 	newName := "new"
-	local := []models.PlaySession{
+	local := []domain.PlaySession{
 		{
 			ID:          "shared",
 			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
@@ -521,7 +521,7 @@ func TestMergeSessions_DoesNotMarkEquivalentWhitespaceOnlyDifferenceAsChanged(t 
 	localName := "  chapter 1  "
 	cloudName := "chapter 1"
 	updatedAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
-	local := []models.PlaySession{
+	local := []domain.PlaySession{
 		{
 			ID:          "shared",
 			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
@@ -560,7 +560,7 @@ func TestMergeSessions_PrefersLocalWhenUpdatedAtMatchesButPayloadDiffers(t *test
 	localName := "local"
 	cloudName := "cloud"
 	updatedAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
-	local := []models.PlaySession{
+	local := []domain.PlaySession{
 		{
 			ID:          "shared",
 			PlayedAt:    time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
@@ -602,7 +602,7 @@ func TestMergeSessions_PrefersLocalWhenUpdatedAtMatchesButPayloadDiffers(t *test
 }
 
 func TestMergeSessions_SortsByPlayedAtDescThenIDDesc(t *testing.T) {
-	local := []models.PlaySession{
+	local := []domain.PlaySession{
 		{
 			ID:        "a-session",
 			PlayedAt:  time.Date(2026, 4, 30, 9, 0, 0, 0, time.UTC),

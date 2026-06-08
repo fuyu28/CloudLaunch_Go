@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"CloudLaunch_Go/internal/memo"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 // MemoService はメモ関連の操作を提供する。
@@ -24,13 +24,13 @@ func NewMemoService(repository MemoRepository, fileManager *memo.FileManager, lo
 }
 
 // CreateMemo はメモを作成する。
-func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) (*models.Memo, error) {
+func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) (*domain.Memo, error) {
 	if error := validateMemoInput(input); error != nil {
 		service.logger.Warn("メモ入力が不正です", "error", error)
 		return nil, newServiceError("メモ入力が不正です", error.Error())
 	}
 
-	memo := models.Memo{
+	memo := domain.Memo{
 		Title:   strings.TrimSpace(input.Title),
 		Content: input.Content,
 		GameID:  strings.TrimSpace(input.GameID),
@@ -53,7 +53,7 @@ func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) (*m
 }
 
 // UpdateMemo はメモを更新する。
-func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input MemoUpdateInput) (*models.Memo, error) {
+func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input MemoUpdateInput) (*domain.Memo, error) {
 	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
 	if !ok {
 		service.logger.Warn("メモIDが不正です", "detail", detail, "memoId", memoID)
@@ -94,7 +94,7 @@ func (service *MemoService) UpdateMemo(ctx context.Context, memoID string, input
 }
 
 // GetMemoByID はメモIDでメモを取得する。
-func (service *MemoService) GetMemoByID(ctx context.Context, memoID string) (*models.Memo, error) {
+func (service *MemoService) GetMemoByID(ctx context.Context, memoID string) (*domain.Memo, error) {
 	trimmedID, detail, ok := requireNonEmpty(memoID, "memoID")
 	if !ok {
 		service.logger.Warn("メモIDが不正です", "detail", detail, "memoId", memoID)
@@ -110,7 +110,7 @@ func (service *MemoService) GetMemoByID(ctx context.Context, memoID string) (*mo
 }
 
 // FindMemoByTitle はゲームIDとタイトルでメモを取得する。
-func (service *MemoService) FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+func (service *MemoService) FindMemoByTitle(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
@@ -131,7 +131,7 @@ func (service *MemoService) FindMemoByTitle(ctx context.Context, gameID string, 
 }
 
 // ListMemosByGame はゲームIDでメモ一覧を取得する。
-func (service *MemoService) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
+func (service *MemoService) ListMemosByGame(ctx context.Context, gameID string) ([]domain.Memo, error) {
 	memos, error := service.repository.ListMemosByGame(ctx, strings.TrimSpace(gameID))
 	if error != nil {
 		service.logger.Error("メモ取得に失敗", "error", error)
@@ -141,7 +141,7 @@ func (service *MemoService) ListMemosByGame(ctx context.Context, gameID string) 
 }
 
 // ListAllMemos は全メモを取得する。
-func (service *MemoService) ListAllMemos(ctx context.Context) ([]models.Memo, error) {
+func (service *MemoService) ListAllMemos(ctx context.Context) ([]domain.Memo, error) {
 	memos, error := service.repository.ListAllMemos(ctx)
 	if error != nil {
 		service.logger.Error("メモ取得に失敗", "error", error)

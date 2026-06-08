@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 // RouteService はルート関連の操作を提供する。
@@ -22,7 +22,7 @@ func NewRouteService(repository RouteRepository, logger *slog.Logger) *RouteServ
 }
 
 // ListRoutesByGame はゲームIDでルート一覧を取得する。
-func (service *RouteService) ListRoutesByGame(ctx context.Context, gameID string) ([]models.Route, error) {
+func (service *RouteService) ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error) {
 	routes, error := service.repository.ListRoutesByGame(ctx, strings.TrimSpace(gameID))
 	if error != nil {
 		service.logger.Error("ルート取得に失敗", "error", error)
@@ -32,13 +32,13 @@ func (service *RouteService) ListRoutesByGame(ctx context.Context, gameID string
 }
 
 // CreateRoute はルートを作成する。
-func (service *RouteService) CreateRoute(ctx context.Context, input RouteInput) (*models.Route, error) {
+func (service *RouteService) CreateRoute(ctx context.Context, input RouteInput) (*domain.Route, error) {
 	if error := validateRouteInput(input); error != nil {
 		service.logger.Warn("ルート入力が不正です", "error", error)
 		return nil, newServiceError("ルート入力が不正です", error.Error())
 	}
 
-	route := models.Route{
+	route := domain.Route{
 		Name:   strings.TrimSpace(input.Name),
 		Order:  input.Order,
 		GameID: strings.TrimSpace(input.GameID),
@@ -53,7 +53,7 @@ func (service *RouteService) CreateRoute(ctx context.Context, input RouteInput) 
 }
 
 // UpdateRoute はルートを更新する。
-func (service *RouteService) UpdateRoute(ctx context.Context, routeID string, input RouteUpdateInput) (*models.Route, error) {
+func (service *RouteService) UpdateRoute(ctx context.Context, routeID string, input RouteUpdateInput) (*domain.Route, error) {
 	trimmedID, detail, ok := requireNonEmpty(routeID, "routeID")
 	if !ok {
 		service.logger.Warn("ルートIDが不正です", "detail", detail, "routeId", routeID)
@@ -121,7 +121,7 @@ func (service *RouteService) UpdateRouteOrders(ctx context.Context, gameID strin
 }
 
 // GetRouteStats はルートの統計を取得する。
-func (service *RouteService) GetRouteStats(ctx context.Context, gameID string) ([]models.RouteStat, error) {
+func (service *RouteService) GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error) {
 	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)

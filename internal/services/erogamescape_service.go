@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/image/draw"
@@ -52,48 +52,48 @@ func NewErogameScapeService(cfg config.Config, logger *slog.Logger) *ErogameScap
 }
 
 // FetchFromErogameScape は批評空間のURLからゲーム情報を取得する。
-func (service *ErogameScapeService) FetchFromErogameScape(ctx context.Context, gamePageURL string) (models.GameImport, error) {
+func (service *ErogameScapeService) FetchFromErogameScape(ctx context.Context, gamePageURL string) (domain.GameImport, error) {
 	gameID, error := extractErogameScapeID(gamePageURL)
 	if error != nil {
-		return models.GameImport{}, error
+		return domain.GameImport{}, error
 	}
 
 	pageHTML, error := service.fetchHTML(ctx, gamePageURL)
 	if error != nil {
-		return models.GameImport{}, error
+		return domain.GameImport{}, error
 	}
 
 	doc, error := goquery.NewDocumentFromReader(strings.NewReader(pageHTML))
 	if error != nil {
-		return models.GameImport{}, ParseError{Field: "document", Err: error}
+		return domain.GameImport{}, ParseError{Field: "document", Err: error}
 	}
 
 	title := strings.TrimSpace(doc.Find("#game_title > a").First().Text())
 	if title == "" {
-		return models.GameImport{}, ParseError{Field: "title", Err: errors.New("title not found")}
+		return domain.GameImport{}, ParseError{Field: "title", Err: errors.New("title not found")}
 	}
 
 	brand := strings.TrimSpace(doc.Find("#brand > td > a").First().Text())
 	if brand == "" {
-		return models.GameImport{}, ParseError{Field: "brand", Err: errors.New("brand not found")}
+		return domain.GameImport{}, ParseError{Field: "brand", Err: errors.New("brand not found")}
 	}
 
 	imageSrc, ok := doc.Find("#main_image img").First().Attr("src")
 	if !ok || strings.TrimSpace(imageSrc) == "" {
-		return models.GameImport{}, ParseError{Field: "imageUrl", Err: errors.New("image url not found")}
+		return domain.GameImport{}, ParseError{Field: "imageUrl", Err: errors.New("image url not found")}
 	}
 
 	imageURL, error := resolveURL(gamePageURL, strings.TrimSpace(imageSrc))
 	if error != nil {
-		return models.GameImport{}, ParseError{Field: "imageUrl", Err: error}
+		return domain.GameImport{}, ParseError{Field: "imageUrl", Err: error}
 	}
 
 	imagePath, error := service.downloadAndSaveImage(ctx, imageURL, gameID)
 	if error != nil {
-		return models.GameImport{}, error
+		return domain.GameImport{}, error
 	}
 
-	return models.GameImport{
+	return domain.GameImport{
 		ErogameScapeID: gameID,
 		Title:          title,
 		Brand:          brand,

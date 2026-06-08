@@ -11,40 +11,40 @@ import (
 	"testing"
 
 	"CloudLaunch_Go/internal/memo"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type fakeMemoRepository struct {
-	createMemoFn    func(ctx context.Context, memo models.Memo) (*models.Memo, error)
-	updateMemoFn    func(ctx context.Context, memo models.Memo) (*models.Memo, error)
-	getMemoByIDFn   func(ctx context.Context, memoID string) (*models.Memo, error)
-	findMemoByTitle func(ctx context.Context, gameID string, title string) (*models.Memo, error)
-	listMemosByGame func(ctx context.Context, gameID string) ([]models.Memo, error)
-	listAllMemosFn  func(ctx context.Context) ([]models.Memo, error)
+	createMemoFn    func(ctx context.Context, memo domain.Memo) (*domain.Memo, error)
+	updateMemoFn    func(ctx context.Context, memo domain.Memo) (*domain.Memo, error)
+	getMemoByIDFn   func(ctx context.Context, memoID string) (*domain.Memo, error)
+	findMemoByTitle func(ctx context.Context, gameID string, title string) (*domain.Memo, error)
+	listMemosByGame func(ctx context.Context, gameID string) ([]domain.Memo, error)
+	listAllMemosFn  func(ctx context.Context) ([]domain.Memo, error)
 	deleteMemoFn    func(ctx context.Context, memoID string) error
 }
 
-func (repository fakeMemoRepository) CreateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (repository fakeMemoRepository) CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return repository.createMemoFn(ctx, memo)
 }
 
-func (repository fakeMemoRepository) UpdateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (repository fakeMemoRepository) UpdateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return repository.updateMemoFn(ctx, memo)
 }
 
-func (repository fakeMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*models.Memo, error) {
+func (repository fakeMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*domain.Memo, error) {
 	return repository.getMemoByIDFn(ctx, memoID)
 }
 
-func (repository fakeMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+func (repository fakeMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 	return repository.findMemoByTitle(ctx, gameID, title)
 }
 
-func (repository fakeMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
+func (repository fakeMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]domain.Memo, error) {
 	return repository.listMemosByGame(ctx, gameID)
 }
 
-func (repository fakeMemoRepository) ListAllMemos(ctx context.Context) ([]models.Memo, error) {
+func (repository fakeMemoRepository) ListAllMemos(ctx context.Context) ([]domain.Memo, error) {
 	return repository.listAllMemosFn(ctx)
 }
 
@@ -56,22 +56,22 @@ func TestMemoServiceGetMemoByIDUsesRepositoryBoundary(t *testing.T) {
 	t.Parallel()
 
 	service := NewMemoService(fakeMemoRepository{
-		createMemoFn: func(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+		createMemoFn: func(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 			return &memo, nil
 		},
-		updateMemoFn: func(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+		updateMemoFn: func(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 			return &memo, nil
 		},
-		getMemoByIDFn: func(ctx context.Context, memoID string) (*models.Memo, error) {
-			return &models.Memo{ID: memoID, Title: "Memo", GameID: "game-1"}, nil
+		getMemoByIDFn: func(ctx context.Context, memoID string) (*domain.Memo, error) {
+			return &domain.Memo{ID: memoID, Title: "Memo", GameID: "game-1"}, nil
 		},
-		findMemoByTitle: func(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+		findMemoByTitle: func(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 			return nil, nil
 		},
-		listMemosByGame: func(ctx context.Context, gameID string) ([]models.Memo, error) {
+		listMemosByGame: func(ctx context.Context, gameID string) ([]domain.Memo, error) {
 			return nil, nil
 		},
-		listAllMemosFn: func(ctx context.Context) ([]models.Memo, error) {
+		listAllMemosFn: func(ctx context.Context) ([]domain.Memo, error) {
 			return nil, nil
 		},
 		deleteMemoFn: func(ctx context.Context, memoID string) error {
@@ -92,12 +92,12 @@ func TestMemoServiceFindMemoByTitleRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
 	service := NewMemoService(fakeMemoRepository{
-		createMemoFn:    func(ctx context.Context, memo models.Memo) (*models.Memo, error) { return &memo, nil },
-		updateMemoFn:    func(ctx context.Context, memo models.Memo) (*models.Memo, error) { return &memo, nil },
-		getMemoByIDFn:   func(ctx context.Context, memoID string) (*models.Memo, error) { return nil, nil },
-		findMemoByTitle: func(ctx context.Context, gameID string, title string) (*models.Memo, error) { return nil, nil },
-		listMemosByGame: func(ctx context.Context, gameID string) ([]models.Memo, error) { return nil, nil },
-		listAllMemosFn:  func(ctx context.Context) ([]models.Memo, error) { return nil, nil },
+		createMemoFn:    func(ctx context.Context, memo domain.Memo) (*domain.Memo, error) { return &memo, nil },
+		updateMemoFn:    func(ctx context.Context, memo domain.Memo) (*domain.Memo, error) { return &memo, nil },
+		getMemoByIDFn:   func(ctx context.Context, memoID string) (*domain.Memo, error) { return nil, nil },
+		findMemoByTitle: func(ctx context.Context, gameID string, title string) (*domain.Memo, error) { return nil, nil },
+		listMemosByGame: func(ctx context.Context, gameID string) ([]domain.Memo, error) { return nil, nil },
+		listAllMemosFn:  func(ctx context.Context) ([]domain.Memo, error) { return nil, nil },
 		deleteMemoFn:    func(ctx context.Context, memoID string) error { return nil },
 	}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -116,7 +116,7 @@ func TestMemoServiceCreateMemoRollsBackDatabaseWhenFileWriteFails(t *testing.T) 
 	}
 	manager := memo.NewFileManager(tempDir)
 	repository := &trackingMemoRepository{
-		createResult: &models.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
+		createResult: &domain.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -139,7 +139,7 @@ func TestMemoServiceCreateMemoWritesDatabaseAndLocalFile(t *testing.T) {
 
 	manager := memo.NewFileManager(t.TempDir())
 	repository := &trackingMemoRepository{
-		createResult: &models.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
+		createResult: &domain.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
@@ -172,8 +172,8 @@ func TestMemoServiceUpdateMemoRollsBackDatabaseWhenFileUpdateFails(t *testing.T)
 	}
 	manager := memo.NewFileManager(tempDir)
 	repository := &trackingMemoRepository{
-		getResult: &models.Memo{ID: "memo-1", Title: "Old", Content: "Old body", GameID: "game-1"},
-		updateResults: []*models.Memo{
+		getResult: &domain.Memo{ID: "memo-1", Title: "Old", Content: "Old body", GameID: "game-1"},
+		updateResults: []*domain.Memo{
 			{ID: "memo-1", Title: "New", Content: "New body", GameID: "game-1"},
 			{ID: "memo-1", Title: "Old", Content: "Old body", GameID: "game-1"},
 		},
@@ -201,8 +201,8 @@ func TestMemoServiceUpdateMemoRenamesLocalFile(t *testing.T) {
 		t.Fatalf("failed to create existing memo file: %v", err)
 	}
 	repository := &trackingMemoRepository{
-		getResult: &models.Memo{ID: "memo-1", Title: "Old", Content: "Old body", GameID: "game-1"},
-		updateResults: []*models.Memo{
+		getResult: &domain.Memo{ID: "memo-1", Title: "Old", Content: "Old body", GameID: "game-1"},
+		updateResults: []*domain.Memo{
 			{ID: "memo-1", Title: "New", Content: "New body", GameID: "game-1"},
 		},
 	}
@@ -229,18 +229,18 @@ func TestMemoServiceUpdateMemoRenamesLocalFile(t *testing.T) {
 }
 
 type trackingMemoRepository struct {
-	createResult    *models.Memo
-	getResult       *models.Memo
-	findResult      *models.Memo
-	updateResults   []*models.Memo
+	createResult    *domain.Memo
+	getResult       *domain.Memo
+	findResult      *domain.Memo
+	updateResults   []*domain.Memo
 	updateMemoCalls int
 	deleteMemoCalls int
 }
 
-func (repository *trackingMemoRepository) CreateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (repository *trackingMemoRepository) CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return repository.createResult, nil
 }
-func (repository *trackingMemoRepository) UpdateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (repository *trackingMemoRepository) UpdateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	repository.updateMemoCalls++
 	if len(repository.updateResults) == 0 {
 		return &memo, nil
@@ -249,16 +249,16 @@ func (repository *trackingMemoRepository) UpdateMemo(ctx context.Context, memo m
 	repository.updateResults = repository.updateResults[1:]
 	return result, nil
 }
-func (repository *trackingMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*models.Memo, error) {
+func (repository *trackingMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*domain.Memo, error) {
 	return repository.getResult, nil
 }
-func (repository *trackingMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+func (repository *trackingMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 	return repository.findResult, nil
 }
-func (repository *trackingMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
+func (repository *trackingMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]domain.Memo, error) {
 	return nil, nil
 }
-func (repository *trackingMemoRepository) ListAllMemos(ctx context.Context) ([]models.Memo, error) {
+func (repository *trackingMemoRepository) ListAllMemos(ctx context.Context) ([]domain.Memo, error) {
 	return nil, nil
 }
 func (repository *trackingMemoRepository) DeleteMemo(ctx context.Context, memoID string) error {
@@ -270,22 +270,22 @@ func TestMemoServiceListAllMemosHandlesRepositoryError(t *testing.T) {
 	t.Parallel()
 
 	service := NewMemoService(fakeMemoRepository{
-		createMemoFn: func(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+		createMemoFn: func(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 			return &memo, nil
 		},
-		updateMemoFn: func(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+		updateMemoFn: func(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 			return &memo, nil
 		},
-		getMemoByIDFn: func(ctx context.Context, memoID string) (*models.Memo, error) {
+		getMemoByIDFn: func(ctx context.Context, memoID string) (*domain.Memo, error) {
 			return nil, nil
 		},
-		findMemoByTitle: func(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+		findMemoByTitle: func(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 			return nil, nil
 		},
-		listMemosByGame: func(ctx context.Context, gameID string) ([]models.Memo, error) {
+		listMemosByGame: func(ctx context.Context, gameID string) ([]domain.Memo, error) {
 			return nil, nil
 		},
-		listAllMemosFn: func(ctx context.Context) ([]models.Memo, error) {
+		listAllMemosFn: func(ctx context.Context) ([]domain.Memo, error) {
 			return nil, errors.New("db down")
 		},
 		deleteMemoFn: func(ctx context.Context, memoID string) error {
@@ -310,7 +310,7 @@ func TestMemoServiceDeleteMemoRemovesDatabaseRecordAndLocalFile(t *testing.T) {
 		t.Fatalf("failed to create existing memo file: %v", err)
 	}
 	repository := &trackingMemoRepository{
-		getResult: &models.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
+		getResult: &domain.Memo{ID: "memo-1", Title: "Memo", Content: "Body", GameID: "game-1"},
 	}
 	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
 

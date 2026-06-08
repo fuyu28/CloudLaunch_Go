@@ -10,27 +10,27 @@ import (
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type fakeMemoCloudGameRepository struct {
-	games []models.Game
-	game  *models.Game
+	games []domain.Game
+	game  *domain.Game
 }
 
-func (repository fakeMemoCloudGameRepository) ListGames(ctx context.Context, searchText string, filter models.PlayStatus, sortBy string, sortDirection string) ([]models.Game, error) {
+func (repository fakeMemoCloudGameRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 	return repository.games, nil
 }
 
-func (repository fakeMemoCloudGameRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (repository fakeMemoCloudGameRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return repository.game, nil
 }
 
-func (repository fakeMemoCloudGameRepository) CreateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (repository fakeMemoCloudGameRepository) CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return nil, nil
 }
 
-func (repository fakeMemoCloudGameRepository) UpdateGame(ctx context.Context, game models.Game) (*models.Game, error) {
+func (repository fakeMemoCloudGameRepository) UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	return &game, nil
 }
 
@@ -38,36 +38,36 @@ func (repository fakeMemoCloudGameRepository) DeleteGame(ctx context.Context, ga
 	return nil
 }
 
-func (repository fakeMemoCloudGameRepository) CreateRoute(ctx context.Context, route models.Route) (*models.Route, error) {
+func (repository fakeMemoCloudGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
 	return nil, nil
 }
 
 type fakeMemoCloudMemoRepository struct {
-	memo       *models.Memo
-	memoByGame []models.Memo
+	memo       *domain.Memo
+	memoByGame []domain.Memo
 }
 
-func (repository fakeMemoCloudMemoRepository) CreateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (repository fakeMemoCloudMemoRepository) CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return &memo, nil
 }
 
-func (repository fakeMemoCloudMemoRepository) UpdateMemo(ctx context.Context, memo models.Memo) (*models.Memo, error) {
+func (repository fakeMemoCloudMemoRepository) UpdateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	return &memo, nil
 }
 
-func (repository fakeMemoCloudMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*models.Memo, error) {
+func (repository fakeMemoCloudMemoRepository) GetMemoByID(ctx context.Context, memoID string) (*domain.Memo, error) {
 	return repository.memo, nil
 }
 
-func (repository fakeMemoCloudMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*models.Memo, error) {
+func (repository fakeMemoCloudMemoRepository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
 	return nil, nil
 }
 
-func (repository fakeMemoCloudMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]models.Memo, error) {
+func (repository fakeMemoCloudMemoRepository) ListMemosByGame(ctx context.Context, gameID string) ([]domain.Memo, error) {
 	return repository.memoByGame, nil
 }
 
-func (repository fakeMemoCloudMemoRepository) ListAllMemos(ctx context.Context) ([]models.Memo, error) {
+func (repository fakeMemoCloudMemoRepository) ListAllMemos(ctx context.Context) ([]domain.Memo, error) {
 	return repository.memoByGame, nil
 }
 
@@ -113,8 +113,8 @@ func TestMemoCloudServiceGetCloudMemosUsesObjectStorePort(t *testing.T) {
 func TestMemoCloudServiceUploadMemoToCloudUsesObjectStorePort(t *testing.T) {
 	t.Parallel()
 
-	game := &models.Game{ID: "game-1", Title: "Game"}
-	memoData := &models.Memo{
+	game := &domain.Game{ID: "game-1", Title: "Game"}
+	memoData := &domain.Memo{
 		ID:      "memo-1",
 		GameID:  "game-1",
 		Title:   "Memo",

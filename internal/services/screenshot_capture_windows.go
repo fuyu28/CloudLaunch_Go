@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 	"golang.org/x/sys/windows"
 )
 
@@ -84,7 +84,7 @@ func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGa
 func (service *ScreenshotService) resolveHotkeyGame(
 	ctx context.Context,
 	preferredGameID string,
-) (*models.Game, error) {
+) (*domain.Game, error) {
 	trimmed := strings.TrimSpace(preferredGameID)
 	if trimmed == "" {
 		return nil, nil

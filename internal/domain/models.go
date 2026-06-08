@@ -1,5 +1,5 @@
 // @fileoverview データベースとAPIで使う基本モデルを定義する。
-package models
+package domain
 
 import "time"
 

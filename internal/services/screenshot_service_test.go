@@ -10,14 +10,14 @@ import (
 	"testing"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 type fakeScreenshotRepository struct {
-	getGameByIDFn func(ctx context.Context, gameID string) (*models.Game, error)
+	getGameByIDFn func(ctx context.Context, gameID string) (*domain.Game, error)
 }
 
-func (repository fakeScreenshotRepository) GetGameByID(ctx context.Context, gameID string) (*models.Game, error) {
+func (repository fakeScreenshotRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	return repository.getGameByIDFn(ctx, gameID)
 }
 
@@ -25,7 +25,7 @@ func TestScreenshotServiceCaptureGameScreenshotRejectsEmptyGameID(t *testing.T) 
 	t.Parallel()
 
 	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -40,7 +40,7 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsRepositoryError(t *testing
 	t.Parallel()
 
 	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, errors.New("db down")
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -55,7 +55,7 @@ func TestScreenshotServiceBuildScreenshotPathsUsesConfiguredExtension(t *testing
 	t.Parallel()
 
 	service := NewScreenshotService(config.Config{ScreenshotLocalJpeg: true}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -79,7 +79,7 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsNotFoundWhenGameMissing(t 
 	t.Parallel()
 
 	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -94,8 +94,8 @@ func TestScreenshotServiceCaptureGameScreenshotPassesThroughErrNoNewScreenshot(t
 	t.Parallel()
 
 	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game"}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.captureFunc = func(ctx context.Context, fullPath, tmpPath string) error {
@@ -113,8 +113,8 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsCaptureError(t *testing.T)
 
 	captureErr := errors.New("capture failed")
 	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game"}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.captureFunc = func(ctx context.Context, fullPath, tmpPath string) error {
@@ -131,8 +131,8 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsPathOnSuccess(t *testing.T
 	t.Parallel()
 
 	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
-		getGameByIDFn: func(ctx context.Context, gameID string) (*models.Game, error) {
-			return &models.Game{ID: gameID, Title: "Game"}, nil
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.captureFunc = func(ctx context.Context, fullPath, tmpPath string) error {

@@ -11,7 +11,7 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/storage"
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 )
 
 func TestPrepareGameSyncStateBuildsMergedStateAndSkipsUpsertWhenSessionsUnchanged(t *testing.T) {
@@ -29,8 +29,8 @@ func TestPrepareGameSyncStateBuildsMergedStateAndSkipsUpsertWhenSessionsUnchange
 	service.cloudStorage = cloudStorage
 
 	local := localGameBundle{
-		Game: models.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now.Add(-2 * time.Hour)},
-		Sessions: []models.PlaySession{
+		Game: domain.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now.Add(-2 * time.Hour)},
+		Sessions: []domain.PlaySession{
 			{ID: "session-1", GameID: "game-1", PlayedAt: sessionTime, Duration: 1800, UpdatedAt: sessionTime},
 		},
 	}
@@ -70,7 +70,7 @@ func TestPrepareGameSyncStateUpsertsLocalSessionsWhenSessionsChanged(t *testing.
 		},
 	}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
 	state, err := service.prepareGameSyncState(context.Background(), nil, "bucket", "game-1", local, cloud)
@@ -93,7 +93,7 @@ func TestPrepareGameSyncStatePropagatesLoadCloudSessionsError(t *testing.T) {
 	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{loadSessionsErr: loadErr}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
 	_, err := service.prepareGameSyncState(context.Background(), nil, "bucket", "game-1", local, cloud)
@@ -115,7 +115,7 @@ func TestPrepareGameSyncStatePropagatesUpsertSessionError(t *testing.T) {
 		},
 	}
 
-	local := localGameBundle{Game: models.Game{ID: "game-1", UpdatedAt: now}}
+	local := localGameBundle{Game: domain.Game{ID: "game-1", UpdatedAt: now}}
 	cloud := storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now}
 
 	_, err := service.prepareGameSyncState(context.Background(), nil, "bucket", "game-1", local, cloud)
@@ -134,7 +134,7 @@ func TestSyncUploadPathBuildsCloudGameAndAggregatesSessionCounts(t *testing.T) {
 	service.cloudStorage = cloudStorage
 
 	state := gameSyncState{
-		mergedGame: models.Game{ID: "game-1", Title: "Merged Title", Publisher: "Pub", UpdatedAt: now},
+		mergedGame: domain.Game{ID: "game-1", Title: "Merged Title", Publisher: "Pub", UpdatedAt: now},
 		mergedSessions: mergedSessionsResult{
 			Sessions:        []storage.CloudSessionRecord{{ID: "session-1", PlayedAt: now, Duration: 600, UpdatedAt: now}},
 			UploadedCount:   2,
@@ -175,7 +175,7 @@ func TestSyncUploadPathPropagatesBuildCloudGameError(t *testing.T) {
 	service := NewCloudSyncService(config.Config{}, nil, newNoopCloudSyncRepository(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.cloudStorage = &fakeCloudSyncStorage{saveSessionsErr: saveErr}
 
-	state := gameSyncState{mergedGame: models.Game{ID: "game-1", UpdatedAt: now}}
+	state := gameSyncState{mergedGame: domain.Game{ID: "game-1", UpdatedAt: now}}
 
 	_, err := service.syncUploadPath(context.Background(), nil, "bucket", "game-1", state, nil)
 	if !errors.Is(err, saveErr) {
@@ -202,7 +202,7 @@ func TestSyncDownloadPathSavesCloudSessionsAndAppliesLocalGameWhenSessionsChange
 			Changed:         true,
 		},
 	}
-	localGame := &models.Game{ID: "game-1", ExePath: "/local/game.exe", UpdatedAt: now.Add(-time.Hour)}
+	localGame := &domain.Game{ID: "game-1", ExePath: "/local/game.exe", UpdatedAt: now.Add(-time.Hour)}
 
 	result, err := service.syncDownloadPath(context.Background(), nil, "bucket", "game-1", state, localGame)
 	if err != nil {
@@ -243,7 +243,7 @@ func TestSyncDownloadPathSkipsCloudSessionSaveWhenSessionsUnchanged(t *testing.T
 		mergedCloudGame: storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now},
 		mergedSessions:  mergedSessionsResult{Changed: false},
 	}
-	localGame := &models.Game{ID: "game-1", UpdatedAt: now.Add(-time.Hour)}
+	localGame := &domain.Game{ID: "game-1", UpdatedAt: now.Add(-time.Hour)}
 
 	result, err := service.syncDownloadPath(context.Background(), nil, "bucket", "game-1", state, localGame)
 	if err != nil {
@@ -273,7 +273,7 @@ func TestSyncDownloadPathPropagatesCloudSessionSaveError(t *testing.T) {
 		mergedCloudGame: storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now},
 		mergedSessions:  mergedSessionsResult{Changed: true},
 	}
-	localGame := &models.Game{ID: "game-1", UpdatedAt: now}
+	localGame := &domain.Game{ID: "game-1", UpdatedAt: now}
 
 	_, err := service.syncDownloadPath(context.Background(), nil, "bucket", "game-1", state, localGame)
 	if !errors.Is(err, saveErr) {
@@ -297,7 +297,7 @@ func TestSyncSkipPathMarksSkippedAndSkipsMetadataSaveWhenSessionsUnchanged(t *te
 		mergedCloudGame: storage.CloudGameMetadata{ID: "game-1", Title: "Merged", UpdatedAt: now},
 		mergedSessions:  mergedSessionsResult{Changed: false},
 	}
-	localGame := &models.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now}
+	localGame := &domain.Game{ID: "game-1", Title: "Local Title", UpdatedAt: now}
 
 	result, err := service.syncSkipPath(context.Background(), nil, "bucket", "game-1", state, localGame)
 	if err != nil {
@@ -334,7 +334,7 @@ func TestSyncSkipPathSavesSessionsWithoutSkipSummaryWhenSessionsChanged(t *testi
 			Changed:         true,
 		},
 	}
-	localGame := &models.Game{ID: "game-1", UpdatedAt: now}
+	localGame := &domain.Game{ID: "game-1", UpdatedAt: now}
 
 	result, err := service.syncSkipPath(context.Background(), nil, "bucket", "game-1", state, localGame)
 	if err != nil {
@@ -365,7 +365,7 @@ func TestSyncSkipPathPropagatesCloudSessionSaveError(t *testing.T) {
 		mergedCloudGame: storage.CloudGameMetadata{ID: "game-1", UpdatedAt: now},
 		mergedSessions:  mergedSessionsResult{Changed: true},
 	}
-	localGame := &models.Game{ID: "game-1", UpdatedAt: now}
+	localGame := &domain.Game{ID: "game-1", UpdatedAt: now}
 
 	_, err := service.syncSkipPath(context.Background(), nil, "bucket", "game-1", state, localGame)
 	if !errors.Is(err, saveErr) {
