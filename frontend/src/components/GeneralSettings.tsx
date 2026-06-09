@@ -339,23 +339,48 @@ export default function GeneralSettings(): React.JSX.Element {
       return;
     }
     setIsSyncingAll(true);
+    const toastId = toast.loading("全ゲームを同期中…");
     try {
-      const result = await window.api.cloudSync.syncAllGames();
-      if (!result.success || !result.data) {
-        toast.error(result.message || "クラウド同期に失敗しました");
-        return;
+      const games = await window.api.database.listGames("", "all", "title", "asc");
+      let uploaded = 0;
+      let downloaded = 0;
+      let failed = 0;
+
+      for (const game of games) {
+        if (!game.saveFolderPath) continue;
+
+        const statusResult = await window.api.cloudSync.status(game.id);
+        if (!statusResult.success || !statusResult.data) {
+          failed++;
+          continue;
+        }
+
+        const { status } = statusResult.data;
+        if (status === "push_needed") {
+          const r = await window.api.cloudSync.push(game.id);
+          if (r.success) uploaded++;
+          else failed++;
+        } else if (status === "pull_needed") {
+          const r = await window.api.cloudSync.pull(game.id);
+          if (r.success) downloaded++;
+          else failed++;
+        }
       }
-      const summary = result.data;
-      toast.success(
-        `同期完了: アップロード${summary.uploadedGames}件 / ダウンロード${summary.downloadedGames}件`,
-      );
+
+      const parts: string[] = [];
+      if (uploaded > 0) parts.push(`アップロード${uploaded}件`);
+      if (downloaded > 0) parts.push(`ダウンロード${downloaded}件`);
+      const suffix = failed > 0 ? `（${failed}件失敗）` : "";
+      const message =
+        parts.length > 0 ? `同期完了: ${parts.join(" / ")}${suffix}` : "すべて最新の状態です";
+      toast.success(message, { id: toastId });
     } catch (error) {
       logger.error("全ゲーム同期エラー:", {
         component: "GeneralSettings",
         function: "handleSyncAllGames",
         data: error,
       });
-      toast.error("クラウド同期に失敗しました");
+      toast.error("クラウド同期に失敗しました", { id: toastId });
     } finally {
       setIsSyncingAll(false);
     }
