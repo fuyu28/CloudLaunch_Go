@@ -231,20 +231,9 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 	}
 	metaHash := hashBytes(meta.SnapshotBytes)
 
-	// セーブファイルをアップロード（進捗付き）
-	total := len(saveBlobs)
-	current := 0
-	if onProgress != nil {
-		onProgress(0, total)
-	}
-	for hash, data := range saveBlobs {
-		if err := storage.PutBlob(ctx, client, cfg.Bucket, gameID, hash, data); err != nil {
-			return err
-		}
-		current++
-		if onProgress != nil {
-			onProgress(current, total)
-		}
+	// セーブファイルをアップロード（既存ブロブ一括確認 + 差分並列アップロード）
+	if err := storage.PutBlobs(ctx, client, cfg.Bucket, gameID, saveBlobs, s.config.S3UploadConcurrency, onProgress); err != nil {
+		return err
 	}
 
 	// セーブスナップショット・画像・game.json・sessions.json をアップロード
