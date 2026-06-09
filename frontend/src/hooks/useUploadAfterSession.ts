@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 
 import { logger } from "@renderer/utils/logger";
 
+import type { SyncProgressEvent } from "src/wailsBridge";
 import type { ToastHandler } from "@renderer/hooks/useToastHandler";
 
 type PendingUpload = {
@@ -69,6 +70,14 @@ export function useUploadAfterSession(
     setPendingUpload(null);
     setUploadingAfterEndGameId(payload.gameId);
     const toastId = toastHandler.showLoading("セーブデータをアップロード中…");
+    const unsubscribe = window.api.cloudSync.onProgress((event: SyncProgressEvent) => {
+      if (event.operation === "push" && event.total > 0) {
+        toastHandler.showLoading(
+          `セーブデータをアップロード中… ${event.current}/${event.total}`,
+          toastId,
+        );
+      }
+    });
     try {
       const result = await window.api.cloudSync.push(payload.gameId);
       if (result.success) {
@@ -97,6 +106,7 @@ export function useUploadAfterSession(
         toastHandler.showToast("セーブデータのアップロードに失敗しました", "error");
       }
     } finally {
+      unsubscribe();
       setUploadingAfterEndGameId(null);
     }
   }, [pendingUpload, toastHandler]);

@@ -30,7 +30,7 @@ export type ToastOptions = {
  */
 export type ToastHandler = {
   /** ローディングトーストを表示 */
-  showLoading: (message?: string) => string | undefined;
+  showLoading: (message?: string, toastId?: string) => string | undefined;
   /** 成功トーストを表示 */
   showSuccess: (message: string, toastId?: string) => void;
   /** エラートーストを表示 */
@@ -49,9 +49,9 @@ export type ToastHandler = {
  * @returns トーストハンドラー
  */
 export function useToastHandler(): ToastHandler {
-  const showLoading = useCallback((message?: string): string | undefined => {
+  const showLoading = useCallback((message?: string, toastId?: string): string | undefined => {
     if (message) {
-      return toast.loading(message);
+      return toast.loading(message, toastId ? { id: toastId } : undefined);
     }
     return undefined;
   }, []);
