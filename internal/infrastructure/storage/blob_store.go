@@ -13,13 +13,22 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func blobKey(gameID, hash string) string {
-	return fmt.Sprintf("games/%s/objects/%s", gameID, hash)
+// BlobKind はS3上のオブジェクト種別を表す。
+type BlobKind = string
+
+const (
+	BlobKindCommit BlobKind = "commits" // MetaSnapshot（git の commit 相当）
+	BlobKindTree   BlobKind = "trees"   // SaveSnapshot（git の tree 相当）
+	BlobKindMeta   BlobKind = "meta"    // game.json / sessions.json
+	BlobKindObject BlobKind = "objects" // セーブファイル実データ・画像
+)
+
+func blobKey(gameID, kind, hash string) string {
+	return fmt.Sprintf("games/%s/%s/%s", gameID, kind, hash)
 }
 
-// BlobExists はブロブがS3に存在するかを確認する。
-func BlobExists(ctx context.Context, client *s3.Client, bucket, gameID, hash string) (bool, error) {
-	key := blobKey(gameID, hash)
+func blobExists(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string) (bool, error) {
+	key := blobKey(gameID, kind, hash)
 	_, err := client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
@@ -34,15 +43,15 @@ func BlobExists(ctx context.Context, client *s3.Client, bucket, gameID, hash str
 }
 
 // PutBlob はブロブをS3にアップロードする。既に存在する場合はスキップする。
-func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, hash string, data []byte) error {
-	exists, err := BlobExists(ctx, client, bucket, gameID, hash)
+func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string, data []byte) error {
+	exists, err := blobExists(ctx, client, bucket, gameID, kind, hash)
 	if err != nil {
 		return err
 	}
 	if exists {
 		return nil
 	}
-	key := blobKey(gameID, hash)
+	key := blobKey(gameID, kind, hash)
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: &bucket,
 		Key:    &key,
@@ -52,13 +61,14 @@ func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, hash string
 }
 
 // GetBlob はS3からブロブを取得する。
-func GetBlob(ctx context.Context, client *s3.Client, bucket, gameID, hash string) ([]byte, error) {
-	return DownloadObject(ctx, client, bucket, blobKey(gameID, hash))
+func GetBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string) ([]byte, error) {
+	return DownloadObject(ctx, client, bucket, blobKey(gameID, kind, hash))
 }
 
-// ListBlobHashes はゲームの既存ブロブハッシュを一括取得する。
+// ListBlobHashes はゲームの既存セーブファイルブロブのハッシュを一括取得する。
+// objects/ プレフィックスのみを対象とする。
 func ListBlobHashes(ctx context.Context, client *s3.Client, bucket, gameID string) (map[string]struct{}, error) {
-	prefix := fmt.Sprintf("games/%s/objects/", gameID)
+	prefix := fmt.Sprintf("games/%s/%s/", gameID, BlobKindObject)
 	existing := make(map[string]struct{})
 	input := &s3.ListObjectsV2Input{
 		Bucket: &bucket,
@@ -80,7 +90,7 @@ func ListBlobHashes(ctx context.Context, client *s3.Client, bucket, gameID strin
 	return existing, nil
 }
 
-// PutBlobs はブロブを一括アップロードする。
+// PutBlobs はセーブファイルブロブを一括アップロードする（objects/ 固定）。
 // ListObjectsV2 でリモートの既存ハッシュを一括取得し、不足分のみ並列アップロードする。
 // onProgress は (アップロード済み件数, 総件数) を受け取るコールバック。nil 可。
 func PutBlobs(
@@ -151,7 +161,7 @@ func PutBlobs(
 				if ctx.Err() != nil {
 					return
 				}
-				key := blobKey(gameID, t.hash)
+				key := blobKey(gameID, BlobKindObject, t.hash)
 				_, putErr := client.PutObject(ctx, &s3.PutObjectInput{
 					Bucket: &bucket,
 					Key:    &key,
@@ -178,7 +188,7 @@ func PutBlobs(
 	return firstErr
 }
 
-// DownloadBlobs はブロブを並列ダウンロードしてローカルに保存する。
+// DownloadBlobs はセーブファイルブロブを並列ダウンロードしてローカルに保存する（objects/ 固定）。
 // blobs は relPath → hash のマップ。saveDir 配下の relPath に書き込む。
 // onProgress は (ダウンロード済み件数, 総件数) を受け取るコールバック。nil 可。
 func DownloadBlobs(
@@ -235,7 +245,7 @@ func DownloadBlobs(
 				if ctx.Err() != nil {
 					return
 				}
-				data, err := GetBlob(ctx, client, bucket, gameID, t.hash)
+				data, err := GetBlob(ctx, client, bucket, gameID, BlobKindObject, t.hash)
 				if err != nil {
 					errOnce.Do(func() { firstErr = err; cancel() })
 					return

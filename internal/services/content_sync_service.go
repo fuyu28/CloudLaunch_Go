@@ -24,8 +24,8 @@ type ProgressFunc func(current, total int)
 type contentBlobStore interface {
 	readHEAD(ctx context.Context, gameID string) (string, error)
 	writeHEAD(ctx context.Context, gameID, hash string) error
-	getBlob(ctx context.Context, gameID, hash string) ([]byte, error)
-	putBlob(ctx context.Context, gameID, hash string, data []byte) error
+	getBlob(ctx context.Context, gameID, kind, hash string) ([]byte, error)
+	putBlob(ctx context.Context, gameID, kind, hash string, data []byte) error
 	putBlobs(ctx context.Context, gameID string, blobs map[string][]byte, concurrency int, onProgress func(int, int)) error
 	downloadBlobs(ctx context.Context, gameID, saveDir string, blobs map[string]string, concurrency int, onProgress func(int, int)) error
 	deleteByPrefix(ctx context.Context, prefix string) error
@@ -42,11 +42,11 @@ func (b *s3BlobStore) readHEAD(ctx context.Context, gameID string) (string, erro
 func (b *s3BlobStore) writeHEAD(ctx context.Context, gameID, hash string) error {
 	return storage.WriteHEAD(ctx, b.client, b.bucket, gameID, hash)
 }
-func (b *s3BlobStore) getBlob(ctx context.Context, gameID, hash string) ([]byte, error) {
-	return storage.GetBlob(ctx, b.client, b.bucket, gameID, hash)
+func (b *s3BlobStore) getBlob(ctx context.Context, gameID, kind, hash string) ([]byte, error) {
+	return storage.GetBlob(ctx, b.client, b.bucket, gameID, kind, hash)
 }
-func (b *s3BlobStore) putBlob(ctx context.Context, gameID, hash string, data []byte) error {
-	return storage.PutBlob(ctx, b.client, b.bucket, gameID, hash, data)
+func (b *s3BlobStore) putBlob(ctx context.Context, gameID, kind, hash string, data []byte) error {
+	return storage.PutBlob(ctx, b.client, b.bucket, gameID, kind, hash, data)
 }
 func (b *s3BlobStore) putBlobs(ctx context.Context, gameID string, blobs map[string][]byte, concurrency int, onProgress func(int, int)) error {
 	return storage.PutBlobs(ctx, b.client, b.bucket, gameID, blobs, concurrency, onProgress)
@@ -172,7 +172,7 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 		return domain.SyncStatusDetail{Status: domain.SyncStatusNeverSynced}, nil
 	}
 
-	remoteMetaBytes, err := bstore.getBlob(ctx, gameID, remoteHead)
+	remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
 	if err != nil {
 		return domain.SyncStatusDetail{}, err
 	}
@@ -284,21 +284,21 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 	}
 
 	// セーブスナップショット・画像・game.json・sessions.json をアップロード
-	if err := bstore.putBlob(ctx, gameID, savesHash, saveSnapJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindTree, savesHash, saveSnapJSON); err != nil {
 		return err
 	}
 	if imageHash != "" && imageData != nil {
-		if err := bstore.putBlob(ctx, gameID, imageHash, imageData); err != nil {
+		if err := bstore.putBlob(ctx, gameID, storage.BlobKindObject, imageHash, imageData); err != nil {
 			return err
 		}
 	}
-	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
 		return err
 	}
-	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
 		return err
 	}
-	if err := bstore.putBlob(ctx, gameID, metaHash, meta.SnapshotBytes); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
 		return err
 	}
 
@@ -323,7 +323,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return fmt.Errorf("リモートにデータがありません")
 	}
 
-	metaBytes, err := bstore.getBlob(ctx, gameID, remoteHead)
+	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
-	saveSnapBytes, err := bstore.getBlob(ctx, gameID, meta.Saves)
+	saveSnapBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindTree, meta.Saves)
 	if err != nil {
 		return err
 	}
@@ -341,7 +341,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
-	gameJSONBytes, err := bstore.getBlob(ctx, gameID, meta.GameJSON)
+	gameJSONBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON)
 	if err != nil {
 		return err
 	}
@@ -350,7 +350,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
-	sessionsJSONBytes, err := bstore.getBlob(ctx, gameID, meta.SessionsJSON)
+	sessionsJSONBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.SessionsJSON)
 	if err != nil {
 		return err
 	}
@@ -382,7 +382,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 			}
 		}
 		if localImageHash != cloudG.ImageHash {
-			imageData, berr := bstore.getBlob(ctx, gameID, cloudG.ImageHash)
+			imageData, berr := bstore.getBlob(ctx, gameID, storage.BlobKindObject, cloudG.ImageHash)
 			if berr != nil {
 				return berr
 			}

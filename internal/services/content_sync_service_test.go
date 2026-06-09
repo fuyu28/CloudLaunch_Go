@@ -13,6 +13,7 @@ import (
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 )
 
 // ─── fakeContentSyncRepository ──────────────────────────────────────────────
@@ -112,8 +113,8 @@ func newFakeBlobStore() *fakeBlobStore {
 	}
 }
 
-func (f *fakeBlobStore) blobKey(gameID, hash string) string {
-	return gameID + "/" + hash
+func (f *fakeBlobStore) blobKey(gameID, kind, hash string) string {
+	return gameID + "/" + kind + "/" + hash
 }
 
 func (f *fakeBlobStore) readHEAD(_ context.Context, gameID string) (string, error) {
@@ -129,20 +130,20 @@ func (f *fakeBlobStore) writeHEAD(_ context.Context, gameID, hash string) error 
 	return nil
 }
 
-func (f *fakeBlobStore) getBlob(_ context.Context, gameID, hash string) ([]byte, error) {
+func (f *fakeBlobStore) getBlob(_ context.Context, gameID, kind, hash string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	data, ok := f.blobs[f.blobKey(gameID, hash)]
+	data, ok := f.blobs[f.blobKey(gameID, kind, hash)]
 	if !ok {
-		return nil, fmt.Errorf("blob not found: %s/%s", gameID, hash)
+		return nil, fmt.Errorf("blob not found: %s/%s/%s", gameID, kind, hash)
 	}
 	return data, nil
 }
 
-func (f *fakeBlobStore) putBlob(_ context.Context, gameID, hash string, data []byte) error {
+func (f *fakeBlobStore) putBlob(_ context.Context, gameID, kind, hash string, data []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.blobs[f.blobKey(gameID, hash)] = data
+	f.blobs[f.blobKey(gameID, kind, hash)] = data
 	return nil
 }
 
@@ -152,7 +153,7 @@ func (f *fakeBlobStore) putBlobs(_ context.Context, gameID string, blobs map[str
 	total := len(blobs)
 	done := 0
 	for hash, data := range blobs {
-		f.blobs[f.blobKey(gameID, hash)] = data
+		f.blobs[f.blobKey(gameID, storage.BlobKindObject, hash)] = data
 		done++
 		if onProgress != nil {
 			onProgress(done, total)
@@ -175,10 +176,10 @@ func (f *fakeBlobStore) downloadBlobs(_ context.Context, gameID, saveDir string,
 	done := 0
 	for relPath, hash := range blobs {
 		f.mu.Lock()
-		data, ok := f.blobs[f.blobKey(gameID, hash)]
+		data, ok := f.blobs[f.blobKey(gameID, storage.BlobKindObject, hash)]
 		f.mu.Unlock()
 		if !ok {
-			return fmt.Errorf("blob not found: %s/%s", gameID, hash)
+			return fmt.Errorf("blob not found: %s/%s/%s", gameID, storage.BlobKindObject, hash)
 		}
 		targetPath := filepath.Join(saveDir, filepath.FromSlash(relPath))
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
@@ -239,11 +240,11 @@ func setupRemoteState(
 	savesHash := hashBytes(saveSnapJSON)
 
 	for h, data := range saveBlobs {
-		if err := bstore.putBlob(ctx, gameID, h, data); err != nil {
+		if err := bstore.putBlob(ctx, gameID, storage.BlobKindObject, h, data); err != nil {
 			t.Fatalf("putBlob: %v", err)
 		}
 	}
-	if err := bstore.putBlob(ctx, gameID, savesHash, saveSnapJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindTree, savesHash, saveSnapJSON); err != nil {
 		t.Fatalf("putBlob saveSnap: %v", err)
 	}
 
@@ -253,13 +254,13 @@ func setupRemoteState(
 	}
 	metaHash := hashBytes(meta.SnapshotBytes)
 
-	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
 		t.Fatalf("putBlob gameJSON: %v", err)
 	}
-	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
 		t.Fatalf("putBlob sessionsJSON: %v", err)
 	}
-	if err := bstore.putBlob(ctx, gameID, metaHash, meta.SnapshotBytes); err != nil {
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
 		t.Fatalf("putBlob meta: %v", err)
 	}
 	if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
@@ -314,7 +315,7 @@ func TestContentSyncServicePushUploadsDataAndSetsHead(t *testing.T) {
 	saveData := []byte("game data")
 	saveHash := hashBytes(saveData)
 	bstore.mu.Lock()
-	_, ok := bstore.blobs[bstore.blobKey(game.ID, saveHash)]
+	_, ok := bstore.blobs[bstore.blobKey(game.ID, storage.BlobKindObject, saveHash)]
 	bstore.mu.Unlock()
 	if !ok {
 		t.Error("expected save file blob to be stored")
