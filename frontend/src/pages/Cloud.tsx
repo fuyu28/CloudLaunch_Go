@@ -179,7 +179,7 @@ export default function Cloud(): React.JSX.Element {
     }
     setIsDeletingGame(true);
     try {
-      const result = await window.api.cloudSync.deleteGame(selectedGameId);
+      const result = await window.api.cloudSync.deleteFromCloud(selectedGameId);
       if (!result.success) {
         showToast(result.message || "クラウド削除に失敗しました", "error");
         return;

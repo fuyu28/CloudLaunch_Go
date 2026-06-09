@@ -55,19 +55,6 @@ type RouteRepository interface {
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
 }
 
-// CloudSyncRepository defines the persistence boundary required by CloudSyncService.
-type CloudSyncRepository interface {
-	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
-	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
-	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
-	UpsertGameSync(ctx context.Context, game domain.Game) error
-	DeletePlaySessionsByGame(ctx context.Context, gameID string) error
-	UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error
-	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
-	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
-	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
-}
-
 // ContentSyncRepository defines the persistence boundary required by ContentSyncService.
 type ContentSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
