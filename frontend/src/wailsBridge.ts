@@ -82,7 +82,6 @@ import {
   ListSessionsByGame,
   LoadImageFromLocal,
   LoadCredential,
-  DownloadSaveData,
   OpenFolder,
   OpenLogsDirectory,
   DeleteGameFromCloud,
@@ -105,7 +104,6 @@ import {
   UpdateScreenshotSyncEnabled,
   UpdateScreenshotUploadJpeg,
   UpdateUploadConcurrency,
-  UpdateTransferRetryCount,
   UpdateGame,
   UpdateMemo,
   UpdateSessionName,
@@ -134,7 +132,6 @@ export type WindowApi = {
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;
     updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>;
-    updateTransferRetryCount: (value: number) => Promise<ApiResult<void>>;
     updateScreenshotSyncEnabled: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotUploadJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotJpegQuality: (value: number) => Promise<ApiResult<void>>;
@@ -208,7 +205,6 @@ export type WindowApi = {
   };
   saveData: {
     download: {
-      downloadSaveData: (localPath: string, remotePath: string) => Promise<ApiResult<void>>;
       getCloudFileDetails: (
         gameId: string,
       ) => Promise<ApiResult<{ exists: boolean; totalSize: number; files: CloudFileDetail[] }>>;
@@ -333,12 +329,6 @@ export const createWailsBridge = (): WindowApi => {
       },
       updateUploadConcurrency: async (value) => {
         const result = await UpdateUploadConcurrency(value);
-        return result.success
-          ? { success: true }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
-      updateTransferRetryCount: async (value) => {
-        const result = await UpdateTransferRetryCount(value);
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
@@ -725,12 +715,6 @@ export const createWailsBridge = (): WindowApi => {
     },
     saveData: {
       download: {
-        downloadSaveData: async (localPath, remotePath) => {
-          const result = await DownloadSaveData(localPath, remotePath);
-          return result.success
-            ? { success: true }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        },
         getCloudFileDetails: async (gameId) => {
           const result = await GetCloudFileDetailsByGame(gameId);
           return result.success

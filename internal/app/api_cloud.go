@@ -261,27 +261,6 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 	return result.OkResult(CloudFileDetailsResult{Exists: len(files) > 0, TotalSize: total, Files: files})
 }
 
-// DownloadSaveData はクラウドからダウンロードする。
-func (app *App) DownloadSaveData(localPath string, remotePath string) result.ApiResult[bool] {
-	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[bool](app, "ダウンロードに失敗しました", error, "operation", "DownloadSaveData.getDefaultS3Client", "remotePath", remotePath)
-	}
-	if error := storage.DownloadPrefix(
-		ctx,
-		client,
-		bucket,
-		remotePath,
-		localPath,
-		app.Config.S3UploadConcurrency,
-		app.Config.S3TransferRetryCount,
-	); error != nil {
-		return errorResultWithLog[bool](app, "ダウンロードに失敗しました", error, "operation", "DownloadSaveData.downloadPrefix", "remotePath", remotePath, "localPath", localPath)
-	}
-	return result.OkResult(true)
-}
-
 // LoadImageFromLocal はローカル画像をBase64で返す。
 func (app *App) LoadImageFromLocal(filePath string) result.ApiResult[string] {
 	content, error := os.ReadFile(filePath)

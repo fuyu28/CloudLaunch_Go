@@ -8,7 +8,7 @@ type UploadSaveDataInput = {
   gameId: string;
 };
 
-type DownloadSaveDataInput = {
+type PullSaveDataInput = {
   gameId: string;
 };
 
@@ -19,7 +19,7 @@ export async function uploadSaveDataAndSyncHash(
 }
 
 export async function downloadSaveDataAndSyncMetadata(
-  input: DownloadSaveDataInput,
+  input: PullSaveDataInput,
 ): Promise<ApiResult<void>> {
   return window.api.cloudSync.pull(input.gameId);
 }

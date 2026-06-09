@@ -339,16 +339,6 @@ func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// UpdateTransferRetryCount はアップロード/ダウンロードのリトライ回数を更新する。
-func (app *App) UpdateTransferRetryCount(value int) result.ApiResult[bool] {
-	if value < 0 {
-		app.Logger.Warn("リトライ回数が不正です", "operation", "UpdateTransferRetryCount", "value", value)
-		return result.ErrorResult[bool]("リトライ回数が不正です", "valueが不正です")
-	}
-	app.Config.S3TransferRetryCount = value
-	return result.OkResult(true)
-}
-
 // UpdateScreenshotSyncEnabled はスクリーンショット同期の有効/無効を更新する。
 func (app *App) UpdateScreenshotSyncEnabled(enabled bool) result.ApiResult[bool] {
 	app.Config.ScreenshotSyncEnabled = enabled
