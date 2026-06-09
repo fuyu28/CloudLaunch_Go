@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -166,6 +168,91 @@ func PutBlobs(
 					mu.Lock()
 					uploaded++
 					onProgress(uploaded, total)
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	return firstErr
+}
+
+// DownloadBlobs はブロブを並列ダウンロードしてローカルに保存する。
+// blobs は relPath → hash のマップ。saveDir 配下の relPath に書き込む。
+// onProgress は (ダウンロード済み件数, 総件数) を受け取るコールバック。nil 可。
+func DownloadBlobs(
+	ctx context.Context,
+	client *s3.Client,
+	bucket, gameID, saveDir string,
+	blobs map[string]string,
+	concurrency int,
+	onProgress func(downloaded, total int),
+) error {
+	if len(blobs) == 0 {
+		return nil
+	}
+
+	if concurrency <= 0 {
+		concurrency = defaultUploadConcurrency
+	}
+
+	type task struct {
+		relPath string
+		hash    string
+	}
+	tasks := make([]task, 0, len(blobs))
+	for relPath, hash := range blobs {
+		tasks = append(tasks, task{relPath: relPath, hash: hash})
+	}
+
+	total := len(tasks)
+	workerCount := concurrency
+	if workerCount > total {
+		workerCount = total
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	taskCh := make(chan task, total)
+	for _, t := range tasks {
+		taskCh <- t
+	}
+	close(taskCh)
+
+	var wg sync.WaitGroup
+	var errOnce sync.Once
+	var firstErr error
+	var mu sync.Mutex
+	downloaded := 0
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range taskCh {
+				if ctx.Err() != nil {
+					return
+				}
+				data, err := GetBlob(ctx, client, bucket, gameID, t.hash)
+				if err != nil {
+					errOnce.Do(func() { firstErr = err; cancel() })
+					return
+				}
+				targetPath := filepath.Join(saveDir, filepath.FromSlash(t.relPath))
+				if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
+					errOnce.Do(func() { firstErr = err; cancel() })
+					return
+				}
+				if err := os.WriteFile(targetPath, data, 0o600); err != nil {
+					errOnce.Do(func() { firstErr = err; cancel() })
+					return
+				}
+				if onProgress != nil {
+					mu.Lock()
+					downloaded++
+					onProgress(downloaded, total)
 					mu.Unlock()
 				}
 			}

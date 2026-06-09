@@ -353,33 +353,37 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		}
 	}
 
-	// セーブファイルをダウンロード（進捗付き）
+	// セーブファイルをダウンロード（ローカルハッシュ比較で差分のみ並列ダウンロード）
 	if saveFolderPath != nil && *saveFolderPath != "" {
 		saveDir := *saveFolderPath
 		total := len(saveSnap.Files)
-		current := 0
-		if onProgress != nil {
-			onProgress(0, total)
-		}
+
 		if err := os.MkdirAll(saveDir, 0o700); err != nil {
 			return err
 		}
+
+		needsDownload := make(map[string]string, total)
 		for relPath, hash := range saveSnap.Files {
-			data, berr := storage.GetBlob(ctx, client, cfg.Bucket, gameID, hash)
-			if berr != nil {
-				return berr
-			}
 			targetPath := filepath.Join(saveDir, filepath.FromSlash(relPath))
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
-				return err
+			localHash, _, err := hashFile(targetPath)
+			if err != nil || localHash != hash {
+				needsDownload[relPath] = hash
 			}
-			if err := os.WriteFile(targetPath, data, 0o600); err != nil {
-				return err
+		}
+
+		alreadyDone := total - len(needsDownload)
+		if onProgress != nil {
+			onProgress(alreadyDone, total)
+		}
+
+		var wrappedProgress func(int, int)
+		if onProgress != nil {
+			wrappedProgress = func(downloaded, _ int) {
+				onProgress(alreadyDone+downloaded, total)
 			}
-			current++
-			if onProgress != nil {
-				onProgress(current, total)
-			}
+		}
+		if err := storage.DownloadBlobs(ctx, client, cfg.Bucket, gameID, saveDir, needsDownload, s.config.S3UploadConcurrency, wrappedProgress); err != nil {
+			return err
 		}
 	} else {
 		s.logger.Warn("セーブフォルダ未設定のためセーブデータをスキップします", "gameId", gameID)
