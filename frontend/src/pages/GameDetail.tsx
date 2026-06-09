@@ -240,7 +240,8 @@ export default function GameDetail(): React.JSX.Element {
       try {
         const statusResult = await window.api.cloudSync.status(game.id);
         if (!statusResult.success || !statusResult.data) {
-          if (showResult) showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
+          if (showResult)
+            showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
           return false;
         }
         const { status } = statusResult.data;
@@ -348,7 +349,12 @@ export default function GameDetail(): React.JSX.Element {
       try {
         const result = await window.api.cloudSync.resolveConflict(game.id, useLocal);
         if (result.success) {
-          showToast(useLocal ? "ローカルデータをクラウドに反映しました" : "クラウドデータをローカルに適用しました", "success");
+          showToast(
+            useLocal
+              ? "ローカルデータをクラウドに反映しました"
+              : "クラウドデータをローカルに適用しました",
+            "success",
+          );
           setIsConflictModalOpen(false);
           setConflictMeta(null);
         } else {

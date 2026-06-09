@@ -45,11 +45,7 @@ export default function SyncConflictModal({
             onClick={onUseLocal}
             disabled={isResolving}
           >
-            {isResolving ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <FaDesktop />
-            )}
+            {isResolving ? <span className="loading loading-spinner loading-xs" /> : <FaDesktop />}
             ローカルを使う
           </button>
           <button
@@ -58,11 +54,7 @@ export default function SyncConflictModal({
             onClick={onUseRemote}
             disabled={isResolving}
           >
-            {isResolving ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <FaCloud />
-            )}
+            {isResolving ? <span className="loading loading-spinner loading-xs" /> : <FaCloud />}
             クラウドを使う
           </button>
         </div>

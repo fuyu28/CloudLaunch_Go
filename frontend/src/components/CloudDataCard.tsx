@@ -201,7 +201,9 @@ function CloudDataCard({
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={onSync}
-                disabled={!isValidCreds || isSyncing || isUploading || isDownloading || isOfflineMode}
+                disabled={
+                  !isValidCreds || isSyncing || isUploading || isDownloading || isOfflineMode
+                }
                 title="同期状態を確認してコンフリクトを解決する"
               >
                 {isSyncing ? (
@@ -221,7 +223,12 @@ function CloudDataCard({
               className="btn btn-outline btn-sm"
               onClick={handleUpload}
               disabled={
-                !hasSaveFolder || !isValidCreds || isUploading || isDownloading || isSyncing || isOfflineMode
+                !hasSaveFolder ||
+                !isValidCreds ||
+                isUploading ||
+                isDownloading ||
+                isSyncing ||
+                isOfflineMode
               }
             >
               {isUploading ? (
@@ -240,7 +247,12 @@ function CloudDataCard({
               className="btn btn-primary btn-sm"
               onClick={handleDownload}
               disabled={
-                !cloudData.exists || !isValidCreds || isUploading || isDownloading || isSyncing || isOfflineMode
+                !cloudData.exists ||
+                !isValidCreds ||
+                isUploading ||
+                isDownloading ||
+                isSyncing ||
+                isOfflineMode
               }
             >
               {isDownloading ? (
