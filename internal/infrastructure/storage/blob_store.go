@@ -27,6 +27,15 @@ func blobKey(gameID, kind, hash string) string {
 	return fmt.Sprintf("games/%s/%s/%s", gameID, kind, hash)
 }
 
+func contentTypeForKind(kind string) string {
+	switch kind {
+	case BlobKindCommit, BlobKindTree, BlobKindMeta:
+		return "application/json"
+	default:
+		return "application/octet-stream"
+	}
+}
+
 func blobExists(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string) (bool, error) {
 	key := blobKey(gameID, kind, hash)
 	_, err := client.HeadObject(ctx, &s3.HeadObjectInput{
@@ -52,10 +61,12 @@ func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash 
 		return nil
 	}
 	key := blobKey(gameID, kind, hash)
+	ct := contentTypeForKind(kind)
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-		Body:   bytes.NewReader(data),
+		Bucket:      &bucket,
+		Key:         &key,
+		Body:        bytes.NewReader(data),
+		ContentType: &ct,
 	})
 	return err
 }
@@ -162,10 +173,12 @@ func PutBlobs(
 					return
 				}
 				key := blobKey(gameID, BlobKindObject, t.hash)
+				ct := contentTypeForKind(BlobKindObject)
 				_, putErr := client.PutObject(ctx, &s3.PutObjectInput{
-					Bucket: &bucket,
-					Key:    &key,
-					Body:   bytes.NewReader(t.data),
+					Bucket:      &bucket,
+					Key:         &key,
+					Body:        bytes.NewReader(t.data),
+					ContentType: &ct,
 				})
 				if putErr != nil {
 					errOnce.Do(func() {
