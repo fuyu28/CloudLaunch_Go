@@ -3,12 +3,21 @@ package app
 
 import (
 	"strings"
+	"time"
 
 	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/result"
+	"CloudLaunch_Go/internal/services"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// CloudMetadataResult はクラウドメタ情報の API レスポンス。
+type CloudMetadataResult struct {
+	Version   int                    `json:"version"`
+	UpdatedAt time.Time              `json:"updatedAt"`
+	Games     []services.CloudGameInfo `json:"games"`
+}
 
 // SyncStatus は指定ゲームの同期状態を返す。
 func (app *App) SyncStatus(gameID string) result.ApiResult[domain.SyncStatusDetail] {
@@ -84,6 +93,22 @@ func (app *App) syncGameAsync(gameID string) {
 			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
 		}
 	}(gameID)
+}
+
+// LoadCloudMetadata はクラウド上の全ゲームメタ情報を返す。
+func (app *App) LoadCloudMetadata() result.ApiResult[CloudMetadataResult] {
+	games, err := app.ContentSyncService.LoadCloudMetadata(app.context())
+	if err != nil {
+		return serviceErrorResult[CloudMetadataResult](err, "クラウドメタ情報の取得に失敗しました")
+	}
+	if games == nil {
+		games = []services.CloudGameInfo{}
+	}
+	return result.OkResult(CloudMetadataResult{
+		Version:   1,
+		UpdatedAt: time.Now().UTC(),
+		Games:     games,
+	})
 }
 
 // DeleteGameFromCloud は指定ゲームのクラウドデータを削除する。

@@ -206,6 +206,16 @@ func (f *fakeBlobStore) deleteByPrefix(_ context.Context, prefix string) error {
 	return nil
 }
 
+func (f *fakeBlobStore) listGameIDs(_ context.Context) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var ids []string
+	for gameID := range f.heads {
+		ids = append(ids, gameID)
+	}
+	return ids, nil
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 func newTestService(repo *fakeContentSyncRepository, bstore *fakeBlobStore) *ContentSyncService {

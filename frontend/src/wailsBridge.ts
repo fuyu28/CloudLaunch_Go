@@ -85,6 +85,7 @@ import {
   OpenFolder,
   OpenLogsDirectory,
   DeleteGameFromCloud,
+  LoadCloudMetadata,
   SaveCredential,
   SelectFile,
   SelectFolder,
@@ -229,6 +230,9 @@ export type WindowApi = {
         normalizedCmd: string;
       }>;
     }>;
+  };
+  cloudMetadata: {
+    loadCloudMetadata: () => Promise<ApiResult<{ version: number; updatedAt: Date; games: import("src/types/cloud").CloudGameMetadata[] }>>;
   };
   cloudSync: {
     status: (gameId: string) => Promise<ApiResult<SyncStatusDetail>>;
@@ -785,6 +789,15 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
+      },
+    },
+    cloudMetadata: {
+      loadCloudMetadata: async () => {
+        const result = await LoadCloudMetadata();
+        if (!result.success || !result.data) {
+          return { success: false, message: result.error?.message ?? "エラー" };
+        }
+        return { success: true, data: result.data as { version: number; updatedAt: Date; games: import("src/types/cloud").CloudGameMetadata[] } };
       },
     },
     cloudSync: {

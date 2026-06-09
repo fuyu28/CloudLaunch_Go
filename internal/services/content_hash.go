@@ -118,6 +118,21 @@ func removeFilesNotInSnapshot(saveDir string, snapshot domain.SaveSnapshot) erro
 	return nil
 }
 
+// CloudGameInfo はクラウドゲームメタ情報の API 公開型。
+type CloudGameInfo struct {
+	ID             string            `json:"id"`
+	Title          string            `json:"title"`
+	Publisher      string            `json:"publisher"`
+	ImageHash      domain.BlobHash   `json:"imageHash,omitempty"`
+	PlayStatus     domain.PlayStatus `json:"playStatus"`
+	TotalPlayTime  int64             `json:"totalPlayTime"`
+	LastPlayed     *time.Time        `json:"lastPlayed,omitempty"`
+	ClearedAt      *time.Time        `json:"clearedAt,omitempty"`
+	CurrentRouteID *string           `json:"currentRouteId,omitempty"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	UpdatedAt      time.Time         `json:"updatedAt"`
+}
+
 // cloudGame は game.json のクラウド保存フォーマット。
 type cloudGame struct {
 	ID             string            `json:"id"`

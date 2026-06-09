@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/domain"
@@ -29,6 +30,7 @@ type contentBlobStore interface {
 	putBlobs(ctx context.Context, gameID string, blobs map[string][]byte, concurrency int, onProgress func(int, int)) error
 	downloadBlobs(ctx context.Context, gameID, saveDir string, blobs map[string]string, concurrency int, onProgress func(int, int)) error
 	deleteByPrefix(ctx context.Context, prefix string) error
+	listGameIDs(ctx context.Context) ([]string, error)
 }
 
 type s3BlobStore struct {
@@ -56,6 +58,24 @@ func (b *s3BlobStore) downloadBlobs(ctx context.Context, gameID, saveDir string,
 }
 func (b *s3BlobStore) deleteByPrefix(ctx context.Context, prefix string) error {
 	return storage.DeleteObjectsByPrefix(ctx, b.client, b.bucket, prefix)
+}
+func (b *s3BlobStore) listGameIDs(ctx context.Context) ([]string, error) {
+	objects, err := storage.ListObjects(ctx, b.client, b.bucket, "games/")
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	var ids []string
+	for _, obj := range objects {
+		parts := strings.Split(obj.Key, "/")
+		if len(parts) == 3 && parts[0] == "games" && parts[2] == "HEAD" {
+			if _, ok := seen[parts[1]]; !ok {
+				seen[parts[1]] = struct{}{}
+				ids = append(ids, parts[1])
+			}
+		}
+	}
+	return ids, nil
 }
 
 // ContentSyncService はコンテンツアドレッシングによるゲームデータ同期を提供する。
@@ -530,4 +550,57 @@ func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string)
 	}
 	prefix := fmt.Sprintf("games/%s/", gameID)
 	return bstore.deleteByPrefix(ctx, prefix)
+}
+
+// LoadCloudMetadata はクラウド上の全ゲームのメタ情報を返す。
+func (s *ContentSyncService) LoadCloudMetadata(ctx context.Context) ([]CloudGameInfo, error) {
+	bstore, err := s.newBlobStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+	gameIDs, err := bstore.listGameIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var results []CloudGameInfo
+	for _, gameID := range gameIDs {
+		head, err := bstore.readHEAD(ctx, gameID)
+		if err != nil || head == "" {
+			continue
+		}
+		metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
+		if err != nil {
+			s.logger.Warn("コミットブロブ取得失敗", "gameId", gameID, "error", err)
+			continue
+		}
+		var meta domain.MetaSnapshot
+		if err := json.Unmarshal(metaBytes, &meta); err != nil {
+			s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
+			continue
+		}
+		gameJSONBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON)
+		if err != nil {
+			s.logger.Warn("game.json取得失敗", "gameId", gameID, "error", err)
+			continue
+		}
+		var cg cloudGame
+		if err := json.Unmarshal(gameJSONBytes, &cg); err != nil {
+			s.logger.Warn("game.json解析失敗", "gameId", gameID, "error", err)
+			continue
+		}
+		results = append(results, CloudGameInfo{
+			ID:             cg.ID,
+			Title:          cg.Title,
+			Publisher:      cg.Publisher,
+			ImageHash:      cg.ImageHash,
+			PlayStatus:     cg.PlayStatus,
+			TotalPlayTime:  cg.TotalPlayTime,
+			LastPlayed:     cg.LastPlayed,
+			ClearedAt:      cg.ClearedAt,
+			CurrentRouteID: cg.CurrentRouteID,
+			CreatedAt:      cg.CreatedAt,
+			UpdatedAt:      cg.UpdatedAt,
+		})
+	}
+	return results, nil
 }
