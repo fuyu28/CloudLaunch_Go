@@ -125,15 +125,37 @@ export default function Cloud(): React.JSX.Element {
     }
     setIsSyncingGame(true);
     try {
-      const result = await window.api.cloudSync.syncGame(selectedGameId);
-      if (!result.success || !result.data) {
-        showToast(result.message || "クラウド同期に失敗しました", "error");
+      const statusResult = await window.api.cloudSync.status(selectedGameId);
+      if (!statusResult.success || !statusResult.data) {
+        showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
         return;
       }
-      showToast(
-        `同期完了: アップロード${result.data.uploadedGames}件 / ダウンロード${result.data.downloadedGames}件`,
-        "success",
-      );
+      const { status } = statusResult.data;
+      if (status === "in_sync") {
+        showToast("すでに最新の状態です", "success");
+        return;
+      }
+      if (status === "never_synced") {
+        showToast("クラウドにデータがありません", "error");
+        return;
+      }
+      if (status === "push_needed") {
+        const pushResult = await window.api.cloudSync.push(selectedGameId);
+        if (!pushResult.success) {
+          showToast(pushResult.message || "アップロードに失敗しました", "error");
+          return;
+        }
+        showToast("クラウドにアップロードしました", "success");
+      } else if (status === "pull_needed") {
+        const pullResult = await window.api.cloudSync.pull(selectedGameId);
+        if (!pullResult.success) {
+          showToast(pullResult.message || "ダウンロードに失敗しました", "error");
+          return;
+        }
+        showToast("クラウドからダウンロードしました", "success");
+      } else {
+        showToast("コンフリクトが発生しています。詳細画面から解決してください", "error");
+      }
     } catch (error) {
       logger.error("ゲーム同期エラー:", {
         component: "Cloud",

@@ -229,20 +229,41 @@ export default function GameDetail(): React.JSX.Element {
         return false;
       }
       try {
-        const result = await window.api.cloudSync.syncGame(game.id);
-        if (!result.success || !result.data) {
-          if (showResult) {
-            showToast(result.message || "クラウド同期に失敗しました", "error");
-          }
+        const statusResult = await window.api.cloudSync.status(game.id);
+        if (!statusResult.success || !statusResult.data) {
+          if (showResult) showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
           return false;
         }
-        if (showResult) {
-          showToast(
-            `同期完了: アップロード${result.data.uploadedGames}件 / ダウンロード${result.data.downloadedGames}件`,
-            "success",
-          );
+        const { status } = statusResult.data;
+        if (status === "in_sync") {
+          if (showResult) showToast("すでに最新の状態です", "success");
+          return true;
         }
-        return true;
+        if (status === "never_synced") {
+          if (showResult) showToast("クラウドにデータがありません", "error");
+          return false;
+        }
+        if (status === "push_needed") {
+          const pushResult = await window.api.cloudSync.push(game.id);
+          if (!pushResult.success) {
+            if (showResult) showToast(pushResult.message || "アップロードに失敗しました", "error");
+            return false;
+          }
+          if (showResult) showToast("クラウドにアップロードしました", "success");
+          return true;
+        }
+        if (status === "pull_needed") {
+          const pullResult = await window.api.cloudSync.pull(game.id);
+          if (!pullResult.success) {
+            if (showResult) showToast(pullResult.message || "ダウンロードに失敗しました", "error");
+            return false;
+          }
+          if (showResult) showToast("クラウドからダウンロードしました", "success");
+          return true;
+        }
+        // conflict
+        if (showResult) showToast("コンフリクトが発生しています。解決してください", "error");
+        return false;
       } catch (error) {
         logger.error("ゲーム同期エラー:", {
           component: "GameDetail",
@@ -272,22 +293,18 @@ export default function GameDetail(): React.JSX.Element {
       await launchGameDirect();
       return;
     }
-    const cloudHashResult = await window.api.saveData.hash.getCloudHash(game.id);
-    if (!cloudHashResult.success || !cloudHashResult.data?.hash) {
+    const statusResult = await window.api.cloudSync.status(game.id);
+    if (!statusResult.success || !statusResult.data) {
       await launchGameDirect();
       return;
     }
-    const localHashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
-    if (
-      localHashResult.success &&
-      localHashResult.data &&
-      localHashResult.data !== cloudHashResult.data.hash
-    ) {
+    const { status, remoteMeta } = statusResult.data;
+    if (status === "pull_needed" || status === "conflict") {
       setSaveSyncMessage(
         buildSaveSyncMessage(
           game.title,
           game.localSaveHashUpdatedAt,
-          cloudHashResult.data.updatedAt,
+          remoteMeta?.createdAt ?? null,
         ),
       );
       setIsDownloadConfirmOpen(true);

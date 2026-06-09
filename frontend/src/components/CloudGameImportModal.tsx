@@ -152,7 +152,7 @@ export default function CloudGameImportModal({
 
   const importGame = useCallback(
     async (game: CloudGameMetadata): Promise<boolean> => {
-      const result = await window.api.cloudSync.syncGame(game.id);
+      const result = await window.api.cloudSync.pull(game.id);
       if (!result.success) {
         toast.error(result.message ?? "クラウドゲームの追加に失敗しました");
         return false;

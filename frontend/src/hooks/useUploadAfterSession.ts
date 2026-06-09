@@ -7,7 +7,6 @@
 import { useCallback, useState } from "react";
 
 import { logger } from "@renderer/utils/logger";
-import { uploadSaveDataAndSyncHash } from "@renderer/utils/saveDataUpload";
 
 import type { ToastHandler } from "@renderer/hooks/useToastHandler";
 
@@ -15,8 +14,6 @@ type PendingUpload = {
   gameId: string;
   gameTitle: string;
   saveFolderPath: string;
-  localHash: string;
-  localUpdatedAt?: Date | null;
 };
 
 type UseUploadAfterSessionResult = {
@@ -46,20 +43,21 @@ export function useUploadAfterSession(
       if (!game || !game.saveFolderPath) {
         return;
       }
-      const localHashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
-      if (!localHashResult.success || !localHashResult.data) {
-        return;
-      }
-      const cloudHashResult = await window.api.saveData.hash.getCloudHash(gameId);
-      const cloudHash = cloudHashResult.success ? cloudHashResult.data?.hash : null;
-      if (!cloudHash || cloudHash !== localHashResult.data) {
-        setPendingUpload({
-          gameId,
-          gameTitle: game.title,
-          saveFolderPath: game.saveFolderPath,
-          localHash: localHashResult.data,
-          localUpdatedAt: game.localSaveHashUpdatedAt ?? null,
-        });
+      try {
+        const statusResult = await window.api.cloudSync.status(gameId);
+        if (!statusResult.success || !statusResult.data) {
+          return;
+        }
+        const { status } = statusResult.data;
+        if (status === "push_needed" || status === "conflict") {
+          setPendingUpload({
+            gameId,
+            gameTitle: game.title,
+            saveFolderPath: game.saveFolderPath,
+          });
+        }
+      } catch {
+        // バックグラウンドチェックのエラーは無視する
       }
     },
     [isOfflineMode, isValidCreds, uploadingAfterEndGameId],
@@ -72,12 +70,7 @@ export function useUploadAfterSession(
     setUploadingAfterEndGameId(payload.gameId);
     const toastId = toastHandler.showLoading("セーブデータをアップロード中…");
     try {
-      const result = await uploadSaveDataAndSyncHash({
-        gameId: payload.gameId,
-        saveFolderPath: payload.saveFolderPath,
-        localHash: payload.localHash,
-        localUpdatedAt: payload.localUpdatedAt ?? null,
-      });
+      const result = await window.api.cloudSync.push(payload.gameId);
       if (result.success) {
         if (toastId) {
           toastHandler.showSuccess("セーブデータをクラウドにアップロードしました", toastId);

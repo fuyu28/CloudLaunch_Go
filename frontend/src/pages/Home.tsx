@@ -226,23 +226,19 @@ export default function Home(): React.ReactElement {
         return;
       }
 
-      const cloudHashResult = await window.api.saveData.hash.getCloudHash(game.id);
-      if (!cloudHashResult.success || !cloudHashResult.data?.hash) {
+      const statusResult = await window.api.cloudSync.status(game.id);
+      if (!statusResult.success || !statusResult.data) {
         await launchGameDirect(game);
         return;
       }
 
-      const localHashResult = await window.api.saveData.hash.computeLocalHash(game.saveFolderPath);
-      if (
-        localHashResult.success &&
-        localHashResult.data &&
-        localHashResult.data !== cloudHashResult.data.hash
-      ) {
+      const { status, remoteMeta } = statusResult.data;
+      if (status === "pull_needed" || status === "conflict") {
         setSaveSyncMessage(
           buildSaveSyncMessage(
             game.title,
             game.localSaveHashUpdatedAt,
-            cloudHashResult.data.updatedAt,
+            remoteMeta?.createdAt ?? null,
           ),
         );
         setPendingLaunchGame(game);
