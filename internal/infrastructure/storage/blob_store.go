@@ -4,6 +4,8 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -35,6 +37,11 @@ func contentTypeForKind(kind string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+func blobHashBytes(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // ResolveSafeRelativePath resolves a slash-separated relative path under baseDir.
@@ -92,6 +99,9 @@ func blobExists(ctx context.Context, client *s3.Client, bucket, gameID, kind, ha
 
 // PutBlob はブロブをS3にアップロードする。既に存在する場合はスキップする。
 func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string, data []byte) error {
+	if blobHashBytes(data) != hash {
+		return fmt.Errorf("blob hash mismatch: %s/%s", kind, hash)
+	}
 	exists, err := blobExists(ctx, client, bucket, gameID, kind, hash)
 	if err != nil {
 		return err
@@ -112,7 +122,14 @@ func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash 
 
 // GetBlob はS3からブロブを取得する。
 func GetBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string) ([]byte, error) {
-	return DownloadObject(ctx, client, bucket, blobKey(gameID, kind, hash))
+	data, err := DownloadObject(ctx, client, bucket, blobKey(gameID, kind, hash))
+	if err != nil {
+		return nil, err
+	}
+	if blobHashBytes(data) != hash {
+		return nil, fmt.Errorf("blob hash mismatch: %s/%s", kind, hash)
+	}
+	return data, nil
 }
 
 // ListBlobHashes はゲームの既存セーブファイルブロブのハッシュを一括取得する。
@@ -167,6 +184,9 @@ func PutBlobs(
 	}
 	tasks := make([]task, 0, total)
 	for hash, data := range blobs {
+		if blobHashBytes(data) != hash {
+			return fmt.Errorf("blob hash mismatch: %s/%s", BlobKindObject, hash)
+		}
 		if _, ok := existing[hash]; !ok {
 			tasks = append(tasks, task{hash: hash, data: data})
 		}
