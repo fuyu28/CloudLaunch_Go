@@ -20,22 +20,69 @@ import (
 // ProgressFunc はセーブファイルの転送進捗を報告するコールバック。
 type ProgressFunc func(current, total int)
 
+// contentBlobStore はS3のブロブ操作を抽象化する（テスト差し替え用）。
+type contentBlobStore interface {
+	readHEAD(ctx context.Context, gameID string) (string, error)
+	writeHEAD(ctx context.Context, gameID, hash string) error
+	getBlob(ctx context.Context, gameID, hash string) ([]byte, error)
+	putBlob(ctx context.Context, gameID, hash string, data []byte) error
+	putBlobs(ctx context.Context, gameID string, blobs map[string][]byte, concurrency int, onProgress func(int, int)) error
+	downloadBlobs(ctx context.Context, gameID, saveDir string, blobs map[string]string, concurrency int, onProgress func(int, int)) error
+	deleteByPrefix(ctx context.Context, prefix string) error
+}
+
+type s3BlobStore struct {
+	client *s3.Client
+	bucket string
+}
+
+func (b *s3BlobStore) readHEAD(ctx context.Context, gameID string) (string, error) {
+	return storage.ReadHEAD(ctx, b.client, b.bucket, gameID)
+}
+func (b *s3BlobStore) writeHEAD(ctx context.Context, gameID, hash string) error {
+	return storage.WriteHEAD(ctx, b.client, b.bucket, gameID, hash)
+}
+func (b *s3BlobStore) getBlob(ctx context.Context, gameID, hash string) ([]byte, error) {
+	return storage.GetBlob(ctx, b.client, b.bucket, gameID, hash)
+}
+func (b *s3BlobStore) putBlob(ctx context.Context, gameID, hash string, data []byte) error {
+	return storage.PutBlob(ctx, b.client, b.bucket, gameID, hash, data)
+}
+func (b *s3BlobStore) putBlobs(ctx context.Context, gameID string, blobs map[string][]byte, concurrency int, onProgress func(int, int)) error {
+	return storage.PutBlobs(ctx, b.client, b.bucket, gameID, blobs, concurrency, onProgress)
+}
+func (b *s3BlobStore) downloadBlobs(ctx context.Context, gameID, saveDir string, blobs map[string]string, concurrency int, onProgress func(int, int)) error {
+	return storage.DownloadBlobs(ctx, b.client, b.bucket, gameID, saveDir, blobs, concurrency, onProgress)
+}
+func (b *s3BlobStore) deleteByPrefix(ctx context.Context, prefix string) error {
+	return storage.DeleteObjectsByPrefix(ctx, b.client, b.bucket, prefix)
+}
+
 // ContentSyncService はコンテンツアドレッシングによるゲームデータ同期を提供する。
 type ContentSyncService struct {
-	config     config.Config
-	store      credentials.Store
-	repository ContentSyncRepository
-	logger     *slog.Logger
+	config       config.Config
+	store        credentials.Store
+	repository   ContentSyncRepository
+	logger       *slog.Logger
+	newBlobStore func(ctx context.Context) (contentBlobStore, error)
 }
 
 // NewContentSyncService は ContentSyncService を生成する。
 func NewContentSyncService(cfg config.Config, store credentials.Store, repo ContentSyncRepository, logger *slog.Logger) *ContentSyncService {
-	return &ContentSyncService{
+	svc := &ContentSyncService{
 		config:     cfg,
 		store:      store,
 		repository: repo,
 		logger:     logger,
 	}
+	svc.newBlobStore = func(ctx context.Context) (contentBlobStore, error) {
+		client, s3cfg, err := svc.newClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &s3BlobStore{client: client, bucket: s3cfg.Bucket}, nil
+	}
+	return svc
 }
 
 func (s *ContentSyncService) newClient(ctx context.Context) (*s3.Client, storage.S3Config, error) {
@@ -112,12 +159,12 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 
 // Status は現在の同期状態を返す。
 func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.SyncStatusDetail, error) {
-	client, cfg, err := s.newClient(ctx)
+	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return domain.SyncStatusDetail{}, err
 	}
 
-	remoteHead, err := storage.ReadHEAD(ctx, client, cfg.Bucket, gameID)
+	remoteHead, err := bstore.readHEAD(ctx, gameID)
 	if err != nil {
 		return domain.SyncStatusDetail{}, err
 	}
@@ -125,7 +172,7 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 		return domain.SyncStatusDetail{Status: domain.SyncStatusNeverSynced}, nil
 	}
 
-	remoteMetaBytes, err := storage.GetBlob(ctx, client, cfg.Bucket, gameID, remoteHead)
+	remoteMetaBytes, err := bstore.getBlob(ctx, gameID, remoteHead)
 	if err != nil {
 		return domain.SyncStatusDetail{}, err
 	}
@@ -180,7 +227,7 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 
 // Push はローカルデータをリモートにアップロードする。
 func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress ProgressFunc) error {
-	client, cfg, err := s.newClient(ctx)
+	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
 	}
@@ -232,30 +279,30 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 	metaHash := hashBytes(meta.SnapshotBytes)
 
 	// セーブファイルをアップロード（既存ブロブ一括確認 + 差分並列アップロード）
-	if err := storage.PutBlobs(ctx, client, cfg.Bucket, gameID, saveBlobs, s.config.S3UploadConcurrency, onProgress); err != nil {
+	if err := bstore.putBlobs(ctx, gameID, saveBlobs, s.config.S3UploadConcurrency, onProgress); err != nil {
 		return err
 	}
 
 	// セーブスナップショット・画像・game.json・sessions.json をアップロード
-	if err := storage.PutBlob(ctx, client, cfg.Bucket, gameID, savesHash, saveSnapJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, savesHash, saveSnapJSON); err != nil {
 		return err
 	}
 	if imageHash != "" && imageData != nil {
-		if err := storage.PutBlob(ctx, client, cfg.Bucket, gameID, imageHash, imageData); err != nil {
+		if err := bstore.putBlob(ctx, gameID, imageHash, imageData); err != nil {
 			return err
 		}
 	}
-	if err := storage.PutBlob(ctx, client, cfg.Bucket, gameID, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
 		return err
 	}
-	if err := storage.PutBlob(ctx, client, cfg.Bucket, gameID, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
 		return err
 	}
-	if err := storage.PutBlob(ctx, client, cfg.Bucket, gameID, metaHash, meta.SnapshotBytes); err != nil {
+	if err := bstore.putBlob(ctx, gameID, metaHash, meta.SnapshotBytes); err != nil {
 		return err
 	}
 
-	if err := storage.WriteHEAD(ctx, client, cfg.Bucket, gameID, metaHash); err != nil {
+	if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
 		return err
 	}
 	return s.repository.SetLocalSyncHead(ctx, gameID, contentFingerprint(meta.Snapshot))
@@ -263,12 +310,12 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 
 // Pull はリモートデータをローカルに適用する。
 func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress ProgressFunc) error {
-	client, cfg, err := s.newClient(ctx)
+	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
 	}
 
-	remoteHead, err := storage.ReadHEAD(ctx, client, cfg.Bucket, gameID)
+	remoteHead, err := bstore.readHEAD(ctx, gameID)
 	if err != nil {
 		return err
 	}
@@ -276,7 +323,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return fmt.Errorf("リモートにデータがありません")
 	}
 
-	metaBytes, err := storage.GetBlob(ctx, client, cfg.Bucket, gameID, remoteHead)
+	metaBytes, err := bstore.getBlob(ctx, gameID, remoteHead)
 	if err != nil {
 		return err
 	}
@@ -285,7 +332,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
-	saveSnapBytes, err := storage.GetBlob(ctx, client, cfg.Bucket, gameID, meta.Saves)
+	saveSnapBytes, err := bstore.getBlob(ctx, gameID, meta.Saves)
 	if err != nil {
 		return err
 	}
@@ -294,7 +341,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
-	gameJSONBytes, err := storage.GetBlob(ctx, client, cfg.Bucket, gameID, meta.GameJSON)
+	gameJSONBytes, err := bstore.getBlob(ctx, gameID, meta.GameJSON)
 	if err != nil {
 		return err
 	}
@@ -303,7 +350,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
-	sessionsJSONBytes, err := storage.GetBlob(ctx, client, cfg.Bucket, gameID, meta.SessionsJSON)
+	sessionsJSONBytes, err := bstore.getBlob(ctx, gameID, meta.SessionsJSON)
 	if err != nil {
 		return err
 	}
@@ -335,7 +382,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 			}
 		}
 		if localImageHash != cloudG.ImageHash {
-			imageData, berr := storage.GetBlob(ctx, client, cfg.Bucket, gameID, cloudG.ImageHash)
+			imageData, berr := bstore.getBlob(ctx, gameID, cloudG.ImageHash)
 			if berr != nil {
 				return berr
 			}
@@ -382,7 +429,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 				onProgress(alreadyDone+downloaded, total)
 			}
 		}
-		if err := storage.DownloadBlobs(ctx, client, cfg.Bucket, gameID, saveDir, needsDownload, s.config.S3UploadConcurrency, wrappedProgress); err != nil {
+		if err := bstore.downloadBlobs(ctx, gameID, saveDir, needsDownload, s.config.S3UploadConcurrency, wrappedProgress); err != nil {
 			return err
 		}
 	} else {
@@ -441,10 +488,10 @@ func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string,
 
 // DeleteFromCloud はゲームのリモートデータを削除する。
 func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string) error {
-	client, cfg, err := s.newClient(ctx)
+	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
 	}
 	prefix := fmt.Sprintf("games/%s/", gameID)
-	return storage.DeleteObjectsByPrefix(ctx, client, cfg.Bucket, prefix)
+	return bstore.deleteByPrefix(ctx, prefix)
 }

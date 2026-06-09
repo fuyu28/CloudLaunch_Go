@@ -1,0 +1,771 @@
+package services
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"CloudLaunch_Go/internal/config"
+	"CloudLaunch_Go/internal/domain"
+)
+
+// ─── fakeContentSyncRepository ──────────────────────────────────────────────
+
+type fakeContentSyncRepository struct {
+	mu sync.Mutex
+
+	game     *domain.Game
+	sessions []domain.PlaySession
+	settings map[string]string
+
+	// recorded calls
+	localSyncHeadSet string
+	upsertedGame     *domain.Game
+	deletedSessions  bool
+	upsertedSessions []domain.PlaySession
+
+	// error injection
+	getGameErr error
+}
+
+func newFakeRepo(game *domain.Game, sessions []domain.PlaySession) *fakeContentSyncRepository {
+	return &fakeContentSyncRepository{
+		game:     game,
+		sessions: sessions,
+		settings: make(map[string]string),
+	}
+}
+
+func (r *fakeContentSyncRepository) GetGameByID(_ context.Context, _ string) (*domain.Game, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.getGameErr != nil {
+		return nil, r.getGameErr
+	}
+	return r.game, nil
+}
+
+func (r *fakeContentSyncRepository) ListPlaySessionsByGame(_ context.Context, _ string) ([]domain.PlaySession, error) {
+	return r.sessions, nil
+}
+
+func (r *fakeContentSyncRepository) SetLocalSyncHead(_ context.Context, _, hash string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.localSyncHeadSet = hash
+	return nil
+}
+
+func (r *fakeContentSyncRepository) UpsertGameSync(_ context.Context, game domain.Game) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.upsertedGame = &game
+	return nil
+}
+
+func (r *fakeContentSyncRepository) DeletePlaySessionsByGame(_ context.Context, _ string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.deletedSessions = true
+	return nil
+}
+
+func (r *fakeContentSyncRepository) UpsertPlaySessionSync(_ context.Context, session domain.PlaySession) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.upsertedSessions = append(r.upsertedSessions, session)
+	return nil
+}
+
+func (r *fakeContentSyncRepository) GetSetting(_ context.Context, key string) (string, error) {
+	return r.settings[key], nil
+}
+
+func (r *fakeContentSyncRepository) UpsertSetting(_ context.Context, key, value string) error {
+	r.settings[key] = value
+	return nil
+}
+
+// ─── fakeBlobStore ───────────────────────────────────────────────────────────
+
+type fakeBlobStore struct {
+	mu sync.Mutex
+
+	blobs map[string][]byte // key: "gameID/hash"
+	heads map[string]string // gameID → metaHash
+
+	// recorded calls
+	downloadedBlobs []map[string]string // each call's blobs arg
+	deletedPrefixes []string
+}
+
+func newFakeBlobStore() *fakeBlobStore {
+	return &fakeBlobStore{
+		blobs: make(map[string][]byte),
+		heads: make(map[string]string),
+	}
+}
+
+func (f *fakeBlobStore) blobKey(gameID, hash string) string {
+	return gameID + "/" + hash
+}
+
+func (f *fakeBlobStore) readHEAD(_ context.Context, gameID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.heads[gameID], nil
+}
+
+func (f *fakeBlobStore) writeHEAD(_ context.Context, gameID, hash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.heads[gameID] = hash
+	return nil
+}
+
+func (f *fakeBlobStore) getBlob(_ context.Context, gameID, hash string) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	data, ok := f.blobs[f.blobKey(gameID, hash)]
+	if !ok {
+		return nil, fmt.Errorf("blob not found: %s/%s", gameID, hash)
+	}
+	return data, nil
+}
+
+func (f *fakeBlobStore) putBlob(_ context.Context, gameID, hash string, data []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.blobs[f.blobKey(gameID, hash)] = data
+	return nil
+}
+
+func (f *fakeBlobStore) putBlobs(_ context.Context, gameID string, blobs map[string][]byte, _ int, onProgress func(int, int)) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	total := len(blobs)
+	done := 0
+	for hash, data := range blobs {
+		f.blobs[f.blobKey(gameID, hash)] = data
+		done++
+		if onProgress != nil {
+			onProgress(done, total)
+		}
+	}
+	return nil
+}
+
+func (f *fakeBlobStore) downloadBlobs(_ context.Context, gameID, saveDir string, blobs map[string]string, _ int, onProgress func(int, int)) error {
+	// record call
+	snapshot := make(map[string]string, len(blobs))
+	for k, v := range blobs {
+		snapshot[k] = v
+	}
+	f.mu.Lock()
+	f.downloadedBlobs = append(f.downloadedBlobs, snapshot)
+	f.mu.Unlock()
+
+	total := len(blobs)
+	done := 0
+	for relPath, hash := range blobs {
+		f.mu.Lock()
+		data, ok := f.blobs[f.blobKey(gameID, hash)]
+		f.mu.Unlock()
+		if !ok {
+			return fmt.Errorf("blob not found: %s/%s", gameID, hash)
+		}
+		targetPath := filepath.Join(saveDir, filepath.FromSlash(relPath))
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(targetPath, data, 0o600); err != nil {
+			return err
+		}
+		done++
+		if onProgress != nil {
+			onProgress(done, total)
+		}
+	}
+	return nil
+}
+
+func (f *fakeBlobStore) deleteByPrefix(_ context.Context, prefix string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deletedPrefixes = append(f.deletedPrefixes, prefix)
+	return nil
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+func newTestService(repo *fakeContentSyncRepository, bstore *fakeBlobStore) *ContentSyncService {
+	svc := &ContentSyncService{
+		config:     config.Config{S3UploadConcurrency: 2},
+		repository: repo,
+		logger:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
+	}
+	svc.newBlobStore = func(_ context.Context) (contentBlobStore, error) {
+		return bstore, nil
+	}
+	return svc
+}
+
+func strPtr(s string) *string { return &s }
+
+// setupRemoteState はゲームの現在のセーブフォルダ状態をリモートとして fakeBlobStore に書き込む。
+// テストで「remote = 現在のローカル」という基準点を作るために使う。
+func setupRemoteState(
+	t *testing.T,
+	bstore *fakeBlobStore,
+	gameID string,
+	game domain.Game,
+	sessions []domain.PlaySession,
+	saveDir string,
+) domain.MetaSnapshot {
+	t.Helper()
+	ctx := context.Background()
+
+	saveSnap, saveBlobs, err := buildSaveSnapshot(saveDir)
+	if err != nil {
+		t.Fatalf("buildSaveSnapshot: %v", err)
+	}
+	saveSnapJSON, _ := json.Marshal(saveSnap)
+	savesHash := hashBytes(saveSnapJSON)
+
+	for h, data := range saveBlobs {
+		if err := bstore.putBlob(ctx, gameID, h, data); err != nil {
+			t.Fatalf("putBlob: %v", err)
+		}
+	}
+	if err := bstore.putBlob(ctx, gameID, savesHash, saveSnapJSON); err != nil {
+		t.Fatalf("putBlob saveSnap: %v", err)
+	}
+
+	meta, err := buildMetaSnapshot(game, sessions, "", savesHash, "testdevice")
+	if err != nil {
+		t.Fatalf("buildMetaSnapshot: %v", err)
+	}
+	metaHash := hashBytes(meta.SnapshotBytes)
+
+	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+		t.Fatalf("putBlob gameJSON: %v", err)
+	}
+	if err := bstore.putBlob(ctx, gameID, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+		t.Fatalf("putBlob sessionsJSON: %v", err)
+	}
+	if err := bstore.putBlob(ctx, gameID, metaHash, meta.SnapshotBytes); err != nil {
+		t.Fatalf("putBlob meta: %v", err)
+	}
+	if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
+		t.Fatalf("writeHEAD: %v", err)
+	}
+
+	return meta.Snapshot
+}
+
+func baseGame(saveDir string) domain.Game {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	return domain.Game{
+		ID:             "game-1",
+		Title:          "Test Game",
+		Publisher:      "Test Publisher",
+		PlayStatus:     domain.PlayStatusUnplayed,
+		SaveFolderPath: strPtr(saveDir),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+}
+
+// ─── Push tests ──────────────────────────────────────────────────────────────
+
+func TestContentSyncServicePushUploadsDataAndSetsHead(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("game data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	if err := svc.Push(context.Background(), game.ID, nil); err != nil {
+		t.Fatalf("Push returned unexpected error: %v", err)
+	}
+
+	// HEAD が書き込まれた
+	if bstore.heads[game.ID] == "" {
+		t.Error("expected HEAD to be set")
+	}
+	// ローカル同期ヘッドが更新された
+	if repo.localSyncHeadSet == "" {
+		t.Error("expected SetLocalSyncHead to be called")
+	}
+
+	// セーブファイルのブロブが格納されている
+	saveData := []byte("game data")
+	saveHash := hashBytes(saveData)
+	bstore.mu.Lock()
+	_, ok := bstore.blobs[bstore.blobKey(game.ID, saveHash)]
+	bstore.mu.Unlock()
+	if !ok {
+		t.Error("expected save file blob to be stored")
+	}
+}
+
+func TestContentSyncServicePushSetsProgressCallback(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	for i := range 3 {
+		if err := os.WriteFile(filepath.Join(saveDir, fmt.Sprintf("save%d.dat", i)), []byte(fmt.Sprintf("data%d", i)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	var progressCalled bool
+	err := svc.Push(context.Background(), game.ID, func(current, total int) {
+		progressCalled = true
+	})
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if !progressCalled {
+		t.Error("expected progress callback to be called")
+	}
+}
+
+func TestContentSyncServicePushReturnsErrorWhenGameNotFound(t *testing.T) {
+	t.Parallel()
+
+	repo := newFakeRepo(nil, nil) // game = nil
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	err := svc.Push(context.Background(), "nonexistent", nil)
+	if err == nil {
+		t.Fatal("expected error when game not found")
+	}
+}
+
+func TestContentSyncServicePushReturnsErrorWhenSaveFolderNotSet(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	game := domain.Game{
+		ID:         "game-1",
+		PlayStatus: domain.PlayStatusUnplayed,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	err := svc.Push(context.Background(), game.ID, nil)
+	if err == nil {
+		t.Fatal("expected error when SaveFolderPath is nil")
+	}
+}
+
+func TestContentSyncServicePushReturnsErrorWhenSaveDirMissing(t *testing.T) {
+	t.Parallel()
+
+	game := baseGame("/nonexistent/save/path/that/does/not/exist")
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	err := svc.Push(context.Background(), game.ID, nil)
+	if err == nil {
+		t.Fatal("expected error when save directory does not exist")
+	}
+}
+
+// ─── Pull tests ───────────────────────────────────────────────────────────────
+
+func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("remote data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	sessions := []domain.PlaySession{
+		{
+			ID:        "s1",
+			GameID:    game.ID,
+			PlayedAt:  time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			Duration:  3600,
+			UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, sessions, saveDir)
+
+	// ローカルのセーブファイルを別の状態にしてダウンロードが発生するようにする
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("old local data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	if err := svc.Pull(context.Background(), game.ID, nil); err != nil {
+		t.Fatalf("Pull returned unexpected error: %v", err)
+	}
+
+	// セーブファイルが復元された
+	got, err := os.ReadFile(filepath.Join(saveDir, "save.dat"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "remote data" {
+		t.Errorf("save.dat = %q, want %q", string(got), "remote data")
+	}
+
+	// ゲームが更新された
+	if repo.upsertedGame == nil {
+		t.Error("expected UpsertGameSync to be called")
+	}
+
+	// セッションが差し替えられた
+	if !repo.deletedSessions {
+		t.Error("expected DeletePlaySessionsByGame to be called")
+	}
+	if len(repo.upsertedSessions) == 0 {
+		t.Error("expected sessions to be upserted")
+	}
+
+	// 同期ヘッドが更新された
+	if repo.localSyncHeadSet == "" {
+		t.Error("expected SetLocalSyncHead to be called")
+	}
+}
+
+func TestContentSyncServicePullSkipsUnchangedFiles(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	remoteContent := []byte("remote save data")
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), remoteContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+
+	// ローカルファイルはリモートと同一のまま（上書きしない）
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	if err := svc.Pull(context.Background(), game.ID, nil); err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+
+	// downloadBlobs が呼ばれても空マップで呼ばれているはず（スキップ）
+	// OR 呼ばれていない（0件ならスキップ）
+	bstore.mu.Lock()
+	calls := bstore.downloadedBlobs
+	bstore.mu.Unlock()
+
+	for _, call := range calls {
+		if len(call) > 0 {
+			t.Errorf("expected no blobs to be downloaded, but got: %v", call)
+		}
+	}
+}
+
+func TestContentSyncServicePullReturnsErrorWhenNoRemoteHead(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore() // HEAD 未設定
+	svc := newTestService(repo, bstore)
+
+	err := svc.Pull(context.Background(), game.ID, nil)
+	if err == nil {
+		t.Fatal("expected error when remote HEAD is empty")
+	}
+}
+
+func TestContentSyncServicePullReportsProgress(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+
+	// ローカルを古い内容に書き換えてダウンロードを発生させる
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	var maxCurrent int
+	err := svc.Pull(context.Background(), game.ID, func(current, total int) {
+		if current > maxCurrent {
+			maxCurrent = current
+		}
+	})
+	if err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	if maxCurrent == 0 {
+		t.Error("expected progress to be reported")
+	}
+}
+
+// ─── Status tests ────────────────────────────────────────────────────────────
+
+func TestContentSyncServiceStatusReturnsNeverSynced(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore() // HEAD 未設定
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusNeverSynced {
+		t.Errorf("Status = %q, want %q", detail.Status, domain.SyncStatusNeverSynced)
+	}
+}
+
+func TestContentSyncServiceStatusReturnsInSync(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	remoteMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+
+	// LocalSyncHead = remote の fingerprint
+	fp := contentFingerprint(remoteMeta)
+	game.LocalSyncHead = &fp
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusInSync {
+		t.Errorf("Status = %q, want %q", detail.Status, domain.SyncStatusInSync)
+	}
+}
+
+func TestContentSyncServiceStatusReturnsPushNeeded(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	remoteMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+
+	// LocalSyncHead = remote（初期状態は同期済み）
+	fp := contentFingerprint(remoteMeta)
+	game.LocalSyncHead = &fp
+
+	// ローカルにファイルを追加してローカルが変更されたとみなす
+	if err := os.WriteFile(filepath.Join(saveDir, "save2.dat"), []byte("new file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusPushNeeded {
+		t.Errorf("Status = %q, want %q", detail.Status, domain.SyncStatusPushNeeded)
+	}
+}
+
+func TestContentSyncServiceStatusReturnsPullNeeded(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	sessions := []domain.PlaySession{}
+
+	// ローカルの状態を fingerprint として LocalSyncHead に設定
+	localSaveSnap, _, err := buildSaveSnapshot(saveDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localSaveSnapJSON, _ := json.Marshal(localSaveSnap)
+	localSavesHash := hashBytes(localSaveSnapJSON)
+	localMeta, err := buildMetaSnapshot(game, sessions, "", localSavesHash, "testdevice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	localFP := contentFingerprint(localMeta.Snapshot)
+	game.LocalSyncHead = &localFP
+
+	// リモートは異なる内容（別ファイル付き）を設定
+	remoteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remoteDir, "save.dat"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(remoteDir, "remote_extra.dat"), []byte("remote only"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, sessions, remoteDir)
+
+	repo := newFakeRepo(&game, sessions)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusPullNeeded {
+		t.Errorf("Status = %q, want %q", detail.Status, domain.SyncStatusPullNeeded)
+	}
+}
+
+func TestContentSyncServiceStatusReturnsConflict(t *testing.T) {
+	t.Parallel()
+
+	// LocalSyncHead を古い基準点に設定し、ローカルとリモートの両方が変更されている状態
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("base"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+
+	// 基準: 空のフォルダ状態として LocalSyncHead を設定
+	emptyDir := t.TempDir()
+	baseSaveSnap, _, err := buildSaveSnapshot(emptyDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseSaveSnapJSON, _ := json.Marshal(baseSaveSnap)
+	baseSavesHash := hashBytes(baseSaveSnapJSON)
+	baseMeta, err := buildMetaSnapshot(game, nil, "", baseSavesHash, "testdevice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseFP := contentFingerprint(baseMeta.Snapshot)
+	game.LocalSyncHead = &baseFP // 基準は「ファイルなし」
+
+	// リモートは「save.dat = remote content」
+	remoteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remoteDir, "save.dat"), []byte("remote content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, nil, remoteDir)
+
+	// ローカルは「save.dat = base」（上で既に書き込み済み） → 基準と異なる
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusConflict {
+		t.Errorf("Status = %q, want %q", detail.Status, domain.SyncStatusConflict)
+	}
+	// コンフリクト時はローカル/リモートのメタが含まれる
+	if detail.LocalMeta == nil {
+		t.Error("expected LocalMeta to be set on conflict")
+	}
+	if detail.RemoteMeta == nil {
+		t.Error("expected RemoteMeta to be set on conflict")
+	}
+}
+
+func TestContentSyncServiceResolveConflictUsesLocalCallsPush(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	if err := svc.ResolveConflict(context.Background(), game.ID, true); err != nil {
+		t.Fatalf("ResolveConflict(useLocal=true): %v", err)
+	}
+	if bstore.heads[game.ID] == "" {
+		t.Error("expected HEAD to be set (Push was called)")
+	}
+}
+
+func TestContentSyncServiceDeleteFromCloudCallsDeleteWithCorrectPrefix(t *testing.T) {
+	t.Parallel()
+
+	repo := newFakeRepo(nil, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	if err := svc.DeleteFromCloud(context.Background(), "game-1"); err != nil {
+		t.Fatalf("DeleteFromCloud: %v", err)
+	}
+
+	bstore.mu.Lock()
+	defer bstore.mu.Unlock()
+	if len(bstore.deletedPrefixes) == 0 {
+		t.Fatal("expected deleteByPrefix to be called")
+	}
+	want := "games/game-1/"
+	if bstore.deletedPrefixes[0] != want {
+		t.Errorf("deleteByPrefix called with %q, want %q", bstore.deletedPrefixes[0], want)
+	}
+}
