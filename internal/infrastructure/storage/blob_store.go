@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -34,6 +35,44 @@ func contentTypeForKind(kind string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// ResolveSafeRelativePath resolves a slash-separated relative path under baseDir.
+// It rejects empty, absolute, and parent-traversing paths before any filesystem write.
+func ResolveSafeRelativePath(baseDir, relPath string) (string, error) {
+	trimmed := strings.TrimSpace(relPath)
+	if trimmed == "" {
+		return "", fmt.Errorf("relative path is empty")
+	}
+
+	cleaned := path.Clean(trimmed)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || path.IsAbs(cleaned) {
+		return "", fmt.Errorf("relative path escapes base directory: %s", relPath)
+	}
+
+	localRel := filepath.FromSlash(cleaned)
+	if filepath.IsAbs(localRel) || filepath.VolumeName(localRel) != "" {
+		return "", fmt.Errorf("relative path escapes base directory: %s", relPath)
+	}
+
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", err
+	}
+	targetPath := filepath.Join(absBase, localRel)
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", err
+	}
+
+	relToBase, err := filepath.Rel(absBase, absTarget)
+	if err != nil {
+		return "", err
+	}
+	if relToBase == ".." || strings.HasPrefix(relToBase, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("relative path escapes base directory: %s", relPath)
+	}
+	return absTarget, nil
 }
 
 func blobExists(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash string) (bool, error) {
@@ -263,7 +302,11 @@ func DownloadBlobs(
 					errOnce.Do(func() { firstErr = err; cancel() })
 					return
 				}
-				targetPath := filepath.Join(saveDir, filepath.FromSlash(t.relPath))
+				targetPath, err := ResolveSafeRelativePath(saveDir, t.relPath)
+				if err != nil {
+					errOnce.Do(func() { firstErr = err; cancel() })
+					return
+				}
 				if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 					errOnce.Do(func() { firstErr = err; cancel() })
 					return

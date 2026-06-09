@@ -181,7 +181,10 @@ func (f *fakeBlobStore) downloadBlobs(_ context.Context, gameID, saveDir string,
 		if !ok {
 			return fmt.Errorf("blob not found: %s/%s/%s", gameID, storage.BlobKindObject, hash)
 		}
-		targetPath := filepath.Join(saveDir, filepath.FromSlash(relPath))
+		targetPath, err := storage.ResolveSafeRelativePath(saveDir, relPath)
+		if err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return err
 		}
@@ -506,6 +509,59 @@ func TestContentSyncServicePullReturnsErrorWhenNoRemoteHead(t *testing.T) {
 	err := svc.Pull(context.Background(), game.ID, nil)
 	if err == nil {
 		t.Fatal("expected error when remote HEAD is empty")
+	}
+}
+
+func TestContentSyncServicePullRejectsEscapingSavePath(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	evilData := []byte("evil")
+	evilHash := hashBytes(evilData)
+	saveSnap := domain.SaveSnapshot{Files: map[string]domain.BlobHash{
+		"../outside.txt": evilHash,
+	}}
+	saveSnapJSON, err := json.Marshal(saveSnap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	savesHash := hashBytes(saveSnapJSON)
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindObject, evilHash, evilData); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindTree, savesHash, saveSnapJSON); err != nil {
+		t.Fatal(err)
+	}
+
+	meta, err := buildMetaSnapshot(game, nil, "", savesHash, "testdevice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metaHash := hashBytes(meta.SnapshotBytes)
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.writeHEAD(context.Background(), game.ID, metaHash); err != nil {
+		t.Fatal(err)
+	}
+
+	err = svc.Pull(context.Background(), game.ID, nil)
+	if err == nil {
+		t.Fatal("expected error for escaping save path")
+	}
+	if _, statErr := os.Stat(filepath.Join(filepath.Dir(saveDir), "outside.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("outside file should not be written, stat err: %v", statErr)
 	}
 }
 

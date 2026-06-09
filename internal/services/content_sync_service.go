@@ -411,7 +411,10 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 
 		needsDownload := make(map[string]string, total)
 		for relPath, hash := range saveSnap.Files {
-			targetPath := filepath.Join(saveDir, filepath.FromSlash(relPath))
+			targetPath, err := storage.ResolveSafeRelativePath(saveDir, relPath)
+			if err != nil {
+				return err
+			}
 			localHash, _, err := hashFile(targetPath)
 			if err != nil || localHash != hash {
 				needsDownload[relPath] = hash
