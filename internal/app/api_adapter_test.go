@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -405,5 +406,62 @@ func TestAppLoadCredentialConvertsServiceError(t *testing.T) {
 	}
 	if result.Error == nil || result.Error.Message != "認証情報取得に失敗しました" {
 		t.Fatalf("expected converted service error, got %#v", result.Error)
+	}
+}
+
+func TestDeleteCloudDataRejectsEmptyOrWildcardPath(t *testing.T) {
+	t.Parallel()
+
+	app := &App{}
+	cases := []string{"", "   ", "*"}
+	for _, tc := range cases {
+		result := app.DeleteCloudData(tc)
+		if result.Success {
+			t.Fatalf("DeleteCloudData(%q) succeeded, want error", tc)
+		}
+		if result.Error == nil || result.Error.Detail == "" {
+			t.Fatalf("DeleteCloudData(%q) should return error detail", tc)
+		}
+	}
+}
+
+func TestDeleteFileRejectsEmptyKey(t *testing.T) {
+	t.Parallel()
+
+	app := &App{}
+	result := app.DeleteFile("   ")
+	if result.Success {
+		t.Fatal("DeleteFile succeeded, want error")
+	}
+	if result.Error == nil || result.Error.Detail == "" {
+		t.Fatal("DeleteFile should return error detail")
+	}
+}
+
+func TestNormalizeDeletePrefixSeparatesExactKeyAndChildren(t *testing.T) {
+	t.Parallel()
+
+	exact, children, ok := normalizeDeletePrefix("games/game-1/")
+	if !ok {
+		t.Fatal("expected prefix to be valid")
+	}
+	if exact != "games/game-1" {
+		t.Fatalf("exact = %q, want %q", exact, "games/game-1")
+	}
+	if children != "games/game-1/" {
+		t.Fatalf("children = %q, want %q", children, "games/game-1/")
+	}
+	if strings.HasPrefix("games/game-10/", children) {
+		t.Fatal("child prefix should not match sibling game IDs")
+	}
+}
+
+func TestNormalizeDeletePrefixRejectsEmptyOrWildcard(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []string{"", " ", "*", "/"} {
+		if exact, children, ok := normalizeDeletePrefix(tc); ok {
+			t.Fatalf("normalizeDeletePrefix(%q) = %q, %q, true; want invalid", tc, exact, children)
+		}
 	}
 }

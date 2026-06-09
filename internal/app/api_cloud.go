@@ -163,31 +163,40 @@ func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 
 // DeleteCloudData は指定パス配下を削除する。
 func (app *App) DeleteCloudData(path string) result.ApiResult[bool] {
+	exactKey, childPrefix, ok := normalizeDeletePrefix(path)
+	if !ok {
+		return result.ErrorResult[bool]("削除対象のパスが不正です", "delete prefix is empty or wildcard")
+	}
+
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.getDefaultS3Client")
 	}
 
-	prefix := strings.TrimSpace(path)
-	if prefix == "*" || prefix == "" {
-		prefix = ""
+	if error := storage.DeleteObject(ctx, client, bucket, exactKey); error != nil {
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteExactObject", "key", exactKey)
 	}
-	if error := storage.DeleteObjectsByPrefix(ctx, client, bucket, prefix); error != nil {
-		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteByPrefix", "prefix", prefix)
+	if error := storage.DeleteObjectsByPrefix(ctx, client, bucket, childPrefix); error != nil {
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteByPrefix", "prefix", childPrefix)
 	}
 	return result.OkResult(true)
 }
 
 // DeleteFile は単一ファイルを削除する。
 func (app *App) DeleteFile(key string) result.ApiResult[bool] {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return result.ErrorResult[bool]("削除対象のファイルが不正です", "delete object key is empty")
+	}
+
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.getDefaultS3Client")
 	}
-	if error := storage.DeleteObject(ctx, client, bucket, key); error != nil {
-		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.deleteObject", "key", key)
+	if error := storage.DeleteObject(ctx, client, bucket, trimmed); error != nil {
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.deleteObject", "key", trimmed)
 	}
 	return result.OkResult(true)
 }
@@ -386,6 +395,14 @@ func flattenDirectoryBuilders(nodes map[string]*directoryNodeBuilder) []CloudDir
 
 func createGamePrefix(gameID string) string {
 	return "games/" + strings.TrimSpace(gameID) + "/"
+}
+
+func normalizeDeletePrefix(pathValue string) (exactKey string, childPrefix string, ok bool) {
+	trimmed := strings.Trim(strings.TrimSpace(pathValue), "/")
+	if trimmed == "" || trimmed == "*" {
+		return "", "", false
+	}
+	return trimmed, trimmed + "/", true
 }
 
 func detectImageMime(path string) string {
