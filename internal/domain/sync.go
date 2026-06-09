@@ -30,7 +30,7 @@ const (
 
 // SyncStatusDetail は同期状態の詳細を表す。
 type SyncStatusDetail struct {
-	Status     SyncStatus
-	LocalMeta  *MetaSnapshot // コンフリクト時の表示用
-	RemoteMeta *MetaSnapshot
+	Status     SyncStatus    `json:"status"`
+	LocalMeta  *MetaSnapshot `json:"localMeta,omitempty"`
+	RemoteMeta *MetaSnapshot `json:"remoteMeta,omitempty"`
 }

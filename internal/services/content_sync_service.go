@@ -226,6 +226,10 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 
 	var status domain.SyncStatus
 	switch {
+	case localSyncHead == "":
+		// このPCでまだ一度も同期していない（LocalSyncHead未設定）。
+		// ベースラインがないので比較できず、リモートを正として pull_needed とする。
+		status = domain.SyncStatusPullNeeded
 	case currentLocalHash == localSyncHead && remoteContentHash == localSyncHead:
 		status = domain.SyncStatusInSync
 	case currentLocalHash != localSyncHead && remoteContentHash == localSyncHead:

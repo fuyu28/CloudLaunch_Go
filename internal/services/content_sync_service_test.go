@@ -56,10 +56,13 @@ func (r *fakeContentSyncRepository) ListPlaySessionsByGame(_ context.Context, _ 
 	return r.sessions, nil
 }
 
-func (r *fakeContentSyncRepository) SetLocalSyncHead(_ context.Context, _, hash string) error {
+func (r *fakeContentSyncRepository) SetLocalSyncHead(_ context.Context, _ string, hash string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.localSyncHeadSet = hash
+	if r.game != nil {
+		r.game.LocalSyncHead = &hash
+	}
 	return nil
 }
 
@@ -966,5 +969,85 @@ func TestContentSyncServiceDeleteFromCloudCallsDeleteWithCorrectPrefix(t *testin
 	want := "games/game-1/"
 	if bstore.deletedPrefixes[0] != want {
 		t.Errorf("deleteByPrefix called with %q, want %q", bstore.deletedPrefixes[0], want)
+	}
+}
+
+// TestContentSyncServiceStatusReturnsPullNeededWhenLocalSyncHeadUnset は
+// LocalSyncHead が未設定（他PCで一度も同期していない）のとき conflict ではなく
+// pull_needed を返すことを確認する。
+func TestContentSyncServiceStatusReturnsPullNeededWhenLocalSyncHeadUnset(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	// LocalSyncHead は nil のまま（このPCで一度も同期していない）
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusPullNeeded {
+		t.Errorf("Status = %q, want %q (LocalSyncHead unset should not be conflict)", detail.Status, domain.SyncStatusPullNeeded)
+	}
+}
+
+// TestContentSyncServicePullThenAddSaveThenPushSucceeds は PC-A push → PC-B pull →
+// PC-B がセーブを追加 → PC-B が push できることを確認する。
+func TestContentSyncServicePullThenAddSaveThenPushSucceeds(t *testing.T) {
+	t.Parallel()
+
+	// PC-A 側の初期セーブ
+	saveDirA := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDirA, "save.dat"), []byte("pc-a save"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gameA := baseGame(saveDirA)
+	bstore := newFakeBlobStore()
+	repoA := newFakeRepo(&gameA, nil)
+	svcA := newTestService(repoA, bstore)
+
+	// PC-A が push
+	if err := svcA.Push(context.Background(), gameA.ID, nil); err != nil {
+		t.Fatalf("PC-A Push: %v", err)
+	}
+
+	// PC-B の環境（同じゲームID、別セーブフォルダ）
+	saveDirB := t.TempDir()
+	gameB := baseGame(saveDirB)
+	gameB.LocalSyncHead = nil // PC-B では未同期
+	repoB := newFakeRepo(&gameB, nil)
+	svcB := newTestService(repoB, bstore)
+
+	// PC-B が pull
+	if err := svcB.Pull(context.Background(), gameB.ID, nil); err != nil {
+		t.Fatalf("PC-B Pull: %v", err)
+	}
+
+	// Pull 後は LocalSyncHead が設定されているはず
+	if repoB.localSyncHeadSet == "" {
+		t.Fatal("PC-B Pull should have set LocalSyncHead")
+	}
+
+	// PC-B がセーブを追加
+	if err := os.WriteFile(filepath.Join(saveDirB, "save2.dat"), []byte("pc-b new save"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// PC-B が push できる（エラーにならない）
+	headBefore := bstore.heads[gameB.ID]
+	if err := svcB.Push(context.Background(), gameB.ID, nil); err != nil {
+		t.Fatalf("PC-B Push after Pull+add save: %v", err)
+	}
+	if bstore.heads[gameB.ID] == headBefore {
+		t.Error("expected remote HEAD to be updated after PC-B push")
 	}
 }
