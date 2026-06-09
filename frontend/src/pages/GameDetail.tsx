@@ -6,6 +6,7 @@ import { useParams, useNavigate, Navigate } from "react-router-dom";
 
 import CloudDataCard from "@renderer/components/CloudDataCard";
 import ConfirmModal from "@renderer/components/ConfirmModal";
+import SyncConflictModal from "@renderer/components/SyncConflictModal";
 import GameInfo from "@renderer/components/GameInfo";
 import GameFormModal from "@renderer/components/GameModal";
 import MemoCard from "@renderer/components/MemoCard";
@@ -23,6 +24,7 @@ import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { logger } from "@renderer/utils/logger";
 
 import type { GameType } from "src/types/game";
+import type { SyncMetaSnapshot } from "src/wailsBridge";
 
 export default function GameDetail(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +42,13 @@ export default function GameDetail(): React.JSX.Element {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const [saveSyncMessage, setSaveSyncMessage] = useState("");
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictMeta, setConflictMeta] = useState<{
+    localMeta?: SyncMetaSnapshot;
+    remoteMeta?: SyncMetaSnapshot;
+  } | null>(null);
+  const [isResolvingConflict, setIsResolvingConflict] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { showToast } = useToastHandler();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
   const { formatDateWithTime } = useTimeFormat();
@@ -262,7 +271,13 @@ export default function GameDetail(): React.JSX.Element {
           return true;
         }
         // conflict
-        if (showResult) showToast("コンフリクトが発生しています。解決してください", "error");
+        if (showResult) {
+          setConflictMeta({
+            localMeta: statusResult.data.localMeta,
+            remoteMeta: statusResult.data.remoteMeta,
+          });
+          setIsConflictModalOpen(true);
+        }
         return false;
       } catch (error) {
         logger.error("ゲーム同期エラー:", {
@@ -325,6 +340,39 @@ export default function GameDetail(): React.JSX.Element {
     setSaveSyncMessage("");
     await launchGameDirect();
   }, [launchGameDirect]);
+
+  const handleResolveConflict = useCallback(
+    async (useLocal: boolean): Promise<void> => {
+      if (!game) return;
+      setIsResolvingConflict(true);
+      try {
+        const result = await window.api.cloudSync.resolveConflict(game.id, useLocal);
+        if (result.success) {
+          showToast(useLocal ? "ローカルデータをクラウドに反映しました" : "クラウドデータをローカルに適用しました", "success");
+          setIsConflictModalOpen(false);
+          setConflictMeta(null);
+        } else {
+          showToast(result.message || "コンフリクト解決に失敗しました", "error");
+        }
+      } catch {
+        showToast("コンフリクト解決に失敗しました", "error");
+      } finally {
+        setIsResolvingConflict(false);
+      }
+    },
+    [game, showToast],
+  );
+
+  const handleSyncCheck = useCallback(async (): Promise<void> => {
+    if (!game) return;
+    if (!checkNetworkFeature("同期確認")) return;
+    setIsSyncing(true);
+    try {
+      await handleSyncGame(true);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [game, handleSyncGame, checkNetworkFeature]);
 
   // プレイステータス変更のハンドラー
   const handleStatusChange = useCallback(
@@ -412,8 +460,10 @@ export default function GameDetail(): React.JSX.Element {
           isValidCreds={isValidCreds}
           isUploading={isUploading}
           isDownloading={isDownloading}
+          isSyncing={isSyncing}
           onUpload={handleUploadSaveData}
           onDownload={handleDownloadSaveData}
+          onSync={handleSyncCheck}
         />
 
         {/* メモ管理カード */}
@@ -464,6 +514,21 @@ export default function GameDetail(): React.JSX.Element {
         onClose={handleClosePlaySessionModal}
         onSubmit={handleAddPlaySession}
         gameTitle={game.title}
+      />
+
+      {/* コンフリクト解決 */}
+      <SyncConflictModal
+        isOpen={isConflictModalOpen}
+        onClose={() => {
+          setIsConflictModalOpen(false);
+          setConflictMeta(null);
+        }}
+        gameTitle={game.title}
+        localMeta={conflictMeta?.localMeta}
+        remoteMeta={conflictMeta?.remoteMeta}
+        onUseLocal={() => handleResolveConflict(true)}
+        onUseRemote={() => handleResolveConflict(false)}
+        isResolving={isResolvingConflict}
       />
 
       {/* プロセス管理 */}
