@@ -21,12 +21,10 @@ func TestHashBytesIsDeterministic(t *testing.T) {
 		t.Fatalf("expected same hash, got %q and %q", h1, h2)
 	}
 	// SHA-256 of "hello world"
-	want := "b94d27b9934d3e08a52e52d7da7dabfac484efe04294e576dac5d7f6b48d5e5a"
-	// 実際の値を確認（参照値が違う場合はここで検出）
-	if len(h1) != 64 {
-		t.Fatalf("expected 64 hex chars, got %d", len(h1))
+	want := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+	if h1 != want {
+		t.Fatalf("hash = %q, want %q", h1, want)
 	}
-	_ = want
 }
 
 func TestHashBytesDifferentInputProducesDifferentHash(t *testing.T) {
@@ -125,6 +123,57 @@ func TestBuildSaveSnapshotIsDeteministic(t *testing.T) {
 	b2, _ := json.Marshal(snap2)
 	if string(b1) != string(b2) {
 		t.Fatal("buildSaveSnapshot is not deterministic")
+	}
+}
+
+func TestRemoveFilesNotInSnapshotRemovesStaleFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	nestedDir := filepath.Join(dir, "nested")
+	if err := os.MkdirAll(nestedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	keepPath := filepath.Join(nestedDir, "keep.sav")
+	stalePath := filepath.Join(nestedDir, "stale.sav")
+	if err := os.WriteFile(keepPath, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stalePath, []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := domain.SaveSnapshot{Files: map[string]domain.BlobHash{
+		"nested/keep.sav": hashBytes([]byte("keep")),
+	}}
+	if err := removeFilesNotInSnapshot(dir, snapshot); err != nil {
+		t.Fatalf("removeFilesNotInSnapshot: %v", err)
+	}
+	if _, err := os.Stat(keepPath); err != nil {
+		t.Fatalf("keep file should remain: %v", err)
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("stale file should be removed, stat err: %v", err)
+	}
+}
+
+func TestRemoveFilesNotInSnapshotRemovesEmptyDirectories(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	staleDir := filepath.Join(dir, "stale")
+	if err := os.MkdirAll(staleDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleDir, "only.sav"), []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeFilesNotInSnapshot(dir, domain.SaveSnapshot{Files: map[string]domain.BlobHash{}}); err != nil {
+		t.Fatalf("removeFilesNotInSnapshot: %v", err)
+	}
+	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
+		t.Fatalf("empty stale directory should be removed, stat err: %v", err)
 	}
 }
 

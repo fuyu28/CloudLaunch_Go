@@ -227,6 +227,10 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 
 // Push はローカルデータをリモートにアップロードする。
 func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress ProgressFunc) error {
+	return s.push(ctx, gameID, onProgress, false)
+}
+
+func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress ProgressFunc, force bool) error {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
@@ -241,6 +245,29 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 	}
 	if game.SaveFolderPath == nil || *game.SaveFolderPath == "" {
 		return fmt.Errorf("セーブフォルダのパスが未設定です")
+	}
+	if !force {
+		remoteHead, err := bstore.readHEAD(ctx, gameID)
+		if err != nil {
+			return err
+		}
+		if remoteHead != "" {
+			remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
+			if err != nil {
+				return err
+			}
+			var remoteMeta domain.MetaSnapshot
+			if err := json.Unmarshal(remoteMetaBytes, &remoteMeta); err != nil {
+				return err
+			}
+			localSyncHead := ""
+			if game.LocalSyncHead != nil {
+				localSyncHead = *game.LocalSyncHead
+			}
+			if contentFingerprint(remoteMeta) != localSyncHead {
+				return fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
+			}
+		}
 	}
 
 	sessions, err := s.repository.ListPlaySessionsByGame(ctx, gameID)
@@ -349,6 +376,9 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 	if err := json.Unmarshal(gameJSONBytes, &cloudG); err != nil {
 		return err
 	}
+	if cloudG.ID != gameID {
+		return fmt.Errorf("リモートのゲームIDが一致しません: %s", cloudG.ID)
+	}
 
 	sessionsJSONBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.SessionsJSON)
 	if err != nil {
@@ -435,6 +465,9 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		if err := bstore.downloadBlobs(ctx, gameID, saveDir, needsDownload, s.config.S3UploadConcurrency, wrappedProgress); err != nil {
 			return err
 		}
+		if err := removeFilesNotInSnapshot(saveDir, saveSnap); err != nil {
+			return err
+		}
 	} else {
 		s.logger.Warn("セーブフォルダ未設定のためセーブデータをスキップします", "gameId", gameID)
 	}
@@ -484,7 +517,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 // ResolveConflict はコンフリクトを手動解決する。
 func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string, useLocal bool) error {
 	if useLocal {
-		return s.Push(ctx, gameID, nil)
+		return s.push(ctx, gameID, nil, true)
 	}
 	return s.Pull(ctx, gameID, nil)
 }

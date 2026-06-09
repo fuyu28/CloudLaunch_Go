@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"CloudLaunch_Go/internal/domain"
@@ -69,6 +70,52 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 	}
 
 	return domain.SaveSnapshot{Files: files}, blobs, nil
+}
+
+// removeFilesNotInSnapshot removes local save files that are absent from snapshot.
+// It only deletes paths discovered by walking saveDir, then removes empty directories.
+func removeFilesNotInSnapshot(saveDir string, snapshot domain.SaveSnapshot) error {
+	var dirs []string
+	err := filepath.Walk(saveDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == saveDir {
+			return nil
+		}
+		if info.IsDir() {
+			dirs = append(dirs, path)
+			return nil
+		}
+		rel, err := filepath.Rel(saveDir, path)
+		if err != nil {
+			return err
+		}
+		if _, ok := snapshot.Files[filepath.ToSlash(rel)]; ok {
+			return nil
+		}
+		return os.Remove(path)
+	})
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(dirs, func(i, j int) bool {
+		return len(dirs[i]) > len(dirs[j])
+	})
+	for _, dir := range dirs {
+		if err := os.Remove(dir); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			entries, readErr := os.ReadDir(dir)
+			if readErr == nil && len(entries) > 0 {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 // cloudGame は game.json のクラウド保存フォーマット。

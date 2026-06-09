@@ -399,6 +399,39 @@ func TestContentSyncServicePushReturnsErrorWhenSaveDirMissing(t *testing.T) {
 	}
 }
 
+func TestContentSyncServicePushRejectsChangedRemoteHead(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	baseMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	baseFP := contentFingerprint(baseMeta)
+	game.LocalSyncHead = &baseFP
+
+	remoteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remoteDir, "save.dat"), []byte("remote changed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	setupRemoteState(t, bstore, game.ID, game, nil, remoteDir)
+	remoteHead := bstore.heads[game.ID]
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	err := svc.Push(context.Background(), game.ID, nil)
+	if err == nil {
+		t.Fatal("expected Push to reject changed remote head")
+	}
+	if bstore.heads[game.ID] != remoteHead {
+		t.Fatal("remote HEAD should not be overwritten")
+	}
+}
+
 // ─── Pull tests ───────────────────────────────────────────────────────────────
 
 func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
@@ -427,6 +460,10 @@ func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("old local data"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	stalePath := filepath.Join(saveDir, "stale.dat")
+	if err := os.WriteFile(stalePath, []byte("local only"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	repo := newFakeRepo(&game, nil)
 	svc := newTestService(repo, bstore)
@@ -442,6 +479,9 @@ func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
 	}
 	if string(got) != "remote data" {
 		t.Errorf("save.dat = %q, want %q", string(got), "remote data")
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("stale file should be removed, stat err: %v", err)
 	}
 
 	// ゲームが更新された
@@ -562,6 +602,66 @@ func TestContentSyncServicePullRejectsEscapingSavePath(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(filepath.Dir(saveDir), "outside.txt")); !os.IsNotExist(statErr) {
 		t.Fatalf("outside file should not be written, stat err: %v", statErr)
+	}
+}
+
+func TestContentSyncServicePullRejectsMismatchedRemoteGameID(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("remote"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+
+	saveSnap, saveBlobs, err := buildSaveSnapshot(saveDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for hash, data := range saveBlobs {
+		if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindObject, hash, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saveSnapJSON, err := json.Marshal(saveSnap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	savesHash := hashBytes(saveSnapJSON)
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindTree, savesHash, saveSnapJSON); err != nil {
+		t.Fatal(err)
+	}
+
+	remoteGame := game
+	remoteGame.ID = "other-game"
+	meta, err := buildMetaSnapshot(remoteGame, nil, "", savesHash, "testdevice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metaHash := hashBytes(meta.SnapshotBytes)
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.writeHEAD(context.Background(), game.ID, metaHash); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	if err := svc.Pull(context.Background(), game.ID, nil); err == nil {
+		t.Fatal("expected Pull to reject mismatched remote game ID")
+	}
+	if repo.upsertedGame != nil {
+		t.Fatal("mismatched remote game should not be upserted")
 	}
 }
 
@@ -802,6 +902,38 @@ func TestContentSyncServiceResolveConflictUsesLocalCallsPush(t *testing.T) {
 	}
 	if bstore.heads[game.ID] == "" {
 		t.Error("expected HEAD to be set (Push was called)")
+	}
+}
+
+func TestContentSyncServiceResolveConflictUseLocalOverridesChangedRemote(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	baseMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	baseFP := contentFingerprint(baseMeta)
+	game.LocalSyncHead = &baseFP
+
+	remoteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remoteDir, "save.dat"), []byte("remote changed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	setupRemoteState(t, bstore, game.ID, game, nil, remoteDir)
+	remoteHead := bstore.heads[game.ID]
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	if err := svc.ResolveConflict(context.Background(), game.ID, true); err != nil {
+		t.Fatalf("ResolveConflict(useLocal=true): %v", err)
+	}
+	if bstore.heads[game.ID] == remoteHead {
+		t.Fatal("expected remote HEAD to be overwritten by local resolution")
 	}
 }
 
