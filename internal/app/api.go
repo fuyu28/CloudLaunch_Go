@@ -1,4 +1,4 @@
-// @fileoverview Wails バインディング用の API メソッドを提供する。
+// Wails バインディング用の API メソッドを提供する。
 package app
 
 import (

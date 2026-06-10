@@ -1,4 +1,4 @@
-// @fileoverview メモファイル関連APIを提供する。
+// メモファイル関連APIを提供する。
 package app
 
 import (

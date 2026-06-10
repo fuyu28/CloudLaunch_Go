@@ -1,4 +1,4 @@
-// @fileoverview アプリ設定の読み込みとデフォルト値を定義する。
+// アプリ設定の読み込みとデフォルト値を定義する。
 package config
 
 import (

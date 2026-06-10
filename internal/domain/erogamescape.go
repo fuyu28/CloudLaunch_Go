@@ -1,4 +1,4 @@
-// @fileoverview 批評空間の検索結果モデルを定義する。
+// 批評空間の検索結果モデルを定義する。
 package domain
 
 // ErogameScapeSearchItem は検索結果のゲーム情報を表す。

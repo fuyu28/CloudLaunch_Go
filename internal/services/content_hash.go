@@ -72,8 +72,8 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 	return domain.SaveSnapshot{Files: files}, blobs, nil
 }
 
-// removeFilesNotInSnapshot removes local save files that are absent from snapshot.
-// It only deletes paths discovered by walking saveDir, then removes empty directories.
+// removeFilesNotInSnapshot はスナップショットに存在しないローカルセーブファイルを削除する。
+// saveDir を走査して検出したパスのみを削除し、その後空ディレクトリを削除する。
 func removeFilesNotInSnapshot(saveDir string, snapshot domain.SaveSnapshot) error {
 	var dirs []string
 	err := filepath.Walk(saveDir, func(path string, info os.FileInfo, err error) error {

@@ -1,2 +1,2 @@
-// Package result defines API result helpers and error payloads.
+// Package result は API レスポンスのヘルパーとエラーペイロードを定義する。
 package result

@@ -1,4 +1,4 @@
-// @fileoverview メモファイルの作成・更新・削除を提供する。
+// メモファイルの作成・更新・削除を提供する。
 package memo
 
 import (

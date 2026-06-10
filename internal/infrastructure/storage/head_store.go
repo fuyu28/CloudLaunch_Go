@@ -1,4 +1,4 @@
-// @fileoverview ゲームごとのリモートHEADの読み書きを提供する。
+// ゲームごとのリモートHEADの読み書きを提供する。
 package storage
 
 import (

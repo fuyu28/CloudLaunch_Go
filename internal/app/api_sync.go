@@ -1,4 +1,4 @@
-// @fileoverview コンテンツアドレッシング同期関連の API を提供する。
+// コンテンツアドレッシング同期関連の API を提供する。
 package app
 
 import (

@@ -1,2 +1,2 @@
-// Package app provides the Wails application wiring and API bindings.
+// Package app は Wails アプリケーションの配線と API バインディングを提供する。
 package app

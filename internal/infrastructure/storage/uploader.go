@@ -1,4 +1,4 @@
-// @fileoverview S3 へのファイル/フォルダアップロードを提供する。
+// S3 へのファイル/フォルダアップロードを提供する。
 package storage
 
 import (

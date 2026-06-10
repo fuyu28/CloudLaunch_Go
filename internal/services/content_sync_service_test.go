@@ -25,13 +25,13 @@ type fakeContentSyncRepository struct {
 	sessions []domain.PlaySession
 	settings map[string]string
 
-	// recorded calls
+	// 記録された呼び出し
 	localSyncHeadSet string
 	upsertedGame     *domain.Game
 	deletedSessions  bool
 	upsertedSessions []domain.PlaySession
 
-	// error injection
+	// エラー注入
 	getGameErr error
 }
 
@@ -101,11 +101,11 @@ func (r *fakeContentSyncRepository) UpsertSetting(_ context.Context, key, value 
 type fakeBlobStore struct {
 	mu sync.Mutex
 
-	blobs map[string][]byte // key: "gameID/hash"
+	blobs map[string][]byte // キー: "gameID/hash"
 	heads map[string]string // gameID → metaHash
 
-	// recorded calls
-	downloadedBlobs []map[string]string // each call's blobs arg
+	// 記録された呼び出し
+	downloadedBlobs []map[string]string // 各呼び出しの blobs 引数
 	deletedPrefixes []string
 }
 
@@ -166,7 +166,7 @@ func (f *fakeBlobStore) putBlobs(_ context.Context, gameID string, blobs map[str
 }
 
 func (f *fakeBlobStore) downloadBlobs(_ context.Context, gameID, saveDir string, blobs map[string]string, _ int, onProgress func(int, int)) error {
-	// record call
+	// 呼び出しを記録する
 	snapshot := make(map[string]string, len(blobs))
 	for k, v := range blobs {
 		snapshot[k] = v

@@ -1,4 +1,4 @@
-// @fileoverview S3オブジェクトの一覧・削除・ダウンロードを提供する。
+// S3オブジェクトの一覧・削除・ダウンロードを提供する。
 package storage
 
 import (

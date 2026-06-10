@@ -1,2 +1,2 @@
-// Package logging provides application logging helpers.
+// Package logging はアプリケーションのロギングヘルパーを提供する。
 package logging

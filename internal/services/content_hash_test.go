@@ -20,7 +20,7 @@ func TestHashBytesIsDeterministic(t *testing.T) {
 	if h1 != h2 {
 		t.Fatalf("expected same hash, got %q and %q", h1, h2)
 	}
-	// SHA-256 of "hello world"
+	// "hello world" の SHA-256
 	want := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
 	if h1 != want {
 		t.Fatalf("hash = %q, want %q", h1, want)

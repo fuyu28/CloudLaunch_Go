@@ -1,4 +1,4 @@
-// @fileoverview メモ内容のハッシュ計算を提供する。
+// メモ内容のハッシュ計算を提供する。
 package memo
 
 import (

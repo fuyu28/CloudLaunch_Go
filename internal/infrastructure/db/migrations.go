@@ -1,4 +1,4 @@
-// @fileoverview SQL ファイルを使ったシンプルなマイグレーションを実行する。
+// SQL ファイルを使ったシンプルなマイグレーションを実行する。
 package db
 
 import (

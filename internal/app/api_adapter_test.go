@@ -380,7 +380,7 @@ func TestAppSaveCredentialConvertsServiceError(t *testing.T) {
 		CredentialService: services.NewCredentialService(&adapterTestCredentialStore{}, newAdapterTestLogger()),
 	}
 
-	// empty input triggers validation error in CredentialService
+	// 空の入力は CredentialService でバリデーションエラーになる
 	result := app.SaveCredential("key", services.CredentialInput{})
 
 	if result.Success {

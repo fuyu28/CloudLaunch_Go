@@ -1,4 +1,4 @@
-// @fileoverview グローバルホットキーの共通定義。
+// グローバルホットキーの共通定義。
 package services
 
 import "log/slog"

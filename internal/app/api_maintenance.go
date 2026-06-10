@@ -1,4 +1,4 @@
-// @fileoverview データエクスポートとバックアップ復元APIを提供する。
+// データエクスポートとバックアップ復元APIを提供する。
 package app
 
 import (

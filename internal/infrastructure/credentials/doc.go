@@ -1,2 +1,2 @@
-// Package credentials manages storage for S3-compatible credentials.
+// Package credentials は S3 互換の認証情報ストレージを管理する。
 package credentials

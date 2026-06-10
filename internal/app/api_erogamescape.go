@@ -1,4 +1,4 @@
-// @fileoverview 批評空間からのゲーム情報取得APIを提供する。
+// 批評空間からのゲーム情報取得APIを提供する。
 package app
 
 import (

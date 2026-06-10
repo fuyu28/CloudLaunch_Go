@@ -1,4 +1,4 @@
-// @fileoverview 認証情報の保存・取得・削除を提供する。
+// 認証情報の保存・取得・削除を提供する。
 package services
 
 import (

@@ -1,4 +1,4 @@
-// @fileoverview slog を使ったログ初期化を提供する。
+// slog を使ったログ初期化を提供する。
 package logging
 
 import (

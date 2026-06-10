@@ -1,6 +1,6 @@
 //go:build windows
 
-// @fileoverview Windows Credential Manager を使う認証情報ストア。
+// Windows Credential Manager を使う認証情報ストア。
 package credentials
 
 import (

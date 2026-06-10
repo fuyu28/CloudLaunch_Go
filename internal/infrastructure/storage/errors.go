@@ -1,4 +1,4 @@
-// @fileoverview クラウドストレージエラー判定を提供する。
+// クラウドストレージエラー判定を提供する。
 package storage
 
 import (

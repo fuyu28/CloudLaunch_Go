@@ -1,2 +1,2 @@
-// Package services contains business logic for CloudLaunch features.
+// Package services は CloudLaunch 機能のビジネスロジックを含む。
 package services

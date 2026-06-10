@@ -1,4 +1,4 @@
-// @fileoverview ApiResult の基本動作を検証する。
+// ApiResult の基本動作を検証する。
 package result
 
 import "testing"

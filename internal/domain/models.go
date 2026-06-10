@@ -1,4 +1,4 @@
-// @fileoverview データベースとAPIで使う基本モデルを定義する。
+// データベースとAPIで使う基本モデルを定義する。
 package domain
 
 import "time"

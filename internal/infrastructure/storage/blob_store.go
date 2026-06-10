@@ -1,4 +1,4 @@
-// @fileoverview コンテンツアドレッシングブロブの読み書きを提供する。
+// コンテンツアドレッシングブロブの読み書きを提供する。
 package storage
 
 import (
@@ -22,7 +22,7 @@ type BlobKind = string
 const (
 	BlobKindCommit BlobKind = "commits" // MetaSnapshot（git の commit 相当）
 	BlobKindTree   BlobKind = "trees"   // SaveSnapshot（git の tree 相当）
-	BlobKindMeta   BlobKind = "meta"    // game.json / sessions.json
+	BlobKindMeta   BlobKind = "meta"    // ゲーム情報・セッション情報 JSON
 	BlobKindObject BlobKind = "objects" // セーブファイル実データ・画像
 )
 
@@ -44,8 +44,8 @@ func blobHashBytes(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ResolveSafeRelativePath resolves a slash-separated relative path under baseDir.
-// It rejects empty, absolute, and parent-traversing paths before any filesystem write.
+// ResolveSafeRelativePath は baseDir 配下のスラッシュ区切り相対パスを解決する。
+// ファイルシステム書き込み前に、空・絶対パス・親ディレクトリ参照を拒否する。
 func ResolveSafeRelativePath(baseDir, relPath string) (string, error) {
 	trimmed := strings.TrimSpace(relPath)
 	if trimmed == "" {

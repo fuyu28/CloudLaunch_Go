@@ -1,2 +1,2 @@
-// Package storage provides S3-compatible storage helpers.
+// Package storage は S3 互換ストレージのヘルパーを提供する。
 package storage

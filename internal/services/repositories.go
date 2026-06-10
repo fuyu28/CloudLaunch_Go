@@ -7,7 +7,7 @@ import (
 	"CloudLaunch_Go/internal/domain"
 )
 
-// GameRepository defines the persistence boundary required by GameService.
+// GameRepository は GameService が必要とする永続化境界を定義する。
 type GameRepository interface {
 	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
@@ -17,7 +17,7 @@ type GameRepository interface {
 	CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error)
 }
 
-// SessionRepository defines the persistence boundary required by SessionService.
+// SessionRepository は SessionService が必要とする永続化境界を定義する。
 type SessionRepository interface {
 	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
@@ -31,7 +31,7 @@ type SessionRepository interface {
 	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
-// MemoRepository defines the persistence boundary required by MemoService.
+// MemoRepository は MemoService が必要とする永続化境界を定義する。
 type MemoRepository interface {
 	CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error)
 	UpdateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error)
@@ -42,7 +42,7 @@ type MemoRepository interface {
 	DeleteMemo(ctx context.Context, memoID string) error
 }
 
-// RouteRepository defines the persistence boundary required by RouteService.
+// RouteRepository は RouteService が必要とする永続化境界を定義する。
 type RouteRepository interface {
 	ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error)
 	CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error)
@@ -55,7 +55,7 @@ type RouteRepository interface {
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
 }
 
-// ContentSyncRepository defines the persistence boundary required by ContentSyncService.
+// ContentSyncRepository は ContentSyncService が必要とする永続化境界を定義する。
 type ContentSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
@@ -67,12 +67,12 @@ type ContentSyncRepository interface {
 	UpsertSetting(ctx context.Context, key, value string) error
 }
 
-// ScreenshotRepository defines the persistence boundary required by ScreenshotService.
+// ScreenshotRepository は ScreenshotService が必要とする永続化境界を定義する。
 type ScreenshotRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 }
 
-// ProcessMonitorRepository defines the persistence boundary required by ProcessMonitorService.
+// ProcessMonitorRepository は ProcessMonitorService が必要とする永続化境界を定義する。
 type ProcessMonitorRepository interface {
 	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)

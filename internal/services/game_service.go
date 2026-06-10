@@ -1,4 +1,4 @@
-// @fileoverview ゲーム管理のビジネスロジックを提供する。
+// ゲーム管理のビジネスロジックを提供する。
 package services
 
 import (

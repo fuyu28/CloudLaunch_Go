@@ -1,4 +1,4 @@
-// Package db provides SQLite connection helpers and migrations.
+// Package db は SQLite 接続ヘルパーとマイグレーションを提供する。
 package db
 
 import (
@@ -8,7 +8,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Open opens a SQLite database with required pragmas.
+// Open は必要なプラグマを設定して SQLite データベースを開く。
 func Open(databasePath string) (*sql.DB, error) {
 	connection, error := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys(1)", databasePath))
 	if error != nil {

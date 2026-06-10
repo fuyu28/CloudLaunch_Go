@@ -1,6 +1,6 @@
 //go:build windows
 
-// @fileoverview Windows向けの認証情報ストア初期化を提供する。
+// Windows向けの認証情報ストア初期化を提供する。
 package app
 
 import (
