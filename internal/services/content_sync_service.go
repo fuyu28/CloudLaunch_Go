@@ -163,6 +163,10 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 	if game.ImagePath != nil && *game.ImagePath != "" {
 		if h, _, herr := hashFile(*game.ImagePath); herr == nil {
 			imageHash = h
+		} else {
+			// 画像が一時的に読めない場合 imageHash="" のままになり、fingerprint が
+			// リモートとズレて偽の差分（PushNeeded）に見える。原因追跡のため記録する。
+			s.logger.Warn("画像のハッシュ計算に失敗（imageHash を空として扱う）", "gameId", game.ID, "path", *game.ImagePath, "error", herr)
 		}
 	}
 	saveSnap, _, err := buildSaveSnapshot(saveFolderPath)
@@ -320,6 +324,10 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 		if herr == nil {
 			imageHash = h
 			imageData = data
+		} else {
+			// 画像欠損のまま push すると imageHash="" の game.json が確定し、
+			// この状態が新しいリモート HEAD になる。意図せぬ画像消失を追跡できるよう記録する。
+			s.logger.Warn("画像のハッシュ計算に失敗（imageHash を空として push）", "gameId", game.ID, "path", *game.ImagePath, "error", herr)
 		}
 	}
 
