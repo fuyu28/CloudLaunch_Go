@@ -316,10 +316,12 @@ func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID 
 }
 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
+// playedAt が同値のときも順序が安定するよう id を第2ソートキーにしている。
+// （sessions.json のシリアライズ結果が環境ごとにブレてハッシュが変わるのを防ぐ）
 func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []domain.PlaySession, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, gameId, playedAt, duration, sessionName, routeId, updatedAt
-		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
+		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC, id
 	`, gameID)
 	if err != nil {
 		return nil, err
