@@ -14,8 +14,8 @@ import (
 
 // CloudMetadataResult はクラウドメタ情報の API レスポンス。
 type CloudMetadataResult struct {
-	Version   int                    `json:"version"`
-	UpdatedAt time.Time              `json:"updatedAt"`
+	Version   int                      `json:"version"`
+	UpdatedAt time.Time                `json:"updatedAt"`
 	Games     []services.CloudGameInfo `json:"games"`
 }
 
