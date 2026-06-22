@@ -37,6 +37,7 @@ type App struct {
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
+	syncCoalescer       *asyncCoalescer
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -126,6 +127,11 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
 	app.ContentSyncService = services.NewContentSyncService(app.Config, credentialStore, repository, app.Logger)
+	app.syncCoalescer = newAsyncCoalescer(func(id string) {
+		if err := app.ContentSyncService.Push(app.context(), id, nil); err != nil {
+			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
+		}
+	})
 	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
 	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.ContentSyncService)
 	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)

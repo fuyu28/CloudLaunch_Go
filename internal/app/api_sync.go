@@ -89,15 +89,17 @@ func (app *App) ResolveConflict(gameID string, useLocal, deleteUntracked bool) r
 	return result.OkResult(res)
 }
 
+// syncGameAsync は指定ゲームのクラウド同期を非同期に要求する。
+// 同一 gameID の同期は直列化され、実行中の再要求は完了後に1回だけ畳み込まれる。
 func (app *App) syncGameAsync(gameID string) {
-	if app.ContentSyncService == nil || strings.TrimSpace(gameID) == "" {
+	if app.ContentSyncService == nil || app.syncCoalescer == nil {
 		return
 	}
-	go func(id string) {
-		if err := app.ContentSyncService.Push(app.context(), id, nil); err != nil {
-			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
-		}
-	}(gameID)
+	id := strings.TrimSpace(gameID)
+	if id == "" {
+		return
+	}
+	app.syncCoalescer.trigger(id)
 }
 
 // LoadCloudMetadata はクラウド上の全ゲームメタ情報を返す。
