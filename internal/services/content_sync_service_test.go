@@ -1061,6 +1061,30 @@ func TestContentSyncServiceDeleteFromCloudCallsDeleteWithCorrectPrefix(t *testin
 	}
 }
 
+// TestContentSyncServiceDeleteFromCloudClearsLocalSyncState は、リモート削除後に
+// ローカルの localSyncHead / localSaveTree がクリアされることを確認する。
+func TestContentSyncServiceDeleteFromCloudClearsLocalSyncState(t *testing.T) {
+	t.Parallel()
+
+	game := baseGame(t.TempDir())
+	game.LocalSyncHead = strPtr("old-head")
+	repo := newFakeRepo(&game, nil)
+	repo.saveTree = "{\"files\":{\"a.sav\":\"h\"}}"
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	if err := svc.DeleteFromCloud(context.Background(), game.ID); err != nil {
+		t.Fatalf("DeleteFromCloud: %v", err)
+	}
+
+	if repo.localSyncHeadSet != "" {
+		t.Errorf("localSyncHead should be cleared, got %q", repo.localSyncHeadSet)
+	}
+	if repo.saveTreeSet != "" {
+		t.Errorf("localSaveTree should be cleared, got %q", repo.saveTreeSet)
+	}
+}
+
 // TestContentSyncServiceStatusReturnsPullNeededWhenLocalSyncHeadUnset は
 // LocalSyncHead が未設定（他PCで一度も同期していない）のとき conflict ではなく
 // pull_needed を返すことを確認する。

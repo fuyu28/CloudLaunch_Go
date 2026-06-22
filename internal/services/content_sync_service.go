@@ -617,14 +617,26 @@ func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string,
 	return s.Pull(ctx, gameID, nil, deleteUntracked)
 }
 
-// DeleteFromCloud はゲームのリモートデータを削除する。
+// DeleteFromCloud はゲームのリモートデータを削除し、ローカルの同期基準もクリアする。
 func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string) error {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
 	}
 	prefix := fmt.Sprintf("games/%s/", gameID)
-	return bstore.deleteByPrefix(ctx, prefix)
+	if err := bstore.deleteByPrefix(ctx, prefix); err != nil {
+		return err
+	}
+	// リモート削除後はローカルの同期基準（localSyncHead/localSaveTree）を無効化して状態を
+	// 一貫させる。残しても Status は remoteHead=="" を先に判定するため誤判定はしないが、
+	// 古い基準が残るのを避ける。削除は成功済みなのでクリア失敗は致命扱いせずログのみ。
+	if err := s.repository.SetLocalSyncHead(ctx, gameID, ""); err != nil {
+		s.logger.Warn("localSyncHead のクリアに失敗", "gameId", gameID, "error", err)
+	}
+	if err := s.repository.SetLocalSaveTree(ctx, gameID, ""); err != nil {
+		s.logger.Warn("localSaveTree のクリアに失敗", "gameId", gameID, "error", err)
+	}
+	return nil
 }
 
 // LoadCloudMetadata はクラウド上の全ゲームのメタ情報を返す。
