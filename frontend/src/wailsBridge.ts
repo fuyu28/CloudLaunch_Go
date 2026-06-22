@@ -1,5 +1,10 @@
 /**
- * @fileoverview Electron IPC互換のWailsブリッジを提供する。
+ * @fileoverview WailsバックエンドAPIをフロントエンドに公開するブリッジ。
+ *
+ * Wailsが自動生成した `wailsjs/go/app/App` および `wailsjs/runtime/runtime` のバインディングを
+ * ラップし、`WindowApi` 型として統一したインターフェースを提供する。
+ * フロントエンドは必ず `window.api`（`src/types/window.d.ts` で宣言）経由でアクセスし、
+ * 生成バインディングを直接 import しない。
  */
 
 import type { ApiResult } from "src/types/result";
