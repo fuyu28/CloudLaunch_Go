@@ -143,6 +143,10 @@ type fakeBlobStore struct {
 	// 記録された呼び出し
 	downloadedBlobs []map[string]string // 各呼び出しの blobs 引数
 	deletedPrefixes []string
+
+	// onPutBlobs は putBlobs 呼び出し時に1回呼ばれるフック。
+	// テストでアップロード中の HEAD 変更（別デバイスの並行 push）を模すのに使う。nil 可。
+	onPutBlobs func()
 }
 
 func newFakeBlobStore() *fakeBlobStore {
@@ -187,6 +191,9 @@ func (f *fakeBlobStore) putBlob(_ context.Context, gameID, kind, hash string, da
 }
 
 func (f *fakeBlobStore) putBlobs(_ context.Context, gameID string, blobs map[string][]byte, _ int, onProgress func(int, int)) error {
+	if f.onPutBlobs != nil {
+		f.onPutBlobs()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	total := len(blobs)
@@ -371,6 +378,41 @@ func TestContentSyncServicePushUploadsDataAndSetsHead(t *testing.T) {
 	bstore.mu.Unlock()
 	if !ok {
 		t.Error("expected save file blob to be stored")
+	}
+}
+
+// TestContentSyncServicePushAbortsWhenRemoteHeadChangesMidUpload は、アップロード中に
+// 別デバイスがリモート HEAD を進めた場合、push が writeHEAD せず中断することを確認する。
+func TestContentSyncServicePushAbortsWhenRemoteHeadChangesMidUpload(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir) // localSyncHead 未設定、remote HEAD なしから開始
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	// アップロード中（putBlobs）に別デバイスが HEAD を進めた状況を模す
+	bstore.onPutBlobs = func() {
+		_ = bstore.writeHEAD(context.Background(), game.ID, "concurrent-head")
+	}
+	svc := newTestService(repo, bstore)
+
+	err := svc.Push(context.Background(), game.ID, nil)
+	if err == nil {
+		t.Fatal("Push should abort when remote HEAD changed during upload")
+	}
+
+	// 別デバイスの HEAD が上書きされていないこと
+	head, _ := bstore.readHEAD(context.Background(), game.ID)
+	if head != "concurrent-head" {
+		t.Fatalf("remote HEAD should not be overwritten, got %q", head)
+	}
+	// 中断したので localSyncHead は更新されていないこと
+	if repo.localSyncHeadSet != "" {
+		t.Fatalf("localSyncHead should not be set on aborted push, got %q", repo.localSyncHeadSet)
 	}
 }
 

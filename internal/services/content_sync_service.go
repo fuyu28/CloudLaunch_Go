@@ -274,11 +274,14 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 	if game.SaveFolderPath == nil || *game.SaveFolderPath == "" {
 		return fmt.Errorf("セーブフォルダのパスが未設定です")
 	}
+	// !force のとき、push 開始時点のリモート HEAD を控える（writeHEAD 直前の再確認に使う）。
+	expectedHead := ""
 	if !force {
 		remoteHead, err := bstore.readHEAD(ctx, gameID)
 		if err != nil {
 			return err
 		}
+		expectedHead = remoteHead
 		if remoteHead != "" {
 			remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
 			if err != nil {
@@ -361,6 +364,18 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 		return err
 	}
 
+	// HEAD 書き換え直前に再度リモート HEAD を確認し、push 開始時から変化していれば中断する。
+	// S3 に CAS が無いため完全な排他はできないが、アップロード中に別デバイスが push した場合の
+	// ロストアップデートの窓を大幅に縮小する（force 時はユーザーが上書きを選択済みのため省略）。
+	if !force {
+		currentHead, err := bstore.readHEAD(ctx, gameID)
+		if err != nil {
+			return err
+		}
+		if currentHead != expectedHead {
+			return fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
+		}
+	}
 	if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
 		return err
 	}
