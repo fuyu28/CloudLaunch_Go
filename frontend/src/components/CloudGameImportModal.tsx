@@ -159,7 +159,9 @@ export default function CloudGameImportModal({
       }
       if (result.data && !result.data.applied) {
         // 同期対象外のローカルファイルがある場合は破壊を避けて中断（詳細画面で確認）
-        toast.error("同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。");
+        toast.error(
+          "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
+        );
         return false;
       }
 

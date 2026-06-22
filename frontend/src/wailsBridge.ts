@@ -242,7 +242,13 @@ export type WindowApi = {
     }>;
   };
   cloudMetadata: {
-    loadCloudMetadata: () => Promise<ApiResult<{ version: number; updatedAt: Date; games: import("src/types/cloud").CloudGameMetadata[] }>>;
+    loadCloudMetadata: () => Promise<
+      ApiResult<{
+        version: number;
+        updatedAt: Date;
+        games: import("src/types/cloud").CloudGameMetadata[];
+      }>
+    >;
   };
   cloudSync: {
     status: (gameId: string) => Promise<ApiResult<SyncStatusDetail>>;
@@ -811,7 +817,14 @@ export const createWailsBridge = (): WindowApi => {
         if (!result.success || !result.data) {
           return { success: false, message: result.error?.message ?? "エラー" };
         }
-        return { success: true, data: result.data as { version: number; updatedAt: Date; games: import("src/types/cloud").CloudGameMetadata[] } };
+        return {
+          success: true,
+          data: result.data as {
+            version: number;
+            updatedAt: Date;
+            games: import("src/types/cloud").CloudGameMetadata[];
+          },
+        };
       },
     },
     cloudSync: {

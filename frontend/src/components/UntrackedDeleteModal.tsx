@@ -45,11 +45,7 @@ export default function UntrackedDeleteModal({
             onClick={onConfirm}
             disabled={isProcessing}
           >
-            {isProcessing ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <FaTrash />
-            )}
+            {isProcessing ? <span className="loading loading-spinner loading-xs" /> : <FaTrash />}
             削除してダウンロード
           </button>
         </div>
