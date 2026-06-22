@@ -132,6 +132,9 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
 		}
 	})
+	app.syncCoalescer.onPanic = func(id string, recovered any) {
+		app.Logger.Error("クラウド同期中に panic を回収", "gameId", id, "recovered", recovered)
+	}
 	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
 	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.ContentSyncService)
 	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)

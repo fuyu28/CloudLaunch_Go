@@ -10,6 +10,8 @@ type asyncCoalescer struct {
 	inFlight map[string]bool
 	pending  map[string]bool
 	run      func(id string)
+	// onPanic は run が panic を起こした際に回収した値とともに呼ばれる（任意）。
+	onPanic func(id string, recovered any)
 }
 
 // newAsyncCoalescer は run を実行関数とする asyncCoalescer を生成する。
@@ -37,7 +39,15 @@ func (c *asyncCoalescer) trigger(id string) {
 // loop は id のタスクを実行し、実行中に再要求があれば1回だけ追加実行してから終了する。
 func (c *asyncCoalescer) loop(id string) {
 	for {
-		c.run(id)
+		if c.runSafely(id) {
+			// run が panic した場合は再実行せず（pending を消化すると panic ループに
+			// なりうる）、inFlight を確実にクリアして終了する。次回 trigger で再開できる。
+			c.mu.Lock()
+			delete(c.pending, id)
+			delete(c.inFlight, id)
+			c.mu.Unlock()
+			return
+		}
 		c.mu.Lock()
 		if c.pending[id] {
 			delete(c.pending, id)
@@ -48,4 +58,19 @@ func (c *asyncCoalescer) loop(id string) {
 		c.mu.Unlock()
 		return
 	}
+}
+
+// runSafely は run を実行し、panic を回収する。panic したら true を返し、loop 側で
+// inFlight を確実にクリアして同期が永久にブロックされるのを防ぐ。
+func (c *asyncCoalescer) runSafely(id string) (panicked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = true
+			if c.onPanic != nil {
+				c.onPanic(id, r)
+			}
+		}
+	}()
+	c.run(id)
+	return false
 }

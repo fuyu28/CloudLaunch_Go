@@ -101,3 +101,45 @@ func TestAsyncCoalescerDifferentKeysRunConcurrently(t *testing.T) {
 		t.Fatalf("expected both a and b to start, got %v", got)
 	}
 }
+
+// TestAsyncCoalescerRecoversFromPanic は、run が panic しても inFlight が
+// クリアされ、当該キーの後続タスクが実行可能なまま（永久ブロックしない）ことを確認する。
+func TestAsyncCoalescerRecoversFromPanic(t *testing.T) {
+	calls := make(chan int, 16)
+	panics := make(chan struct{}, 4)
+	var mu sync.Mutex
+	n := 0
+	c := newAsyncCoalescer(func(_ string) {
+		mu.Lock()
+		n++
+		cur := n
+		mu.Unlock()
+		if cur == 1 {
+			panic("boom")
+		}
+		calls <- cur
+	})
+	c.onPanic = func(_ string, _ any) { panics <- struct{}{} }
+
+	c.trigger("g1")
+	select {
+	case <-panics:
+	case <-time.After(2 * time.Second):
+		t.Fatal("onPanic was not invoked")
+	}
+
+	// panic 後も inFlight がクリアされ、後続タスクが走ること（永久ブロックしない）。
+	deadline := time.After(2 * time.Second)
+	for {
+		c.trigger("g1")
+		select {
+		case got := <-calls:
+			if got >= 2 {
+				return // 2回目以降が走った = inFlight はクリア済み
+			}
+		case <-time.After(20 * time.Millisecond):
+		case <-deadline:
+			t.Fatal("coalescer did not recover (inFlight stuck) after panic")
+		}
+	}
+}
