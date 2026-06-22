@@ -86,6 +86,7 @@ type ContentSyncService struct {
 	repository   ContentSyncRepository
 	logger       *slog.Logger
 	newBlobStore func(ctx context.Context) (contentBlobStore, error)
+	gameLocks    sync.Map // gameID → *sync.Mutex（同一ゲームの Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
 }
 
 // NewContentSyncService は ContentSyncService を生成する。
@@ -104,6 +105,17 @@ func NewContentSyncService(cfg config.Config, store credentials.Store, repo Cont
 		return &s3BlobStore{client: client, bucket: s3cfg.Bucket}, nil
 	}
 	return svc
+}
+
+// lockGame は gameID 単位の排他ロックを取得し、解放関数を返す。
+// 同一ゲームに対する Push/Pull/ResolveConflict/DeleteFromCloud を直列化し、
+// ローカルファイル操作とリモート HEAD 操作が交錯しないようにする。
+// 使い方: defer s.lockGame(gameID)()
+func (s *ContentSyncService) lockGame(gameID string) func() {
+	m, _ := s.gameLocks.LoadOrStore(gameID, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 func (s *ContentSyncService) newClient(ctx context.Context) (*s3.Client, storage.S3Config, error) {
@@ -258,8 +270,9 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 	return detail, nil
 }
 
-// Push はローカルデータをリモートにアップロードする。
+// Push はローカルデータをリモートにアップロードする。同一ゲームの同期と直列化される。
 func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress ProgressFunc) error {
+	defer s.lockGame(gameID)()
 	return s.push(ctx, gameID, onProgress, false)
 }
 
@@ -391,13 +404,20 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 	return s.repository.SetLocalSaveTree(ctx, gameID, string(saveSnapJSON))
 }
 
-// Pull はリモートデータをローカルに適用する。
+// Pull はリモートデータをローカルに適用する。同一ゲームの同期と直列化される。
+// 詳細な挙動（deleteUntracked による未追跡ファイル削除確認）は内部の pull を参照。
+func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
+	defer s.lockGame(gameID)()
+	return s.pull(ctx, gameID, onProgress, deleteUntracked)
+}
+
+// pull はリモートデータをローカルに適用する。
 //
 // deleteUntracked が false の場合、同期が認識していないローカル固有ファイル
 // （untracked）を削除する必要があると分かった時点で、ローカルに一切変更を加えずに
 // PullResult{Applied:false, UntrackedDeletes:...} を返す。呼び出し側でユーザーに
 // 確認を取り、承認後に deleteUntracked=true で再実行する。
-func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
+func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return domain.PullResult{}, err
@@ -605,20 +625,22 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 	return domain.PullResult{Applied: true}, nil
 }
 
-// ResolveConflict はコンフリクトを手動解決する。
+// ResolveConflict はコンフリクトを手動解決する。同一ゲームの同期と直列化される。
 // useLocal=false（リモート採用）は Pull と同様に未追跡ファイルの削除確認を経由する。
 func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string, useLocal, deleteUntracked bool) (domain.PullResult, error) {
+	defer s.lockGame(gameID)()
 	if useLocal {
 		if err := s.push(ctx, gameID, nil, true); err != nil {
 			return domain.PullResult{}, err
 		}
 		return domain.PullResult{Applied: true}, nil
 	}
-	return s.Pull(ctx, gameID, nil, deleteUntracked)
+	return s.pull(ctx, gameID, nil, deleteUntracked)
 }
 
-// DeleteFromCloud はゲームのリモートデータを削除し、ローカルの同期基準もクリアする。
+// DeleteFromCloud はゲームのリモートデータを削除し、ローカルの同期基準もクリアする。同一ゲームの同期と直列化される。
 func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string) error {
+	defer s.lockGame(gameID)()
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1269,5 +1270,65 @@ func TestContentSyncServicePullRequiresConfirmationForUntracked(t *testing.T) {
 	}
 	if _, statErr := os.Stat(untrackedPath); !os.IsNotExist(statErr) {
 		t.Fatalf("untracked file should be deleted after confirmation, stat err: %v", statErr)
+	}
+}
+
+// TestContentSyncServicePushSerializesSameGame は、同一ゲームに対する複数の Push が
+// 同時並行に putBlobs（=セーブ走査・アップロード本体）へ突入しないことを確認する。
+func TestContentSyncServicePushSerializesSameGame(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "s.dat"), []byte("d"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+
+	var concurrent, overlap int32
+	bstore.onPutBlobs = func() {
+		if atomic.AddInt32(&concurrent, 1) > 1 {
+			atomic.StoreInt32(&overlap, 1)
+		}
+		time.Sleep(20 * time.Millisecond) // 重なりがあれば検出できるよう保持
+		atomic.AddInt32(&concurrent, -1)
+	}
+	svc := newTestService(repo, bstore)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = svc.Push(context.Background(), game.ID, nil)
+		}()
+	}
+	wg.Wait()
+
+	if atomic.LoadInt32(&overlap) != 0 {
+		t.Fatal("same-game Push calls must be serialized (no concurrent putBlobs)")
+	}
+}
+
+// TestContentSyncServiceLockGameAllowsDifferentIDs は、異なる gameID のロックが
+// 互いをブロックしないことを確認する。
+func TestContentSyncServiceLockGameAllowsDifferentIDs(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(newFakeRepo(nil, nil), newFakeBlobStore())
+	unlockA := svc.lockGame("game-a")
+	defer unlockA()
+
+	done := make(chan struct{})
+	go func() {
+		unlockB := svc.lockGame("game-b")
+		unlockB()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("locks for different gameIDs must not block each other")
 	}
 }
