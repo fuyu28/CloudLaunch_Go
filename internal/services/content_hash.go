@@ -65,6 +65,9 @@ func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
 		if err != nil {
 			return err
 		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil // シンボリックリンクは同期対象外（リンク先実体の漏洩・誤上書きを防ぐ）
+		}
 		if info.IsDir() {
 			return nil
 		}
@@ -109,6 +112,9 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 		if err != nil {
 			return err
 		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil // シンボリックリンクは同期対象外（リンク先実体の漏洩・誤上書きを防ぐ）
+		}
 		if info.IsDir() {
 			return nil
 		}
@@ -144,6 +150,9 @@ func planDeletions(saveDir string, snapshot domain.SaveSnapshot, baseTree map[st
 	walkErr := filepath.Walk(saveDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil // シンボリックリンクは同期対象外（リンク先実体の漏洩・誤上書きを防ぐ）
 		}
 		if info.IsDir() {
 			return nil

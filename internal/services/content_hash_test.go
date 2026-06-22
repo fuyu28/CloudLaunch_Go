@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -389,5 +390,56 @@ func TestBuildSaveTreeRejectsMissingDir(t *testing.T) {
 	t.Parallel()
 	if _, err := buildSaveTree(filepath.Join(t.TempDir(), "nope")); err == nil {
 		t.Fatal("expected error for missing dir")
+	}
+}
+
+// TestBuildSaveTreeIgnoresSymlinks は、セーブフォルダ内のシンボリックリンクが
+// スナップショットに含まれない（リンク先実体が読まれない）ことを確認する。
+func TestBuildSaveTreeIgnoresSymlinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink 権限の都合で Windows ではスキップ")
+	}
+	t.Parallel()
+
+	// リンク先となる「外部の機密ファイル」
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secret, []byte("TOP SECRET"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "real.sav"), []byte("real"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// セーブフォルダ内に外部機密ファイルへのシンボリックリンクを置く
+	if err := os.Symlink(secret, filepath.Join(saveDir, "link.txt")); err != nil {
+		t.Skipf("symlink を作成できない環境: %v", err)
+	}
+
+	tree, err := buildSaveTree(saveDir)
+	if err != nil {
+		t.Fatalf("buildSaveTree: %v", err)
+	}
+	if _, ok := tree.Files["link.txt"]; ok {
+		t.Fatal("symlink はスナップショットに含めてはならない")
+	}
+	if _, ok := tree.Files["real.sav"]; !ok {
+		t.Fatal("通常ファイルは含まれるべき")
+	}
+
+	// buildSaveSnapshot 側も同様にリンクを無視すること
+	snap, blobs, err := buildSaveSnapshot(saveDir)
+	if err != nil {
+		t.Fatalf("buildSaveSnapshot: %v", err)
+	}
+	if _, ok := snap.Files["link.txt"]; ok {
+		t.Fatal("buildSaveSnapshot も symlink を含めてはならない")
+	}
+	// リンク先の機密内容が blob 化されていないこと
+	for _, data := range blobs {
+		if string(data) == "TOP SECRET" {
+			t.Fatal("リンク先の機密内容が blob 化されている（情報漏洩）")
+		}
 	}
 }
