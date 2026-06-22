@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { logger } from "@renderer/utils/logger";
@@ -37,6 +38,7 @@ export default function CloudGameImportModal({
   onImported,
 }: CloudGameImportModalProps): React.JSX.Element {
   const { checkNetworkFeature, isOfflineMode } = useOfflineMode();
+  const { pull } = useCloudSync(isOfflineMode);
   const { formatDateWithTime, formatSmart } = useTimeFormat();
   const [cloudGames, setCloudGames] = useState<CloudGameMetadata[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -154,12 +156,12 @@ export default function CloudGameImportModal({
 
   const importGame = useCallback(
     async (game: CloudGameMetadata): Promise<boolean> => {
-      const result = await window.api.cloudSync.pull(game.id);
-      if (!result.success) {
-        toast.error(result.message ?? "クラウドゲームの追加に失敗しました");
+      const op = await pull(game.id);
+      if (!op.ok) {
+        toast.error(op.message ?? "クラウドゲームの追加に失敗しました");
         return false;
       }
-      if (result.data && !result.data.applied) {
+      if (op.ok && op.applied === false) {
         // 同期対象外のローカルファイルがある場合は破壊を避けて中断（詳細画面で確認）
         toast.error(
           "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
@@ -180,7 +182,7 @@ export default function CloudGameImportModal({
       }
       return true;
     },
-    [onImported],
+    [onImported, pull],
   );
 
   const processQueue = useCallback(

@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 
 import { logger } from "@renderer/utils/logger";
 
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import type { SyncProgressEvent } from "src/wailsBridge";
 import type { ToastHandler } from "@renderer/hooks/useToastHandler";
 
@@ -31,6 +32,7 @@ export function useUploadAfterSession(
 ): UseUploadAfterSessionResult {
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [uploadingAfterEndGameId, setUploadingAfterEndGameId] = useState<string | null>(null);
+  const { getStatus, push, subscribeProgress } = useCloudSync(isOfflineMode);
 
   const checkUploadPrompt = useCallback(
     async (gameId: string): Promise<void> => {
@@ -45,7 +47,7 @@ export function useUploadAfterSession(
         return;
       }
       try {
-        const statusResult = await window.api.cloudSync.status(gameId);
+        const statusResult = await getStatus(gameId);
         if (!statusResult.success || !statusResult.data) {
           return;
         }
@@ -61,7 +63,7 @@ export function useUploadAfterSession(
         // バックグラウンドチェックのエラーは無視する
       }
     },
-    [isOfflineMode, isValidCreds, uploadingAfterEndGameId],
+    [isOfflineMode, isValidCreds, uploadingAfterEndGameId, getStatus],
   );
 
   const handleUploadAfterEnd = useCallback(async (): Promise<void> => {
@@ -70,7 +72,7 @@ export function useUploadAfterSession(
     setPendingUpload(null);
     setUploadingAfterEndGameId(payload.gameId);
     const toastId = toastHandler.showLoading("セーブデータをアップロード中…");
-    const unsubscribe = window.api.cloudSync.onProgress((event: SyncProgressEvent) => {
+    const unsubscribe = subscribeProgress((event: SyncProgressEvent) => {
       if (event.operation === "push" && event.total > 0) {
         toastHandler.showLoading(
           `セーブデータをアップロード中… ${event.current}/${event.total}`,
@@ -79,15 +81,15 @@ export function useUploadAfterSession(
       }
     });
     try {
-      const result = await window.api.cloudSync.push(payload.gameId);
-      if (result.success) {
+      const op = await push(payload.gameId);
+      if (op.ok) {
         if (toastId) {
           toastHandler.showSuccess("セーブデータをクラウドにアップロードしました", toastId);
         } else {
           toastHandler.showToast("セーブデータをクラウドにアップロードしました", "success");
         }
       } else {
-        const message = result.message || "セーブデータのアップロードに失敗しました";
+        const message = op.message || "セーブデータのアップロードに失敗しました";
         if (toastId) {
           toastHandler.showError(message, toastId);
         } else {
@@ -109,7 +111,7 @@ export function useUploadAfterSession(
       unsubscribe();
       setUploadingAfterEndGameId(null);
     }
-  }, [pendingUpload, toastHandler]);
+  }, [pendingUpload, toastHandler, push, subscribeProgress]);
 
   const handleSkipUploadAfterEnd = useCallback((): void => {
     setPendingUpload(null);

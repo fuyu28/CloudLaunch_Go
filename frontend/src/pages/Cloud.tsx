@@ -26,6 +26,7 @@ import { FiAlertTriangle } from "react-icons/fi";
 import { isValidCredsAtom } from "@renderer/state/credentials";
 
 import { useCloudData } from "@renderer/hooks/useCloudData";
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
@@ -69,6 +70,7 @@ export default function Cloud(): React.JSX.Element {
   const validateCreds = useValidateCreds();
   const { showToast } = useToastHandler();
   const { isOfflineMode } = useOfflineMode();
+  const { getStatus, push, pull } = useCloudSync(isOfflineMode);
 
   // クラウドデータ管理フック
   const {
@@ -121,7 +123,7 @@ export default function Cloud(): React.JSX.Element {
     }
     setIsSyncingGame(true);
     try {
-      const statusResult = await window.api.cloudSync.status(selectedGameId);
+      const statusResult = await getStatus(selectedGameId);
       if (!statusResult.success || !statusResult.data) {
         showToast(
           (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
@@ -139,19 +141,19 @@ export default function Cloud(): React.JSX.Element {
         return;
       }
       if (status === "push_needed") {
-        const pushResult = await window.api.cloudSync.push(selectedGameId);
-        if (!pushResult.success) {
-          showToast(pushResult.message || "アップロードに失敗しました", "error");
+        const op = await push(selectedGameId);
+        if (!op.ok) {
+          showToast(op.message || "アップロードに失敗しました", "error");
           return;
         }
         showToast("クラウドにアップロードしました", "success");
       } else if (status === "pull_needed") {
-        const pullResult = await window.api.cloudSync.pull(selectedGameId);
-        if (!pullResult.success) {
-          showToast(pullResult.message || "ダウンロードに失敗しました", "error");
+        const op = await pull(selectedGameId);
+        if (!op.ok) {
+          showToast(op.message || "ダウンロードに失敗しました", "error");
           return;
         }
-        if (pullResult.data && !pullResult.data.applied) {
+        if (op.ok && op.applied === false) {
           showToast(
             "同期対象外のローカルファイルがあります。詳細画面の「同期」から確認してください",
             "error",
@@ -172,7 +174,7 @@ export default function Cloud(): React.JSX.Element {
     } finally {
       setIsSyncingGame(false);
     }
-  }, [selectedGameId, isOfflineMode, showToast]);
+  }, [selectedGameId, isOfflineMode, showToast, getStatus, push, pull]);
 
   const handleDeleteSelectedGame = useCallback(async (): Promise<void> => {
     if (!selectedGameId) {

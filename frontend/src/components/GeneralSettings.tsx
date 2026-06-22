@@ -24,6 +24,7 @@ import { Link } from "react-router-dom";
 
 import { logger } from "@renderer/utils/logger";
 
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { DAISYUI_THEMES } from "@renderer/constants/themes";
 import {
   themeAtom,
@@ -72,6 +73,7 @@ export default function GeneralSettings(): React.JSX.Element {
   const [screenshotLocalJpeg, setScreenshotLocalJpeg] = useAtom(screenshotLocalJpegAtom);
   const [screenshotHotkey, setScreenshotHotkey] = useAtom(screenshotHotkeyAtom);
   const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
+  const { getStatus, push, pull } = useCloudSync(offlineMode);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
@@ -306,7 +308,7 @@ export default function GeneralSettings(): React.JSX.Element {
       for (const game of games) {
         if (!game.saveFolderPath) continue;
 
-        const statusResult = await window.api.cloudSync.status(game.id);
+        const statusResult = await getStatus(game.id);
         if (!statusResult.success || !statusResult.data) {
           failed++;
           continue;
@@ -314,14 +316,14 @@ export default function GeneralSettings(): React.JSX.Element {
 
         const { status } = statusResult.data;
         if (status === "push_needed") {
-          const r = await window.api.cloudSync.push(game.id);
-          if (r.success) uploaded++;
+          const op = await push(game.id);
+          if (op.ok) uploaded++;
           else failed++;
         } else if (status === "pull_needed") {
-          const r = await window.api.cloudSync.pull(game.id);
+          const op = await pull(game.id);
           // 同期管理外ファイルの削除確認が必要な場合は破壊を避けてスキップ（詳細画面で確認）
-          if (r.success && r.data && !r.data.applied) skipped++;
-          else if (r.success) downloaded++;
+          if (op.ok && op.applied === false) skipped++;
+          else if (op.ok) downloaded++;
           else failed++;
         }
       }
