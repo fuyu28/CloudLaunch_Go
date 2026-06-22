@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/domain"
@@ -623,6 +624,8 @@ func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string)
 }
 
 // LoadCloudMetadata はクラウド上の全ゲームのメタ情報を返す。
+// ゲームごとの取得（readHEAD + commit + game.json）を S3UploadConcurrency 並列で実行する。
+// 取得・解析に失敗したゲームは警告ログを出してスキップする。結果は gameIDs の順序を保つ。
 func (s *ContentSyncService) LoadCloudMetadata(ctx context.Context) ([]CloudGameInfo, error) {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
@@ -632,45 +635,81 @@ func (s *ContentSyncService) LoadCloudMetadata(ctx context.Context) ([]CloudGame
 	if err != nil {
 		return nil, err
 	}
-	var results []CloudGameInfo
-	for _, gameID := range gameIDs {
-		head, err := bstore.readHEAD(ctx, gameID)
-		if err != nil || head == "" {
-			continue
+	if len(gameIDs) == 0 {
+		return nil, nil
+	}
+
+	concurrency := s.config.S3UploadConcurrency
+	if concurrency <= 0 {
+		concurrency = 6
+	}
+	if concurrency > len(gameIDs) {
+		concurrency = len(gameIDs)
+	}
+
+	infos := make([]*CloudGameInfo, len(gameIDs))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, concurrency)
+	for i, gameID := range gameIDs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if info := s.loadCloudGameInfo(ctx, bstore, id); info != nil {
+				infos[idx] = info
+			}
+		}(i, gameID)
+	}
+	wg.Wait()
+
+	results := make([]CloudGameInfo, 0, len(gameIDs))
+	for _, info := range infos {
+		if info != nil {
+			results = append(results, *info)
 		}
-		metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
-		if err != nil {
-			s.logger.Warn("コミットブロブ取得失敗", "gameId", gameID, "error", err)
-			continue
-		}
-		var meta domain.MetaSnapshot
-		if err := json.Unmarshal(metaBytes, &meta); err != nil {
-			s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
-			continue
-		}
-		gameJSONBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON)
-		if err != nil {
-			s.logger.Warn("game.json取得失敗", "gameId", gameID, "error", err)
-			continue
-		}
-		var cg cloudGame
-		if err := json.Unmarshal(gameJSONBytes, &cg); err != nil {
-			s.logger.Warn("game.json解析失敗", "gameId", gameID, "error", err)
-			continue
-		}
-		results = append(results, CloudGameInfo{
-			ID:             cg.ID,
-			Title:          cg.Title,
-			Publisher:      cg.Publisher,
-			ImageHash:      cg.ImageHash,
-			PlayStatus:     cg.PlayStatus,
-			TotalPlayTime:  cg.TotalPlayTime,
-			LastPlayed:     cg.LastPlayed,
-			ClearedAt:      cg.ClearedAt,
-			CurrentRouteID: cg.CurrentRouteID,
-			CreatedAt:      cg.CreatedAt,
-			UpdatedAt:      cg.UpdatedAt,
-		})
 	}
 	return results, nil
+}
+
+// loadCloudGameInfo は1ゲームのクラウドメタ情報を取得する。
+// HEAD 未設定や取得・解析失敗時は（必要なら警告ログを出して）nil を返す。
+func (s *ContentSyncService) loadCloudGameInfo(ctx context.Context, bstore contentBlobStore, gameID string) *CloudGameInfo {
+	head, err := bstore.readHEAD(ctx, gameID)
+	if err != nil || head == "" {
+		return nil
+	}
+	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
+	if err != nil {
+		s.logger.Warn("コミットブロブ取得失敗", "gameId", gameID, "error", err)
+		return nil
+	}
+	var meta domain.MetaSnapshot
+	if err := json.Unmarshal(metaBytes, &meta); err != nil {
+		s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
+		return nil
+	}
+	gameJSONBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON)
+	if err != nil {
+		s.logger.Warn("game.json取得失敗", "gameId", gameID, "error", err)
+		return nil
+	}
+	var cg cloudGame
+	if err := json.Unmarshal(gameJSONBytes, &cg); err != nil {
+		s.logger.Warn("game.json解析失敗", "gameId", gameID, "error", err)
+		return nil
+	}
+	return &CloudGameInfo{
+		ID:             cg.ID,
+		Title:          cg.Title,
+		Publisher:      cg.Publisher,
+		ImageHash:      cg.ImageHash,
+		PlayStatus:     cg.PlayStatus,
+		TotalPlayTime:  cg.TotalPlayTime,
+		LastPlayed:     cg.LastPlayed,
+		ClearedAt:      cg.ClearedAt,
+		CurrentRouteID: cg.CurrentRouteID,
+		CreatedAt:      cg.CreatedAt,
+		UpdatedAt:      cg.UpdatedAt,
+	}
 }

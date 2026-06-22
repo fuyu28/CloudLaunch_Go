@@ -1141,6 +1141,55 @@ func TestContentSyncServicePullThenAddSaveThenPushSucceeds(t *testing.T) {
 	}
 }
 
+// ─── LoadCloudMetadata tests ─────────────────────────────────────────────────
+
+// TestLoadCloudMetadataReturnsAllGamesAndSkipsBroken は、複数ゲームのメタ情報が
+// 並列取得で全件返り、HEAD はあるが commit ブロブが壊れているゲームはスキップされることを確認する。
+func TestLoadCloudMetadataReturnsAllGamesAndSkipsBroken(t *testing.T) {
+	t.Parallel()
+
+	bstore := newFakeBlobStore()
+	ctx := context.Background()
+
+	// 正常な2ゲームをリモートに用意する
+	for _, id := range []string{"game-a", "game-b"} {
+		saveDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(saveDir, "s.dat"), []byte(id), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		g := baseGame(saveDir)
+		g.ID = id
+		setupRemoteState(t, bstore, id, g, nil, saveDir)
+	}
+
+	// HEAD はあるが commit ブロブが存在しない壊れたゲーム
+	if err := bstore.writeHEAD(ctx, "game-broken", "missing-head-hash"); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(nil, nil)
+	svc := newTestService(repo, bstore)
+
+	infos, err := svc.LoadCloudMetadata(ctx)
+	if err != nil {
+		t.Fatalf("LoadCloudMetadata: %v", err)
+	}
+
+	got := map[string]bool{}
+	for _, info := range infos {
+		got[info.ID] = true
+	}
+	if !got["game-a"] || !got["game-b"] {
+		t.Fatalf("expected game-a and game-b, got %v", got)
+	}
+	if got["game-broken"] {
+		t.Fatalf("broken game should be skipped, got %v", got)
+	}
+	if len(infos) != 2 {
+		t.Fatalf("expected 2 games, got %d", len(infos))
+	}
+}
+
 // TestContentSyncServicePullRequiresConfirmationForUntracked は、base tree に無い
 // ローカル固有ファイル（untracked）を削除する必要があるとき、Pull が変更を加えずに
 // 確認待ち（Applied=false）を返すことを確認する。
