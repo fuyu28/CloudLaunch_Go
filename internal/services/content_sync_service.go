@@ -161,7 +161,7 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 	}
 	imageHash := ""
 	if game.ImagePath != nil && *game.ImagePath != "" {
-		if h, _, herr := hashFile(*game.ImagePath); herr == nil {
+		if h, herr := hashFileStream(*game.ImagePath); herr == nil {
 			imageHash = h
 		} else {
 			// 画像が一時的に読めない場合 imageHash="" のままになり、fingerprint が
@@ -169,7 +169,7 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 			s.logger.Warn("画像のハッシュ計算に失敗（imageHash を空として扱う）", "gameId", game.ID, "path", *game.ImagePath, "error", herr)
 		}
 	}
-	saveSnap, _, err := buildSaveSnapshot(saveFolderPath)
+	saveSnap, err := buildSaveTree(saveFolderPath)
 	if err != nil {
 		return metaBuildResult{}, err
 	}
@@ -475,7 +475,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 	if cloudG.ImageHash != "" {
 		localImageHash := ""
 		if imagePath != nil && *imagePath != "" {
-			if h, _, herr := hashFile(*imagePath); herr == nil {
+			if h, herr := hashFileStream(*imagePath); herr == nil {
 				localImageHash = h
 			}
 		}
@@ -513,7 +513,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 			if err != nil {
 				return domain.PullResult{}, err
 			}
-			localHash, _, err := hashFile(targetPath)
+			localHash, err := hashFileStream(targetPath)
 			if err != nil || localHash != hash {
 				needsDownload[relPath] = hash
 			}

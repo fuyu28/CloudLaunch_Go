@@ -508,7 +508,7 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	if current.SaveFolderPath != nil {
 		saveFolderPath := strings.TrimSpace(*current.SaveFolderPath)
 		if saveFolderPath != "" {
-			if snap, _, hashErr := buildSaveSnapshot(saveFolderPath); hashErr != nil {
+			if snap, hashErr := buildSaveTree(saveFolderPath); hashErr != nil {
 				service.logger.Warn("ローカルセーブハッシュの計算に失敗", "error", hashErr)
 			} else if snapJSON, merr := json.Marshal(snap); merr == nil {
 				h := hashBytes(snapJSON)

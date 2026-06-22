@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,6 +26,63 @@ func hashFile(path string) (domain.BlobHash, []byte, error) {
 		return "", nil, err
 	}
 	return hashBytes(data), data, nil
+}
+
+// hashFileStream はファイルを逐次読みしながらハッシュのみを計算する（内容を RAM に保持しない）。
+// 差分判定など、ハッシュだけ必要でファイル本体が不要な箇所に使う。
+func hashFileStream(filePath string) (domain.BlobHash, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// buildSaveTree はセーブディレクトリを走査し、パス→ハッシュのみの SaveSnapshot を返す
+// （ブロブ本体を RAM に保持しない）。状態確認や差分判定など、アップロード本体が不要な箇所に使う。
+func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
+	if saveDir == "" {
+		return domain.SaveSnapshot{}, fmt.Errorf("セーブフォルダのパスが未設定です")
+	}
+	info, err := os.Stat(saveDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return domain.SaveSnapshot{}, fmt.Errorf("セーブフォルダが見つかりません: %s", saveDir)
+		}
+		return domain.SaveSnapshot{}, err
+	}
+	if !info.IsDir() {
+		return domain.SaveSnapshot{}, fmt.Errorf("セーブフォルダのパスがディレクトリではありません: %s", saveDir)
+	}
+
+	files := make(map[string]domain.BlobHash)
+	err = filepath.Walk(saveDir, func(walkPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		hash, herr := hashFileStream(walkPath)
+		if herr != nil {
+			return herr
+		}
+		rel, rerr := filepath.Rel(saveDir, walkPath)
+		if rerr != nil {
+			return rerr
+		}
+		files[filepath.ToSlash(rel)] = hash
+		return nil
+	})
+	if err != nil {
+		return domain.SaveSnapshot{}, err
+	}
+	return domain.SaveSnapshot{Files: files}, nil
 }
 
 // buildSaveSnapshot はセーブディレクトリを走査し SaveSnapshot とブロブマップを返す。

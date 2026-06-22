@@ -332,3 +332,62 @@ func TestBuildMetaSnapshotImageHashOmittedWhenEmpty(t *testing.T) {
 		t.Error("imageHash should be omitted when empty")
 	}
 }
+
+// TestHashFileStreamMatchesHashBytes は hashFileStream が hashBytes と同じハッシュを返すことを確認する。
+func TestHashFileStreamMatchesHashBytes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "f.bin")
+	content := []byte("streaming hash content 0123456789")
+	if err := os.WriteFile(p, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := hashFileStream(p)
+	if err != nil {
+		t.Fatalf("hashFileStream: %v", err)
+	}
+	if want := hashBytes(content); got != want {
+		t.Fatalf("hash mismatch: got %s want %s", got, want)
+	}
+}
+
+// TestBuildSaveTreeMatchesSnapshot は buildSaveTree が buildSaveSnapshot と同じ
+// パス→ハッシュ集合を返すことを確認する。
+func TestBuildSaveTreeMatchesSnapshot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.sav"), []byte("aaa"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nested", "b.sav"), []byte("bbb"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := buildSaveTree(dir)
+	if err != nil {
+		t.Fatalf("buildSaveTree: %v", err)
+	}
+	snap, _, err := buildSaveSnapshot(dir)
+	if err != nil {
+		t.Fatalf("buildSaveSnapshot: %v", err)
+	}
+	if len(tree.Files) != len(snap.Files) {
+		t.Fatalf("file count mismatch: tree=%d snap=%d", len(tree.Files), len(snap.Files))
+	}
+	for k, v := range snap.Files {
+		if tree.Files[k] != v {
+			t.Fatalf("hash mismatch for %s: tree=%s snap=%s", k, tree.Files[k], v)
+		}
+	}
+}
+
+// TestBuildSaveTreeRejectsMissingDir は存在しないディレクトリでエラーを返すことを確認する。
+func TestBuildSaveTreeRejectsMissingDir(t *testing.T) {
+	t.Parallel()
+	if _, err := buildSaveTree(filepath.Join(t.TempDir(), "nope")); err == nil {
+		t.Fatal("expected error for missing dir")
+	}
+}
