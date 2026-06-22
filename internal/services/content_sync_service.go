@@ -146,7 +146,11 @@ func (s *ContentSyncService) getOrInitDeviceName(ctx context.Context) (string, e
 	if err != nil || hostname == "" {
 		hostname = "Unknown Device"
 	}
-	_ = s.repository.UpsertSetting(ctx, "device_name", hostname)
+	// 保存に失敗しても致命的ではない（次回再取得・再保存される）が、
+	// 書き込みエラーを完全に握り潰さないようログに残す。
+	if err := s.repository.UpsertSetting(ctx, "device_name", hostname); err != nil {
+		s.logger.Warn("device_name の保存に失敗", "error", err)
+	}
 	return hostname, nil
 }
 
