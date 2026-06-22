@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"time"
@@ -113,47 +114,44 @@ func planDeletions(saveDir string, snapshot domain.SaveSnapshot, baseTree map[st
 }
 
 // applyDeletions は指定された相対パス（スラッシュ区切り）のファイルを削除し、
-// その後 saveDir 配下の空ディレクトリを除去する。
+// その削除によって空になった祖先ディレクトリのみを除去する。
+// saveDir 全体は走査せず、ユーザーが元々置いていた無関係な空ディレクトリは残す。
 func applyDeletions(saveDir string, relPaths []string) error {
+	if len(relPaths) == 0 {
+		return nil
+	}
+	// 削除したファイルの祖先ディレクトリを空チェック対象として収集する。
+	dirsToCheck := make(map[string]struct{})
 	for _, rel := range relPaths {
-		// relPaths は planDeletions が saveDir 配下を走査して得たパスなので安全。
+		// relPaths は planDeletions が saveDir 配下を走査して得たスラッシュ区切りパスなので安全。
 		target := filepath.Join(saveDir, filepath.FromSlash(rel))
 		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-	}
-	return pruneEmptyDirs(saveDir)
-}
-
-// pruneEmptyDirs は saveDir 配下の空ディレクトリを削除する（saveDir 自身は残す）。
-func pruneEmptyDirs(saveDir string) error {
-	var dirs []string
-	err := filepath.Walk(saveDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+		for d := path.Dir(rel); d != "." && d != "/"; d = path.Dir(d) {
+			dirsToCheck[filepath.Join(saveDir, filepath.FromSlash(d))] = struct{}{}
 		}
-		if info.IsDir() && path != saveDir {
-			dirs = append(dirs, path)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
-	// 深い階層から削除するため長いパス順に並べる。
+	// 深い順に処理し、子が消えて空になった親も連鎖的に削除できるようにする。
+	dirs := make([]string, 0, len(dirsToCheck))
+	for d := range dirsToCheck {
+		dirs = append(dirs, d)
+	}
 	sort.Slice(dirs, func(i, j int) bool {
 		return len(dirs[i]) > len(dirs[j])
 	})
 	for _, dir := range dirs {
-		if err := os.Remove(dir); err != nil {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			entries, readErr := os.ReadDir(dir)
-			if readErr == nil && len(entries) > 0 {
-				continue
-			}
 			return err
+		}
+		if len(entries) == 0 {
+			if err := os.Remove(dir); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 	}
 	return nil

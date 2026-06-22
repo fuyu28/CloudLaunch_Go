@@ -262,6 +262,57 @@ func TestBuildMetaSnapshotReturnsConsistentHashes(t *testing.T) {
 	}
 }
 
+// TestApplyDeletionsPreservesUnrelatedEmptyDir は、削除したファイルの祖先でない
+// 「元から空のディレクトリ」を applyDeletions が消さないことを確認する。
+func TestApplyDeletionsPreservesUnrelatedEmptyDir(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	// 削除対象のファイルとその親
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "old.sav"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// 削除と無関係な、ユーザーが置いた空ディレクトリ
+	userEmpty := filepath.Join(dir, "userempty")
+	if err := os.MkdirAll(userEmpty, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := applyDeletions(dir, []string{"data/old.sav"}); err != nil {
+		t.Fatalf("applyDeletions: %v", err)
+	}
+
+	// 削除ファイルの親 data/ は空になったので消える
+	if _, err := os.Stat(dataDir); !os.IsNotExist(err) {
+		t.Fatalf("emptied data dir should be removed, stat err: %v", err)
+	}
+	// 無関係な空ディレクトリは残る
+	if _, err := os.Stat(userEmpty); err != nil {
+		t.Fatalf("unrelated empty dir should be preserved: %v", err)
+	}
+}
+
+// TestApplyDeletionsNoopOnEmptyInput は relPaths が空のとき何も走査・削除しないことを確認する。
+func TestApplyDeletionsNoopOnEmptyInput(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	emptyDir := filepath.Join(dir, "keepme")
+	if err := os.MkdirAll(emptyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyDeletions(dir, nil); err != nil {
+		t.Fatalf("applyDeletions(nil): %v", err)
+	}
+	if _, err := os.Stat(emptyDir); err != nil {
+		t.Fatalf("empty input must not prune any dir: %v", err)
+	}
+}
+
 func TestBuildMetaSnapshotImageHashOmittedWhenEmpty(t *testing.T) {
 	t.Parallel()
 
