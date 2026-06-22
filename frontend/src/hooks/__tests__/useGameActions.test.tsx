@@ -8,35 +8,33 @@
  * - ローディング状態管理
  */
 
-/// <reference types="jest" />
-/// <reference types="@testing-library/jest-dom" />
-
+import { vi, type Mock } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
-import type { API } from "../../../../preload/preload.d";
+import type { WindowApi } from "src/wailsBridge";
 import type { InputGameData, GameType } from "src/types/game";
 import type { FilterOption, SortOption, SortDirection } from "src/types/menu";
 import type { ApiResult } from "src/types/result";
 import { useGameActions } from "../useGameActions";
 import { useLoadingState } from "../useLoadingState";
 
-const mockUseLoadingState = useLoadingState as jest.MockedFunction<typeof useLoadingState>;
+const mockUseLoadingState = useLoadingState as Mock;
 
 // Window型拡張
 declare global {
   interface Window {
-    api: API;
+    api: WindowApi;
   }
 }
 
 // useLoadingState のモック
-jest.mock("../useLoadingState");
+vi.mock("../useLoadingState");
 
 // Window API のモック
 const mockGameApi = {
-  createGame: jest.fn(),
-  updateGame: jest.fn(),
-  listGames: jest.fn(),
+  createGame: vi.fn(),
+  updateGame: vi.fn(),
+  listGames: vi.fn(),
 };
 
 Object.defineProperty(window, "api", {
@@ -52,8 +50,8 @@ describe("useGameActions", () => {
     filter: "all" as FilterOption,
     sort: "title" as SortOption,
     sortDirection: "desc" as SortDirection,
-    onGamesUpdate: jest.fn(),
-    onModalClose: jest.fn(),
+    onGamesUpdate: vi.fn(),
+    onModalClose: vi.fn(),
   };
 
   const mockGameData: InputGameData = {
@@ -62,7 +60,6 @@ describe("useGameActions", () => {
     exePath: "/path/to/game.exe",
     saveFolderPath: "/path/to/saves",
     imagePath: "/path/to/image.jpg",
-    playStatus: "unplayed",
   };
 
   const mockGames: GameType[] = [
@@ -83,7 +80,7 @@ describe("useGameActions", () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("createGameAndRefreshList", () => {
@@ -97,7 +94,7 @@ describe("useGameActions", () => {
       mockGameApi.listGames.mockResolvedValue(mockGames);
 
       // executeWithLoading のモックを設定
-      const mockExecuteWithLoading = jest.fn().mockImplementation(async (asyncFn) => {
+      const mockExecuteWithLoading = vi.fn().mockImplementation(async (asyncFn) => {
         const result = await asyncFn();
         if (result.success) {
           return { success: true, data: undefined }; // Return data as undefined for ApiResult<void>
@@ -109,9 +106,9 @@ describe("useGameActions", () => {
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
         error: undefined,
-        setLoading: jest.fn(),
-        setError: jest.fn(),
-        reset: jest.fn(),
+        setLoading: vi.fn(),
+        setError: vi.fn(),
+        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -139,7 +136,7 @@ describe("useGameActions", () => {
       mockGameApi.createGame.mockResolvedValue(mockCreateResult);
 
       // 実際のuseLoadingStateの動作を模擬: エラーが投げられた場合はundefinedを返す
-      const mockExecuteWithLoading = jest.fn().mockImplementation(async (asyncFn) => {
+      const mockExecuteWithLoading = vi.fn().mockImplementation(async (asyncFn) => {
         try {
           await asyncFn();
           return { success: true, data: undefined };
@@ -151,9 +148,9 @@ describe("useGameActions", () => {
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
         error: undefined,
-        setLoading: jest.fn(),
-        setError: jest.fn(),
-        reset: jest.fn(),
+        setLoading: vi.fn(),
+        setError: vi.fn(),
+        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -178,7 +175,7 @@ describe("useGameActions", () => {
       const error = new Error("Network error");
       mockGameApi.createGame.mockRejectedValue(error);
 
-      const mockExecuteWithLoading = jest.fn().mockImplementation(async (asyncFn) => {
+      const mockExecuteWithLoading = vi.fn().mockImplementation(async (asyncFn) => {
         try {
           const result = await asyncFn();
           return { success: true, data: result }; // 成功時もApiResultを返す
@@ -190,9 +187,9 @@ describe("useGameActions", () => {
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
         error: undefined,
-        setLoading: jest.fn(),
-        setError: jest.fn(),
-        reset: jest.fn(),
+        setLoading: vi.fn(),
+        setError: vi.fn(),
+        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -225,16 +222,16 @@ describe("useGameActions", () => {
       mockGameApi.createGame.mockResolvedValue(mockCreateResult);
       mockGameApi.listGames.mockResolvedValue(mockGames);
 
-      const mockExecuteWithLoading = jest.fn().mockImplementation(async (asyncFn) => {
+      const mockExecuteWithLoading = vi.fn().mockImplementation(async (asyncFn) => {
         return await asyncFn();
       });
 
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
         error: undefined,
-        setLoading: jest.fn(),
-        setError: jest.fn(),
-        reset: jest.fn(),
+        setLoading: vi.fn(),
+        setError: vi.fn(),
+        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -308,7 +305,7 @@ describe("useGameActions", () => {
       mockGameApi.createGame.mockResolvedValue(mockCreateResult);
       mockGameApi.listGames.mockResolvedValue(mockGames);
 
-      const mockExecuteWithLoading = jest.fn().mockImplementation(async (asyncFn, options) => {
+      const mockExecuteWithLoading = vi.fn().mockImplementation(async (asyncFn, options) => {
         expect(options.loadingMessage).toBe("ゲームを追加しています...");
         expect(options.successMessage).toBe("ゲームを追加しました");
         expect(options.showToast).toBe(true);
@@ -318,9 +315,9 @@ describe("useGameActions", () => {
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
         error: undefined,
-        setLoading: jest.fn(),
-        setError: jest.fn(),
-        reset: jest.fn(),
+        setLoading: vi.fn(),
+        setError: vi.fn(),
+        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
