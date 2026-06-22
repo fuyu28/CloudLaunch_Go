@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/domain"
@@ -708,6 +710,144 @@ func (s *ContentSyncService) LoadCloudMetadata(ctx context.Context) ([]CloudGame
 		}
 	}
 	return results, nil
+}
+
+// CloudLogicalFile はクラウド上の論理セーブファイル1件を表す。
+type CloudLogicalFile struct {
+	RelPath string `json:"relPath"`
+	Size    int64  `json:"size"`
+}
+
+// CloudGameView は1ゲームのクラウド論理セーブビュー（最新コミットから復元したファイル一覧）を表す。
+type CloudGameView struct {
+	GameID       string             `json:"gameId"`
+	Title        string             `json:"title"`
+	Files        []CloudLogicalFile `json:"files"`
+	TotalSize    int64              `json:"totalSize"`
+	LastModified time.Time          `json:"lastModified"`
+}
+
+// GetCloudGameView は1ゲームの最新コミットから論理セーブファイル一覧を復元する。
+// HEAD 未設定や解析失敗時は (nil, nil)（=クラウドデータ無し扱い）を返す。エラーは取得失敗時のみ返す。
+func (s *ContentSyncService) GetCloudGameView(ctx context.Context, gameID string) (*CloudGameView, error) {
+	client, cfg, err := s.newClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bstore := &s3BlobStore{client: client, bucket: cfg.Bucket}
+	return s.buildCloudGameView(ctx, bstore, gameID)
+}
+
+// buildCloudGameView は与えられた blob store を使って1ゲームの論理ビューを復元する。
+// サイズ解決のため bstore は内部に S3 クライアントとバケットを保持している必要がある。
+func (s *ContentSyncService) buildCloudGameView(ctx context.Context, bstore *s3BlobStore, gameID string) (*CloudGameView, error) {
+	head, err := bstore.readHEAD(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if head == "" {
+		return nil, nil
+	}
+
+	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
+	if err != nil {
+		return nil, err
+	}
+	var meta domain.MetaSnapshot
+	if err := json.Unmarshal(metaBytes, &meta); err != nil {
+		s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
+		return nil, nil
+	}
+
+	// Title: game.json から取得。失敗時は gameID にフォールバックする。
+	title := gameID
+	if meta.GameJSON != "" {
+		if gameJSONBytes, gerr := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON); gerr == nil {
+			var cg cloudGame
+			if json.Unmarshal(gameJSONBytes, &cg) == nil && cg.Title != "" {
+				title = cg.Title
+			}
+		} else {
+			s.logger.Warn("game.json取得失敗（Titleをフォールバック）", "gameId", gameID, "error", gerr)
+		}
+	}
+
+	// saves tree から relPath→hash を取得する。
+	var saveSnap domain.SaveSnapshot
+	if meta.Saves != "" {
+		saveSnapBytes, terr := bstore.getBlob(ctx, gameID, storage.BlobKindTree, meta.Saves)
+		if terr != nil {
+			return nil, terr
+		}
+		if err := json.Unmarshal(saveSnapBytes, &saveSnap); err != nil {
+			s.logger.Warn("セーブツリー解析失敗", "gameId", gameID, "error", err)
+			return nil, nil
+		}
+	}
+
+	// サイズ解決: objects プレフィックスを1回列挙して hash→size マップを作る。
+	sizeMap := make(map[string]int64)
+	if len(saveSnap.Files) > 0 {
+		prefix := fmt.Sprintf("games/%s/%s/", gameID, storage.BlobKindObject)
+		objects, oerr := storage.ListObjects(ctx, bstore.client, bstore.bucket, prefix)
+		if oerr != nil {
+			return nil, oerr
+		}
+		for _, obj := range objects {
+			hash := obj.Key
+			if idx := strings.LastIndex(hash, "/"); idx >= 0 {
+				hash = hash[idx+1:]
+			}
+			sizeMap[hash] = obj.Size
+		}
+	}
+
+	files := make([]CloudLogicalFile, 0, len(saveSnap.Files))
+	var totalSize int64
+	for relPath, hash := range saveSnap.Files {
+		size := sizeMap[hash]
+		totalSize += size
+		files = append(files, CloudLogicalFile{RelPath: relPath, Size: size})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].RelPath < files[j].RelPath })
+
+	return &CloudGameView{
+		GameID:       gameID,
+		Title:        title,
+		Files:        files,
+		TotalSize:    totalSize,
+		LastModified: meta.CreatedAt,
+	}, nil
+}
+
+// ListCloudGameViews は全ゲームの論理ビューを返す（Title 昇順）。
+// 個別ゲームの取得に失敗した場合は警告ログを出してスキップする。
+func (s *ContentSyncService) ListCloudGameViews(ctx context.Context) ([]CloudGameView, error) {
+	client, cfg, err := s.newClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bstore := &s3BlobStore{client: client, bucket: cfg.Bucket}
+
+	gameIDs, err := bstore.listGameIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	views := make([]CloudGameView, 0, len(gameIDs))
+	for _, gameID := range gameIDs {
+		view, verr := s.buildCloudGameView(ctx, bstore, gameID)
+		if verr != nil {
+			s.logger.Warn("クラウド論理ビュー復元失敗（スキップ）", "gameId", gameID, "error", verr)
+			continue
+		}
+		if view == nil {
+			continue
+		}
+		views = append(views, *view)
+	}
+	sort.Slice(views, func(i, j int) bool { return views[i].Title < views[j].Title })
+	return views, nil
 }
 
 // loadCloudGameInfo は1ゲームのクラウドメタ情報を取得する。

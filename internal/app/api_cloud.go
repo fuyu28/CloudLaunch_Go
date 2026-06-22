@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/result"
+	"CloudLaunch_Go/internal/services"
 	"CloudLaunch_Go/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -39,11 +41,6 @@ type CloudDirectoryNode struct {
 	ObjectKey    *string              `json:"objectKey,omitempty"`
 }
 
-type directoryNodeBuilder struct {
-	node     CloudDirectoryNode
-	children map[string]*directoryNodeBuilder
-}
-
 // CloudFileDetail はクラウドファイル詳細を表す。
 type CloudFileDetail struct {
 	Name         string    `json:"name"`
@@ -60,105 +57,110 @@ type CloudFileDetailsResult struct {
 	Files     []CloudFileDetail `json:"files"`
 }
 
-// ListCloudData はクラウドデータ一覧を取得する。
+// ListCloudData はクラウドデータ一覧（ゲーム単位の論理ビュー）を取得する。
 func (app *App) ListCloudData() result.ApiResult[[]CloudDataItem] {
 	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[[]CloudDataItem](app, "クラウドデータ取得に失敗しました", error, "operation", "ListCloudData.getDefaultS3Client")
+	views, err := app.ContentSyncService.ListCloudGameViews(ctx)
+	if err != nil {
+		return errorResultWithLog[[]CloudDataItem](app, "クラウドデータ取得に失敗しました", err, "operation", "ListCloudData.ListCloudGameViews")
 	}
 
-	objects, error := storage.ListObjects(ctx, client, bucket, "")
-	if error != nil {
-		return errorResultWithLog[[]CloudDataItem](app, "クラウドデータ取得に失敗しました", error, "operation", "ListCloudData.listObjects", "bucket", bucket)
+	items := make([]CloudDataItem, 0, len(views))
+	for _, view := range views {
+		items = append(items, CloudDataItem{
+			Name:         view.Title,
+			TotalSize:    view.TotalSize,
+			FileCount:    int64(len(view.Files)),
+			LastModified: view.LastModified,
+			RemotePath:   view.GameID,
+		})
 	}
-
-	grouped := map[string]*CloudDataItem{}
-	for _, obj := range objects {
-		groupKey := detectGamePrefix(obj.Key)
-		item, exists := grouped[groupKey]
-		if !exists {
-			item = &CloudDataItem{
-				Name:       groupKey,
-				RemotePath: groupKey,
-			}
-			grouped[groupKey] = item
-		}
-		item.FileCount++
-		item.TotalSize += obj.Size
-		if obj.LastModified > 0 {
-			last := time.UnixMilli(obj.LastModified)
-			if item.LastModified.IsZero() || last.After(item.LastModified) {
-				item.LastModified = last
-			}
-		}
-	}
-
-	items := make([]CloudDataItem, 0, len(grouped))
-	for _, item := range grouped {
-		items = append(items, *item)
-	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 	return result.OkResult(items)
 }
 
-// GetDirectoryTree はクラウドのディレクトリツリーを取得する。
+// GetDirectoryTree はクラウドのディレクトリツリー（ゲーム単位の論理ビュー）を取得する。
 func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[[]CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", error, "operation", "GetDirectoryTree.getDefaultS3Client")
-	}
-	objects, error := storage.ListObjects(ctx, client, bucket, "")
-	if error != nil {
-		return errorResultWithLog[[]CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", error, "operation", "GetDirectoryTree.listObjects", "bucket", bucket)
+	views, err := app.ContentSyncService.ListCloudGameViews(ctx)
+	if err != nil {
+		return errorResultWithLog[[]CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", err, "operation", "GetDirectoryTree.ListCloudGameViews")
 	}
 
-	root := map[string]*directoryNodeBuilder{}
-	for _, obj := range objects {
-		segments := strings.Split(obj.Key, "/")
-		currentPath := ""
-		currentMap := root
+	nodes := make([]CloudDirectoryNode, 0, len(views))
+	for _, view := range views {
+		nodes = append(nodes, buildGameDirectoryNode(view))
+	}
+	return result.OkResult(nodes)
+}
+
+// buildGameDirectoryNode は1ゲームの論理ファイル一覧から階層ディレクトリツリーを構築する。
+// トップノードはゲーム（IsDirectory=true, Path=gameID）で、配下にセーブファイルの階層を持つ。
+func buildGameDirectoryNode(view services.CloudGameView) CloudDirectoryNode {
+	root := &dirBuilder{
+		node:     CloudDirectoryNode{Name: view.Title, Path: view.GameID, IsDirectory: true, LastModified: view.LastModified},
+		children: map[string]*dirBuilder{},
+	}
+	for _, f := range view.Files {
+		segments := strings.Split(f.RelPath, "/")
+		cur := root
+		curPath := view.GameID
 		for idx, seg := range segments {
 			if seg == "" {
 				continue
 			}
-			if currentPath == "" {
-				currentPath = seg
-			} else {
-				currentPath = currentPath + "/" + seg
-			}
-			builder, exists := currentMap[seg]
-			if !exists {
-				builder = &directoryNodeBuilder{
+			curPath = curPath + "/" + seg
+			isLeaf := idx == len(segments)-1
+			child, ok := cur.children[seg]
+			if !ok {
+				child = &dirBuilder{
 					node: CloudDirectoryNode{
 						Name:        seg,
-						Path:        currentPath,
-						IsDirectory: idx < len(segments)-1,
+						Path:        curPath,
+						IsDirectory: !isLeaf,
 					},
-					children: map[string]*directoryNodeBuilder{},
+					children: map[string]*dirBuilder{},
 				}
-				currentMap[seg] = builder
+				cur.children[seg] = child
 			}
-			if idx == len(segments)-1 {
-				builder.node.IsDirectory = false
-				builder.node.Size = obj.Size
-				if obj.LastModified > 0 {
-					builder.node.LastModified = time.UnixMilli(obj.LastModified)
-				}
-				key := obj.Key
-				builder.node.ObjectKey = &key
+			if isLeaf {
+				child.node.IsDirectory = false
+				child.node.Size = f.Size
+				child.node.LastModified = view.LastModified
 			}
-			if builder.node.IsDirectory {
-				if builder.children == nil {
-					builder.children = map[string]*directoryNodeBuilder{}
-				}
-				currentMap = builder.children
-			}
+			cur = child
 		}
 	}
+	return finalizeDirBuilder(root)
+}
 
-	return result.OkResult(flattenDirectoryBuilders(root))
+type dirBuilder struct {
+	node     CloudDirectoryNode
+	children map[string]*dirBuilder
+}
+
+// finalizeDirBuilder は dirBuilder を CloudDirectoryNode へ変換する。
+// ディレクトリノードの Size には子の合計サイズを集約する（ObjectKey は設定しない）。
+func finalizeDirBuilder(b *dirBuilder) CloudDirectoryNode {
+	if len(b.children) == 0 {
+		return b.node
+	}
+	names := make([]string, 0, len(b.children))
+	for name := range b.children {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	children := make([]CloudDirectoryNode, 0, len(names))
+	var total int64
+	for _, name := range names {
+		c := finalizeDirBuilder(b.children[name])
+		total += c.Size
+		children = append(children, c)
+	}
+	b.node.Children = children
+	if b.node.IsDirectory {
+		b.node.Size = total
+	}
+	return b.node
 }
 
 // DeleteCloudData は指定パス配下を削除する。
@@ -201,64 +203,71 @@ func (app *App) DeleteFile(key string) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
-// GetCloudFileDetails はプレフィックス配下の詳細を取得する。
+// GetCloudFileDetails はプレフィックス（先頭セグメント=gameID、残り=サブパス）配下の
+// 論理セーブファイル詳細を取得する。互換のため戻り型は []CloudFileDetail を維持する。
 func (app *App) GetCloudFileDetails(prefix string) result.ApiResult[[]CloudFileDetail] {
 	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[[]CloudFileDetail](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetails.getDefaultS3Client")
+	gameID, subPath := splitCloudPrefix(prefix)
+	if gameID == "" {
+		return result.OkResult([]CloudFileDetail{})
 	}
-	objects, error := storage.ListObjects(ctx, client, bucket, prefix)
-	if error != nil {
-		return errorResultWithLog[[]CloudFileDetail](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetails.listObjects", "prefix", prefix)
+	view, err := app.ContentSyncService.GetCloudGameView(ctx, gameID)
+	if err != nil {
+		return errorResultWithLog[[]CloudFileDetail](app, "詳細取得に失敗しました", err, "operation", "GetCloudFileDetails.GetCloudGameView", "gameId", gameID)
 	}
-	files := make([]CloudFileDetail, 0, len(objects))
-	for _, obj := range objects {
-		relative := strings.TrimPrefix(obj.Key, prefix)
-		relative = strings.TrimPrefix(relative, "/")
-		files = append(files, CloudFileDetail{
-			Name:         filepath.Base(obj.Key),
-			Size:         obj.Size,
-			LastModified: time.UnixMilli(obj.LastModified),
-			Key:          obj.Key,
-			RelativePath: relative,
-		})
+	files := make([]CloudFileDetail, 0)
+	if view != nil {
+		for _, f := range view.Files {
+			if subPath != "" && f.RelPath != subPath && !strings.HasPrefix(f.RelPath, subPath+"/") {
+				continue
+			}
+			files = append(files, CloudFileDetail{
+				Name:         path.Base(f.RelPath),
+				Size:         f.Size,
+				LastModified: view.LastModified,
+				Key:          "",
+				RelativePath: f.RelPath,
+			})
+		}
 	}
 	return result.OkResult(files)
 }
 
-// GetCloudFileDetailsByGame はゲームIDから詳細を取得する。
+// GetCloudFileDetailsByGame はゲームIDから論理セーブファイル詳細を取得する。
 func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudFileDetailsResult] {
 	ctx := app.context()
-	game, err := app.GameService.GetGameByID(ctx, gameID)
+	view, err := app.ContentSyncService.GetCloudGameView(ctx, gameID)
 	if err != nil {
-		return serviceErrorResult[CloudFileDetailsResult](err, "ゲーム取得に失敗しました")
+		return errorResultWithLog[CloudFileDetailsResult](app, "詳細取得に失敗しました", err, "operation", "GetCloudFileDetailsByGame.GetCloudGameView", "gameId", gameID)
 	}
-	if game == nil {
+	if view == nil {
 		return result.OkResult(CloudFileDetailsResult{Exists: false, Files: []CloudFileDetail{}})
 	}
-	prefix := createGamePrefix(game.ID)
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[CloudFileDetailsResult](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.getDefaultS3Client", "gameId", gameID)
-	}
-	objects, error := storage.ListObjects(ctx, client, bucket, prefix)
-	if error != nil {
-		return errorResultWithLog[CloudFileDetailsResult](app, "詳細取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.listObjects", "prefix", prefix)
-	}
-	files := make([]CloudFileDetail, 0, len(objects))
-	var total int64
-	for _, obj := range objects {
+	files := make([]CloudFileDetail, 0, len(view.Files))
+	for _, f := range view.Files {
 		files = append(files, CloudFileDetail{
-			Name:         filepath.Base(obj.Key),
-			Size:         obj.Size,
-			LastModified: time.UnixMilli(obj.LastModified),
-			Key:          obj.Key,
-			RelativePath: strings.TrimPrefix(obj.Key, prefix),
+			Name:         path.Base(f.RelPath),
+			Size:         f.Size,
+			LastModified: view.LastModified,
+			Key:          "",
+			RelativePath: f.RelPath,
 		})
-		total += obj.Size
 	}
-	return result.OkResult(CloudFileDetailsResult{Exists: len(files) > 0, TotalSize: total, Files: files})
+	return result.OkResult(CloudFileDetailsResult{Exists: len(files) > 0, TotalSize: view.TotalSize, Files: files})
+}
+
+// splitCloudPrefix は "games/{gameID}/sub/path" or "{gameID}/sub/path" を gameID とサブパスに分解する。
+func splitCloudPrefix(prefix string) (gameID, subPath string) {
+	trimmed := strings.Trim(strings.TrimSpace(prefix), "/")
+	trimmed = strings.TrimPrefix(trimmed, "games/")
+	trimmed = strings.Trim(trimmed, "/")
+	if trimmed == "" {
+		return "", ""
+	}
+	if idx := strings.Index(trimmed, "/"); idx >= 0 {
+		return trimmed[:idx], trimmed[idx+1:]
+	}
+	return trimmed, ""
 }
 
 // LoadImageFromLocal はローカル画像をBase64で返す。
@@ -349,33 +358,6 @@ func (app *App) resolveS3Config(ctx context.Context) (storage.S3Config, credenti
 	}, *credential, nil
 }
 
-func detectGamePrefix(key string) string {
-	parts := strings.Split(key, "/")
-	if len(parts) >= 2 && parts[0] == "games" {
-		return parts[0] + "/" + parts[1]
-	}
-	if len(parts) > 0 {
-		return parts[0]
-	}
-	return key
-}
-
-func flattenDirectoryBuilders(nodes map[string]*directoryNodeBuilder) []CloudDirectoryNode {
-	result := make([]CloudDirectoryNode, 0, len(nodes))
-	for _, node := range nodes {
-		if len(node.children) > 0 {
-			node.node.Children = flattenDirectoryBuilders(node.children)
-		}
-		result = append(result, node.node)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
-	return result
-}
-
-func createGamePrefix(gameID string) string {
-	return "games/" + strings.TrimSpace(gameID) + "/"
-}
-
 func normalizeDeletePrefix(pathValue string) (exactKey string, childPrefix string, ok bool) {
 	trimmed := strings.Trim(strings.TrimSpace(pathValue), "/")
 	if trimmed == "" || trimmed == "*" {
@@ -384,8 +366,8 @@ func normalizeDeletePrefix(pathValue string) (exactKey string, childPrefix strin
 	return trimmed, trimmed + "/", true
 }
 
-func detectImageMime(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
+func detectImageMime(filePath string) string {
+	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
 	case ".png":
 		return "image/png"
