@@ -53,10 +53,12 @@ func (app *App) PushSync(gameID string) result.ApiResult[any] {
 }
 
 // PullSync は指定ゲームのデータをリモートからダウンロードする。
-func (app *App) PullSync(gameID string) result.ApiResult[any] {
+// deleteUntracked=false で未追跡ファイルの削除が必要な場合、ダウンロードを行わず
+// PullResult{Applied:false, UntrackedDeletes:...} を返す（呼び出し側で確認）。
+func (app *App) PullSync(gameID string, deleteUntracked bool) result.ApiResult[domain.PullResult] {
 	trimmed := strings.TrimSpace(gameID)
 	if trimmed == "" {
-		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
+		return result.ErrorResult[domain.PullResult]("ゲームIDが不正です", "gameID is empty")
 	}
 	ctx := app.context()
 	onProgress := func(current, total int) {
@@ -66,22 +68,25 @@ func (app *App) PullSync(gameID string) result.ApiResult[any] {
 			"total":     total,
 		})
 	}
-	if err := app.ContentSyncService.Pull(ctx, trimmed, onProgress); err != nil {
-		return serviceErrorResult[any](err, "ダウンロードに失敗しました")
+	res, err := app.ContentSyncService.Pull(ctx, trimmed, onProgress, deleteUntracked)
+	if err != nil {
+		return serviceErrorResult[domain.PullResult](err, "ダウンロードに失敗しました")
 	}
-	return result.OkResult[any](nil)
+	return result.OkResult(res)
 }
 
 // ResolveConflict はコンフリクトを解決する。
-func (app *App) ResolveConflict(gameID string, useLocal bool) result.ApiResult[any] {
+// useLocal=false（リモート採用）は Pull と同様に未追跡ファイルの削除確認を経由する。
+func (app *App) ResolveConflict(gameID string, useLocal, deleteUntracked bool) result.ApiResult[domain.PullResult] {
 	trimmed := strings.TrimSpace(gameID)
 	if trimmed == "" {
-		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
+		return result.ErrorResult[domain.PullResult]("ゲームIDが不正です", "gameID is empty")
 	}
-	if err := app.ContentSyncService.ResolveConflict(app.context(), trimmed, useLocal); err != nil {
-		return serviceErrorResult[any](err, "コンフリクト解決に失敗しました")
+	res, err := app.ContentSyncService.ResolveConflict(app.context(), trimmed, useLocal, deleteUntracked)
+	if err != nil {
+		return serviceErrorResult[domain.PullResult](err, "コンフリクト解決に失敗しました")
 	}
-	return result.OkResult[any](nil)
+	return result.OkResult(res)
 }
 
 func (app *App) syncGameAsync(gameID string) {

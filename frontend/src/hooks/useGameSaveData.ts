@@ -114,7 +114,14 @@ export function useGameSaveData(): GameSaveDataResult {
 
     try {
       const result = await downloadSaveDataAndSyncMetadata({ gameId: game.id });
-      if (result.success) {
+      if (result.success && result.data && !result.data.applied) {
+        // 同期管理外のローカルファイルを削除する必要があり確認待ち。
+        // ここでは破壊的削除を避けてダウンロードせず、ゲーム詳細の「同期」から確認する案内を出す。
+        toast.error(
+          "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
+          { id: toastId },
+        );
+      } else if (result.success) {
         toast.success("セーブデータのダウンロードに成功しました。", { id: toastId });
       } else {
         toast.error(result.message || "エラーが発生しました", { id: toastId });

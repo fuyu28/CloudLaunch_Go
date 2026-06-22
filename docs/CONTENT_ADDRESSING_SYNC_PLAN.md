@@ -304,8 +304,13 @@ func (s *ContentSyncService) LoadCloudMetadata(ctx) ([]CloudGameInfo, error)  //
 2. MetaSnapshot を取得・デコード
 3. SaveSnapshot を取得し必要なセーブファイル数を集計して `onProgress(0, total)` を呼ぶ
 4. セーブファイルを1件ずつダウンロードし `onProgress(current, total)` を呼ぶ
-5. ローカルのゲーム情報・セッション・セーブフォルダを上書き
-6. SQLite の `localSyncHead` を更新
+5. SaveSnapshot に無いローカルファイルを削除（リモートへのミラー）
+6. ローカルのゲーム情報・セッション・セーブフォルダを上書き
+7. SQLite の `localSyncHead` を更新
+
+> ⚠️ Step 5 は `saveFolderPath` 配下を**リモートのスナップショットに合わせて削除**する。
+> `saveFolderPath` が広すぎるディレクトリに設定されていると、ゲーム無関係のファイルも
+> 巻き込んで消える。削除したファイルは件数とパスを `Warn` ログに記録して可観測にしている。
 
 **DeleteFromCloud の流れ**
 1. S3 の `games/{gameId}/` を一括削除

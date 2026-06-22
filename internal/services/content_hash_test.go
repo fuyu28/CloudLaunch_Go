@@ -146,14 +146,57 @@ func TestRemoveFilesNotInSnapshotRemovesStaleFiles(t *testing.T) {
 	snapshot := domain.SaveSnapshot{Files: map[string]domain.BlobHash{
 		"nested/keep.sav": hashBytes([]byte("keep")),
 	}}
-	if err := removeFilesNotInSnapshot(dir, snapshot); err != nil {
-		t.Fatalf("removeFilesNotInSnapshot: %v", err)
+	// base tree に stale.sav を含めると tracked 削除に分類される。
+	baseTree := map[string]struct{}{
+		"nested/keep.sav":  {},
+		"nested/stale.sav": {},
+	}
+	tracked, untracked, err := planDeletions(dir, snapshot, baseTree)
+	if err != nil {
+		t.Fatalf("planDeletions: %v", err)
+	}
+	if len(tracked) != 1 || tracked[0] != "nested/stale.sav" {
+		t.Fatalf("tracked should be [nested/stale.sav], got %v", tracked)
+	}
+	if len(untracked) != 0 {
+		t.Fatalf("untracked should be empty, got %v", untracked)
+	}
+	if err := applyDeletions(dir, tracked); err != nil {
+		t.Fatalf("applyDeletions: %v", err)
 	}
 	if _, err := os.Stat(keepPath); err != nil {
 		t.Fatalf("keep file should remain: %v", err)
 	}
 	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
 		t.Fatalf("stale file should be removed, stat err: %v", err)
+	}
+}
+
+// TestPlanDeletionsClassifiesUntracked は base tree に無いファイルが untracked に
+// 分類され、planDeletions 自体はファイルを削除しないことを確認する。
+func TestPlanDeletionsClassifiesUntracked(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	unknownPath := filepath.Join(dir, "unrelated.txt")
+	if err := os.WriteFile(unknownPath, []byte("user file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// 新スナップショットにも base tree にも無いファイル → untracked
+	tracked, untracked, err := planDeletions(dir, domain.SaveSnapshot{Files: map[string]domain.BlobHash{}}, map[string]struct{}{})
+	if err != nil {
+		t.Fatalf("planDeletions: %v", err)
+	}
+	if len(tracked) != 0 {
+		t.Fatalf("tracked should be empty, got %v", tracked)
+	}
+	if len(untracked) != 1 || untracked[0] != "unrelated.txt" {
+		t.Fatalf("untracked should be [unrelated.txt], got %v", untracked)
+	}
+	// planDeletions は削除しない
+	if _, err := os.Stat(unknownPath); err != nil {
+		t.Fatalf("planDeletions must not delete files: %v", err)
 	}
 }
 
@@ -169,8 +212,9 @@ func TestRemoveFilesNotInSnapshotRemovesEmptyDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := removeFilesNotInSnapshot(dir, domain.SaveSnapshot{Files: map[string]domain.BlobHash{}}); err != nil {
-		t.Fatalf("removeFilesNotInSnapshot: %v", err)
+	// stale/only.sav を tracked 削除として削除 → 空になった stale/ も除去される
+	if err := applyDeletions(dir, []string{"stale/only.sav"}); err != nil {
+		t.Fatalf("applyDeletions: %v", err)
 	}
 	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
 		t.Fatalf("empty stale directory should be removed, stat err: %v", err)

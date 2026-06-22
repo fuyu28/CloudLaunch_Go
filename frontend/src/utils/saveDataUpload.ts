@@ -3,6 +3,7 @@
  */
 
 import type { ApiResult } from "src/types/result";
+import type { PullResult } from "src/wailsBridge";
 
 type UploadSaveDataInput = {
   gameId: string;
@@ -10,6 +11,8 @@ type UploadSaveDataInput = {
 
 type PullSaveDataInput = {
   gameId: string;
+  /** 同期管理外のローカル固有ファイルの削除を承認するか（既定 false=確認を返す） */
+  deleteUntracked?: boolean;
 };
 
 export async function uploadSaveDataAndSyncHash(
@@ -20,6 +23,6 @@ export async function uploadSaveDataAndSyncHash(
 
 export async function downloadSaveDataAndSyncMetadata(
   input: PullSaveDataInput,
-): Promise<ApiResult<void>> {
-  return window.api.cloudSync.pull(input.gameId);
+): Promise<ApiResult<PullResult>> {
+  return window.api.cloudSync.pull(input.gameId, input.deleteUntracked ?? false);
 }

@@ -216,6 +216,79 @@ func TestRepositorySessionCRUD(t *testing.T) {
 	}
 }
 
+// --- ApplyPullResult ---
+
+func TestApplyPullResultNormalizesMissingRouteRefs(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("RouteGame", "/route.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	missingRoute := "nonexistent-route-id"
+	game := *created
+	game.CurrentRouteID = &missingRoute
+	sessions := []domain.PlaySession{
+		{ID: "sess-1", GameID: created.ID, PlayedAt: time.Now().UTC(), Duration: 60, RouteID: &missingRoute, UpdatedAt: time.Now().UTC()},
+	}
+
+	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{\"files\":{}}"); err != nil {
+		t.Fatalf("ApplyPullResult should not fail on missing route refs: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.CurrentRouteID != nil {
+		t.Fatalf("currentRouteId should be normalized to NULL, got %v", *got.CurrentRouteID)
+	}
+
+	savedSessions, err := repo.ListPlaySessionsByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListPlaySessionsByGame: %v", err)
+	}
+	if len(savedSessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(savedSessions))
+	}
+	if savedSessions[0].RouteID != nil {
+		t.Fatalf("session routeId should be normalized to NULL, got %v", *savedSessions[0].RouteID)
+	}
+}
+
+func TestApplyPullResultPersistsHeadAndTree(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("HeadGame", "/head.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	if err := repo.ApplyPullResult(ctx, *created, nil, "head-xyz", "{\"files\":{\"a.sav\":\"h\"}}"); err != nil {
+		t.Fatalf("ApplyPullResult: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "head-xyz" {
+		t.Fatalf("localSyncHead not persisted, got %v", got.LocalSyncHead)
+	}
+	tree, err := repo.GetLocalSaveTree(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetLocalSaveTree: %v", err)
+	}
+	if tree != "{\"files\":{\"a.sav\":\"h\"}}" {
+		t.Fatalf("localSaveTree not persisted, got %q", tree)
+	}
+}
+
 // --- Route カスケード削除 ---
 
 func TestRepositoryRoutesDeletedWithGame(t *testing.T) {

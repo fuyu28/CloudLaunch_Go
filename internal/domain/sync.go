@@ -34,3 +34,13 @@ type SyncStatusDetail struct {
 	LocalMeta  *MetaSnapshot `json:"localMeta,omitempty"`
 	RemoteMeta *MetaSnapshot `json:"remoteMeta,omitempty"`
 }
+
+// PullResult は Pull / ResolveConflict(リモート採用) の結果を表す。
+//
+// Applied=false かつ UntrackedDeletes が非空のときは「未追跡ファイルの削除確認待ち」を表し、
+// この時点ではローカルに一切変更を加えていない。呼び出し側は一覧をユーザーに提示し、
+// 承認されたら deleteUntracked=true で再実行する。
+type PullResult struct {
+	Applied          bool     `json:"applied"`
+	UntrackedDeletes []string `json:"untrackedDeletes,omitempty"`
+}

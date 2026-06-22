@@ -152,6 +152,13 @@ export default function Cloud(): React.JSX.Element {
           showToast(pullResult.message || "ダウンロードに失敗しました", "error");
           return;
         }
+        if (pullResult.data && !pullResult.data.applied) {
+          showToast(
+            "同期対象外のローカルファイルがあります。詳細画面の「同期」から確認してください",
+            "error",
+          );
+          return;
+        }
         showToast("クラウドからダウンロードしました", "success");
       } else {
         showToast("コンフリクトが発生しています。詳細画面から解決してください", "error");

@@ -21,12 +21,14 @@ import (
 type fakeContentSyncRepository struct {
 	mu sync.Mutex
 
-	game     *domain.Game
-	sessions []domain.PlaySession
-	settings map[string]string
+	game      *domain.Game
+	sessions  []domain.PlaySession
+	settings  map[string]string
+	saveTree  string
 
 	// 記録された呼び出し
 	localSyncHeadSet string
+	saveTreeSet      string
 	upsertedGame     *domain.Game
 	deletedSessions  bool
 	upsertedSessions []domain.PlaySession
@@ -66,6 +68,20 @@ func (r *fakeContentSyncRepository) SetLocalSyncHead(_ context.Context, _ string
 	return nil
 }
 
+func (r *fakeContentSyncRepository) GetLocalSaveTree(_ context.Context, _ string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.saveTree, nil
+}
+
+func (r *fakeContentSyncRepository) SetLocalSaveTree(_ context.Context, _ string, tree string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.saveTree = tree
+	r.saveTreeSet = tree
+	return nil
+}
+
 func (r *fakeContentSyncRepository) UpsertGameSync(_ context.Context, game domain.Game) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -84,6 +100,26 @@ func (r *fakeContentSyncRepository) UpsertPlaySessionSync(_ context.Context, ses
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.upsertedSessions = append(r.upsertedSessions, session)
+	return nil
+}
+
+func (r *fakeContentSyncRepository) ApplyPullResult(
+	_ context.Context,
+	game domain.Game,
+	sessions []domain.PlaySession,
+	syncHead, saveTree string,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.upsertedGame = &game
+	r.deletedSessions = true
+	r.upsertedSessions = append([]domain.PlaySession{}, sessions...)
+	r.localSyncHeadSet = syncHead
+	if r.game != nil {
+		r.game.LocalSyncHead = &syncHead
+	}
+	r.saveTree = saveTree
+	r.saveTreeSet = saveTree
 	return nil
 }
 
@@ -479,10 +515,21 @@ func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
 	}
 
 	repo := newFakeRepo(&game, nil)
+	// 前回同期時点では stale.dat も存在した（base tree に含める）ため、
+	// リモートから消えた stale.dat は tracked 削除として確認なしに削除される。
+	baseTreeJSON, _ := json.Marshal(domain.SaveSnapshot{Files: map[string]domain.BlobHash{
+		"save.dat":  hashBytes([]byte("old local data")),
+		"stale.dat": hashBytes([]byte("local only")),
+	}})
+	repo.saveTree = string(baseTreeJSON)
 	svc := newTestService(repo, bstore)
 
-	if err := svc.Pull(context.Background(), game.ID, nil); err != nil {
+	res, err := svc.Pull(context.Background(), game.ID, nil, false)
+	if err != nil {
 		t.Fatalf("Pull returned unexpected error: %v", err)
+	}
+	if !res.Applied {
+		t.Fatalf("expected Pull to apply changes, got %+v", res)
 	}
 
 	// セーブファイルが復元された
@@ -533,7 +580,7 @@ func TestContentSyncServicePullSkipsUnchangedFiles(t *testing.T) {
 	repo := newFakeRepo(&game, nil)
 	svc := newTestService(repo, bstore)
 
-	if err := svc.Pull(context.Background(), game.ID, nil); err != nil {
+	if _, err := svc.Pull(context.Background(), game.ID, nil, false); err != nil {
 		t.Fatalf("Pull: %v", err)
 	}
 
@@ -559,7 +606,7 @@ func TestContentSyncServicePullReturnsErrorWhenNoRemoteHead(t *testing.T) {
 	bstore := newFakeBlobStore() // HEAD 未設定
 	svc := newTestService(repo, bstore)
 
-	err := svc.Pull(context.Background(), game.ID, nil)
+	_, err := svc.Pull(context.Background(), game.ID, nil, false)
 	if err == nil {
 		t.Fatal("expected error when remote HEAD is empty")
 	}
@@ -609,7 +656,7 @@ func TestContentSyncServicePullRejectsEscapingSavePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = svc.Pull(context.Background(), game.ID, nil)
+	_, err = svc.Pull(context.Background(), game.ID, nil, false)
 	if err == nil {
 		t.Fatal("expected error for escaping save path")
 	}
@@ -670,7 +717,7 @@ func TestContentSyncServicePullRejectsMismatchedRemoteGameID(t *testing.T) {
 	repo := newFakeRepo(&game, nil)
 	svc := newTestService(repo, bstore)
 
-	if err := svc.Pull(context.Background(), game.ID, nil); err == nil {
+	if _, err := svc.Pull(context.Background(), game.ID, nil, false); err == nil {
 		t.Fatal("expected Pull to reject mismatched remote game ID")
 	}
 	if repo.upsertedGame != nil {
@@ -699,11 +746,11 @@ func TestContentSyncServicePullReportsProgress(t *testing.T) {
 	svc := newTestService(repo, bstore)
 
 	var maxCurrent int
-	err := svc.Pull(context.Background(), game.ID, func(current, total int) {
+	_, err := svc.Pull(context.Background(), game.ID, func(current, total int) {
 		if current > maxCurrent {
 			maxCurrent = current
 		}
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("Pull: %v", err)
 	}
@@ -910,7 +957,7 @@ func TestContentSyncServiceResolveConflictUsesLocalCallsPush(t *testing.T) {
 	bstore := newFakeBlobStore()
 	svc := newTestService(repo, bstore)
 
-	if err := svc.ResolveConflict(context.Background(), game.ID, true); err != nil {
+	if _, err := svc.ResolveConflict(context.Background(), game.ID, true, false); err != nil {
 		t.Fatalf("ResolveConflict(useLocal=true): %v", err)
 	}
 	if bstore.heads[game.ID] == "" {
@@ -942,7 +989,7 @@ func TestContentSyncServiceResolveConflictUseLocalOverridesChangedRemote(t *test
 	repo := newFakeRepo(&game, nil)
 	svc := newTestService(repo, bstore)
 
-	if err := svc.ResolveConflict(context.Background(), game.ID, true); err != nil {
+	if _, err := svc.ResolveConflict(context.Background(), game.ID, true, false); err != nil {
 		t.Fatalf("ResolveConflict(useLocal=true): %v", err)
 	}
 	if bstore.heads[game.ID] == remoteHead {
@@ -1028,7 +1075,7 @@ func TestContentSyncServicePullThenAddSaveThenPushSucceeds(t *testing.T) {
 	svcB := newTestService(repoB, bstore)
 
 	// PC-B が pull
-	if err := svcB.Pull(context.Background(), gameB.ID, nil); err != nil {
+	if _, err := svcB.Pull(context.Background(), gameB.ID, nil, false); err != nil {
 		t.Fatalf("PC-B Pull: %v", err)
 	}
 
@@ -1049,5 +1096,63 @@ func TestContentSyncServicePullThenAddSaveThenPushSucceeds(t *testing.T) {
 	}
 	if bstore.heads[gameB.ID] == headBefore {
 		t.Error("expected remote HEAD to be updated after PC-B push")
+	}
+}
+
+// TestContentSyncServicePullRequiresConfirmationForUntracked は、base tree に無い
+// ローカル固有ファイル（untracked）を削除する必要があるとき、Pull が変更を加えずに
+// 確認待ち（Applied=false）を返すことを確認する。
+func TestContentSyncServicePullRequiresConfirmationForUntracked(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("remote data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+
+	// 同期が知らないローカル固有ファイルを置く（base tree は空のまま）
+	untrackedPath := filepath.Join(saveDir, "user_notes.txt")
+	if err := os.WriteFile(untrackedPath, []byte("personal"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	// deleteUntracked=false → 確認待ちを返し、何も変更しない
+	res, err := svc.Pull(context.Background(), game.ID, nil, false)
+	if err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	if res.Applied {
+		t.Fatal("expected Applied=false (confirmation required)")
+	}
+	if len(res.UntrackedDeletes) != 1 || res.UntrackedDeletes[0] != "user_notes.txt" {
+		t.Fatalf("UntrackedDeletes = %v, want [user_notes.txt]", res.UntrackedDeletes)
+	}
+	if _, statErr := os.Stat(untrackedPath); statErr != nil {
+		t.Fatalf("untracked file must remain on confirmation-required path: %v", statErr)
+	}
+	if repo.upsertedGame != nil {
+		t.Fatal("no DB changes should occur on confirmation-required path")
+	}
+	if repo.localSyncHeadSet != "" {
+		t.Fatal("LocalSyncHead must not be set on confirmation-required path")
+	}
+
+	// deleteUntracked=true → 適用され、untracked も削除される
+	res, err = svc.Pull(context.Background(), game.ID, nil, true)
+	if err != nil {
+		t.Fatalf("Pull(deleteUntracked=true): %v", err)
+	}
+	if !res.Applied {
+		t.Fatal("expected Applied=true after confirmation")
+	}
+	if _, statErr := os.Stat(untrackedPath); !os.IsNotExist(statErr) {
+		t.Fatalf("untracked file should be deleted after confirmation, stat err: %v", statErr)
 	}
 }

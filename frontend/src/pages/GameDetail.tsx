@@ -7,6 +7,7 @@ import { useParams, useNavigate, Navigate } from "react-router-dom";
 import CloudDataCard from "@renderer/components/CloudDataCard";
 import ConfirmModal from "@renderer/components/ConfirmModal";
 import SyncConflictModal from "@renderer/components/SyncConflictModal";
+import UntrackedDeleteModal from "@renderer/components/UntrackedDeleteModal";
 import GameInfo from "@renderer/components/GameInfo";
 import GameFormModal from "@renderer/components/GameModal";
 import MemoCard from "@renderer/components/MemoCard";
@@ -49,6 +50,13 @@ export default function GameDetail(): React.JSX.Element {
   } | null>(null);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  // 同期管理外（untracked）ファイルの削除確認モーダル状態
+  const [untrackedDeletes, setUntrackedDeletes] = useState<string[] | null>(null);
+  // 確認後に再実行する操作の種別（通常 pull か、コンフリクトのリモート採用か）
+  const [untrackedConfirmKind, setUntrackedConfirmKind] = useState<"pull" | "resolveRemote" | null>(
+    null,
+  );
+  const [isDeletingUntracked, setIsDeletingUntracked] = useState(false);
   const { showToast } = useToastHandler();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
   const { formatDateWithTime } = useTimeFormat();
@@ -268,6 +276,14 @@ export default function GameDetail(): React.JSX.Element {
             if (showResult) showToast(pullResult.message || "ダウンロードに失敗しました", "error");
             return false;
           }
+          if (pullResult.data && !pullResult.data.applied) {
+            // 同期管理外ファイルの削除確認が必要（ここまでローカル無変更）
+            if (showResult) {
+              setUntrackedDeletes(pullResult.data.untrackedDeletes ?? []);
+              setUntrackedConfirmKind("pull");
+            }
+            return false;
+          }
           if (showResult) showToast("クラウドからダウンロードしました", "success");
           return true;
         }
@@ -349,6 +365,14 @@ export default function GameDetail(): React.JSX.Element {
       try {
         const result = await window.api.cloudSync.resolveConflict(game.id, useLocal);
         if (result.success) {
+          if (!useLocal && result.data && !result.data.applied) {
+            // リモート採用だが、同期管理外ファイルの削除確認が必要（ローカル無変更）
+            setIsConflictModalOpen(false);
+            setConflictMeta(null);
+            setUntrackedDeletes(result.data.untrackedDeletes ?? []);
+            setUntrackedConfirmKind("resolveRemote");
+            return;
+          }
           showToast(
             useLocal
               ? "ローカルデータをクラウドに反映しました"
@@ -368,6 +392,35 @@ export default function GameDetail(): React.JSX.Element {
     },
     [game, showToast],
   );
+
+  // untracked 削除の確認後、deleteUntracked=true で再実行する。
+  const handleConfirmUntrackedDelete = useCallback(async (): Promise<void> => {
+    if (!game || !untrackedConfirmKind) return;
+    setIsDeletingUntracked(true);
+    try {
+      const result =
+        untrackedConfirmKind === "pull"
+          ? await window.api.cloudSync.pull(game.id, true)
+          : await window.api.cloudSync.resolveConflict(game.id, false, true);
+      if (result.success && result.data?.applied) {
+        showToast("クラウドからダウンロードしました", "success");
+        setUntrackedDeletes(null);
+        setUntrackedConfirmKind(null);
+        setRefreshKey((k) => k + 1);
+      } else {
+        showToast(result.message || "ダウンロードに失敗しました", "error");
+      }
+    } catch {
+      showToast("ダウンロードに失敗しました", "error");
+    } finally {
+      setIsDeletingUntracked(false);
+    }
+  }, [game, untrackedConfirmKind, showToast]);
+
+  const handleCancelUntrackedDelete = useCallback((): void => {
+    setUntrackedDeletes(null);
+    setUntrackedConfirmKind(null);
+  }, []);
 
   const handleSyncCheck = useCallback(async (): Promise<void> => {
     if (!game) return;
@@ -535,6 +588,16 @@ export default function GameDetail(): React.JSX.Element {
         onUseLocal={() => handleResolveConflict(true)}
         onUseRemote={() => handleResolveConflict(false)}
         isResolving={isResolvingConflict}
+      />
+
+      {/* 同期管理外ファイルの削除確認 */}
+      <UntrackedDeleteModal
+        isOpen={untrackedDeletes !== null}
+        onClose={handleCancelUntrackedDelete}
+        gameTitle={game.title}
+        files={untrackedDeletes ?? []}
+        onConfirm={handleConfirmUntrackedDelete}
+        isProcessing={isDeletingUntracked}
       />
 
       {/* プロセス管理 */}

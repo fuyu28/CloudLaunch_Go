@@ -301,6 +301,7 @@ export default function GeneralSettings(): React.JSX.Element {
       let uploaded = 0;
       let downloaded = 0;
       let failed = 0;
+      let skipped = 0;
 
       for (const game of games) {
         if (!game.saveFolderPath) continue;
@@ -318,7 +319,9 @@ export default function GeneralSettings(): React.JSX.Element {
           else failed++;
         } else if (status === "pull_needed") {
           const r = await window.api.cloudSync.pull(game.id);
-          if (r.success) downloaded++;
+          // 同期管理外ファイルの削除確認が必要な場合は破壊を避けてスキップ（詳細画面で確認）
+          if (r.success && r.data && !r.data.applied) skipped++;
+          else if (r.success) downloaded++;
           else failed++;
         }
       }
@@ -326,7 +329,8 @@ export default function GeneralSettings(): React.JSX.Element {
       const parts: string[] = [];
       if (uploaded > 0) parts.push(`アップロード${uploaded}件`);
       if (downloaded > 0) parts.push(`ダウンロード${downloaded}件`);
-      const suffix = failed > 0 ? `（${failed}件失敗）` : "";
+      const suffix =
+        (failed > 0 ? `（${failed}件失敗）` : "") + (skipped > 0 ? `（${skipped}件要確認）` : "");
       const message =
         parts.length > 0 ? `同期完了: ${parts.join(" / ")}${suffix}` : "すべて最新の状態です";
       toast.success(message, { id: toastId });

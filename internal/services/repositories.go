@@ -60,9 +60,13 @@ type ContentSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
 	SetLocalSyncHead(ctx context.Context, gameID, hash string) error
-	UpsertGameSync(ctx context.Context, game domain.Game) error
-	DeletePlaySessionsByGame(ctx context.Context, gameID string) error
-	UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error
+	GetLocalSaveTree(ctx context.Context, gameID string) (string, error)
+	SetLocalSaveTree(ctx context.Context, gameID, tree string) error
+	// ApplyPullResult は Pull で取得したリモート状態を単一トランザクションで反映する。
+	// Game の upsert・セッションの全削除と再投入・localSyncHead・localSaveTree を all-or-nothing で書き込む。
+	// game.CurrentRouteID および各 session.RouteID のうち、ローカルに対応する Route が存在しないものは
+	// NULL に正規化する（Route は同期対象外のため、別PCで FK 違反になるのを防ぐ）。
+	ApplyPullResult(ctx context.Context, game domain.Game, sessions []domain.PlaySession, syncHead, saveTree string) error
 	GetSetting(ctx context.Context, key string) (string, error)
 	UpsertSetting(ctx context.Context, key, value string) error
 }

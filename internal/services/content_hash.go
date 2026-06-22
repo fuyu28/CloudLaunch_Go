@@ -72,34 +72,75 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 	return domain.SaveSnapshot{Files: files}, blobs, nil
 }
 
-// removeFilesNotInSnapshot はスナップショットに存在しないローカルセーブファイルを削除する。
-// saveDir を走査して検出したパスのみを削除し、その後空ディレクトリを削除する。
-func removeFilesNotInSnapshot(saveDir string, snapshot domain.SaveSnapshot) error {
+// planDeletions は saveDir 配下でリモートスナップショットに存在しないファイルを洗い出し、
+// baseTree（前回同期した SaveSnapshot のパス集合）に含まれていたか否かで二分する。
+//
+//   - tracked   : 以前は同期管理下にあったが新スナップショットから消えたファイル。
+//     リモートで削除された等なので自動削除してよい。
+//   - untracked : 同期が一度も認識していないローカル固有のファイル。
+//     saveFolderPath の誤設定で混入した無関係ファイルもここに入る。確認なしで消さない。
+//
+// いずれも相対パス（スラッシュ区切り）を昇順で返す。この関数はファイルを削除しない。
+func planDeletions(saveDir string, snapshot domain.SaveSnapshot, baseTree map[string]struct{}) (tracked, untracked []string, err error) {
+	walkErr := filepath.Walk(saveDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(saveDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		slashRel := filepath.ToSlash(rel)
+		if _, ok := snapshot.Files[slashRel]; ok {
+			return nil // 新スナップショットに含まれる → 残す
+		}
+		if _, ok := baseTree[slashRel]; ok {
+			tracked = append(tracked, slashRel)
+		} else {
+			untracked = append(untracked, slashRel)
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, nil, walkErr
+	}
+	sort.Strings(tracked)
+	sort.Strings(untracked)
+	return tracked, untracked, nil
+}
+
+// applyDeletions は指定された相対パス（スラッシュ区切り）のファイルを削除し、
+// その後 saveDir 配下の空ディレクトリを除去する。
+func applyDeletions(saveDir string, relPaths []string) error {
+	for _, rel := range relPaths {
+		// relPaths は planDeletions が saveDir 配下を走査して得たパスなので安全。
+		target := filepath.Join(saveDir, filepath.FromSlash(rel))
+		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return pruneEmptyDirs(saveDir)
+}
+
+// pruneEmptyDirs は saveDir 配下の空ディレクトリを削除する（saveDir 自身は残す）。
+func pruneEmptyDirs(saveDir string) error {
 	var dirs []string
 	err := filepath.Walk(saveDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if path == saveDir {
-			return nil
-		}
-		if info.IsDir() {
+		if info.IsDir() && path != saveDir {
 			dirs = append(dirs, path)
-			return nil
 		}
-		rel, err := filepath.Rel(saveDir, path)
-		if err != nil {
-			return err
-		}
-		if _, ok := snapshot.Files[filepath.ToSlash(rel)]; ok {
-			return nil
-		}
-		return os.Remove(path)
+		return nil
 	})
 	if err != nil {
 		return err
 	}
-
+	// 深い階層から削除するため長いパス順に並べる。
 	sort.Slice(dirs, func(i, j int) bool {
 		return len(dirs[i]) > len(dirs[j])
 	})
@@ -116,6 +157,34 @@ func removeFilesNotInSnapshot(saveDir string, snapshot domain.SaveSnapshot) erro
 		}
 	}
 	return nil
+}
+
+// parseSaveTree は localSaveTree(JSON) をパスの集合へ変換する。空文字なら空集合を返す。
+func parseSaveTree(treeJSON string) (map[string]struct{}, error) {
+	set := make(map[string]struct{})
+	if treeJSON == "" {
+		return set, nil
+	}
+	var snap domain.SaveSnapshot
+	if err := json.Unmarshal([]byte(treeJSON), &snap); err != nil {
+		return nil, err
+	}
+	for relPath := range snap.Files {
+		set[relPath] = struct{}{}
+	}
+	return set, nil
+}
+
+// logSamplePaths はログ出力用に最大 limit 件までのパスを返す。
+// 超過分は "... (+N more)" に丸めてログの肥大化を防ぐ。
+func logSamplePaths(paths []string, limit int) []string {
+	if len(paths) <= limit {
+		return paths
+	}
+	sample := make([]string, 0, limit+1)
+	sample = append(sample, paths[:limit]...)
+	sample = append(sample, fmt.Sprintf("... (+%d more)", len(paths)-limit))
+	return sample
 }
 
 // CloudGameInfo はクラウドゲームメタ情報の API 公開型。

@@ -45,6 +45,16 @@ export type SyncProgressEvent = {
   total: number;
 };
 
+/**
+ * Pull / ResolveConflict(リモート採用) の結果。
+ * applied=false かつ untrackedDeletes が非空のときは「未追跡ファイルの削除確認待ち」で、
+ * この時点ではローカルに変更が加わっていない。確認後 deleteUntracked=true で再実行する。
+ */
+export type PullResult = {
+  applied: boolean;
+  untrackedDeletes?: string[];
+};
+
 import {
   CreateGame,
   CreateMemo,
@@ -237,8 +247,12 @@ export type WindowApi = {
   cloudSync: {
     status: (gameId: string) => Promise<ApiResult<SyncStatusDetail>>;
     push: (gameId: string) => Promise<ApiResult<void>>;
-    pull: (gameId: string) => Promise<ApiResult<void>>;
-    resolveConflict: (gameId: string, useLocal: boolean) => Promise<ApiResult<void>>;
+    pull: (gameId: string, deleteUntracked?: boolean) => Promise<ApiResult<PullResult>>;
+    resolveConflict: (
+      gameId: string,
+      useLocal: boolean,
+      deleteUntracked?: boolean,
+    ) => Promise<ApiResult<PullResult>>;
     deleteFromCloud: (gameId: string) => Promise<ApiResult<void>>;
     onProgress: (callback: (event: SyncProgressEvent) => void) => () => void;
   };
@@ -840,16 +854,16 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      pull: async (gameId) => {
-        const result = await PullSync(gameId);
+      pull: async (gameId, deleteUntracked = false) => {
+        const result = await PullSync(gameId, deleteUntracked);
         return result.success
-          ? { success: true }
+          ? { success: true, data: result.data as PullResult }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      resolveConflict: async (gameId, useLocal) => {
-        const result = await ResolveConflict(gameId, useLocal);
+      resolveConflict: async (gameId, useLocal, deleteUntracked = false) => {
+        const result = await ResolveConflict(gameId, useLocal, deleteUntracked);
         return result.success
-          ? { success: true }
+          ? { success: true, data: result.data as PullResult }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       deleteFromCloud: async (gameId) => {

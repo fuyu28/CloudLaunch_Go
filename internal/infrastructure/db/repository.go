@@ -406,6 +406,30 @@ func (repository *Repository) SetLocalSyncHead(ctx context.Context, gameID, hash
 	return err
 }
 
+// GetLocalSaveTree はゲームの localSaveTree（前回同期した SaveSnapshot JSON）を取得する。
+// 未設定の場合は "" を返す。
+func (repository *Repository) GetLocalSaveTree(ctx context.Context, gameID string) (string, error) {
+	var value sql.NullString
+	err := repository.connection.QueryRowContext(ctx, `
+		SELECT localSaveTree FROM "Game" WHERE id = ?
+	`, gameID).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return value.String, nil
+}
+
+// SetLocalSaveTree はゲームの localSaveTree を更新する。
+func (repository *Repository) SetLocalSaveTree(ctx context.Context, gameID, tree string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		UPDATE "Game" SET localSaveTree = ? WHERE id = ?
+	`, tree, gameID)
+	return err
+}
+
 // GetSetting は Settings テーブルから値を取得する。存在しない場合は "" を返す。
 func (repository *Repository) GetSetting(ctx context.Context, key string) (string, error) {
 	var value string
@@ -442,6 +466,109 @@ func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session
 	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.SessionName,
 		session.RouteID, session.UpdatedAt)
 	return error
+}
+
+// routeExistsTx は tx 内で Route が存在するか確認する。存在しなければ NULL 正規化のため nil を返す。
+func routeExistsTx(ctx context.Context, tx *sql.Tx, routeID *string) (*string, error) {
+	if routeID == nil || *routeID == "" {
+		return nil, nil
+	}
+	var dummy int
+	err := tx.QueryRowContext(ctx, `SELECT 1 FROM "Route" WHERE id = ?`, *routeID).Scan(&dummy)
+	if err == sql.ErrNoRows {
+		return nil, nil // ローカルに該当 Route が無い → NULL に正規化
+	}
+	if err != nil {
+		return nil, err
+	}
+	return routeID, nil
+}
+
+// ApplyPullResult は Pull のローカル反映を単一トランザクションで実行する。
+// 存在しない Route 参照（currentRouteId / routeId）は NULL に正規化して FK 違反を防ぐ。
+func (repository *Repository) ApplyPullResult(
+	ctx context.Context,
+	game domain.Game,
+	sessions []domain.PlaySession,
+	syncHead, saveTree string,
+) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	game.CurrentRouteID, err = routeExistsTx(ctx, tx, game.CurrentRouteID)
+	if err != nil {
+		return err
+	}
+
+	if _, err = tx.ExecContext(ctx, `
+		INSERT INTO "Game" (
+			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+			localSaveHash, localSaveHashUpdatedAt,
+			totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			publisher = excluded.publisher,
+			imagePath = excluded.imagePath,
+			exePath = excluded.exePath,
+			saveFolderPath = excluded.saveFolderPath,
+			createdAt = excluded.createdAt,
+			updatedAt = excluded.updatedAt,
+			localSaveHash = excluded.localSaveHash,
+			localSaveHashUpdatedAt = excluded.localSaveHashUpdatedAt,
+			totalPlayTime = excluded.totalPlayTime,
+			lastPlayed = excluded.lastPlayed,
+			clearedAt = excluded.clearedAt,
+			playStatus = excluded.playStatus,
+			currentRouteId = excluded.currentRouteId
+	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
+		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.PlayStatus, game.CurrentRouteID); err != nil {
+		return err
+	}
+
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+
+	for _, session := range sessions {
+		var routeID *string
+		routeID, err = routeExistsTx(ctx, tx, session.RouteID)
+		if err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, routeId, updatedAt)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				gameId = excluded.gameId,
+				playedAt = excluded.playedAt,
+				duration = excluded.duration,
+				sessionName = excluded.sessionName,
+				routeId = excluded.routeId,
+				updatedAt = excluded.updatedAt
+		`, session.ID, game.ID, session.PlayedAt, session.Duration, session.SessionName,
+			routeID, session.UpdatedAt); err != nil {
+			return err
+		}
+	}
+
+	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSyncHead = ? WHERE id = ?`, syncHead, game.ID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSaveTree = ? WHERE id = ?`, saveTree, game.ID); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // UpdatePlaySessionRoute はセッションのルートを更新する。
