@@ -92,7 +92,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     window.api.errorReport.reportError({
       message: error.message,
       stack: error.stack || "",
-      componentStack: errorInfo.componentStack || undefined,
+      data: { componentStack: errorInfo.componentStack || undefined },
       timestamp: new Date().toISOString(),
     });
   }

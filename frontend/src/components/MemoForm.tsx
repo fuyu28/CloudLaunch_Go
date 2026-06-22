@@ -242,9 +242,9 @@ export default function MemoForm({
           result = await window.api.memo.createMemo(createData);
           if (result.success) {
             showToast("メモを作成しました", "success");
-            void uploadMemoToCloud(result.data?.id);
+            void uploadMemoToCloud(undefined);
             if (closeAfterSave) {
-              onSaveSuccess(saveData.effectiveGameId, result.data?.id);
+              onSaveSuccess(saveData.effectiveGameId, undefined);
             }
           } else {
             const errorMessage = result.message || "メモの作成に失敗しました";

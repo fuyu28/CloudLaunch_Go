@@ -27,6 +27,12 @@ import type {
 } from "src/types/memo";
 import type { Creds } from "src/types/creds";
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
+import type {
+  app as modelsApp,
+  domain as modelsDomain,
+  services as modelsServices,
+  time as modelsTime,
+} from "../wailsjs/go/models";
 
 export type SyncStatus = "never_synced" | "in_sync" | "push_needed" | "pull_needed" | "conflict";
 
@@ -301,35 +307,103 @@ export type WindowApi = {
   };
 };
 
-function normalizeApiDate(value: Date | string | number | null | undefined): Date {
+function normalizeApiDate(
+  value: Date | string | number | null | undefined | modelsTime.Time,
+): Date {
   if (value instanceof Date) {
     return value;
   }
   if (typeof value === "string" && value.startsWith("0001-01-01T00:00:00")) {
     return new Date(Number.NaN);
   }
-  return new Date(value ?? Number.NaN);
+  // time.Time arrives as ISO string at runtime; coerce to string for Date constructor
+  const coerced = value as Date | string | number | null | undefined;
+  return new Date(coerced ?? Number.NaN);
 }
 
-function normalizeCloudDirectoryNode(node: CloudDirectoryNode): CloudDirectoryNode {
+function normalizeCloudDirectoryNode(node: modelsApp.CloudDirectoryNode): CloudDirectoryNode {
   return {
-    ...node,
+    name: node.name,
+    path: node.path,
+    isDirectory: node.isDirectory,
+    size: node.size,
     lastModified: normalizeApiDate(node.lastModified),
     children: node.children?.map(normalizeCloudDirectoryNode),
+    objectKey: node.objectKey,
   };
 }
 
-function normalizeCloudDataItem(item: CloudDataItem): CloudDataItem {
+function normalizeCloudDataItem(item: modelsApp.CloudDataItem): CloudDataItem {
   return {
-    ...item,
+    name: item.name,
+    totalSize: item.totalSize,
+    fileCount: item.fileCount,
     lastModified: normalizeApiDate(item.lastModified),
+    remotePath: item.remotePath,
   };
 }
 
-function normalizeCloudFileDetail(file: CloudFileDetail): CloudFileDetail {
+function normalizeCloudFileDetail(file: modelsApp.CloudFileDetail): CloudFileDetail {
   return {
-    ...file,
+    name: file.name,
+    size: file.size,
     lastModified: normalizeApiDate(file.lastModified),
+    key: file.key,
+    relativePath: file.relativePath,
+  };
+}
+
+function toGameType(g: modelsDomain.Game): GameType {
+  return {
+    id: g.id,
+    title: g.title,
+    publisher: g.publisher,
+    imagePath: g.imagePath,
+    exePath: g.exePath,
+    saveFolderPath: g.saveFolderPath,
+    createdAt: normalizeApiDate(g.createdAt),
+    localSaveHash: g.localSaveHash,
+    localSaveHashUpdatedAt: g.localSaveHashUpdatedAt
+      ? normalizeApiDate(g.localSaveHashUpdatedAt)
+      : undefined,
+    playStatus: g.playStatus as GameType["playStatus"],
+    totalPlayTime: g.totalPlayTime,
+    lastPlayed: g.lastPlayed ? normalizeApiDate(g.lastPlayed) : null,
+    clearedAt: g.clearedAt ? normalizeApiDate(g.clearedAt) : null,
+    currentRouteId: g.currentRouteId ?? null,
+  };
+}
+
+function toPlaySessionType(s: modelsDomain.PlaySession): PlaySessionType {
+  return {
+    id: s.id,
+    gameId: s.gameId,
+    playedAt: normalizeApiDate(s.playedAt),
+    duration: s.duration,
+    sessionName: s.sessionName,
+  };
+}
+
+function toMemoType(m: modelsDomain.Memo): MemoType {
+  return {
+    id: m.id,
+    title: m.title,
+    content: m.content,
+    gameId: m.gameId,
+    createdAt: normalizeApiDate(m.createdAt),
+    updatedAt: normalizeApiDate(m.updatedAt),
+  };
+}
+
+function toCloudMemoInfo(c: modelsServices.CloudMemoInfo): CloudMemoInfo {
+  return {
+    key: c.key,
+    fileName: c.fileName,
+    gameId: c.gameId,
+    memoTitle: c.memoTitle,
+    memoId: c.memoId,
+    lastModified: normalizeApiDate(c.lastModified),
+    size: c.size,
   };
 }
 
@@ -467,22 +541,22 @@ export const createWailsBridge = (): WindowApi => {
     database: {
       listGames: async (searchWord, filter, sort, sortDirection) => {
         const result = await ListGames(searchWord, filter, sort, sortDirection ?? "asc");
-        return result.success && result.data ? result.data : [];
+        return result.success && result.data ? result.data.map(toGameType) : [];
       },
       getGameById: async (id) => {
         const result = await GetGameByID(id);
         if (!result.success) {
           return undefined;
         }
-        return result.data ?? undefined;
+        return result.data ? toGameType(result.data) : undefined;
       },
       createGame: async (game) => {
         const payload = {
           Title: game.title,
           Publisher: game.publisher,
-          ImagePath: game.imagePath ?? null,
+          ImagePath: game.imagePath ?? undefined,
           ExePath: game.exePath,
-          SaveFolderPath: game.saveFolderPath ?? null,
+          SaveFolderPath: game.saveFolderPath ?? undefined,
         };
         const result = await CreateGame(payload);
         return result.success
@@ -493,13 +567,16 @@ export const createWailsBridge = (): WindowApi => {
         const payload = {
           Title: game.title,
           Publisher: game.publisher,
-          ImagePath: game.imagePath ?? null,
+          ImagePath: game.imagePath ?? undefined,
           ExePath: game.exePath,
-          SaveFolderPath: game.saveFolderPath ?? null,
-          ClearedAt: null,
-          CurrentRouteID: null,
+          SaveFolderPath: game.saveFolderPath ?? undefined,
+          // 空文字を渡すとバックエンド側 (UpdateGame) は playStatus を上書きしない。
+          // 一般的なゲーム編集では playStatus を変更しないため空文字を維持する。
+          PlayStatus: "" as string,
+          ClearedAt: undefined,
+          CurrentRouteID: undefined,
         };
-        const result = await UpdateGame(id, payload);
+        const result = await UpdateGame(id, payload as unknown as modelsServices.GameUpdateInput);
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
@@ -515,19 +592,22 @@ export const createWailsBridge = (): WindowApi => {
         if (!current.success || !current.data) {
           return { success: false, message: current.error?.message ?? "ゲーム取得に失敗しました" };
         }
-        const game = current.data as GameType;
+        const game = toGameType(current.data);
         const clearedAt = playStatus === "played" ? new Date() : null;
         const updatePayload = {
           Title: game.title,
           Publisher: game.publisher,
-          ImagePath: game.imagePath ?? null,
+          ImagePath: game.imagePath ?? undefined,
           ExePath: game.exePath,
-          SaveFolderPath: game.saveFolderPath ?? null,
+          SaveFolderPath: game.saveFolderPath ?? undefined,
           PlayStatus: playStatus,
-          ClearedAt: clearedAt,
-          CurrentRouteID: game.currentRouteId ?? null,
+          ClearedAt: clearedAt !== null ? (clearedAt as unknown as modelsTime.Time) : undefined,
+          CurrentRouteID: game.currentRouteId ?? undefined,
         };
-        const result = await UpdateGame(gameId, updatePayload);
+        const result = await UpdateGame(
+          gameId,
+          updatePayload as unknown as modelsServices.GameUpdateInput,
+        );
         if (!result.success) {
           return { success: false, message: result.error?.message ?? "エラー" };
         }
@@ -535,17 +615,20 @@ export const createWailsBridge = (): WindowApi => {
         if (!updated.success) {
           return { success: false, message: updated.error?.message ?? "エラー" };
         }
-        return { success: true, data: updated.data as GameType };
+        return {
+          success: true,
+          data: updated.data ? toGameType(updated.data) : (undefined as unknown as GameType),
+        };
       },
       createSession: async (duration, gameId, sessionName) => {
         const payload = {
           GameID: gameId,
-          PlayedAt: new Date(),
+          PlayedAt: new Date() as unknown as modelsTime.Time,
           Duration: duration,
-          SessionName: sessionName ?? null,
-          RouteID: null,
+          SessionName: sessionName ?? undefined,
+          RouteID: undefined,
         };
-        const result = await CreateSession(payload);
+        const result = await CreateSession(payload as unknown as modelsServices.SessionInput);
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
@@ -553,7 +636,7 @@ export const createWailsBridge = (): WindowApi => {
       getPlaySessions: async (gameId) => {
         const result = await ListSessionsByGame(gameId);
         return result.success
-          ? { success: true, data: (result.data ?? []) as PlaySessionType[] }
+          ? { success: true, data: (result.data ?? []).map(toPlaySessionType) }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateSessionName: async (sessionId, sessionName) => {
@@ -573,19 +656,22 @@ export const createWailsBridge = (): WindowApi => {
       getAllMemos: async () => {
         const result = await ListAllMemos();
         return result.success
-          ? { success: true, data: (result.data ?? []) as MemoType[] }
+          ? { success: true, data: (result.data ?? []).map(toMemoType) }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       getMemoById: async (memoId) => {
         const result = await GetMemoByID(memoId);
         return result.success
-          ? { success: true, data: result.data as MemoType }
+          ? {
+              success: true,
+              data: result.data ? toMemoType(result.data) : (undefined as unknown as MemoType),
+            }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       getMemosByGameId: async (gameId) => {
         const result = await ListMemosByGame(gameId);
         return result.success
-          ? { success: true, data: (result.data ?? []) as MemoType[] }
+          ? { success: true, data: (result.data ?? []).map(toMemoType) }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       createMemo: async (data) => {
@@ -643,7 +729,7 @@ export const createWailsBridge = (): WindowApi => {
       getCloudMemos: async () => {
         const result = await GetCloudMemos();
         return result.success
-          ? { success: true, data: (result.data ?? []) as CloudMemoInfo[] }
+          ? { success: true, data: (result.data ?? []).map(toCloudMemoInfo) }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       syncMemosFromCloud: async (gameId) => {
@@ -707,7 +793,7 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? {
               success: true,
-              data: ((result.data ?? []) as CloudDataItem[]).map(normalizeCloudDataItem),
+              data: (result.data ?? []).map(normalizeCloudDataItem),
             }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
@@ -716,7 +802,7 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? {
               success: true,
-              data: ((result.data ?? []) as CloudDirectoryNode[]).map(normalizeCloudDirectoryNode),
+              data: (result.data ?? []).map(normalizeCloudDirectoryNode),
             }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
@@ -737,7 +823,7 @@ export const createWailsBridge = (): WindowApi => {
         return result.success
           ? {
               success: true,
-              data: ((result.data ?? []) as CloudFileDetail[]).map(normalizeCloudFileDetail),
+              data: (result.data ?? []).map(normalizeCloudFileDetail),
             }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
@@ -752,9 +838,7 @@ export const createWailsBridge = (): WindowApi => {
                 data: {
                   exists: Boolean(result.data?.exists),
                   totalSize: Number(result.data?.totalSize ?? 0),
-                  files: ((result.data?.files ?? []) as CloudFileDetail[]).map(
-                    normalizeCloudFileDetail,
-                  ),
+                  files: (result.data?.files ?? []).map(normalizeCloudFileDetail),
                 },
               }
             : { success: false, message: result.error?.message ?? "エラー" };
@@ -824,10 +908,10 @@ export const createWailsBridge = (): WindowApi => {
         }
         return {
           success: true,
-          data: result.data as {
-            version: number;
-            updatedAt: Date;
-            games: import("src/types/cloud").CloudGameMetadata[];
+          data: {
+            version: result.data.version,
+            updatedAt: normalizeApiDate(result.data.updatedAt),
+            games: result.data.games as unknown as import("src/types/cloud").CloudGameMetadata[],
           },
         };
       },
@@ -962,12 +1046,29 @@ export const createWailsBridge = (): WindowApi => {
     },
     errorReport: {
       reportError: (payload) => {
-        void ReportError(payload).catch((error: unknown) => {
+        void ReportError({
+          level: payload.level ?? "error",
+          message: payload.message,
+          stack: payload.stack ?? "",
+          context: payload.context ?? "",
+          component: payload.component ?? "",
+          function: payload.function ?? "",
+          data: payload.data ?? null,
+          timestamp: payload.timestamp ?? new Date().toISOString(),
+        }).catch((error: unknown) => {
           console.error("ReportError failed", error, payload);
         });
       },
       reportLog: (payload) => {
-        void ReportLog(payload).catch((error: unknown) => {
+        void ReportLog({
+          level: payload.level ?? "info",
+          message: payload.message,
+          component: payload.component ?? "",
+          function: payload.function ?? "",
+          context: payload.context ?? "",
+          data: payload.data ?? null,
+          timestamp: payload.timestamp ?? new Date().toISOString(),
+        }).catch((error: unknown) => {
           console.error("ReportLog failed", error, payload);
         });
       },

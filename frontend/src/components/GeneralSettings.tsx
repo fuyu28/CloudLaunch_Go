@@ -355,7 +355,7 @@ export default function GeneralSettings(): React.JSX.Element {
     try {
       const result = await window.api.maintenance.exportGameData(selected.data);
       if (!result.success || !result.data) {
-        toast.error(result.message || "データエクスポートに失敗しました");
+        toast.error((!result.success && result.message) || "データエクスポートに失敗しました");
         return;
       }
       toast.success("CSV/JSONのエクスポートが完了しました");
@@ -381,7 +381,7 @@ export default function GeneralSettings(): React.JSX.Element {
     try {
       const result = await window.api.maintenance.createFullBackup(selected.data);
       if (!result.success || !result.data) {
-        toast.error(result.message || "バックアップ作成に失敗しました");
+        toast.error((!result.success && result.message) || "バックアップ作成に失敗しました");
         return;
       }
       toast.success("バックアップを作成しました");

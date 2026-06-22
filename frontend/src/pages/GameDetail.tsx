@@ -249,7 +249,10 @@ export default function GameDetail(): React.JSX.Element {
         const statusResult = await window.api.cloudSync.status(game.id);
         if (!statusResult.success || !statusResult.data) {
           if (showResult)
-            showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
+            showToast(
+              (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
+              "error",
+            );
           return false;
         }
         const { status } = statusResult.data;
@@ -408,7 +411,7 @@ export default function GameDetail(): React.JSX.Element {
         setUntrackedConfirmKind(null);
         setRefreshKey((k) => k + 1);
       } else {
-        showToast(result.message || "ダウンロードに失敗しました", "error");
+        showToast((!result.success && result.message) || "ダウンロードに失敗しました", "error");
       }
     } catch {
       showToast("ダウンロードに失敗しました", "error");

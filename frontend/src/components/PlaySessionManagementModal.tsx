@@ -144,7 +144,7 @@ export default function PlaySessionManagementModal({
    */
   const handleFormChange = useCallback(
     (field: EditFormFields, value: string | null) => {
-      setEditFormData((prev) => ({ ...prev, [field]: value }));
+      setEditFormData((prev) => ({ ...prev, [field]: value ?? "" }));
       validation.touch(field);
     },
     [validation],

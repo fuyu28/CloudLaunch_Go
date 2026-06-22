@@ -78,7 +78,9 @@ export default function CloudGameImportModal({
     try {
       const result = await window.api.cloudMetadata.loadCloudMetadata();
       if (!result.success || !result.data) {
-        toast.error(result.message ?? "クラウドデータの取得に失敗しました");
+        toast.error(
+          (!result.success ? result.message : undefined) ?? "クラウドデータの取得に失敗しました",
+        );
         setCloudGames([]);
         return;
       }

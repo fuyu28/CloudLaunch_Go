@@ -123,7 +123,10 @@ export default function Cloud(): React.JSX.Element {
     try {
       const statusResult = await window.api.cloudSync.status(selectedGameId);
       if (!statusResult.success || !statusResult.data) {
-        showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
+        showToast(
+          (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
+          "error",
+        );
         return;
       }
       const { status } = statusResult.data;
