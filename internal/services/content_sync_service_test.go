@@ -21,10 +21,10 @@ import (
 type fakeContentSyncRepository struct {
 	mu sync.Mutex
 
-	game      *domain.Game
-	sessions  []domain.PlaySession
-	settings  map[string]string
-	saveTree  string
+	game     *domain.Game
+	sessions []domain.PlaySession
+	settings map[string]string
+	saveTree string
 
 	// 記録された呼び出し
 	localSyncHeadSet string
