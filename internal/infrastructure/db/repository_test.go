@@ -316,3 +316,22 @@ func TestRepositoryRoutesDeletedWithGame(t *testing.T) {
 		t.Fatalf("expected routes cascade deleted, got %d, err=%v", len(routes), err)
 	}
 }
+
+// TestOpenSetsBusyTimeout は Open が busy_timeout を設定し、瞬間的なロック競合を
+// 即 SQLITE_BUSY で失敗させず待機させることを確認する。
+func TestOpenSetsBusyTimeout(t *testing.T) {
+	t.Parallel()
+	conn, err := db.Open(filepath.Join(t.TempDir(), "busy.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	var timeout int
+	if err := conn.QueryRow("PRAGMA busy_timeout").Scan(&timeout); err != nil {
+		t.Fatalf("PRAGMA busy_timeout: %v", err)
+	}
+	if timeout < 5000 {
+		t.Fatalf("busy_timeout should be >= 5000ms, got %d", timeout)
+	}
+}
