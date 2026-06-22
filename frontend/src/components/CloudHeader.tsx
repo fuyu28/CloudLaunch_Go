@@ -13,7 +13,7 @@
 
 import { FiTrash2, FiRefreshCw, FiCloud, FiFolder, FiFolderPlus } from "react-icons/fi";
 
-import type { CloudDataItem, CloudDirectoryNode } from "@renderer/hooks/useCloudData";
+import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
 /**
  * ビューモードの型定義

@@ -9,7 +9,7 @@ import { toast } from "react-hot-toast";
 
 import { logger } from "@renderer/utils/logger";
 
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 import {
   countFilesRecursively,
   getNodesByPath,
@@ -17,30 +17,7 @@ import {
   sumSizesRecursively,
 } from "@renderer/utils/cloudUtils";
 
-// CloudDirectoryNodeを再エクスポート
-export type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-
-/**
- * クラウドデータアイテムの型定義
- */
-export type CloudDataItem = {
-  name: string;
-  totalSize: number;
-  fileCount: number;
-  lastModified: Date;
-  remotePath: string;
-};
-
-/**
- * クラウドファイル詳細情報の型定義
- */
-export type CloudFileDetail = {
-  name: string;
-  size: number;
-  lastModified: Date;
-  key: string;
-  relativePath: string;
-};
+export type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 
 /**
  * useCloudDataフックの戻り値の型定義

@@ -6,14 +6,13 @@
 
 import { FiFolder, FiFile, FiTrash2 } from "react-icons/fi";
 
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 import {
   formatFileSize,
   formatDate,
   countFilesRecursively,
   sumSizesRecursively,
 } from "@renderer/utils/cloudUtils";
-import type { CloudDataItem } from "@renderer/hooks/useCloudData";
 
 /**
  * クラウドデータアイテムカードのプロパティ

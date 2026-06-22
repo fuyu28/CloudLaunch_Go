@@ -16,7 +16,7 @@ import { FiCloud, FiFolder } from "react-icons/fi";
 import type { ViewMode } from "./CloudHeader";
 import { DirectoryNodeCard } from "./CloudItemCard";
 import CloudTreeNode from "./CloudTreeNode";
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDirectoryNode } from "src/types/cloud";
 
 /**
  * クラウドコンテンツのプロパティ

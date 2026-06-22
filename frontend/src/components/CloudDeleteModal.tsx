@@ -17,8 +17,7 @@ import { useCloudDeleteConfirm } from "@renderer/hooks/useCloudDeleteConfirm";
 
 import ConfirmModal from "./ConfirmModal";
 import type { ConfirmDetails, WarningItem } from "./ConfirmModal";
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-import type { CloudDataItem } from "@renderer/hooks/useCloudData";
+import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
 /**
  * 削除確認モーダルのプロパティ

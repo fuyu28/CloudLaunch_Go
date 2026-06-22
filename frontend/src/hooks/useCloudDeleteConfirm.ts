@@ -14,8 +14,7 @@
 
 import { useMemo } from "react";
 
-import type { CloudDataItem } from "./useCloudData";
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 import { formatFileSize, countFilesRecursively } from "@renderer/utils/cloudUtils";
 import type { WarningItem } from "@renderer/components/ConfirmModal";
 

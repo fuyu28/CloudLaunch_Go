@@ -25,11 +25,7 @@ import { FiAlertTriangle } from "react-icons/fi";
 
 import { isValidCredsAtom } from "@renderer/state/credentials";
 
-import {
-  useCloudData,
-  type CloudDataItem,
-  type CloudFileDetail,
-} from "@renderer/hooks/useCloudData";
+import { useCloudData } from "@renderer/hooks/useCloudData";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
@@ -37,7 +33,7 @@ import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { logger } from "@renderer/utils/logger";
 
 import { countFilesRecursively, sumSizesRecursively } from "@renderer/utils/cloudUtils";
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 import type { GameType } from "src/types/game";
 
 /**

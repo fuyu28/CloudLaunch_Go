@@ -14,7 +14,7 @@
 import { FiFolder, FiFile } from "react-icons/fi";
 
 import { formatFileSize, formatDate } from "@renderer/utils/cloudUtils";
-import type { CloudDataItem, CloudFileDetail } from "@renderer/hooks/useCloudData";
+import type { CloudDataItem, CloudFileDetail } from "src/types/cloud";
 
 /**
  * ファイル詳細モーダルのプロパティ

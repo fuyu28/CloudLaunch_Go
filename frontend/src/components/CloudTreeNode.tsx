@@ -6,7 +6,7 @@
 
 import { FiFolder, FiFile, FiTrash2, FiChevronRight, FiChevronDown } from "react-icons/fi";
 
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDirectoryNode } from "src/types/cloud";
 import {
   formatFileSize,
   formatDate,

@@ -26,7 +26,7 @@ import type {
   CloudMemoInfo,
 } from "src/types/memo";
 import type { Creds } from "src/types/creds";
-import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "./hooks/useCloudData";
+import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 
 export type SyncStatus = "never_synced" | "in_sync" | "push_needed" | "pull_needed" | "conflict";
 
