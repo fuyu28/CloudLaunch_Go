@@ -137,7 +137,7 @@ export default memo(MemoCardBase, (prevProps, nextProps) => {
     prevProps.memo.id === nextProps.memo.id &&
     prevProps.memo.title === nextProps.memo.title &&
     prevProps.memo.content === nextProps.memo.content &&
-    prevProps.memo.updatedAt === nextProps.memo.updatedAt &&
+    new Date(prevProps.memo.updatedAt).getTime() === new Date(nextProps.memo.updatedAt).getTime() &&
     prevProps.memo.gameTitle === nextProps.memo.gameTitle &&
     prevProps.isDropdownOpen === nextProps.isDropdownOpen &&
     prevProps.className === nextProps.className &&

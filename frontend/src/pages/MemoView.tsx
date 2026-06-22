@@ -166,7 +166,7 @@ export default function MemoView(): React.JSX.Element {
           {/* メタ情報 */}
           <div className="flex justify-between text-sm text-base-content/60 mb-6 border-b border-base-300 pb-4">
             <div>作成日時: {formatDateWithTime(memo.createdAt)}</div>
-            {memo.updatedAt !== memo.createdAt && (
+            {new Date(memo.updatedAt).getTime() !== new Date(memo.createdAt).getTime() && (
               <div>更新日時: {formatDateWithTime(memo.updatedAt)}</div>
             )}
           </div>
