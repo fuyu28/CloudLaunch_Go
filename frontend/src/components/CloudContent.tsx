@@ -100,7 +100,7 @@ export function CloudContent({
       <div>
         {/* カード表示 */}
         {currentPath.length === 0 ? (
-          // ルートレベル - DirectoryNodeCardを表示
+          // ルートレベル（ゲーム単位）- onDelete を渡して削除ボタンを表示
           directoryTree.length === 0 ? (
             <EmptyState
               icon={FiCloud}
@@ -120,7 +120,7 @@ export function CloudContent({
               ))}
             </div>
           )
-        ) : // サブディレクトリ - DirectoryNodeCardを表示
+        ) : // サブディレクトリ（セーブファイル階層）- onDelete を渡さず削除ボタンを非表示
         currentDirectoryNodes.length === 0 ? (
           <EmptyState
             icon={FiFolder}
@@ -135,7 +135,7 @@ export function CloudContent({
                 node={node}
                 onNavigate={node.isDirectory ? () => onNavigateToDirectory(node.path) : undefined}
                 onViewDetails={onViewDetails}
-                onDelete={() => onDelete(node)}
+                // onDelete は渡さない：サブノードの個別削除は履歴破壊になるため不可
               />
             ))}
           </div>

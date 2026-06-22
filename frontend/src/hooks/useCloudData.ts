@@ -35,7 +35,10 @@ export type UseCloudDataReturn = {
   navigateToDirectory: (directoryName: string) => void;
   navigateBack: () => void;
   navigateToPath: (newPath: string[]) => void;
-  deleteCloudData: (item: CloudDataItem | CloudDirectoryNode) => Promise<void>;
+  /** ゲーム単位でクラウドデータを削除する（gameId = remotePath または path） */
+  deleteGameFromCloud: (gameId: string) => Promise<void>;
+  /** 全ゲームのクラウドデータを一括削除する */
+  deleteAllGamesFromCloud: () => Promise<void>;
   clearNavigationCache: () => void;
 };
 
@@ -165,63 +168,68 @@ export function useCloudData(): UseCloudDataReturn {
   }, []);
 
   /**
-   * クラウドデータを削除
+   * ゲーム単位でクラウドデータを削除する。
+   * content-addressed ストレージではブロブ単位の削除は履歴破壊になるため、
+   * 必ずゲーム全体を単位として deleteFromCloud を呼ぶ。
    */
-  const deleteCloudData = useCallback(
-    async (item: CloudDataItem | CloudDirectoryNode): Promise<void> => {
+  const deleteGameFromCloud = useCallback(
+    async (gameId: string): Promise<void> => {
       try {
-        // 全削除の場合
-        if ("path" in item && item.path === "*") {
-          const deletePromises = state.cloudData.map(async (cloudItem) => {
-            return window.api.cloudData.deleteCloudData(cloudItem.remotePath);
-          });
-
-          const results = await Promise.all(deletePromises);
-          const failedCount = results.filter((result) => !result.success).length;
-
-          if (failedCount === 0) {
-            toast.success("全てのクラウドデータを削除しました");
-          } else if (failedCount < results.length) {
-            toast.success(`一部のデータを削除しました（失敗: ${failedCount}件）`);
-          } else {
-            toast.error("削除に失敗しました");
-          }
+        const result = await window.api.cloudSync.deleteFromCloud(gameId);
+        if (result.success) {
+          toast.success("クラウドデータを削除しました");
         } else {
-          // 個別削除の場合
-          if ("path" in item && !item.isDirectory && item.objectKey) {
-            // ファイルの個別削除
-            const result = await window.api.cloudData.deleteFile(item.objectKey);
-            if (result.success) {
-              toast.success(`${item.name} ファイルを削除しました`);
-            } else {
-              toast.error("ファイルの削除に失敗しました");
-            }
-          } else {
-            // ディレクトリの削除
-            const deletePath = "remotePath" in item ? item.remotePath : item.path;
-            const result = await window.api.cloudData.deleteCloudData(deletePath);
-            if (result.success) {
-              toast.success(`${item.name} を削除しました`);
-            } else {
-              toast.error("削除に失敗しました");
-            }
-          }
+          toast.error(result.message ?? "削除に失敗しました");
+          return;
         }
 
         // 削除後はキャッシュをクリアして最新データを取得
         navigationCacheRef.current.clear();
-        fetchCloudData();
+        await fetchCloudData();
       } catch (error) {
         logger.error("削除エラー:", {
           component: "useCloudData",
-          function: "unknown",
+          function: "deleteGameFromCloud",
           data: error,
         });
         toast.error("削除に失敗しました");
       }
     },
-    [state.cloudData, fetchCloudData],
+    [fetchCloudData],
   );
+
+  /**
+   * 全ゲームのクラウドデータを一括削除する。
+   * cloudData 配列の remotePath（= gameId）を順次 deleteFromCloud に渡す。
+   */
+  const deleteAllGamesFromCloud = useCallback(async (): Promise<void> => {
+    try {
+      const gameIds = state.cloudData.map((item) => item.remotePath);
+      const results = await Promise.all(
+        gameIds.map((gameId) => window.api.cloudSync.deleteFromCloud(gameId)),
+      );
+      const failedCount = results.filter((r) => !r.success).length;
+
+      if (failedCount === 0) {
+        toast.success("全てのクラウドデータを削除しました");
+      } else if (failedCount < results.length) {
+        toast.success(`一部のデータを削除しました（失敗: ${failedCount}件）`);
+      } else {
+        toast.error("削除に失敗しました");
+      }
+
+      // 削除後はキャッシュをクリアして最新データを取得
+      navigationCacheRef.current.clear();
+      await fetchCloudData();
+    } catch (error) {
+      logger.error("一括削除エラー:", {
+        component: "useCloudData",
+        function: "deleteAllGamesFromCloud",
+        data: error,
+      });
+      toast.error("削除に失敗しました");
+    }
+  }, [state.cloudData, fetchCloudData]);
 
   return {
     // State
@@ -236,7 +244,8 @@ export function useCloudData(): UseCloudDataReturn {
     navigateToDirectory,
     navigateBack,
     navigateToPath,
-    deleteCloudData,
+    deleteGameFromCloud,
+    deleteAllGamesFromCloud,
     clearNavigationCache,
   };
 }

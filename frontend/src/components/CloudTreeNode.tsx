@@ -94,17 +94,21 @@ export default function CloudTreeNode({
             </div>
           </div>
 
-          {/* 削除ボタン */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(node);
-            }}
-            className="btn btn-sm btn-ghost btn-error opacity-0 group-hover:opacity-100 transition-opacity ml-2"
-            title={node.isDirectory ? `${node.name} 以下を削除` : `${node.name} ファイルを削除`}
-          >
-            <FiTrash2 className="text-xs" />
-          </button>
+          {/* 削除ボタン：トップレベル（level === 0）のゲームノードのみ表示。
+              深度で判定することで、path にスラッシュが含まれるかどうかに依存せず
+              レンダリング構造から明確にゲーム単位を識別できる。 */}
+          {level === 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(node);
+              }}
+              className="btn btn-sm btn-ghost btn-error opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+              title={`${node.name} のクラウドデータを削除`}
+            >
+              <FiTrash2 className="text-xs" />
+            </button>
+          )}
         </div>
       </div>
 

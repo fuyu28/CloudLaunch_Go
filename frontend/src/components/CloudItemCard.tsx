@@ -98,7 +98,12 @@ export function CloudItemCard({
 type DirectoryNodeCardProps = {
   node: CloudDirectoryNode;
   onNavigate?: (directoryName: string) => void;
-  onDelete: (node: CloudDirectoryNode) => void;
+  /**
+   * 削除ボタンを表示するかどうか。
+   * ゲーム単位削除のみ許可するため、ルートレベル（isGameNode=true）のカードにのみ渡す。
+   * サブディレクトリ・ファイルカードでは undefined のまま（ボタンを表示しない）。
+   */
+  onDelete?: (node: CloudDirectoryNode) => void;
   onViewDetails?: (node: CloudDirectoryNode) => void;
 };
 
@@ -162,16 +167,21 @@ export function DirectoryNodeCard({
               <FiFile className="text-base" />
             </button>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(node);
-            }}
-            className="btn btn-sm btn-error btn-ghost tooltip"
-            data-tip={node.isDirectory ? "ディレクトリ削除" : "ファイル削除"}
-          >
-            <FiTrash2 className="text-base" />
-          </button>
+          {/* 削除ボタン：onDelete が渡された場合のみ表示。
+              CloudContent はルートレベルのカードにのみ onDelete を渡すため、
+              サブディレクトリ・ファイルカードには削除ボタンが表示されない。 */}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(node);
+              }}
+              className="btn btn-sm btn-error btn-ghost tooltip"
+              data-tip="このゲームのクラウドデータを削除"
+            >
+              <FiTrash2 className="text-base" />
+            </button>
+          )}
         </div>
       </div>
 

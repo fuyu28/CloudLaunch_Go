@@ -83,7 +83,8 @@ export default function Cloud(): React.JSX.Element {
     navigateToDirectory,
     navigateBack,
     navigateToPath,
-    deleteCloudData,
+    deleteGameFromCloud,
+    deleteAllGamesFromCloud,
   } = useCloudData();
 
   const fetchGames = useCallback(async (): Promise<void> => {
@@ -236,7 +237,7 @@ export default function Cloud(): React.JSX.Element {
   };
 
   /**
-   * 全削除処理
+   * 全削除処理 - 全ゲームの削除確認モーダルを表示するためのセンチネルをセット
    */
   const handleDeleteAll = (): void => {
     const allDeleteItem = {
@@ -251,11 +252,19 @@ export default function Cloud(): React.JSX.Element {
   };
 
   /**
-   * クラウドデータを削除
+   * ゲーム単位のクラウドデータ削除（確認モーダルからコールバック）
    */
   const handleDelete = async (item: CloudDataItem | CloudDirectoryNode): Promise<void> => {
     try {
-      await deleteCloudData(item);
+      // 全削除センチネル（path === "*"）
+      if ("path" in item && (item as CloudDirectoryNode).path === "*") {
+        await deleteAllGamesFromCloud();
+        return;
+      }
+
+      // ゲーム単位削除：remotePath（CloudDataItem）または path（CloudDirectoryNode）をゲームIDとして使用
+      const gameId = "remotePath" in item ? item.remotePath : (item as CloudDirectoryNode).path;
+      await deleteGameFromCloud(gameId);
     } finally {
       setDeleteConfirm(null);
     }
