@@ -2,7 +2,7 @@
  * @fileoverview クラウドから既存ゲームを追加するモーダル
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 
 import { useCloudSync } from "@renderer/hooks/useCloudSync";
@@ -46,6 +46,8 @@ export default function CloudGameImportModal({
   const [importing, setImporting] = useState(false);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [localCache, setLocalCache] = useState<GameType[]>(localGames);
+  // バッチ取り込み中に1件でも取り込めたか（バッチ終了時に1回だけ親へ通知するため）
+  const importedAnyRef = useRef(false);
 
   const localIds = useMemo(() => new Set(localCache.map((game) => game.id)), [localCache]);
   const localTitleMap = useMemo(() => {
@@ -128,10 +130,17 @@ export default function CloudGameImportModal({
       return;
     }
 
+    // 取り込み処理中は再フェッチしない。
+    // 取り込みごとに親の localGames が更新されて useEffect が再実行されると、
+    // モーダルの一覧が1件ごとに再読み込みされてしまうため。
+    if (importing) {
+      return;
+    }
+
     setLocalCache(localGames);
     fetchLocalGames();
     fetchCloudGames();
-  }, [fetchCloudGames, fetchLocalGames, isOpen, localGames]);
+  }, [fetchCloudGames, fetchLocalGames, isOpen, localGames, importing]);
 
   const toggleSelection = (gameId: string): void => {
     setSelectedIds((prev) => {
@@ -177,18 +186,28 @@ export default function CloudGameImportModal({
         return next;
       });
 
+      // 親への通知（一覧更新）はバッチ終了時にまとめて1回だけ行う。
+      importedAnyRef.current = true;
+      return true;
+    },
+    [pull],
+  );
+
+  // バッチ終了処理：取り込み状態を解除し、1件でも取り込めていれば親へ1回だけ通知する。
+  const finishBatch = useCallback(async (): Promise<void> => {
+    setImporting(false);
+    if (importedAnyRef.current) {
+      importedAnyRef.current = false;
       if (onImported) {
         await onImported();
       }
-      return true;
-    },
-    [onImported, pull],
-  );
+    }
+  }, [onImported]);
 
   const processQueue = useCallback(
     async (queue: CloudGameMetadata[]): Promise<void> => {
       if (queue.length === 0) {
-        setImporting(false);
+        await finishBatch();
         return;
       }
 
@@ -201,13 +220,13 @@ export default function CloudGameImportModal({
 
       const imported = await importGame(current);
       if (!imported) {
-        setImporting(false);
+        await finishBatch();
         return;
       }
 
       await processQueue(rest);
     },
-    [importGame, localTitleMap],
+    [finishBatch, importGame, localTitleMap],
   );
 
   const handleStartImport = async (): Promise<void> => {
@@ -216,6 +235,7 @@ export default function CloudGameImportModal({
       return;
     }
 
+    importedAnyRef.current = false;
     setImporting(true);
     await processQueue(selectedGames);
   };
@@ -229,18 +249,17 @@ export default function CloudGameImportModal({
         const result = await window.api.database.deleteGame(localGame.id);
         if (!result.success) {
           toast.error(result.message ?? "ローカルゲームの削除に失敗しました");
-          setImporting(false);
+          await finishBatch();
           return;
         }
-      }
-      if (onImported) {
-        await onImported();
+        // 削除が発生した時点で一覧更新が必要。バッチ終了時にまとめて通知する。
+        importedAnyRef.current = true;
       }
     }
 
     const imported = await importGame(conflict.cloudGame);
     if (!imported) {
-      setImporting(false);
+      await finishBatch();
       return;
     }
 
@@ -359,7 +378,7 @@ export default function CloudGameImportModal({
         isOpen={!!conflict}
         onClose={() => {
           setConflict(null);
-          setImporting(false);
+          void finishBatch();
         }}
         cloudGame={conflict?.cloudGame ?? null}
         localMatches={conflict?.localMatches ?? []}
