@@ -488,50 +488,52 @@ export default function GameDetail(): React.JSX.Element {
   }
 
   return (
-    <div className="bg-base-200 px-6 ">
-      {/* 上段：ゲーム情報カード */}
-      <div className="mb-5">
-        <GameInfo
-          game={game}
-          isUpdatingStatus={isUpdatingStatus}
-          isLaunching={isLaunching}
-          onStatusChange={(status) =>
-            handleStatusChange(status as "unplayed" | "playing" | "played")
-          }
-          onLaunchGame={handleLaunchGameWithSync}
-          onEditGame={openEdit}
-          onDeleteGame={openDelete}
-        />
-      </div>
+    <div className="px-6 py-6">
+      <div className="mx-auto max-w-6xl space-y-5">
+        {/* 上段：ゲーム情報カード */}
+        <div>
+          <GameInfo
+            game={game}
+            isUpdatingStatus={isUpdatingStatus}
+            isLaunching={isLaunching}
+            onStatusChange={(status) =>
+              handleStatusChange(status as "unplayed" | "playing" | "played")
+            }
+            onLaunchGame={handleLaunchGameWithSync}
+            onEditGame={openEdit}
+            onDeleteGame={openDelete}
+          />
+        </div>
 
-      {/* 中段：プレイ統計 */}
-      <div className="mb-5">
-        <PlayStatistics
-          game={game}
-          refreshKey={refreshKey}
-          onAddPlaySession={handleOpenPlaySessionModal}
-          onOpenProcessManagement={() => setIsProcessModalOpen(true)}
-        />
-      </div>
+        {/* 中段：プレイ統計 */}
+        <div>
+          <PlayStatistics
+            game={game}
+            refreshKey={refreshKey}
+            onAddPlaySession={handleOpenPlaySessionModal}
+            onOpenProcessManagement={() => setIsProcessModalOpen(true)}
+          />
+        </div>
 
-      {/* 下段：その他の管理機能 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* クラウドデータ管理カード */}
-        <CloudDataCard
-          gameId={game.id}
-          gameTitle={game.title}
-          hasSaveFolder={!!game.saveFolderPath}
-          isValidCreds={isValidCreds}
-          isUploading={isUploading}
-          isDownloading={isDownloading}
-          isSyncing={isSyncing}
-          onUpload={handleUploadSaveData}
-          onDownload={handleDownloadSaveData}
-          onSync={handleSyncCheck}
-        />
+        {/* 下段：その他の管理機能 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* クラウドデータ管理カード */}
+          <CloudDataCard
+            gameId={game.id}
+            gameTitle={game.title}
+            hasSaveFolder={!!game.saveFolderPath}
+            isValidCreds={isValidCreds}
+            isUploading={isUploading}
+            isDownloading={isDownloading}
+            isSyncing={isSyncing}
+            onUpload={handleUploadSaveData}
+            onDownload={handleDownloadSaveData}
+            onSync={handleSyncCheck}
+          />
 
-        {/* メモ管理カード */}
-        <MemoCard gameId={game.id} />
+          {/* メモ管理カード */}
+          <MemoCard gameId={game.id} />
+        </div>
       </div>
 
       {/* モーダル */}

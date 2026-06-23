@@ -37,7 +37,7 @@ const PlayStatistics = memo(function PlayStatistics({
   onOpenProcessManagement,
 }: PlayStatisticsProps): React.JSX.Element {
   return (
-    <div className="card bg-base-100 shadow-xl">
+    <div className="card bg-base-100 border border-base-300/60 shadow-md">
       <div className="card-body pb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">

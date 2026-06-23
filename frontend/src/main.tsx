@@ -7,9 +7,19 @@ import "./assets/tailwind.css";
 import { createWailsBridge } from "./wailsBridge";
 import { installGlobalErrorHandlers } from "./utils/globalErrorHandlers";
 
-// テーマを初期化
+// テーマを初期化（初期描画のちらつき防止）
 const initializeTheme = (): void => {
-  const savedTheme = localStorage.getItem("theme") || "light";
+  // jotai の atomWithStorage は JSON 文字列（例: "light"）で保存するため、
+  // クォートを除去して data-theme に渡す。未設定時は既定テーマを使う。
+  const raw = localStorage.getItem("theme");
+  let savedTheme = "cloudlaunch";
+  if (raw) {
+    try {
+      savedTheme = JSON.parse(raw) as string;
+    } catch {
+      savedTheme = raw;
+    }
+  }
   document.documentElement.setAttribute("data-theme", savedTheme);
 };
 

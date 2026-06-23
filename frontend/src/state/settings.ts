@@ -30,7 +30,7 @@ import type { SortOption, FilterOption } from "src/types/menu";
  * テーマ設定atom
  * LocalStorageに自動保存される
  */
-export const themeAtom = atomWithStorage<ThemeName>("theme", "light");
+export const themeAtom = atomWithStorage<ThemeName>("theme", "cloudlaunch");
 
 /**
  * デフォルトソート順atom

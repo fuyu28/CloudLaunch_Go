@@ -74,7 +74,7 @@ const GameInfo = memo(function GameInfo({
   }, []);
 
   return (
-    <div className="card bg-base-100 shadow-xl">
+    <div className="card bg-base-100 border border-base-300/60 shadow-md">
       <div className="card-body">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* 左：サムネイル */}
@@ -118,7 +118,7 @@ const GameInfo = memo(function GameInfo({
                   </ul>
                 </div>
               </div>
-              <p className="text-lg text-base-content/70 mb-4">{game.publisher}</p>
+              <p className="text-lg text-base-content/80 mb-4">{game.publisher}</p>
 
               {/* プレイステータス */}
               <div className="mb-4">
@@ -130,7 +130,7 @@ const GameInfo = memo(function GameInfo({
               </div>
 
               {/* メタ情報 */}
-              <div className="flex flex-wrap text-sm text-base-content/60 gap-4 mb-6">
+              <div className="flex flex-wrap text-sm text-base-content/75 gap-x-5 gap-y-2 mb-6">
                 <span>
                   最終プレイ: {game.lastPlayed ? formatDateWithTime(game.lastPlayed) : "なし"}
                 </span>

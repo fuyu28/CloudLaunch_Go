@@ -63,7 +63,7 @@ export function CloudHeader({
         <FiCloud className="text-3xl text-primary" />
         <div>
           <h1 className="text-2xl font-bold text-base-content">クラウドデータ管理</h1>
-          <p className="text-base-content/70">クラウドストレージ上のゲームデータを管理できます</p>
+          <p className="text-base-content/80">クラウドストレージ上のゲームデータを管理できます</p>
         </div>
       </div>
 

@@ -52,16 +52,22 @@ export default function MainLayout(): React.JSX.Element {
           fixed left-0 z-50
           h-full w-56
           bg-base-100
-          border-r border-base-200
-          pt-10 pb-2 px-2
-          rounded-tr-lg rounded-br-lg
+          border-r border-base-300
+          pt-4 pb-3 px-3
+          rounded-tr-2xl rounded-br-2xl
           shadow-lg
           transform transition-transform duration-200 ease-out
         "
         >
           <div className="flex flex-col h-full">
+            {/* ブランド */}
+            <div className="flex items-center gap-2 px-2 pb-4 mb-2 border-b border-base-200">
+              <FiCloud className="text-xl text-primary" />
+              <span className="font-semibold tracking-tight">CloudLaunch</span>
+            </div>
+
             {/* 上部メニュー */}
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               <li>
                 <NavLink
                   to="/"
@@ -107,7 +113,7 @@ export default function MainLayout(): React.JSX.Element {
             </ul>
 
             {/* 下部メニューは mt-auto で下端へ */}
-            <ul className="space-y-2 mt-auto">
+            <ul className="space-y-1 mt-auto">
               <li>
                 <NavLink
                   to="/settings"
@@ -134,7 +140,7 @@ export default function MainLayout(): React.JSX.Element {
           className="
           relative
           flex items-center
-          h-10 bg-base-100 shadow
+          h-12 bg-base-100 border-b border-base-300
           select-none wails-drag
         "
         >
@@ -173,7 +179,9 @@ export default function MainLayout(): React.JSX.Element {
           )}
 
           {/* 中央タイトルもドラッグ可能 */}
-          <h1 className="flex-1 text-center text-lg font-medium leading-none">{pageLabel}</h1>
+          <h1 className="flex-1 text-center text-lg font-semibold tracking-tight leading-none">
+            {pageLabel}
+          </h1>
 
           {/* ウィンドウ操作ボタン群 */}
           <div className="absolute inset-y-0 right-0 flex wails-no-drag">
@@ -199,7 +207,7 @@ export default function MainLayout(): React.JSX.Element {
         </header>
 
         {/* ページ固有部分 */}
-        <main className="flex-1 pt-4 overflow-y-auto scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent min-h-0">
+        <main className="flex-1 pt-6 overflow-y-auto scrollbar-thin scrollbar-thumb-base-content/30 scrollbar-track-transparent min-h-0">
           <Outlet />
         </main>
 
