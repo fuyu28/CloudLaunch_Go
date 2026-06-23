@@ -206,7 +206,7 @@ function CloudDataCard({
                 disabled={
                   !isValidCreds || isSyncing || isUploading || isDownloading || isOfflineMode
                 }
-                title="同期状態を確認してコンフリクトを解決する"
+                title="ローカルとクラウドの同期状態を確認する"
               >
                 {isSyncing ? (
                   <>
