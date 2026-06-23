@@ -25,10 +25,10 @@ import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
 import { logger } from "@renderer/utils/logger";
 
-import ConfirmModal from "./ConfirmModal";
+import ConfirmModal from "../common/ConfirmModal";
 import { playSessionEditSchema } from "@renderer/schemas/playSession";
 import type { PlaySessionType } from "src/types/game";
-import { useZodValidation } from "../hooks/useZodValidation";
+import { useZodValidation } from "../../hooks/useZodValidation";
 
 /**
  * 編集用のフォームデータ

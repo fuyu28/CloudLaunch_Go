@@ -2,7 +2,7 @@ import { memo, useCallback } from "react";
 import { IoIosPlay } from "react-icons/io";
 import { Link } from "react-router-dom";
 
-import DynamicImage from "./DynamicImage";
+import DynamicImage from "../common/DynamicImage";
 import type { GameType } from "src/types/game";
 
 type GameCardProps = {

@@ -14,7 +14,7 @@
 import React, { Component } from "react";
 import { FiAlertTriangle, FiRefreshCw, FiChevronDown, FiChevronUp } from "react-icons/fi";
 
-import { logger } from "../utils/logger";
+import { logger } from "../../utils/logger";
 import type { ReactNode } from "react";
 
 /**

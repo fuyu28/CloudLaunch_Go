@@ -22,9 +22,9 @@
  * ```
  */
 
-import { FileSelectButton } from "./FileSelectButton";
+import { FileSelectButton } from "../common/FileSelectButton";
 import type { InputGameData } from "src/types/game";
-import type { GameFormValidationResult } from "../hooks/useGameFormValidationZod";
+import type { GameFormValidationResult } from "../../hooks/useGameFormValidationZod";
 
 /**
  * ゲームフォームフィールドコンポーネントのprops

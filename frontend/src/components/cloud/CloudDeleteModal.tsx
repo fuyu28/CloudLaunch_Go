@@ -15,8 +15,8 @@ import { FiAlertTriangle } from "react-icons/fi";
 
 import { useCloudDeleteConfirm } from "@renderer/hooks/useCloudDeleteConfirm";
 
-import ConfirmModal from "./ConfirmModal";
-import type { ConfirmDetails, WarningItem } from "./ConfirmModal";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import type { ConfirmDetails, WarningItem } from "@renderer/components/common/ConfirmModal";
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
 /**

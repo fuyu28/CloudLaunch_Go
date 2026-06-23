@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "../common/BaseModal";
 import { GameFormFields } from "./GameFormFields";
 import ErogameScapeSearchModal from "./ErogameScapeSearchModal";
 import { useGameFormHandlers } from "@renderer/hooks/useGameFormHandlers";

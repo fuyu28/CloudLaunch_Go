@@ -17,8 +17,8 @@
 
 import { useState } from "react";
 
-import GeneralSettings from "@renderer/components/GeneralSettings";
-import R2S3Settings from "@renderer/components/R2S3Settings";
+import GeneralSettings from "@renderer/components/settings/GeneralSettings";
+import R2S3Settings from "@renderer/components/settings/R2S3Settings";
 
 type TabType = "general" | "r2s3";
 

@@ -20,8 +20,8 @@ import { visibleGamesAtom } from "@renderer/state/home";
 import { useAtom, useAtomValue } from "jotai";
 import { FaClock, FaGamepad } from "react-icons/fa";
 
-import ConfirmModal from "@renderer/components/ConfirmModal";
-import BaseModal from "@renderer/components/BaseModal";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import BaseModal from "@renderer/components/common/BaseModal";
 
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";

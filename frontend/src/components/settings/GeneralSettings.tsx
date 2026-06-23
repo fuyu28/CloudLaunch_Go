@@ -44,7 +44,7 @@ import {
   screenshotHotkeyNotifyAtom,
   sortOptionLabels,
   filterStateLabels,
-} from "../state/settings";
+} from "../../state/settings";
 import type { SortOption, FilterOption } from "src/types/menu";
 
 /**

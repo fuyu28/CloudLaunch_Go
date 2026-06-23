@@ -10,7 +10,7 @@ import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { logger } from "@renderer/utils/logger";
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "../common/BaseModal";
 import CloudGameImportConflictModal from "./CloudGameImportConflictModal";
 
 import type { CloudGameMetadata } from "src/types/cloud";

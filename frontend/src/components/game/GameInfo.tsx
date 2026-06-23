@@ -17,7 +17,7 @@ import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { logger } from "@renderer/utils/logger";
 import { getParentDirectory } from "@renderer/utils/pathUtils";
 
-import DynamicImage from "./DynamicImage";
+import DynamicImage from "../common/DynamicImage";
 import GameActionButtons from "./GameActionButtons";
 import PlayStatusSelector from "./PlayStatusSelector";
 import type { GameType } from "src/types/game";

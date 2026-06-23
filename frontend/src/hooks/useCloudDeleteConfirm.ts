@@ -16,7 +16,7 @@ import {
   countFilesRecursively,
   sumSizesRecursively,
 } from "@renderer/utils/cloudUtils";
-import type { WarningItem } from "@renderer/components/ConfirmModal";
+import type { WarningItem } from "@renderer/components/common/ConfirmModal";
 
 /**
  * 削除確認ロジックのフック

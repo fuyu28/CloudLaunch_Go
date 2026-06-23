@@ -2,7 +2,7 @@
  * @fileoverview クラウドゲームインポートの競合モーダル
  */
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "@renderer/components/common/BaseModal";
 import type { CloudGameMetadata } from "src/types/cloud";
 import type { GameType } from "src/types/game";
 

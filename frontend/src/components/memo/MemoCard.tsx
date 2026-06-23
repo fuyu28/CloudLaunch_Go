@@ -14,7 +14,7 @@ import { useMemoOperations } from "@renderer/hooks/useMemoOperations";
 
 import { logger } from "@renderer/utils/logger";
 
-import ConfirmModal from "./ConfirmModal";
+import ConfirmModal from "../common/ConfirmModal";
 import MemoCardBase from "./MemoCardBase";
 import type { MemoType } from "src/types/memo";
 

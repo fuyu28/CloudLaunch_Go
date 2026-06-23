@@ -15,12 +15,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAtomValue } from "jotai";
 
-import { CloudBreadcrumb } from "@renderer/components/CloudBreadcrumb";
-import { CloudContent } from "@renderer/components/CloudContent";
-import { CloudDeleteModal } from "@renderer/components/CloudDeleteModal";
-import { CloudFileDetailsModal } from "@renderer/components/CloudFileDetailsModal";
-import { CloudHeader, type ViewMode } from "@renderer/components/CloudHeader";
-import ConfirmModal from "@renderer/components/ConfirmModal";
+import { CloudBreadcrumb } from "@renderer/components/cloud/CloudBreadcrumb";
+import { CloudContent } from "@renderer/components/cloud/CloudContent";
+import { CloudDeleteModal } from "@renderer/components/cloud/CloudDeleteModal";
+import { CloudFileDetailsModal } from "@renderer/components/cloud/CloudFileDetailsModal";
+import { CloudHeader, type ViewMode } from "@renderer/components/cloud/CloudHeader";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import { FiAlertTriangle } from "react-icons/fi";
 
 import { isValidCredsAtom } from "@renderer/state/credentials";

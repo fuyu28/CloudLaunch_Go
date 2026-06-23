@@ -10,7 +10,7 @@ import { FaArrowLeft, FaEdit, FaTrash, FaExternalLinkAlt } from "react-icons/fa"
 import ReactMarkdown from "react-markdown";
 import { useParams, Link, useNavigate } from "react-router-dom";
 
-import ConfirmModal from "@renderer/components/ConfirmModal";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
 
 import { useMemoNavigation } from "@renderer/hooks/useMemoNavigation";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";

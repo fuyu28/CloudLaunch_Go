@@ -18,10 +18,10 @@
 import { FaCheck, FaSyncAlt, FaTimes } from "react-icons/fa";
 
 import SettingsFormField from "./SettingsFormField";
-import { useConnectionStatus } from "../hooks/useConnectionStatus";
-import { useOfflineMode } from "../hooks/useOfflineMode";
-import { useSettingsFormZod } from "../hooks/useSettingsFormZod";
-import { getOfflineDisabledClasses } from "../utils/offlineUtils";
+import { useConnectionStatus } from "../../hooks/useConnectionStatus";
+import { useOfflineMode } from "../../hooks/useOfflineMode";
+import { useSettingsFormZod } from "../../hooks/useSettingsFormZod";
+import { getOfflineDisabledClasses } from "../../utils/offlineUtils";
 
 /**
  * R2/S3設定コンポーネント

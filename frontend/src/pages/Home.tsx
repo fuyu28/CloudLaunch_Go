@@ -2,13 +2,13 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState, useCallback } from "react";
 import { IoIosAdd } from "react-icons/io";
 
-import ConfirmModal from "@renderer/components/ConfirmModal";
-import FloatingButton from "@renderer/components/FloatingButton";
-import CloudGameImportModal from "@renderer/components/CloudGameImportModal";
-import ErogameScapeImportModal from "@renderer/components/ErogameScapeImportModal";
-import GameGrid from "@renderer/components/GameGrid";
-import GameFormModal from "@renderer/components/GameModal";
-import GameSearchFilter from "@renderer/components/GameSearchFilter";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import FloatingButton from "@renderer/components/common/FloatingButton";
+import CloudGameImportModal from "@renderer/components/cloud/CloudGameImportModal";
+import ErogameScapeImportModal from "@renderer/components/game/ErogameScapeImportModal";
+import GameGrid from "@renderer/components/game/GameGrid";
+import GameFormModal from "@renderer/components/game/GameModal";
+import GameSearchFilter from "@renderer/components/game/GameSearchFilter";
 
 import { CONFIG, MESSAGES } from "@renderer/constants";
 import { UNCONFIGURED_EXE_PATH } from "@renderer/constants/game";

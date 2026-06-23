@@ -4,9 +4,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "../common/BaseModal";
 import type { ErogameScapeSearchItem, ErogameScapeSearchResult } from "src/types/erogamescape";
-import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
+import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 
 type ErogameScapeSearchModalProps = {
   isOpen: boolean;

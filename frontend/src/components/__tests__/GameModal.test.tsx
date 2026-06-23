@@ -16,7 +16,7 @@ import { toast } from "react-hot-toast";
 
 import type { InputGameData } from "src/types/game";
 import type { ApiResult } from "src/types/result";
-import GameModal from "../GameModal";
+import GameModal from "../game/GameModal";
 
 // React Hot Toastのモック
 vi.mock("react-hot-toast", () => {

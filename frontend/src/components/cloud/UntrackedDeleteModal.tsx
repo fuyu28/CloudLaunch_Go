@@ -1,6 +1,6 @@
 import { FaTrash, FaExclamationTriangle } from "react-icons/fa";
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "../common/BaseModal";
 
 type UntrackedDeleteModalProps = {
   isOpen: boolean;

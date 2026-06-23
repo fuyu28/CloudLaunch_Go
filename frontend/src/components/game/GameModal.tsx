@@ -16,13 +16,13 @@
 
 import { useState, useEffect, useRef } from "react";
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "../common/BaseModal";
 import { GameFormFields } from "./GameFormFields";
 import type { InputGameData } from "src/types/game";
 import type { ApiResult } from "src/types/result";
-import { useGameFormHandlers } from "../hooks/useGameFormHandlers";
-import { useGameFormValidationZod } from "../hooks/useGameFormValidationZod";
-import { handleApiError, handleUnexpectedError } from "../utils/errorHandler";
+import { useGameFormHandlers } from "../../hooks/useGameFormHandlers";
+import { useGameFormValidationZod } from "../../hooks/useGameFormValidationZod";
+import { handleApiError, handleUnexpectedError } from "../../utils/errorHandler";
 
 type GameFormModalProps = {
   mode: "add" | "edit";

@@ -1,6 +1,6 @@
 import { FaDesktop, FaCloud } from "react-icons/fa";
 
-import { BaseModal } from "./BaseModal";
+import { BaseModal } from "../common/BaseModal";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import type { SyncMetaSnapshot } from "src/wailsBridge";
 

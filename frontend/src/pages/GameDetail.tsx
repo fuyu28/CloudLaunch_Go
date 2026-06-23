@@ -4,16 +4,16 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 
-import CloudDataCard from "@renderer/components/CloudDataCard";
-import ConfirmModal from "@renderer/components/ConfirmModal";
-import SyncConflictModal from "@renderer/components/SyncConflictModal";
-import UntrackedDeleteModal from "@renderer/components/UntrackedDeleteModal";
-import GameInfo from "@renderer/components/GameInfo";
-import GameFormModal from "@renderer/components/GameModal";
-import MemoCard from "@renderer/components/MemoCard";
-import PlaySessionManagementModal from "@renderer/components/PlaySessionManagementModal";
-import PlaySessionModal from "@renderer/components/PlaySessionModal";
-import PlayStatistics from "@renderer/components/PlayStatistics";
+import CloudDataCard from "@renderer/components/cloud/CloudDataCard";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import SyncConflictModal from "@renderer/components/cloud/SyncConflictModal";
+import UntrackedDeleteModal from "@renderer/components/cloud/UntrackedDeleteModal";
+import GameInfo from "@renderer/components/game/GameInfo";
+import GameFormModal from "@renderer/components/game/GameModal";
+import MemoCard from "@renderer/components/memo/MemoCard";
+import PlaySessionManagementModal from "@renderer/components/game/PlaySessionManagementModal";
+import PlaySessionModal from "@renderer/components/game/PlaySessionModal";
+import PlayStatistics from "@renderer/components/game/PlayStatistics";
 
 import { useGameEdit } from "@renderer/hooks/useGameEdit";
 import { useGameSaveData } from "@renderer/hooks/useGameSaveData";
