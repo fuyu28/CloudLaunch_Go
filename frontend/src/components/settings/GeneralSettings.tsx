@@ -20,32 +20,17 @@
 import { useAtom } from "jotai";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { Link } from "react-router-dom";
 
 import { logger } from "@renderer/utils/logger";
 
 import { useCloudSync } from "@renderer/hooks/useCloudSync";
-import { DAISYUI_THEMES } from "@renderer/constants/themes";
-import {
-  themeAtom,
-  changeThemeAtom,
-  isChangingThemeAtom,
-  defaultSortOptionAtom,
-  defaultFilterStateAtom,
-  offlineModeAtom,
-  autoTrackingAtom,
-  transferConcurrencyAtom,
-  screenshotSyncEnabledAtom,
-  screenshotUploadJpegAtom,
-  screenshotJpegQualityAtom,
-  screenshotClientOnlyAtom,
-  screenshotLocalJpegAtom,
-  screenshotHotkeyAtom,
-  screenshotHotkeyNotifyAtom,
-  sortOptionLabels,
-  filterStateLabels,
-} from "../../state/settings";
-import type { SortOption, FilterOption } from "src/types/menu";
+import { offlineModeAtom, autoTrackingAtom, transferConcurrencyAtom } from "../../state/settings";
+
+import AppearanceTab from "./AppearanceTab";
+import ScreenshotSettingsTab from "./ScreenshotSettingsTab";
+import BehaviorTab from "./BehaviorTab";
+import DefaultsTab from "./DefaultsTab";
+import SyncAndLogsTab from "./SyncAndLogsTab";
 
 /**
  * 一般設定コンポーネント
@@ -58,40 +43,15 @@ import type { SortOption, FilterOption } from "src/types/menu";
 export default function GeneralSettings(): React.JSX.Element {
   type GeneralTab = "appearance" | "screenshot" | "behavior" | "defaults" | "maintenance";
 
-  const [currentTheme] = useAtom(themeAtom);
-  const [isChangingTheme] = useAtom(isChangingThemeAtom);
-  const [, changeTheme] = useAtom(changeThemeAtom);
-  const [defaultSortOption, setDefaultSortOption] = useAtom(defaultSortOptionAtom);
-  const [defaultFilterState, setDefaultFilterState] = useAtom(defaultFilterStateAtom);
   const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom);
   const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom);
   const [transferConcurrency, setTransferConcurrency] = useAtom(transferConcurrencyAtom);
-  const [screenshotSyncEnabled, setScreenshotSyncEnabled] = useAtom(screenshotSyncEnabledAtom);
-  const [screenshotUploadJpeg, setScreenshotUploadJpeg] = useAtom(screenshotUploadJpegAtom);
-  const [screenshotJpegQuality, setScreenshotJpegQuality] = useAtom(screenshotJpegQualityAtom);
-  const [screenshotClientOnly, setScreenshotClientOnly] = useAtom(screenshotClientOnlyAtom);
-  const [screenshotLocalJpeg, setScreenshotLocalJpeg] = useAtom(screenshotLocalJpegAtom);
-  const [screenshotHotkey, setScreenshotHotkey] = useAtom(screenshotHotkeyAtom);
-  const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const { getStatus, push, pull } = useCloudSync(offlineMode);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
-  const [isCapturingHotkey, setIsCapturingHotkey] = useState(false);
   const [activeTab, setActiveTab] = useState<GeneralTab>("appearance");
-
-  // ソート変更ハンドラー
-  const handleSortChange = (newSortOption: SortOption): void => {
-    setDefaultSortOption(newSortOption);
-    toast.success(`デフォルトソート順を「${sortOptionLabels[newSortOption]}」に変更しました`);
-  };
-
-  // フィルター変更ハンドラー
-  const handleFilterChange = (newFilterState: FilterOption): void => {
-    setDefaultFilterState(newFilterState);
-    toast.success(`デフォルトフィルターを「${filterStateLabels[newFilterState]}」に変更しました`);
-  };
 
   // オフラインモード変更ハンドラー
   const handleOfflineModeChange = async (enabled: boolean): Promise<void> => {
@@ -155,121 +115,6 @@ export default function GeneralSettings(): React.JSX.Element {
     const nextValue = Math.min(32, Math.max(1, value));
     setTransferConcurrency(nextValue);
     await applyTransferConcurrency(nextValue, true);
-  };
-
-  const handleScreenshotSyncEnabledChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotSyncEnabled(enabled);
-    const result = await window.api.settings.updateScreenshotSyncEnabled(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット同期の更新に失敗しました");
-      return;
-    }
-    toast.success(`スクリーンショット同期を${enabled ? "有効" : "無効"}にしました`);
-  };
-
-  const handleScreenshotUploadJpegChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotUploadJpeg(enabled);
-    const result = await window.api.settings.updateScreenshotUploadJpeg(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット形式の更新に失敗しました");
-      return;
-    }
-    toast.success(`スクリーンショットを${enabled ? "JPEG" : "PNG"}でアップロードします`);
-  };
-
-  const handleScreenshotJpegQualityChange = async (value: number): Promise<void> => {
-    const nextValue = Math.min(100, Math.max(1, value));
-    setScreenshotJpegQuality(nextValue);
-    const result = await window.api.settings.updateScreenshotJpegQuality(nextValue);
-    if (!result.success) {
-      toast.error("スクリーンショット品質の更新に失敗しました");
-      return;
-    }
-  };
-
-  const handleScreenshotClientOnlyChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotClientOnly(enabled);
-    const result = await window.api.settings.updateScreenshotClientOnly(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット設定の更新に失敗しました");
-      return;
-    }
-    toast.success(enabled ? "タイトルバーを除外して撮影します" : "タイトルバーを含めて撮影します");
-  };
-
-  const handleScreenshotLocalJpegChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotLocalJpeg(enabled);
-    const result = await window.api.settings.updateScreenshotLocalJpeg(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット設定の更新に失敗しました");
-      return;
-    }
-    toast.success(enabled ? "ローカル保存をJPEGにします" : "ローカル保存をPNGにします");
-  };
-
-  const applyScreenshotHotkey = async (value: string, showToast: boolean): Promise<void> => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      if (showToast) {
-        toast.error("ホットキーを入力してください");
-      }
-      return;
-    }
-    const result = await window.api.settings.updateScreenshotHotkey(trimmed);
-    if (!result.success) {
-      if (showToast) {
-        toast.error(result.message || "ホットキーの更新に失敗しました");
-      }
-      return;
-    }
-    if (showToast) {
-      toast.success(`ホットキーを「${trimmed}」に更新しました`);
-    }
-  };
-
-  const handleScreenshotHotkeyChange = async (value: string): Promise<void> => {
-    setScreenshotHotkey(value);
-    await applyScreenshotHotkey(value, true);
-  };
-
-  const handleScreenshotHotkeyNotifyChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotHotkeyNotify(enabled);
-    const result = await window.api.settings.updateScreenshotHotkeyNotify(enabled);
-    if (!result.success) {
-      toast.error("ホットキー通知の更新に失敗しました");
-      return;
-    }
-    toast.success(enabled ? "ホットキー通知を有効にしました" : "ホットキー通知を無効にしました");
-  };
-
-  const normalizeHotkeyFromEvent = (event: KeyboardEvent): string | null => {
-    if (event.key === "Escape") {
-      setIsCapturingHotkey(false);
-      return null;
-    }
-    const modifiers: string[] = [];
-    if (event.ctrlKey) modifiers.push("Ctrl");
-    if (event.altKey) modifiers.push("Alt");
-    if (event.shiftKey) modifiers.push("Shift");
-    if (event.metaKey) modifiers.push("Win");
-
-    const key = event.key;
-    if (key === "Control" || key === "Alt" || key === "Shift" || key === "Meta") {
-      return null;
-    }
-    let mainKey = "";
-    if (/^F(1[0-2]|[1-9])$/.test(key)) {
-      mainKey = key.toUpperCase();
-    } else if (key.length === 1) {
-      mainKey = key.toUpperCase();
-    } else {
-      return null;
-    }
-
-    if (modifiers.length === 0) {
-      return null;
-    }
-    return [...modifiers, mainKey].join("+");
   };
 
   // ログフォルダを開くハンドラー
@@ -441,55 +286,6 @@ export default function GeneralSettings(): React.JSX.Element {
     void applyTransferConcurrency(transferConcurrency, false);
   }, []);
 
-  useEffect(() => {
-    void window.api.settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotJpegQuality(screenshotJpegQuality);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotClientOnly(screenshotClientOnly);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
-  }, []);
-
-  useEffect(() => {
-    // 初回マウント時にLocalStorage設定をバックエンドへ同期する。
-    void applyScreenshotHotkey(screenshotHotkey, false);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
-  }, []);
-
-  useEffect(() => {
-    if (!isCapturingHotkey) {
-      return;
-    }
-    const handler = (event: KeyboardEvent): void => {
-      event.preventDefault();
-      const hotkey = normalizeHotkeyFromEvent(event);
-      if (!hotkey) {
-        return;
-      }
-      setIsCapturingHotkey(false);
-      setScreenshotHotkey(hotkey);
-      void applyScreenshotHotkey(hotkey, true);
-    };
-    window.addEventListener("keydown", handler);
-    return () => {
-      window.removeEventListener("keydown", handler);
-    };
-  }, [isCapturingHotkey]);
-
   return (
     <div className="w-full">
       <h2 className="text-xl font-semibold mb-6">一般設定</h2>
@@ -527,417 +323,37 @@ export default function GeneralSettings(): React.JSX.Element {
         </button>
       </div>
 
-      {activeTab === "appearance" && (
-        <div className="space-y-6">
-          <div className="border-l-4 border-primary pl-4">
-            <h3 className="text-lg font-semibold text-primary mb-1">外観設定</h3>
-            <p className="text-sm text-base-content/60">アプリケーションの見た目を設定</p>
-          </div>
-          <div className="bg-base-200 p-4 rounded-lg">
-            <div className="mb-3">
-              <h4 className="font-medium">テーマ</h4>
-              <p className="text-sm text-base-content/70">外観テーマを選択</p>
-            </div>
-            <div className="form-control">
-              <label className="label pb-1">
-                <span className="label-text text-sm">現在: {currentTheme}</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <select
-                  className="select select-bordered select-sm"
-                  value={currentTheme}
-                  onChange={(e) => changeTheme(e.target.value as typeof currentTheme)}
-                  disabled={isChangingTheme}
-                >
-                  {DAISYUI_THEMES.map((theme) => (
-                    <option key={theme} value={theme}>
-                      {theme}
-                    </option>
-                  ))}
-                </select>
-                {isChangingTheme && <span className="loading loading-spinner loading-sm"></span>}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === "appearance" && <AppearanceTab />}
 
-      {activeTab === "screenshot" && (
-        <div className="space-y-6">
-          <div className="border-l-4 border-primary pl-4">
-            <h3 className="text-lg font-semibold text-primary mb-1">スクリーンショット</h3>
-            <p className="text-sm text-base-content/60">撮影データの同期と形式</p>
-          </div>
-          <div className="bg-base-200 p-4 rounded-lg space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">クラウド同期</h4>
-                <p className="text-sm text-base-content/70">
-                  スクリーンショットをクラウドにアップロードします
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                checked={screenshotSyncEnabled}
-                onChange={(event) => void handleScreenshotSyncEnabledChange(event.target.checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">タイトルバーを除外</h4>
-                <p className="text-sm text-base-content/70">
-                  オンでクライアント領域のみを撮影します
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                checked={screenshotClientOnly}
-                onChange={(event) => void handleScreenshotClientOnlyChange(event.target.checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">ローカル保存をJPEGにする</h4>
-                <p className="text-sm text-base-content/70">オンでPNGより容量を抑えて保存します</p>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                checked={screenshotLocalJpeg}
-                onChange={(event) => void handleScreenshotLocalJpegChange(event.target.checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">JPEGでアップロード</h4>
-                <p className="text-sm text-base-content/70">PNGより容量を抑えられます</p>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                checked={screenshotUploadJpeg}
-                onChange={(event) => void handleScreenshotUploadJpegChange(event.target.checked)}
-                disabled={!screenshotSyncEnabled}
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h4 className="font-medium">JPEG品質</h4>
-                  <p className="text-sm text-base-content/70">
-                    数値が高いほど画質は向上します（1-100）
-                  </p>
-                </div>
-                <span className="text-sm font-mono">{screenshotJpegQuality}</span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={100}
-                value={screenshotJpegQuality}
-                onChange={(event) =>
-                  void handleScreenshotJpegQualityChange(Number(event.target.value))
-                }
-                className="range range-primary"
-                disabled={!screenshotSyncEnabled || !screenshotUploadJpeg}
-              />
-            </div>
-
-            <div>
-              <div className="mb-2">
-                <h4 className="font-medium">ホットキー</h4>
-                <p className="text-sm text-base-content/70">
-                  例: Ctrl+Alt+S（押すとSnipping Toolが起動します）
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  className="input input-bordered input-sm flex-1"
-                  value={screenshotHotkey}
-                  onChange={(event) => setScreenshotHotkey(event.target.value)}
-                  onBlur={(event) => void applyScreenshotHotkey(event.target.value, false)}
-                  readOnly={isCapturingHotkey}
-                />
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setIsCapturingHotkey(true)}
-                >
-                  入力開始
-                </button>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() => void handleScreenshotHotkeyChange(screenshotHotkey)}
-                  disabled={isCapturingHotkey}
-                >
-                  適用
-                </button>
-              </div>
-              {isCapturingHotkey && (
-                <p className="text-xs text-base-content/60 mt-2">
-                  ホットキーを押してください（Escでキャンセル）
-                </p>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium">ホットキー通知</h4>
-                <p className="text-sm text-base-content/70">押下時にWindows通知を表示します</p>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                checked={screenshotHotkeyNotify}
-                onChange={(event) => void handleScreenshotHotkeyNotifyChange(event.target.checked)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === "screenshot" && <ScreenshotSettingsTab />}
 
       {activeTab === "behavior" && (
-        <div className="space-y-6">
-          <div className="border-l-4 border-secondary pl-4">
-            <h3 className="text-lg font-semibold text-secondary mb-1">動作設定</h3>
-            <p className="text-sm text-base-content/60">アプリケーションの動作を設定</p>
-          </div>
-          <div className="bg-base-200 p-4 rounded-lg space-y-4">
-            <div>
-              <h4 className="font-medium mb-3">機能設定</h4>
-              <div className="form-control mb-4">
-                <label className="label cursor-pointer justify-start p-0">
-                  <input
-                    type="checkbox"
-                    className="toggle toggle-primary mr-3"
-                    checked={offlineMode}
-                    onChange={(e) => handleOfflineModeChange(e.target.checked)}
-                  />
-                  <div>
-                    <span className="label-text font-medium">オフラインモード</span>
-                    <p className="text-xs text-base-content/50 mt-1">
-                      {offlineMode ? "クラウド機能が無効" : "すべての機能が利用可能"}
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <div className="form-control">
-                <label className="label cursor-pointer justify-start p-0">
-                  <input
-                    type="checkbox"
-                    className="toggle toggle-primary mr-3"
-                    checked={autoTracking}
-                    onChange={(e) => handleAutoTrackingChange(e.target.checked)}
-                  />
-                  <div>
-                    <span className="label-text font-medium">自動ゲーム検出</span>
-                    <p className="text-xs text-base-content/50 mt-1">
-                      {autoTracking
-                        ? "実行中ゲームを自動検出して監視開始"
-                        : "手動でのゲーム登録のみ"}
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              <div className="form-control mt-4">
-                <label className="label p-0 mb-2">
-                  <span className="label-text font-medium">同時転送数</span>
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    max={32}
-                    step={1}
-                    className="input input-bordered input-sm w-24"
-                    value={transferConcurrency}
-                    onChange={(e) => setTransferConcurrency(Number(e.target.value))}
-                    onBlur={(e) => handleTransferConcurrencyChange(Number(e.target.value))}
-                  />
-                  <span className="text-xs text-base-content/50">1〜32</span>
-                </div>
-                <p className="text-xs text-base-content/50 mt-2">
-                  アップロード/ダウンロード共通の同時転送数です
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BehaviorTab
+          offlineMode={offlineMode}
+          onOfflineModeChange={handleOfflineModeChange}
+          autoTracking={autoTracking}
+          onAutoTrackingChange={handleAutoTrackingChange}
+          transferConcurrency={transferConcurrency}
+          onTransferConcurrencyInputChange={setTransferConcurrency}
+          onTransferConcurrencyBlur={handleTransferConcurrencyChange}
+        />
       )}
 
-      {activeTab === "defaults" && (
-        <div className="space-y-6">
-          <div className="border-l-4 border-accent pl-4">
-            <h3 className="text-lg font-semibold text-accent mb-1">デフォルト設定</h3>
-            <p className="text-sm text-base-content/60">ホーム画面の初期表示設定</p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="bg-base-200 p-4 rounded-lg">
-              <div className="mb-3">
-                <h4 className="font-medium">ソート順</h4>
-                <p className="text-sm text-base-content/70">初期表示時のソート方法</p>
-              </div>
-              <div className="form-control">
-                <div className="mb-2">
-                  <p className="text-xs text-base-content/60 mt-1">
-                    {`現在: ${sortOptionLabels[defaultSortOption]}`}
-                  </p>
-                </div>
-                <select
-                  className="select select-bordered select-sm"
-                  value={defaultSortOption}
-                  onChange={(e) => handleSortChange(e.target.value as SortOption)}
-                >
-                  {Object.entries(sortOptionLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="bg-base-200 p-4 rounded-lg">
-              <div className="mb-3">
-                <h4 className="font-medium">フィルター</h4>
-                <p className="text-sm text-base-content/70">初期表示時のフィルター状態</p>
-              </div>
-              <div className="form-control">
-                <div className="mb-2">
-                  <p className="text-xs text-base-content/60 mt-1">
-                    {`現在: ${filterStateLabels[defaultFilterState]}`}
-                  </p>
-                </div>
-                <select
-                  className="select select-bordered select-sm"
-                  value={defaultFilterState}
-                  onChange={(e) => handleFilterChange(e.target.value as FilterOption)}
-                >
-                  {Object.entries(filterStateLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === "defaults" && <DefaultsTab />}
 
       {activeTab === "maintenance" && (
-        <div className="space-y-6">
-          <div className="border-l-4 border-info pl-4">
-            <h3 className="text-lg font-semibold text-info mb-1">同期・ログ</h3>
-            <p className="text-sm text-base-content/60">クラウド同期とトラブルシューティング</p>
-          </div>
-
-          <div className="bg-base-200 p-4 rounded-lg">
-            <div className="mb-3">
-              <h4 className="font-medium">クラウド同期</h4>
-              <p className="text-sm text-base-content/70">ゲーム情報とセッションを同期します</p>
-            </div>
-            <div className="form-control">
-              <button
-                className="btn btn-outline btn-sm w-fit"
-                onClick={handleSyncAllGames}
-                disabled={isSyncingAll || offlineMode}
-              >
-                {isSyncingAll ? "同期中..." : "全ゲームを同期"}
-              </button>
-              <p className="text-xs text-base-content/50 mt-2">
-                変更があったゲームのみクラウドと同期します
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-base-200 p-4 rounded-lg">
-            <div className="mb-3">
-              <h4 className="font-medium">データエクスポート</h4>
-              <p className="text-sm text-base-content/70">ゲーム情報と統計をCSV/JSONで保存します</p>
-            </div>
-            <div className="form-control">
-              <button
-                className="btn btn-outline btn-sm w-fit"
-                onClick={handleExportGameData}
-                disabled={isExportingData}
-              >
-                {isExportingData ? "エクスポート中..." : "CSV/JSONを出力"}
-              </button>
-              <p className="text-xs text-base-content/50 mt-2">
-                出力先フォルダにタイムスタンプ付きファイルを生成します
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-base-200 p-4 rounded-lg">
-            <div className="mb-3">
-              <h4 className="font-medium">バックアップ・復元</h4>
-              <p className="text-sm text-base-content/70">
-                全データをZIPで保存し、後で復元できます
-              </p>
-            </div>
-            <div className="form-control gap-3">
-              <button
-                className="btn btn-outline btn-sm w-fit"
-                onClick={handleCreateBackup}
-                disabled={isCreatingBackup}
-              >
-                {isCreatingBackup ? "バックアップ作成中..." : "バックアップを作成"}
-              </button>
-              <button
-                className="btn btn-warning btn-sm w-fit"
-                onClick={handleRestoreBackup}
-                disabled={isRestoringBackup}
-              >
-                {isRestoringBackup ? "復元中..." : "バックアップを復元"}
-              </button>
-              <p className="text-xs text-base-content/50 mt-1">
-                復元時は現在のローカルデータを上書きします（認証情報はOS管理のため対象外）
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-base-200 p-4 rounded-lg">
-            <div className="mb-3">
-              <h4 className="font-medium">ログ・デバッグ</h4>
-              <p className="text-sm text-base-content/70">トラブルシューティング用</p>
-            </div>
-            <div className="form-control gap-3">
-              <button className="btn btn-outline btn-sm w-fit" onClick={handleOpenLogsDirectory}>
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-                  />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 1v6" />
-                </svg>
-                ログフォルダを開く
-              </button>
-              <p className="text-xs text-base-content/50 mt-2">
-                アプリケーションのログファイルが保存されているフォルダを開きます
-              </p>
-
-              <Link to="/debug/process" className="btn btn-outline btn-sm w-fit mt-4">
-                プロセス監視デバッグを開く
-              </Link>
-              <p className="text-xs text-base-content/50 mt-2">
-                プロセス監視の取得結果を確認します
-              </p>
-            </div>
-          </div>
-        </div>
+        <SyncAndLogsTab
+          offlineMode={offlineMode}
+          onSyncAllGames={handleSyncAllGames}
+          isSyncingAll={isSyncingAll}
+          onExportGameData={handleExportGameData}
+          isExportingData={isExportingData}
+          onCreateBackup={handleCreateBackup}
+          isCreatingBackup={isCreatingBackup}
+          onRestoreBackup={handleRestoreBackup}
+          isRestoringBackup={isRestoringBackup}
+          onOpenLogsDirectory={handleOpenLogsDirectory}
+        />
       )}
     </div>
   );
