@@ -919,6 +919,102 @@ func (s *ContentSyncService) ListCloudGameViews(ctx context.Context) ([]CloudGam
 	return views, nil
 }
 
+// CloudGameSummary は1ゲームの軽量サマリ（ファイル一覧・サイズを含まない）を表す。
+// クラウドデータ管理の初期表示ではタイトル一覧のみが必要なため、
+// セーブツリーの解析や objects の列挙（サイズ解決）は行わない。
+type CloudGameSummary struct {
+	GameID       string    `json:"gameId"`
+	Title        string    `json:"title"`
+	LastModified time.Time `json:"lastModified"`
+}
+
+// buildCloudGameSummary は HEAD→commit→game.json のみを読み取り、軽量サマリを復元する。
+// buildCloudGameView と異なりセーブツリーの解析・objects の列挙は行わないため高速。
+func (s *ContentSyncService) buildCloudGameSummary(ctx context.Context, bstore *s3BlobStore, gameID string) (*CloudGameSummary, error) {
+	head, err := bstore.readHEAD(ctx, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if head == "" {
+		return nil, nil
+	}
+
+	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
+	if err != nil {
+		return nil, err
+	}
+	var meta domain.MetaSnapshot
+	if err := json.Unmarshal(metaBytes, &meta); err != nil {
+		s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
+		return nil, nil
+	}
+
+	title := gameID
+	if meta.GameJSON != "" {
+		if gameJSONBytes, gerr := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON); gerr == nil {
+			var cg cloudGame
+			if json.Unmarshal(gameJSONBytes, &cg) == nil && cg.Title != "" {
+				title = cg.Title
+			}
+		} else {
+			s.logger.Warn("game.json取得失敗（Titleをフォールバック）", "gameId", gameID, "error", gerr)
+		}
+	}
+
+	return &CloudGameSummary{GameID: gameID, Title: title, LastModified: meta.CreatedAt}, nil
+}
+
+// ListCloudGameSummaries は全ゲームの軽量サマリ（Title 昇順）を返す。
+// ファイル数・サイズは含まず、各ゲームの詳細は GetCloudGameView で個別に遅延取得する。
+func (s *ContentSyncService) ListCloudGameSummaries(ctx context.Context) ([]CloudGameSummary, error) {
+	client, cfg, err := s.newClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bstore := &s3BlobStore{client: client, bucket: cfg.Bucket}
+
+	gameIDs, err := bstore.listGameIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 各ゲームは小さな GET を3回行うのみ。並列度を絞り全タイトルをまとめて取得する。
+	const maxConcurrency = 8
+	type item struct {
+		summary *CloudGameSummary
+		gameID  string
+		err     error
+	}
+	items := make([]item, len(gameIDs))
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+	for i, gameID := range gameIDs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			summary, verr := s.buildCloudGameSummary(ctx, bstore, id)
+			items[idx] = item{summary: summary, gameID: id, err: verr}
+		}(i, gameID)
+	}
+	wg.Wait()
+
+	summaries := make([]CloudGameSummary, 0, len(gameIDs))
+	for _, it := range items {
+		if it.err != nil {
+			s.logger.Warn("クラウドサマリ復元失敗（スキップ）", "gameId", it.gameID, "error", it.err)
+			continue
+		}
+		if it.summary == nil {
+			continue
+		}
+		summaries = append(summaries, *it.summary)
+	}
+	sort.Slice(summaries, func(i, j int) bool { return summaries[i].Title < summaries[j].Title })
+	return summaries, nil
+}
+
 // loadCloudGameInfo は1ゲームのクラウドメタ情報を取得する。
 // HEAD 未設定や取得・解析失敗時は（必要なら警告ログを出して）nil を返す。
 func (s *ContentSyncService) loadCloudGameInfo(ctx context.Context, bstore contentBlobStore, gameID string) *CloudGameInfo {

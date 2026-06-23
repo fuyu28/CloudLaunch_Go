@@ -134,7 +134,11 @@ export type WindowApi = {
   };
   cloudData: {
     listCloudData: () => Promise<ApiResult<CloudDataItem[]>>;
+    /** 全ゲームの軽量サマリ（タイトル一覧のみ。ファイル数・サイズを含まない）を取得する */
+    getCloudGameSummaries: () => Promise<ApiResult<CloudDataItem[]>>;
     getDirectoryTree: () => Promise<ApiResult<CloudDirectoryNode[]>>;
+    /** 1ゲームの論理ディレクトリツリー（ファイル一覧・サイズ付き）を遅延取得する */
+    getGameDirectoryNode: (gameId: string) => Promise<ApiResult<CloudDirectoryNode>>;
     deleteCloudData: (path: string) => Promise<ApiResult<void>>;
     deleteFile: (path: string) => Promise<ApiResult<void>>;
     getCloudFileDetails: (path: string) => Promise<ApiResult<CloudFileDetail[]>>;

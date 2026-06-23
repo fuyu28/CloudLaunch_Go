@@ -122,6 +122,9 @@ export function DirectoryNodeCard({
     }
   };
 
+  // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
+  // 未取得（children が undefined）のあいだはファイル数・サイズを「—」で表示する。
+  const isLoaded = !node.isDirectory || node.children !== undefined;
   const totalSize = node.isDirectory ? sumSizesRecursively(node) : node.size;
 
   return (
@@ -146,10 +149,10 @@ export function DirectoryNodeCard({
               {node.isDirectory && (
                 <div className="flex items-center gap-2">
                   <FiFile className="text-xs" />
-                  <span>{countFilesRecursively(node)} ファイル</span>
+                  <span>{isLoaded ? `${countFilesRecursively(node)} ファイル` : "— ファイル"}</span>
                 </div>
               )}
-              <div>{formatFileSize(totalSize)}</div>
+              <div>{isLoaded ? formatFileSize(totalSize) : "—"}</div>
             </div>
           </div>
         </div>

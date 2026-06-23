@@ -78,6 +78,56 @@ func (app *App) ListCloudData() result.ApiResult[[]CloudDataItem] {
 	return result.OkResult(items)
 }
 
+// CloudGameSummaryItem はクラウドデータ一覧の軽量サマリ要素を表す（ファイル数・サイズを含まない）。
+type CloudGameSummaryItem struct {
+	Name         string    `json:"name"`
+	RemotePath   string    `json:"remotePath"`
+	LastModified time.Time `json:"lastModified"`
+}
+
+// ListCloudGameSummaries はクラウド上の全ゲームの軽量サマリ（タイトル一覧）を取得する。
+// 初期表示用。ファイル数・サイズは含めず、各ゲームの詳細は GetGameDirectoryNode で遅延取得する。
+func (app *App) ListCloudGameSummaries() result.ApiResult[[]CloudGameSummaryItem] {
+	ctx := app.context()
+	summaries, err := app.ContentSyncService.ListCloudGameSummaries(ctx)
+	if err != nil {
+		return errorResultWithLog[[]CloudGameSummaryItem](app, "クラウドデータ取得に失敗しました", err, "operation", "ListCloudGameSummaries.ListCloudGameSummaries")
+	}
+
+	items := make([]CloudGameSummaryItem, 0, len(summaries))
+	for _, s := range summaries {
+		items = append(items, CloudGameSummaryItem{
+			Name:         s.Title,
+			RemotePath:   s.GameID,
+			LastModified: s.LastModified,
+		})
+	}
+	return result.OkResult(items)
+}
+
+// GetGameDirectoryNode は1ゲームの論理ディレクトリツリー（ファイル一覧・サイズ付き）を取得する。
+// クラウドデータ管理画面で対象ゲームを開いたときに遅延取得される。
+func (app *App) GetGameDirectoryNode(gameID string) result.ApiResult[CloudDirectoryNode] {
+	ctx := app.context()
+	trimmed := strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return result.ErrorResult[CloudDirectoryNode]("ゲームIDが不正です", "game id is empty")
+	}
+	view, err := app.ContentSyncService.GetCloudGameView(ctx, trimmed)
+	if err != nil {
+		return errorResultWithLog[CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", err, "operation", "GetGameDirectoryNode.GetCloudGameView", "gameId", trimmed)
+	}
+	if view == nil {
+		// クラウドにデータが無い（HEAD 未設定）。空の子を持つゲームノードを返す。
+		return result.OkResult(CloudDirectoryNode{Name: trimmed, Path: trimmed, IsDirectory: true, Children: []CloudDirectoryNode{}})
+	}
+	node := buildGameDirectoryNode(*view)
+	if node.Children == nil {
+		node.Children = []CloudDirectoryNode{}
+	}
+	return result.OkResult(node)
+}
+
 // GetDirectoryTree はクラウドのディレクトリツリー（ゲーム単位の論理ビュー）を取得する。
 func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 	ctx := app.context()

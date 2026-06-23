@@ -24,8 +24,12 @@ import type { CloudDirectoryNode } from "src/types/cloud";
 type CloudContentProps = {
   /** ビューモード */
   viewMode: ViewMode;
-  /** ローディング状態 */
+  /** ローディング状態（初期タイトル一覧の取得中） */
   loading: boolean;
+  /** カードビューで開いているゲームのファイル一覧を取得中かどうか */
+  gameLoading?: boolean;
+  /** ファイル一覧を遅延取得中のゲームID集合（ツリービュー用） */
+  loadingGameIds?: Set<string>;
   /** クラウドデータ */
   /** ディレクトリツリー */
   directoryTree: CloudDirectoryNode[];
@@ -41,8 +45,8 @@ type CloudContentProps = {
   onSelectNode: (node: CloudDirectoryNode) => void;
   /** 削除コールバック */
   onDelete: (item: CloudDirectoryNode) => void;
-  /** ディレクトリ移動コールバック */
-  onNavigateToDirectory: (directoryName: string) => void;
+  /** ディレクトリ移動コールバック（対象ノードを渡す） */
+  onNavigateToDirectory: (node: CloudDirectoryNode) => void;
   /** 詳細表示コールバック */
   onViewDetails: (item: CloudDirectoryNode) => void;
 };
@@ -77,6 +81,8 @@ function EmptyState({
 export function CloudContent({
   viewMode,
   loading,
+  gameLoading = false,
+  loadingGameIds,
   directoryTree,
   currentPath,
   currentDirectoryNodes,
@@ -115,11 +121,16 @@ export function CloudContent({
                   node={node}
                   onDelete={() => onDelete(node)}
                   onViewDetails={onViewDetails}
-                  onNavigate={node.isDirectory ? () => onNavigateToDirectory(node.path) : undefined}
+                  onNavigate={node.isDirectory ? () => onNavigateToDirectory(node) : undefined}
                 />
               ))}
             </div>
           )
+        ) : gameLoading ? (
+          // ゲームのファイル一覧を遅延取得中
+          <div className="flex justify-center py-12">
+            <div className="loading loading-spinner loading-lg"></div>
+          </div>
         ) : // サブディレクトリ（セーブファイル階層）- onDelete を渡さず削除ボタンを非表示
         currentDirectoryNodes.length === 0 ? (
           <EmptyState
@@ -133,7 +144,7 @@ export function CloudContent({
               <DirectoryNodeCard
                 key={`${node.path}-${index}`}
                 node={node}
-                onNavigate={node.isDirectory ? () => onNavigateToDirectory(node.path) : undefined}
+                onNavigate={node.isDirectory ? () => onNavigateToDirectory(node) : undefined}
                 onViewDetails={onViewDetails}
                 // onDelete は渡さない：サブノードの個別削除は履歴破壊になるため不可
               />
@@ -161,6 +172,7 @@ export function CloudContent({
                 node={node}
                 level={0}
                 expandedNodes={expandedNodes}
+                loadingGameIds={loadingGameIds}
                 onToggleExpand={onToggleExpand}
                 onDelete={onDelete}
                 onSelect={onSelectNode}

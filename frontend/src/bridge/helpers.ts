@@ -57,6 +57,20 @@ export function normalizeCloudDirectoryNode(
   };
 }
 
+/**
+ * 軽量サマリ（CloudGameSummaryItem）を CloudDataItem に正規化する。
+ * ファイル数・サイズはこの段階では不明なため 0 とし、ゲームを開いたときに遅延取得する。
+ */
+export function normalizeCloudGameSummaryItem(item: modelsApp.CloudGameSummaryItem): CloudDataItem {
+  return {
+    name: item.name,
+    totalSize: 0,
+    fileCount: 0,
+    lastModified: normalizeApiDate(item.lastModified),
+    remotePath: item.remotePath,
+  };
+}
+
 export function normalizeCloudDataItem(item: modelsApp.CloudDataItem): CloudDataItem {
   return {
     name: item.name,

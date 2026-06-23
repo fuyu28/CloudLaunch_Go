@@ -79,13 +79,37 @@ export default function Cloud(): React.JSX.Element {
     loading,
     currentPath,
     currentDirectoryNodes,
+    loadingGameIds,
     fetchCloudData,
+    ensureGameLoaded,
     navigateToDirectory,
     navigateBack,
     navigateToPath,
     deleteGameFromCloud,
     deleteAllGamesFromCloud,
   } = useCloudData();
+
+  /**
+   * ディレクトリ（ゲームまたはサブフォルダ）を開く。
+   * ルートレベル（=ゲーム）を開くときは、そのゲームのファイル一覧を遅延取得する。
+   * currentPath は表示名ベースで管理するため、ナビゲーションには node.name を使う。
+   */
+  const handleNavigateToDirectory = useCallback(
+    (node: CloudDirectoryNode): void => {
+      if (currentPath.length === 0) {
+        // node.path はルートではゲームID（remotePath）
+        void ensureGameLoaded(node.path);
+      }
+      navigateToDirectory(node.name);
+    },
+    [currentPath.length, ensureGameLoaded, navigateToDirectory],
+  );
+
+  // ルートで開いているゲームノード（カードビューのサブ階層表示用）
+  const openGameNode =
+    currentPath.length > 0 ? directoryTree.find((node) => node.name === currentPath[0]) : undefined;
+  // 開いているゲームのファイル一覧をまだ取得中かどうか
+  const isOpenGameLoading = openGameNode ? loadingGameIds.has(openGameNode.path) : false;
 
   const fetchGames = useCallback(async (): Promise<void> => {
     setIsLoadingGames(true);
@@ -194,7 +218,7 @@ export default function Cloud(): React.JSX.Element {
         return;
       }
       showToast("クラウドデータを削除しました", "success");
-      fetchCloudData(viewMode);
+      fetchCloudData();
     } catch (error) {
       logger.error("クラウド削除エラー:", {
         component: "Cloud",
@@ -206,7 +230,7 @@ export default function Cloud(): React.JSX.Element {
       setIsDeletingGame(false);
       setDeleteGameTarget(null);
     }
-  }, [fetchCloudData, isOfflineMode, selectedGameId, showToast, viewMode]);
+  }, [fetchCloudData, isOfflineMode, selectedGameId, showToast]);
 
   /**
    * ツリーノードの展開・折りたたみ
@@ -217,6 +241,11 @@ export default function Cloud(): React.JSX.Element {
       newExpanded.delete(path);
     } else {
       newExpanded.add(path);
+      // トップレベル（=ゲーム）を展開するときにファイル一覧を遅延取得する。
+      // ゲームノードの path は remotePath（ゲームID）と一致する。
+      if (directoryTree.some((node) => node.path === path)) {
+        void ensureGameLoaded(path);
+      }
     }
     setExpandedNodes(newExpanded);
   };
@@ -311,10 +340,10 @@ export default function Cloud(): React.JSX.Element {
     }
   };
 
-  // コンポーネントマウント時にデータを取得
+  // コンポーネントマウント時にタイトル一覧を取得（カード/ツリーで共通）
   useEffect(() => {
-    fetchCloudData(viewMode);
-  }, [fetchCloudData, viewMode]);
+    fetchCloudData();
+  }, [fetchCloudData]);
 
   useEffect(() => {
     if (!isOfflineMode) {
@@ -335,7 +364,7 @@ export default function Cloud(): React.JSX.Element {
         cloudData={cloudData}
         directoryTree={directoryTree}
         loading={loading}
-        onRefresh={() => fetchCloudData(viewMode)}
+        onRefresh={() => fetchCloudData()}
         onDeleteAll={handleDeleteAll}
       />
 
@@ -413,6 +442,8 @@ export default function Cloud(): React.JSX.Element {
       <CloudContent
         viewMode={viewMode}
         loading={loading}
+        gameLoading={isOpenGameLoading}
+        loadingGameIds={loadingGameIds}
         directoryTree={directoryTree}
         currentPath={currentPath}
         currentDirectoryNodes={currentDirectoryNodes}
@@ -420,7 +451,7 @@ export default function Cloud(): React.JSX.Element {
         onToggleExpand={handleToggleExpand}
         onSelectNode={handleSelectNode}
         onDelete={(item) => setDeleteConfirm(item)}
-        onNavigateToDirectory={navigateToDirectory}
+        onNavigateToDirectory={handleNavigateToDirectory}
         onViewDetails={handleViewDetails}
       />
 

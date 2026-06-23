@@ -4,13 +4,16 @@
 
 import {
   ListCloudData,
+  ListCloudGameSummaries,
   GetDirectoryTree,
+  GetGameDirectoryNode,
   DeleteCloudData,
   DeleteFile,
   GetCloudFileDetails,
 } from "../../wailsjs/go/app/App";
 import {
   normalizeCloudDataItem,
+  normalizeCloudGameSummaryItem,
   normalizeCloudDirectoryNode,
   normalizeCloudFileDetail,
   toApiResultVoid,
@@ -28,12 +31,30 @@ export function createCloudDataBridge(): WindowApi["cloudData"] {
           }
         : { success: false, message: result.error?.message ?? "エラー" };
     },
+    getCloudGameSummaries: async () => {
+      const result = await ListCloudGameSummaries();
+      return result.success
+        ? {
+            success: true,
+            data: (result.data ?? []).map(normalizeCloudGameSummaryItem),
+          }
+        : { success: false, message: result.error?.message ?? "エラー" };
+    },
     getDirectoryTree: async () => {
       const result = await GetDirectoryTree();
       return result.success
         ? {
             success: true,
             data: (result.data ?? []).map(normalizeCloudDirectoryNode),
+          }
+        : { success: false, message: result.error?.message ?? "エラー" };
+    },
+    getGameDirectoryNode: async (gameId) => {
+      const result = await GetGameDirectoryNode(gameId);
+      return result.success && result.data
+        ? {
+            success: true,
+            data: normalizeCloudDirectoryNode(result.data),
           }
         : { success: false, message: result.error?.message ?? "エラー" };
     },

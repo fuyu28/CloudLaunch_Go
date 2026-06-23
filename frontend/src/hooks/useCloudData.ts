@@ -29,9 +29,13 @@ export type UseCloudDataReturn = {
   loading: boolean;
   currentPath: string[];
   currentDirectoryNodes: CloudDirectoryNode[];
+  /** 現在ファイル一覧を遅延取得中のゲームID（remotePath）集合 */
+  loadingGameIds: Set<string>;
 
   // Actions
-  fetchCloudData: (mode?: "cards" | "tree") => Promise<void>;
+  fetchCloudData: () => Promise<void>;
+  /** 指定ゲームのファイル一覧を遅延取得し、ディレクトリツリーへマージする */
+  ensureGameLoaded: (gameId: string) => Promise<void>;
   navigateToDirectory: (directoryName: string) => void;
   navigateBack: () => void;
   navigateToPath: (newPath: string[]) => void;
@@ -73,10 +77,15 @@ export function useCloudData(): UseCloudDataReturn {
     directoryTree: [] as CloudDirectoryNode[],
     loading: true,
     currentPath: [] as string[],
+    loadingGameIds: new Set<string>(),
   });
 
   // ナビゲーションキャッシュ
   const navigationCacheRef = useRef<Map<string, CloudDirectoryNode[]>>(new Map());
+  // 詳細を取得済みのゲームID（再ナビゲーション時の二重取得を防ぐ）
+  const loadedGamesRef = useRef<Set<string>>(new Set());
+  // 取得中のゲームID（同時呼び出しによる二重取得を防ぐ）
+  const loadingGamesRef = useRef<Set<string>>(new Set());
 
   // 現在のディレクトリノードをメモ化
   const currentDirectoryNodes = useMemo(() => {
@@ -92,45 +101,118 @@ export function useCloudData(): UseCloudDataReturn {
   }, []);
 
   /**
-   * クラウドデータ一覧を取得
+   * クラウドデータ一覧（タイトルのみ）を取得する。
+   * 初期表示ではファイル数・サイズは取得せず、ゲームを開いたときに ensureGameLoaded で遅延取得する。
    */
-  const fetchCloudData = useCallback(
-    async (mode?: "cards" | "tree"): Promise<void> => {
-      setState((prev) => ({ ...prev, loading: true }));
+  const fetchCloudData = useCallback(async (): Promise<void> => {
+    setState((prev) => ({ ...prev, loading: true }));
 
-      try {
-        const shouldFetchTree = mode === "tree" || mode === "cards" || mode === undefined;
-        const treeResult = shouldFetchTree ? await window.api.cloudData.getDirectoryTree() : null;
-
-        const directoryTree =
-          treeResult && treeResult.success && treeResult.data ? treeResult.data : null;
-        if (treeResult && !treeResult.success) {
-          logger.warn("ディレクトリツリーの取得に失敗しました", {
-            component: "useCloudData",
-            function: "unknown",
-          });
-        }
-
-        clearNavigationCache();
-        setState((prev) => ({
-          cloudData: directoryTree ? buildCloudDataFromTree(directoryTree) : prev.cloudData,
-          directoryTree: directoryTree ?? prev.directoryTree,
-          loading: false,
-          currentPath: prev.currentPath,
-        }));
-      } catch (error) {
-        logger.error("クラウドデータ取得エラー:", {
+    try {
+      const result = await window.api.cloudData.getCloudGameSummaries();
+      if (!result.success) {
+        logger.warn("クラウドサマリの取得に失敗しました", {
           component: "useCloudData",
-          function: "unknown",
-          data: error,
+          function: "fetchCloudData",
         });
         toast.error("クラウドデータの取得に失敗しました");
-        setState((prev) => ({
-          cloudData: mode === "cards" || mode === undefined ? [] : prev.cloudData,
-          directoryTree: mode === "tree" || mode === undefined ? [] : prev.directoryTree,
-          loading: false,
-          currentPath: prev.currentPath,
-        }));
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const summaries = result.data ?? [];
+      // 各ゲームを「未取得（children: undefined）」のトップノードとして表示する。
+      const topNodes: CloudDirectoryNode[] = summaries.map((summary) => ({
+        name: summary.name,
+        path: summary.remotePath,
+        isDirectory: true,
+        size: 0,
+        lastModified: summary.lastModified,
+        children: undefined,
+      }));
+
+      loadedGamesRef.current.clear();
+      loadingGamesRef.current.clear();
+      clearNavigationCache();
+      setState({
+        cloudData: buildCloudDataFromTree(topNodes),
+        directoryTree: topNodes,
+        loading: false,
+        currentPath: [],
+        loadingGameIds: new Set(),
+      });
+    } catch (error) {
+      logger.error("クラウドデータ取得エラー:", {
+        component: "useCloudData",
+        function: "fetchCloudData",
+        data: error,
+      });
+      toast.error("クラウドデータの取得に失敗しました");
+      setState((prev) => ({ ...prev, loading: false }));
+    }
+  }, [clearNavigationCache]);
+
+  /**
+   * 指定ゲームのファイル一覧（サイズ付き）を遅延取得し、ディレクトリツリーへマージする。
+   * 取得済み・取得中のゲームは再取得しない。
+   */
+  const ensureGameLoaded = useCallback(
+    async (gameId: string): Promise<void> => {
+      if (!gameId) {
+        return;
+      }
+      if (loadedGamesRef.current.has(gameId) || loadingGamesRef.current.has(gameId)) {
+        return;
+      }
+      loadingGamesRef.current.add(gameId);
+      setState((prev) => {
+        const next = new Set(prev.loadingGameIds);
+        next.add(gameId);
+        return { ...prev, loadingGameIds: next };
+      });
+
+      try {
+        const result = await window.api.cloudData.getGameDirectoryNode(gameId);
+        if (!result.success || !result.data) {
+          logger.warn("ゲームのディレクトリ取得に失敗しました", {
+            component: "useCloudData",
+            function: "ensureGameLoaded",
+            data: gameId,
+          });
+          toast.error("ゲームのデータ取得に失敗しました");
+          return;
+        }
+
+        // children が undefined（=ファイルなし）でも「取得済み」と区別できるよう空配列にする。
+        const loadedNode: CloudDirectoryNode = {
+          ...result.data,
+          children: result.data.children ?? [],
+        };
+        loadedGamesRef.current.add(gameId);
+        clearNavigationCache();
+        setState((prev) => {
+          const directoryTree = prev.directoryTree.map((node) =>
+            node.path === gameId ? loadedNode : node,
+          );
+          return {
+            ...prev,
+            directoryTree,
+            cloudData: buildCloudDataFromTree(directoryTree),
+          };
+        });
+      } catch (error) {
+        logger.error("ゲームのデータ取得エラー:", {
+          component: "useCloudData",
+          function: "ensureGameLoaded",
+          data: error,
+        });
+        toast.error("ゲームのデータ取得に失敗しました");
+      } finally {
+        loadingGamesRef.current.delete(gameId);
+        setState((prev) => {
+          const next = new Set(prev.loadingGameIds);
+          next.delete(gameId);
+          return { ...prev, loadingGameIds: next };
+        });
       }
     },
     [clearNavigationCache],
@@ -238,9 +320,11 @@ export function useCloudData(): UseCloudDataReturn {
     loading: state.loading,
     currentPath: state.currentPath,
     currentDirectoryNodes,
+    loadingGameIds: state.loadingGameIds,
 
     // Actions
     fetchCloudData,
+    ensureGameLoaded,
     navigateToDirectory,
     navigateBack,
     navigateToPath,
