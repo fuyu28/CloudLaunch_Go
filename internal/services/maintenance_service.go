@@ -194,24 +194,39 @@ func (service *MaintenanceService) CreateFullBackup(outputDir string) (string, e
 		_ = os.RemoveAll(stagingDir)
 	}()
 
+	if err := service.populateBackupStaging(appDataDir, stagingDir, relDBPath); err != nil {
+		return "", err
+	}
+
+	return service.writeBackupArchive(trimmed, stagingDir, appDataDir, relDBPath)
+}
+
+// populateBackupStaging はステージングディレクトリへ AppData をコピーし、
+// DBスナップショットを取得して WAL/SHM の残骸を除去する。
+// stagingDir は呼び出し側が作成・後始末（defer RemoveAll）する前提。
+func (service *MaintenanceService) populateBackupStaging(appDataDir string, stagingDir string, relDBPath string) error {
 	if err := copyDirectoryTree(appDataDir, stagingDir); err != nil {
 		service.logger.Error("バックアップ準備に失敗しました", "error", err, "operation", "CreateFullBackup.copyAppData")
-		return "", newServiceError("バックアップ準備に失敗しました", err.Error())
+		return newServiceError("バックアップ準備に失敗しました", err.Error())
 	}
 
 	snapshotPath := filepath.Join(stagingDir, relDBPath)
 	if service.hooks.CreateDatabaseSnapshot == nil {
-		return "", newServiceError("DBスナップショットの取得に失敗しました", "snapshot hook is nil")
+		return newServiceError("DBスナップショットの取得に失敗しました", "snapshot hook is nil")
 	}
 	if err := service.hooks.CreateDatabaseSnapshot(snapshotPath); err != nil {
 		service.logger.Error("DBスナップショットの取得に失敗しました", "error", err, "operation", "CreateFullBackup.snapshot")
-		return "", newServiceError("DBスナップショットの取得に失敗しました", err.Error())
+		return newServiceError("DBスナップショットの取得に失敗しました", err.Error())
 	}
 	_ = os.Remove(snapshotPath + "-wal")
 	_ = os.Remove(snapshotPath + "-shm")
+	return nil
+}
 
+// writeBackupArchive はステージング内容からマニフェスト付き zip を生成し、出力先パスを返す。
+func (service *MaintenanceService) writeBackupArchive(outputDir string, stagingDir string, appDataDir string, relDBPath string) (string, error) {
 	stamp := time.Now().Format("20060102_150405")
-	backupPath := filepath.Join(trimmed, fmt.Sprintf("cloudlaunch_backup_%s.zip", stamp))
+	backupPath := filepath.Join(outputDir, fmt.Sprintf("cloudlaunch_backup_%s.zip", stamp))
 	manifest := BackupManifest{
 		CreatedAt:             time.Now(),
 		AppDataDir:            appDataDir,
@@ -302,7 +317,7 @@ func writeExportCSV(path string, games []domain.Game, stats []GameExportStatisti
 			game.Publisher,
 			string(game.PlayStatus),
 			fmt.Sprintf("%d", game.TotalPlayTime),
-			formatTimePtr(statOrGameLastPlayed(game.LastPlayed)),
+			formatTimePtr(game.LastPlayed),
 			game.CreatedAt.Format(time.RFC3339),
 			game.UpdatedAt.Format(time.RFC3339),
 			fmt.Sprintf("%d", stat.SessionCount),
@@ -316,10 +331,6 @@ func writeExportCSV(path string, games []domain.Game, stats []GameExportStatisti
 	}
 	writer.Flush()
 	return writer.Error()
-}
-
-func statOrGameLastPlayed(value *time.Time) *time.Time {
-	return value
 }
 
 func formatTimePtr(value *time.Time) string {
@@ -482,12 +493,9 @@ func sanitizeRelativePath(pathValue string) (string, error) {
 	return cleaned, nil
 }
 
-func (service *MaintenanceService) restoreAppDataFrom(extractedRoot string) (restoreErr error) {
-	appDataDir := strings.TrimSpace(service.config.AppDataDir)
-	if appDataDir == "" {
-		return errors.New("appDataDir is empty")
-	}
-
+// validateExtractedBackup は展開済みバックアップのマニフェストと
+// DB ファイルの存在を検証する（副作用なし）。
+func validateExtractedBackup(extractedRoot string) error {
 	manifest, err := ReadBackupManifest(extractedRoot)
 	if err != nil {
 		return err
@@ -503,6 +511,18 @@ func (service *MaintenanceService) restoreAppDataFrom(extractedRoot string) (res
 		}
 		return err
 	}
+	return nil
+}
+
+func (service *MaintenanceService) restoreAppDataFrom(extractedRoot string) (restoreErr error) {
+	appDataDir := strings.TrimSpace(service.config.AppDataDir)
+	if appDataDir == "" {
+		return errors.New("appDataDir is empty")
+	}
+
+	if err := validateExtractedBackup(extractedRoot); err != nil {
+		return err
+	}
 
 	rollbackDir, err := os.MkdirTemp("", "cloudlaunch-rollback-")
 	if err != nil {
@@ -512,14 +532,9 @@ func (service *MaintenanceService) restoreAppDataFrom(extractedRoot string) (res
 		_ = os.RemoveAll(rollbackDir)
 	}()
 
-	hasCurrentData, err := directoryHasAnyEntry(appDataDir)
+	hasCurrentData, err := service.snapshotCurrentAppDataForRollback(appDataDir, rollbackDir)
 	if err != nil {
 		return err
-	}
-	if hasCurrentData {
-		if err := copyDirectoryTree(appDataDir, rollbackDir); err != nil {
-			return err
-		}
 	}
 
 	if service.hooks.StopRuntimeServices != nil {
@@ -541,6 +556,29 @@ func (service *MaintenanceService) restoreAppDataFrom(extractedRoot string) (res
 		}
 	}()
 
+	return service.applyRestoredAppData(extractedRoot, appDataDir)
+}
+
+// snapshotCurrentAppDataForRollback は現状の AppData をロールバック用に退避し、
+// 退避対象が存在したか（hasCurrentData）を返す。
+// ランタイム停止・DBクローズの前に呼ばれる前提で、副作用はファイルコピーのみ。
+func (service *MaintenanceService) snapshotCurrentAppDataForRollback(appDataDir string, rollbackDir string) (bool, error) {
+	hasCurrentData, err := directoryHasAnyEntry(appDataDir)
+	if err != nil {
+		return false, err
+	}
+	if hasCurrentData {
+		if err := copyDirectoryTree(appDataDir, rollbackDir); err != nil {
+			return false, err
+		}
+	}
+	return hasCurrentData, nil
+}
+
+// applyRestoredAppData は AppData を空にして展開済みバックアップで上書きし、
+// DB再オープン・ランタイム再開フックを順に呼ぶ。
+// 失敗時は呼び出し側に登録済みのロールバック defer が発火する前提。
+func (service *MaintenanceService) applyRestoredAppData(extractedRoot string, appDataDir string) error {
 	if err := clearDirectory(appDataDir); err != nil {
 		return err
 	}

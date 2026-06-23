@@ -183,6 +183,23 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		targetGame = game
 	}
 
+	cloudMap, gameByID, localMemos, err := service.buildSyncIndexes(ctx, gameID, cloudMemos)
+	if err != nil {
+		return MemoSyncResult{}, err
+	}
+
+	processed := map[string]bool{}
+
+	service.syncLocalToCloud(ctx, cfg, credential, targetGame, cloudMap, gameByID, localMemos, &resultData, processed)
+
+	service.syncCloudToLocal(ctx, cfg, credential, targetGame, cloudMemos, gameByID, &resultData, processed)
+
+	return resultData, nil
+}
+
+// buildSyncIndexes は同期に必要なインデックス（クラウドメモのキー逆引き・ゲームIDマップ・
+// ローカルメモ一覧）を構築する。エラーは呼び出し側でそのまま返せる形にラップ済み。
+func (service *MemoCloudService) buildSyncIndexes(ctx context.Context, gameID string, cloudMemos []CloudMemoInfo) (map[string]CloudMemoInfo, map[string]domain.Game, []domain.Memo, error) {
 	cloudMap := map[string]CloudMemoInfo{}
 	for _, cloudMemo := range cloudMemos {
 		cloudMap[fmt.Sprintf("%s:%s", cloudMemo.GameID, cloudMemo.MemoID)] = cloudMemo
@@ -190,7 +207,7 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 
 	games, err := service.gameService.ListGames(ctx, "", domain.PlayStatus(""), "title", "asc")
 	if err != nil {
-		return MemoSyncResult{}, wrapServiceError(err, "メモ同期に失敗しました")
+		return nil, nil, nil, wrapServiceError(err, "メモ同期に失敗しました")
 	}
 	gameByID := map[string]domain.Game{}
 	for _, game := range games {
@@ -199,11 +216,25 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 
 	localMemos, err := service.fetchLocalMemos(ctx, gameID)
 	if err != nil {
-		return MemoSyncResult{}, wrapServiceError(err, "メモ同期に失敗しました")
+		return nil, nil, nil, wrapServiceError(err, "メモ同期に失敗しました")
 	}
 
-	processed := map[string]bool{}
+	return cloudMap, gameByID, localMemos, nil
+}
 
+// syncLocalToCloud はローカルメモを基準にクラウドへの新規アップロード・上書きを行い、
+// 結果と処理済みキーを result / processed に反映する。
+func (service *MemoCloudService) syncLocalToCloud(
+	ctx context.Context,
+	cfg storage.S3Config,
+	credential credentials.Credential,
+	targetGame *domain.Game,
+	cloudMap map[string]CloudMemoInfo,
+	gameByID map[string]domain.Game,
+	localMemos []domain.Memo,
+	resultData *MemoSyncResult,
+	processed map[string]bool,
+) {
 	for _, localMemo := range localMemos {
 		game, ok := gameByID[localMemo.GameID]
 		if !ok {
@@ -261,7 +292,20 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		resultData.CloudOverwritten++
 		processed[key] = true
 	}
+}
 
+// syncCloudToLocal はローカル→クラウド同期で未処理のクラウドメモを基準に、
+// ローカルへの新規作成・更新（または逆方向のクラウド上書き）を行う。
+func (service *MemoCloudService) syncCloudToLocal(
+	ctx context.Context,
+	cfg storage.S3Config,
+	credential credentials.Credential,
+	targetGame *domain.Game,
+	cloudMemos []CloudMemoInfo,
+	gameByID map[string]domain.Game,
+	resultData *MemoSyncResult,
+	processed map[string]bool,
+) {
 	for _, cloudMemo := range cloudMemos {
 		if targetGame != nil && cloudMemo.GameID != targetGame.ID {
 			continue
@@ -342,8 +386,6 @@ func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID 
 		resultData.CloudOverwritten++
 		processed[key] = true
 	}
-
-	return resultData, nil
 }
 
 func (service *MemoCloudService) uploadMemoContent(
