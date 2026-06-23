@@ -5,6 +5,7 @@ import { HashRouter } from "react-router-dom";
 import App from "./App";
 import "./assets/tailwind.css";
 import { createWailsBridge } from "./wailsBridge";
+import { installGlobalErrorHandlers } from "./utils/globalErrorHandlers";
 
 // テーマを初期化
 const initializeTheme = (): void => {
@@ -16,6 +17,9 @@ const initializeTheme = (): void => {
 initializeTheme();
 
 window.api = createWailsBridge();
+
+// window.api 初期化後に未捕捉エラーのグローバル捕捉を有効化する
+installGlobalErrorHandlers();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

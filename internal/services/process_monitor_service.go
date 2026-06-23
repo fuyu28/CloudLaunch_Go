@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/logging"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/unicode"
@@ -120,12 +121,18 @@ func (service *ProcessMonitorService) StartMonitoring() {
 	service.logger.Info("プロセス監視を開始しました")
 
 	go func() {
+		// 1反復ごとに panic を回収する。1回のチェックで panic しても監視ループ自体は
+		// 継続させ、エラーをログ（error.log）に残す。
+		tick := func() {
+			defer logging.Recover(service.logger, "process-monitor.checkProcesses")
+			service.checkProcesses()
+		}
 		// 起動時に即時チェック
-		service.checkProcesses()
+		tick()
 		for {
 			select {
 			case <-service.monitoringInterval.C:
-				service.checkProcesses()
+				tick()
 			case <-service.monitoringStop:
 				return
 			}
@@ -541,6 +548,7 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
 	if service.cloudSync != nil {
 		go func(gameID string) {
+			defer logging.Recover(service.logger, "process-monitor.afterPlayPush")
 			if err := service.cloudSync.Push(context.Background(), gameID, nil); err != nil {
 				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
