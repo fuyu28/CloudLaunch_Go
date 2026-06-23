@@ -7,6 +7,18 @@
 }
 @plugin 'tailwind-scrollbar';
 
+/* ルート要素を固定し、Webview 全体の横方向ラバーバンド（2本指スワイプによる
+   オーバースクロール / 戻る・進むジェスチャ）を無効化する。
+   縦スクロールは内側の <main> など各スクロールコンテナが担当するため、
+   ルートを overflow: hidden にしても問題ない。 */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 /* Wails frameless drag regions */
 .wails-drag {
   --wails-draggable: drag;
