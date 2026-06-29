@@ -33,20 +33,18 @@ func NewLogger(appDataDir string, level string) *slog.Logger {
 	var errorHandler slog.Handler
 
 	logDir, dirErr := ensureLogDir(appDataDir)
-	if dirErr == nil {
-		if appWriter, err := newRotatingWriter(filepath.Join(logDir, logFileName), maxLogSize, maxLogBackups); err == nil {
+	if dirErr != nil {
+		// appDataDir が空の場合は ensureLogDir が即エラーを返す。
+		// ユーザーが空のままで起動した可能性もあるので、ログ初期化失敗を黙らずに stderr へ伝える。
+		_, _ = fmt.Fprintf(os.Stderr, "failed to initialize log dir: %v\n", dirErr)
+	} else {
+		if appWriter, ok := tryOpenRotatingLog(filepath.Join(logDir, logFileName), "log file"); ok {
 			mainWriter = io.MultiWriter(os.Stdout, appWriter)
-		} else {
-			_, _ = fmt.Fprintf(os.Stderr, "failed to initialize log file: %v\n", err)
 		}
 		// error 以上だけを集約する専用ファイル。重大なエラーを探しやすくする。
-		if errWriter, err := newRotatingWriter(filepath.Join(logDir, errorFileName), maxLogSize, maxLogBackups); err == nil {
+		if errWriter, ok := tryOpenRotatingLog(filepath.Join(logDir, errorFileName), "error log file"); ok {
 			errorHandler = slog.NewJSONHandler(errWriter, &slog.HandlerOptions{Level: slog.LevelError, AddSource: true})
-		} else {
-			_, _ = fmt.Fprintf(os.Stderr, "failed to initialize error log file: %v\n", err)
 		}
-	} else if strings.TrimSpace(appDataDir) != "" {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to initialize log dir: %v\n", dirErr)
 	}
 
 	baseHandler := slog.NewJSONHandler(mainWriter, &slog.HandlerOptions{
@@ -72,6 +70,17 @@ func ParseLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// tryOpenRotatingLog はローテーション付きログファイルを開き、失敗時は stderr に通知して
+// (nil, false) を返す。description はエラーメッセージに含まれる用途名（"log file" 等）。
+func tryOpenRotatingLog(path, description string) (*rotatingWriter, bool) {
+	w, err := newRotatingWriter(path, maxLogSize, maxLogBackups)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to initialize %s: %v\n", description, err)
+		return nil, false
+	}
+	return w, true
 }
 
 func ensureLogDir(appDataDir string) (string, error) {

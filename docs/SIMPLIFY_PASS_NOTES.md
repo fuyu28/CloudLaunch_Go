@@ -184,6 +184,25 @@
 7. **`UpdateScreenshotHotkey` の rollback で旧設定を二度 start する微小なムダ**
    - エラー経路のみ・ユーザー体感に影響なし。挙動を変えないので見送り。
 
-## G5〜G10
+## G5: logging / domain / main / config
 
-（着手時に追記）
+対象: `internal/logging/*` / `internal/domain/*` / `internal/memo/content_hash.go` / `main.go` / `internal/config/*`
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Reuse | `memo/content_hash.go` の `CalculateContentHash` を `util.Sha256Hex` 経由に変更（G3で `util.Sha256Hex` を作った際の積み残し3箇所目を解消） |
+| Simplification | `logging/logger.go`: 2箇所重複していたローテーション付きログオープン+stderr通知を `tryOpenRotatingLog` に集約 |
+| Simplification | `logging/logger.go`: `dirErr == nil` 後の冗長な `strings.TrimSpace(appDataDir) != ""` 再チェックを削除（`ensureLogDir` 内で既に検証済み）。条件をガード反転して読みやすく |
+
+### 見送った（将来の課題）
+
+1. **`config/config.go` の `getEnv` / `getEnvBool` / `getEnvInt` の形が同じ** — レビュアー自身が「3つだけならむしろ現状の方が明快」と評価。ジェネリック/factoryで集約しても可読性は上がらない。**現状維持。**
+2. **`main.go` の panic 再 throw と `logging/recover.go` の panic swallow** — 意図的に挙動を分けている（main は再 throw / バックグラウンド goroutine は swallow）。共通化すべきでない。
+3. **domain 層には behavior が一切なく Clean Architecture 上クリーン** — 修正不要。
+
+## G6〜G10
+
+（フロントエンドへ移行。着手時に追記）

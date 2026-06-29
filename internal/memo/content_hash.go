@@ -2,14 +2,13 @@
 package memo
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"strings"
+
+	"CloudLaunch_Go/internal/util"
 )
 
 // CalculateContentHash はメモ内容のSHA256ハッシュを返す。
+// 前後の空白は同期判定で同一視するため、ハッシュ前に TrimSpace する。
 func CalculateContentHash(content string) string {
-	trimmed := strings.TrimSpace(content)
-	hash := sha256.Sum256([]byte(trimmed))
-	return hex.EncodeToString(hash[:])
+	return util.Sha256Hex([]byte(strings.TrimSpace(content)))
 }
