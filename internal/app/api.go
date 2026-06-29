@@ -71,10 +71,7 @@ func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed ti
 
 // DeleteGame はゲームを削除する。
 func (app *App) DeleteGame(gameID string) result.ApiResult[bool] {
-	if err := app.GameService.DeleteGame(app.context(), gameID); err != nil {
-		return serviceErrorResult[bool](err, "ゲーム削除に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.GameService.DeleteGame(app.context(), gameID), "ゲーム削除に失敗しました")
 }
 
 // ListRoutesByGame はルート一覧を取得する。
@@ -97,10 +94,7 @@ func (app *App) UpdateRoute(routeID string, input services.RouteUpdateInput) res
 
 // UpdateRouteOrders はルートの並び順を更新する。
 func (app *App) UpdateRouteOrders(gameID string, orders []services.RouteOrderUpdate) result.ApiResult[bool] {
-	if err := app.RouteService.UpdateRouteOrders(app.context(), gameID, orders); err != nil {
-		return serviceErrorResult[bool](err, "ルート順序更新に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.RouteService.UpdateRouteOrders(app.context(), gameID, orders), "ルート順序更新に失敗しました")
 }
 
 // GetRouteStats はルートの統計を取得する。
@@ -111,18 +105,12 @@ func (app *App) GetRouteStats(gameID string) result.ApiResult[[]domain.RouteStat
 
 // SetCurrentRoute はゲームの現在ルートを設定する。
 func (app *App) SetCurrentRoute(gameID string, routeID string) result.ApiResult[bool] {
-	if err := app.RouteService.SetCurrentRoute(app.context(), gameID, routeID); err != nil {
-		return serviceErrorResult[bool](err, "現在ルート更新に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.RouteService.SetCurrentRoute(app.context(), gameID, routeID), "現在ルート更新に失敗しました")
 }
 
 // DeleteRoute はルートを削除する。
 func (app *App) DeleteRoute(routeID string) result.ApiResult[bool] {
-	if err := app.RouteService.DeleteRoute(app.context(), routeID); err != nil {
-		return serviceErrorResult[bool](err, "ルート削除に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.RouteService.DeleteRoute(app.context(), routeID), "ルート削除に失敗しました")
 }
 
 // CreateSession はセッションを作成する。
@@ -211,10 +199,7 @@ func (app *App) ListMemosByGame(gameID string) result.ApiResult[[]domain.Memo] {
 
 // DeleteMemo はメモを削除する。
 func (app *App) DeleteMemo(memoID string) result.ApiResult[bool] {
-	if err := app.MemoService.DeleteMemo(app.context(), memoID); err != nil {
-		return serviceErrorResult[bool](err, "メモ削除に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.MemoService.DeleteMemo(app.context(), memoID), "メモ削除に失敗しました")
 }
 
 // FileFilterInput はファイル選択フィルタを表す。
@@ -246,36 +231,33 @@ type FrontendErrorPayload struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// appendIfNonEmpty は trim 後に非空ならキー・値を attrs に追加する。
+func appendIfNonEmpty(attrs []any, key, value string) []any {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return attrs
+	}
+	return append(attrs, key, trimmed)
+}
+
 // ReportLog はフロントエンドログをバックエンドログに統合する。
 func (app *App) ReportLog(payload FrontendLogPayload) {
 	if app == nil || app.Logger == nil {
 		return
 	}
-
 	message := strings.TrimSpace(payload.Message)
 	if message == "" {
 		message = "frontend log (empty message)"
 	}
-	level := logging.ParseLevel(payload.Level)
-
 	attrs := []any{"origin", "renderer"}
-	if component := strings.TrimSpace(payload.Component); component != "" {
-		attrs = append(attrs, "component", component)
-	}
-	if fn := strings.TrimSpace(payload.Function); fn != "" {
-		attrs = append(attrs, "function", fn)
-	}
-	if ctx := strings.TrimSpace(payload.Context); ctx != "" {
-		attrs = append(attrs, "context", ctx)
-	}
-	if sourceTime := strings.TrimSpace(payload.Timestamp); sourceTime != "" {
-		attrs = append(attrs, "sourceTimestamp", sourceTime)
-	}
+	attrs = appendIfNonEmpty(attrs, "component", payload.Component)
+	attrs = appendIfNonEmpty(attrs, "function", payload.Function)
+	attrs = appendIfNonEmpty(attrs, "context", payload.Context)
+	attrs = appendIfNonEmpty(attrs, "sourceTimestamp", payload.Timestamp)
 	if payload.Data != nil {
 		attrs = append(attrs, "data", payload.Data)
 	}
-
-	app.Logger.Log(app.context(), level, message, attrs...)
+	app.Logger.Log(app.context(), logging.ParseLevel(payload.Level), message, attrs...)
 }
 
 // ReportError はフロントエラーをバックエンド側へ送信する。
@@ -283,35 +265,19 @@ func (app *App) ReportError(payload FrontendErrorPayload) {
 	if app == nil || app.Logger == nil {
 		return
 	}
-
 	message := strings.TrimSpace(payload.Message)
 	if message == "" {
 		message = "frontend error (empty message)"
 	}
-
-	attrs := []any{
-		"origin", "renderer",
-		"kind", "error",
-	}
-	if stack := strings.TrimSpace(payload.Stack); stack != "" {
-		attrs = append(attrs, "stack", stack)
-	}
-	if ctx := strings.TrimSpace(payload.Context); ctx != "" {
-		attrs = append(attrs, "context", ctx)
-	}
-	if component := strings.TrimSpace(payload.Component); component != "" {
-		attrs = append(attrs, "component", component)
-	}
-	if fn := strings.TrimSpace(payload.Function); fn != "" {
-		attrs = append(attrs, "function", fn)
-	}
-	if sourceTime := strings.TrimSpace(payload.Timestamp); sourceTime != "" {
-		attrs = append(attrs, "sourceTimestamp", sourceTime)
-	}
+	attrs := []any{"origin", "renderer", "kind", "error"}
+	attrs = appendIfNonEmpty(attrs, "stack", payload.Stack)
+	attrs = appendIfNonEmpty(attrs, "context", payload.Context)
+	attrs = appendIfNonEmpty(attrs, "component", payload.Component)
+	attrs = appendIfNonEmpty(attrs, "function", payload.Function)
+	attrs = appendIfNonEmpty(attrs, "sourceTimestamp", payload.Timestamp)
 	if payload.Data != nil {
 		attrs = append(attrs, "data", payload.Data)
 	}
-
 	level := logging.ParseLevel(payload.Level)
 	if level < slog.LevelError {
 		level = slog.LevelError
@@ -382,6 +348,21 @@ func (app *App) UpdateScreenshotLocalJpeg(enabled bool) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// applyHotkeyChange は Config を書き換えた後にホットキーを再起動し、
+// 失敗時は呼び出し側の rollback を呼んで旧設定に戻す。
+// rollback は新設定を旧設定へ戻すクロージャ。errMessage はユーザー向けメッセージ。
+func (app *App) applyHotkeyChange(operation, errMessage string, rollback func(), attrs ...any) result.ApiResult[bool] {
+	app.stopHotkey()
+	if err := app.startHotkey(); err != nil {
+		rollback()
+		_ = app.startHotkey()
+		logArgs := append([]any{"operation", operation, "error", err}, attrs...)
+		app.Logger.Error(errMessage, logArgs...)
+		return result.ErrorResult[bool](errMessage, err.Error())
+	}
+	return result.OkResult(true)
+}
+
 // UpdateScreenshotHotkey はスクリーンショットのホットキーを更新する。
 func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 	trimmed := strings.TrimSpace(combo)
@@ -393,30 +374,18 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 		app.Logger.Warn("ホットキーが不正です", "operation", "UpdateScreenshotHotkey", "combo", trimmed, "error", err)
 		return result.ErrorResult[bool]("ホットキーが不正です", err.Error())
 	}
-	prevHotkey := app.Config.ScreenshotHotkey
+	prev := app.Config.ScreenshotHotkey
 	app.Config.ScreenshotHotkey = trimmed
-	app.stopHotkey()
-	if err := app.startHotkey(); err != nil {
-		app.Config.ScreenshotHotkey = prevHotkey
-		_ = app.startHotkey()
-		app.Logger.Error("ホットキーの更新に失敗しました", "operation", "UpdateScreenshotHotkey", "combo", trimmed, "error", err)
-		return result.ErrorResult[bool]("ホットキーの更新に失敗しました", err.Error())
-	}
-	return result.OkResult(true)
+	return app.applyHotkeyChange("UpdateScreenshotHotkey", "ホットキーの更新に失敗しました",
+		func() { app.Config.ScreenshotHotkey = prev }, "combo", trimmed)
 }
 
 // UpdateScreenshotHotkeyNotify はホットキー通知の有効/無効を更新する。
 func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool] {
-	prevNotify := app.Config.ScreenshotHotkeyNotify
+	prev := app.Config.ScreenshotHotkeyNotify
 	app.Config.ScreenshotHotkeyNotify = enabled
-	app.stopHotkey()
-	if err := app.startHotkey(); err != nil {
-		app.Config.ScreenshotHotkeyNotify = prevNotify
-		_ = app.startHotkey()
-		app.Logger.Error("ホットキー通知の更新に失敗しました", "operation", "UpdateScreenshotHotkeyNotify", "enabled", enabled, "error", err)
-		return result.ErrorResult[bool]("ホットキー通知の更新に失敗しました", err.Error())
-	}
-	return result.OkResult(true)
+	return app.applyHotkeyChange("UpdateScreenshotHotkeyNotify", "ホットキー通知の更新に失敗しました",
+		func() { app.Config.ScreenshotHotkeyNotify = prev }, "enabled", enabled)
 }
 
 // GetMonitoringStatus は監視状態を取得する。
@@ -437,11 +406,20 @@ func (app *App) GetProcessSnapshot() result.ApiResult[domain.ProcessSnapshot] {
 	return result.OkResult(snapshot)
 }
 
+// requireProcessMonitor は ProcessMonitor が未設定ならログを残し、無効化エラーを返す。
+// Success=true のときは続行、false のときはその結果をそのまま return する。
+func (app *App) requireProcessMonitor(operation string) result.ApiResult[bool] {
+	if app.ProcessMonitor == nil {
+		app.Logger.Warn("監視が無効です", "operation", operation, "reason", "process monitor is nil")
+		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	}
+	return result.OkResult(true)
+}
+
 // PauseMonitoringSession はセッションを中断する。
 func (app *App) PauseMonitoringSession(gameID string) result.ApiResult[bool] {
-	if app.ProcessMonitor == nil {
-		app.Logger.Warn("監視が無効です", "operation", "PauseMonitoringSession", "reason", "process monitor is nil")
-		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	if errResult := app.requireProcessMonitor("PauseMonitoringSession"); !errResult.Success {
+		return errResult
 	}
 	trimmedGameID := strings.TrimSpace(gameID)
 	if ok := app.ProcessMonitor.PauseSession(trimmedGameID); !ok {
@@ -453,9 +431,8 @@ func (app *App) PauseMonitoringSession(gameID string) result.ApiResult[bool] {
 
 // ResumeMonitoringSession は中断中セッションを再開する。
 func (app *App) ResumeMonitoringSession(gameID string) result.ApiResult[bool] {
-	if app.ProcessMonitor == nil {
-		app.Logger.Warn("監視が無効です", "operation", "ResumeMonitoringSession", "reason", "process monitor is nil")
-		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	if errResult := app.requireProcessMonitor("ResumeMonitoringSession"); !errResult.Success {
+		return errResult
 	}
 	trimmedGameID := strings.TrimSpace(gameID)
 	if ok := app.ProcessMonitor.ResumeSession(trimmedGameID); !ok {
@@ -467,9 +444,8 @@ func (app *App) ResumeMonitoringSession(gameID string) result.ApiResult[bool] {
 
 // EndMonitoringSession はセッションを終了して保存する。
 func (app *App) EndMonitoringSession(gameID string) result.ApiResult[bool] {
-	if app.ProcessMonitor == nil {
-		app.Logger.Warn("監視が無効です", "operation", "EndMonitoringSession", "reason", "process monitor is nil")
-		return result.ErrorResult[bool]("監視が無効です", "process monitor is nil")
+	if errResult := app.requireProcessMonitor("EndMonitoringSession"); !errResult.Success {
+		return errResult
 	}
 	trimmedGameID := strings.TrimSpace(gameID)
 	if ok := app.ProcessMonitor.EndSession(trimmedGameID); !ok {
@@ -567,10 +543,7 @@ func (app *App) OpenLogsDirectory() result.ApiResult[string] {
 
 // SaveCredential は認証情報を保存する。
 func (app *App) SaveCredential(key string, input services.CredentialInput) result.ApiResult[bool] {
-	if err := app.CredentialService.SaveCredential(app.context(), key, input); err != nil {
-		return serviceErrorResult[bool](err, "認証情報保存に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.CredentialService.SaveCredential(app.context(), key, input), "認証情報保存に失敗しました")
 }
 
 // LoadCredential は認証情報を取得する。
@@ -580,10 +553,7 @@ func (app *App) LoadCredential(key string) result.ApiResult[*services.Credential
 
 // DeleteCredential は認証情報を削除する。
 func (app *App) DeleteCredential(key string) result.ApiResult[bool] {
-	if err := app.CredentialService.DeleteCredential(app.context(), key); err != nil {
-		return serviceErrorResult[bool](err, "認証情報削除に失敗しました")
-	}
-	return result.OkResult(true)
+	return boolResult(app.CredentialService.DeleteCredential(app.context(), key), "認証情報削除に失敗しました")
 }
 
 // LaunchGame は指定された実行ファイルを起動する。

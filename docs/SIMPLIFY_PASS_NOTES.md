@@ -149,6 +149,41 @@
 - **`SessionMutationResult` がサービス層に app の関心を持ち込んでいる** — `gameId` を返す理由は app の async sync 用。深い修正は app 層で `repository.GetPlaySessionByID(sessionID)` を呼んで `gameId` を取り出す等。
 - **`MemoCloudService` が `*GameService` / `*MemoService` に依存** — サービス間依存。app 層のコンストラクタ組立を見直すタイミングで再検討。
 
-## G4〜G10
+## G4: app層
+
+対象: `internal/app/api.go` / `api_sync.go` / `api_helpers.go` / `app.go` ほか
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Reuse / Simplification | `api_helpers.go` に `boolResult` を新設し、「サービス呼んで success なら `OkResult(true)`」だけの7メソッド（DeleteGame / UpdateRouteOrders / SetCurrentRoute / DeleteRoute / DeleteMemo / SaveCredential / DeleteCredential）を1行化 |
+| Reuse / Simplification | `api_helpers.go` に `requireGameID[T]` を新設し、`api_sync.go` の5箇所で重複していた「trim → 空チェック → ErrorResult」を集約 |
+| Simplification | `api.go`: `ReportLog` / `ReportError` で重複していた「TrimSpace 後に非空ならattrsに追加」を `appendIfNonEmpty` に集約（約30行削減） |
+| Simplification | `api.go`: `UpdateScreenshotHotkey` / `UpdateScreenshotHotkeyNotify` で重複していた「stop → start → 失敗時 rollback → 再 start」を `applyHotkeyChange(operation, errMessage, rollback, attrs...)` に集約 |
+| Simplification | `api.go`: `Pause/Resume/EndMonitoringSession` の3つで重複していた `ProcessMonitor == nil` 警告ログ＋エラー返却を `requireProcessMonitor` ヘルパーに集約 |
+
+### 見送った（将来の課題）
+
+1. **`SessionMutationResult` 経由のサービス→app関心バブルアップ（G2持ち越し）**
+   - `SessionService.{Delete,UpdateSessionRoute,UpdateSessionName}` が `SessionMutationResult{GameID}` を返すのは app の async sync 用。
+   - 深い修正案: サービスは `error` だけ返し、app 側は事前に `repository.GetPlaySessionByID(sessionID)` で gameID を取って `syncGameAsync` を呼ぶ。
+   - 影響: 3つのサービスメソッド・テスト fake・app の3メソッド。中規模変更で挙動の境界（delete前にread）にも注意が必要。**今回は見送り、将来の独立した一発リファクタへ。**
+2. **`MemoCloudService` がサービス実体に依存（G2持ち越し）**
+   - 深い修正案: app.go で `GameRepository` / `MemoRepository` を直接 `MemoCloudService` に注入し、`gameService.GetGameByID` 等の呼び出しをリポジトリ呼び出しに置換。
+   - 影響: コンストラクタ・既存呼び出し全部・テスト。**今回は見送り。**
+3. **`api_maintenance.go` の DBスナップショット/サービスライフサイクルorchestration**
+   - 現状は `MaintenanceRuntimeHooks` 経由でサービスから app のメソッドを呼び出している。これ自体は責務分離の妥協形だが、ホスト固有処理を app に置く現実的解。深掘りは G5（logging/domain）と一緒に再検討。
+4. **`sync_coalescer.go` の debounce/coalesce ポリシーをサービスへ移管**
+   - サービス層が「同期戦略」を持つべき、というのは正しい。ただし現状は app の起動順序とライフサイクルにきれいに統合されているため、移動するメリットがコストを下回ると判断し見送り。
+5. **`api_cloud.go` の `buildGameDirectoryNode` ツリー構築**
+   - ~70行のロジック。サービスに移すべき。**G9（frontend cloud + Cloud.tsx）で API 形状と一緒に再検討**。
+6. **app.go の closure が `*App` を捕捉している（Efficiency #1）**
+   - レビュアー指摘は GC 観点だが、`*App` はプロセス唯一のルートで GC されない。さらに `configureServices` が復元時にも呼ばれるため、値捕捉に変えると古いインスタンスを参照するリスク。**現状維持。**
+7. **`UpdateScreenshotHotkey` の rollback で旧設定を二度 start する微小なムダ**
+   - エラー経路のみ・ユーザー体感に影響なし。挙動を変えないので見送り。
+
+## G5〜G10
 
 （着手時に追記）

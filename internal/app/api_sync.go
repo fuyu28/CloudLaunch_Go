@@ -21,9 +21,9 @@ type CloudMetadataResult struct {
 
 // SyncStatus は指定ゲームの同期状態を返す。
 func (app *App) SyncStatus(gameID string) result.ApiResult[domain.SyncStatusDetail] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		return result.ErrorResult[domain.SyncStatusDetail]("ゲームIDが不正です", "gameID is empty")
+	trimmed, errResult, ok := requireGameID[domain.SyncStatusDetail](gameID)
+	if !ok {
+		return errResult
 	}
 	detail, err := app.ContentSyncService.Status(app.context(), trimmed)
 	if err != nil {
@@ -34,9 +34,9 @@ func (app *App) SyncStatus(gameID string) result.ApiResult[domain.SyncStatusDeta
 
 // PushSync は指定ゲームのデータをリモートへアップロードする。
 func (app *App) PushSync(gameID string) result.ApiResult[any] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
+	trimmed, errResult, ok := requireGameID[any](gameID)
+	if !ok {
+		return errResult
 	}
 	ctx := app.context()
 	onProgress := func(current, total int) {
@@ -56,9 +56,9 @@ func (app *App) PushSync(gameID string) result.ApiResult[any] {
 // deleteUntracked=false で未追跡ファイルの削除が必要な場合、ダウンロードを行わず
 // PullResult{Applied:false, UntrackedDeletes:...} を返す（呼び出し側で確認）。
 func (app *App) PullSync(gameID string, deleteUntracked bool) result.ApiResult[domain.PullResult] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		return result.ErrorResult[domain.PullResult]("ゲームIDが不正です", "gameID is empty")
+	trimmed, errResult, ok := requireGameID[domain.PullResult](gameID)
+	if !ok {
+		return errResult
 	}
 	ctx := app.context()
 	onProgress := func(current, total int) {
@@ -78,9 +78,9 @@ func (app *App) PullSync(gameID string, deleteUntracked bool) result.ApiResult[d
 // ResolveConflict はコンフリクトを解決する。
 // useLocal=false（リモート採用）は Pull と同様に未追跡ファイルの削除確認を経由する。
 func (app *App) ResolveConflict(gameID string, useLocal, deleteUntracked bool) result.ApiResult[domain.PullResult] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		return result.ErrorResult[domain.PullResult]("ゲームIDが不正です", "gameID is empty")
+	trimmed, errResult, ok := requireGameID[domain.PullResult](gameID)
+	if !ok {
+		return errResult
 	}
 	res, err := app.ContentSyncService.ResolveConflict(app.context(), trimmed, useLocal, deleteUntracked)
 	if err != nil {
@@ -120,9 +120,9 @@ func (app *App) LoadCloudMetadata() result.ApiResult[CloudMetadataResult] {
 
 // DeleteGameFromCloud は指定ゲームのクラウドデータを削除する。
 func (app *App) DeleteGameFromCloud(gameID string) result.ApiResult[any] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		return result.ErrorResult[any]("ゲームIDが不正です", "gameID is empty")
+	trimmed, errResult, ok := requireGameID[any](gameID)
+	if !ok {
+		return errResult
 	}
 	if err := app.ContentSyncService.DeleteFromCloud(app.context(), trimmed); err != nil {
 		return serviceErrorResult[any](err, "クラウドデータ削除に失敗しました")
