@@ -268,6 +268,29 @@
 3. **タブの atom 購読の絞り込み** — `GeneralSettings.tsx` の atom 購読を子に降ろせばリレンダーが減る、という efficiency 指摘。挙動を変える可能性があり、効果も実測がいる。**見送り**。
 4. **`useScreenshotSettings` の mount-only sync を削除提案** — G7と同じ理由で意図的な動作のため /simplify 対象外。
 
-## G9〜G10
+## G9: frontend cloud/* + Cloud.tsx
+
+対象: `frontend/src/components/cloud/*` (13ファイル) + `frontend/src/pages/Cloud.tsx`
+コミット: なし（適用なし）
+
+### 適用した
+
+**なし。** 確認したレビュー findings はいずれも挙動変更を伴うため、/simplify ルール
+（「挙動を変える変更は対象外」）に従いすべて見送り。
+
+### 見送った（将来の課題）
+
+1. **`CloudDataCard.tsx` の局所 `formatFileSize` と `utils/cloudUtils.ts` の重複** — `bytes?: number` の undefined 扱い（"不明"）、decimal 精度（`.toFixed(1)` vs `.toFixed(2)`）、単位数（4 vs 5）が違う。挙動が変わるため見送り。
+2. **`CloudItemCard` と `CloudTreeNode.DirectoryNodeCard` の重複（90%）** — 共通カードコンポーネント抽出は union 型や props 差分の解決が必要で、ユーザー視認の UI 差異リスクあり。
+3. **`CloudDataCard.tsx` の `cloudData` / `fileDetails` 循環状態** — `useMemo` で導出に統合できるが、データフロー変更で挙動が微妙に変わる可能性。
+4. **`useCloudData.ts` の `buildCloudDataFromTree` フルツリー再構築（G7持ち越し）** — 効率改善になるが、直接更新へ書き換えると差分検知の挙動が変わる。
+5. **`CloudGameImportModal.tsx` の conflict 検出ロジック（390行）** — `findTitleConflicts(cloud, local)` をサービスに抽出すべき altitude 課題だが、`/simplify` 範囲外。
+6. **`pages/Cloud.tsx` の `path: "*"` センチネル削除モード** — explicit `deleteAll()` への分解はバックエンドAPI形状の変更を伴う。
+7. **同期ステータス分岐（`in_sync`/`never_synced`/`push_needed`/`pull_needed`/conflict）の hook 化** — `useSyncPolicy(status)` で集約できるが、波及が広い。
+8. **`CloudGameImportModal.tsx` の dual fetch + cache 重複** — `localGames` prop と内部 fetch の競合。挙動の確認が必要。
+
+これらは別途、code-review や feature work で扱うのが適切。
+
+## G10
 
 （着手時に追記）
