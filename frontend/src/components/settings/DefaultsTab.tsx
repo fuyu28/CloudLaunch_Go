@@ -8,6 +8,7 @@ import {
   filterStateLabels,
 } from "../../state/settings";
 import type { SortOption, FilterOption } from "src/types/menu";
+import { TabSectionHeader } from "./TabSectionHeader";
 
 export default function DefaultsTab(): React.JSX.Element {
   const [defaultSortOption, setDefaultSortOption] = useAtom(defaultSortOptionAtom);
@@ -25,10 +26,11 @@ export default function DefaultsTab(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-accent pl-4">
-        <h3 className="text-lg font-semibold text-accent mb-1">デフォルト設定</h3>
-        <p className="text-sm text-base-content/60">ホーム画面の初期表示設定</p>
-      </div>
+      <TabSectionHeader
+        title="デフォルト設定"
+        description="ホーム画面の初期表示設定"
+        color="accent"
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="bg-base-200 p-4 rounded-lg">

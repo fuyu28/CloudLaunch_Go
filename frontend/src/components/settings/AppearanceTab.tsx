@@ -2,6 +2,7 @@ import { useAtom } from "jotai";
 
 import { DAISYUI_THEMES } from "@renderer/constants/themes";
 import { themeAtom, isChangingThemeAtom, changeThemeAtom } from "../../state/settings";
+import { TabSectionHeader } from "./TabSectionHeader";
 
 export default function AppearanceTab(): React.JSX.Element {
   const [currentTheme] = useAtom(themeAtom);
@@ -10,10 +11,7 @@ export default function AppearanceTab(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-primary pl-4">
-        <h3 className="text-lg font-semibold text-primary mb-1">外観設定</h3>
-        <p className="text-sm text-base-content/60">アプリケーションの見た目を設定</p>
-      </div>
+      <TabSectionHeader title="外観設定" description="アプリケーションの見た目を設定" />
       <div className="bg-base-200 p-4 rounded-lg">
         <div className="mb-3">
           <h4 className="font-medium">テーマ</h4>

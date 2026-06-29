@@ -249,6 +249,25 @@
 5. **`useScreenshotSettings.ts` の `isCapturingHotkey` ローカル UI 状態** — コンポーネントへ移すべきという altitude 指摘だが、フック側がイベント captures も管理しているので分離が単純ではない。**現状維持**。
 6. **bridge レイヤーの altitude 持ち越し**（erogameScape の validation、processMonitor の silent エラー swallow） — hooks 側で対応するなら呼び出し側 components まで波及するため**G9/G10 と合わせて見直す候補**。
 
-## G8〜G10
+## G8: frontend settings/*
+
+対象: `frontend/src/components/settings/*` (5タブ + GeneralSettings + R2S3Settings)
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Reuse | `SettingsToggle` コンポーネントを新設。`ScreenshotSettingsTab` の5箇所のトグル（label + description + checkbox）を集約（約65行削減） |
+| Reuse | `TabSectionHeader` コンポーネントを新設（`border-l-4 + 色付き見出し + 説明`）。Tailwind JIT 対応のため色クラスを Record で明示マップ化。5タブ（Appearance/Behavior/Defaults/SyncAndLogs/Screenshot）の冒頭を集約 |
+
+### 見送った（将来の課題）
+
+1. **`GeneralSettings.tsx` ハンドラのフック化（120行削減候補）** — `handleSyncAllGames` / `handleExportGameData` / `handleCreateBackup` / `handleRestoreBackup` / `handleOfflineModeChange` / `handleAutoTrackingChange` を `useBehaviorSettings` / `useSyncAndBackup` 等の hook に分解。挙動と props インターフェースに広く波及するため見送り。
+2. **`BehaviorTab.tsx` の独自トグル markup** — `SettingsToggle` と markup（label.cursor-pointer 包み）が異なるため統一すると挙動が変わる可能性。**現状維持**。
+3. **タブの atom 購読の絞り込み** — `GeneralSettings.tsx` の atom 購読を子に降ろせばリレンダーが減る、という efficiency 指摘。挙動を変える可能性があり、効果も実測がいる。**見送り**。
+4. **`useScreenshotSettings` の mount-only sync を削除提案** — G7と同じ理由で意図的な動作のため /simplify 対象外。
+
+## G9〜G10
 
 （着手時に追記）
