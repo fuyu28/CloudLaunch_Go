@@ -1,23 +1,10 @@
 # Simplify Pass Notes
 
-> **⏸ 再開ポイント（2026-06-30 時点で中断）**
-> - 作業ブランチ: `refactor/simplify-pass`（`refactor/ui-readability` から分岐）。作業ツリーはクリーン。
-> - 完了済み: **G1**(`cf7bba4`) / 検討記録(`00248ce`) / **G2**(`920c8b3`)。各コミットは `go test ./... ` と
->   `./scripts/run-all-lint-format.sh` を通過済み。
-> - **次にやること: G3（infrastructure: `internal/infrastructure/db/repository.go` / `storage/*` / `credentials/*`）から再開。**
-> - 再開手順:
->   1. `git switch refactor/simplify-pass` でこのブランチに戻る。
->   2. このファイル末尾の「G3〜G10」と各グループの「見送った」メモを確認。
->   3. 対象グループを4観点（reuse/simplification/efficiency/altitude）で並列レビュー → 適用 →
->      `go test`(or `bun run test`) + lint → グループ単位でコミット → このファイルに追記。
-> - **G3 で必ず再検討する持ち越し**（G2から）:
->   - `ExportGameData` の N+1（per-game `ListPlaySessionsByGame`）→ `WHERE game_id IN (...)` バッチ化。
->   - `route_service.UpdateRouteOrders` の逐次 UPDATE → バッチ UPDATE。
->   - いずれも `repository.go` にバッチメソッドを足せるか確認する。
-> - **G4 で必ず再検討する持ち越し**（G2から）:
->   - `SessionMutationResult` が app層の関心（`gameId` での async sync）をサービス層に持ち込んでいる件。
->   - `MemoCloudService` がサービス実体（`*GameService`/`*MemoService`）に依存している件。
-> - 進捗トラッキング: タスク #1,#2 完了 / #3〜#10 pending。
+> **✅ 全グループ完了（2026-06-30）**
+> - 作業ブランチ: `refactor/simplify-pass`（`refactor/ui-readability` から分岐）。
+> - G1〜G10 すべて適用済み（G9 は適用なしの記録のみ）。各コミットは `go test ./...` と
+>   `./scripts/run-all-lint-format.sh` 通過済み。
+> - 詳細は本文末尾の「まとめ」表を参照。
 
 
 `refactor/ui-readability` → `main` の全差分（約1.6万行）を対象に、コード品質改善
@@ -291,6 +278,48 @@
 
 これらは別途、code-review や feature work で扱うのが適切。
 
-## G10
+## G10: frontend pages/* + utils/*
 
-（着手時に追記）
+対象: `frontend/src/pages/*` / `frontend/src/utils/*` / `frontend/src/layouts/MainLayout.tsx` ほか
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Reuse | `Home.tsx` と `GameDetail.tsx` で100%重複していた `toValidDate` と `buildSaveSyncMessage`（計約40行）を `utils/saveSyncMessage.ts` に抽出。両ページとも薄いラッパー `buildSyncMessage`（formatDateWithTime をクロージャ束縛）から呼び出す形に統一 |
+
+### 見送った（将来の課題）
+
+1. **`GameDetail.tsx` のモーダル状態15+ の useState 群** — `useReducer` や enum 駆動の `useModalState` で集約できるが、ステート遷移の挙動を厳密にトレースする必要があり大きい変更。**今回見送り**。
+2. **`saveDataUpload.ts` の薄い indirection 削除** — テストファイル `saveDataUpload.test.ts` が本ブランチで追加済み。インライン化するとテストの対象が消えるため見送り。
+3. **`MainLayout.tsx` のページラベル lookup** — `find()` で配列をなめるが、URL パスが少数で実害なし。**現状維持**。
+4. **`Home.tsx` / `GameDetail.tsx` の sync-before-launch ロジック重複** — `useLaunchWithSyncCheck(game)` フックに集約できるが、両ページのフローが微妙に異なる（モーダル遷移、未追跡削除の確認等）ため、挙動差異の精査が要る。**見送り**。
+5. **`GameDetail.tsx` の `refreshGameData()` 散在（5+箇所）** — `React Query`/`SWR` 等のキャッシュ無効化を導入すれば集約できるが、現状はライブラリ未導入。**スコープ外**。
+6. **`globalErrorHandlers.ts` と `react-error-boundary` の併用** — 設計上の suggestion であり、コード重複ではない。**スコープ外**。
+
+---
+
+# まとめ
+
+| グループ | 状態 | コミット |
+|---------|------|---------|
+| G1 services コア同期 | ✅ 完了 | `cf7bba4` |
+| G2 services その他 | ✅ 完了 | `920c8b3` |
+| G3 infrastructure | ✅ 完了 | `6b8d09f` |
+| G4 app層 | ✅ 完了 | `87e25e1` |
+| G5 logging/domain/main | ✅ 完了 | `5b236d8` |
+| G6 frontend bridge | ✅ 完了 | `6aa7028` |
+| G7 frontend hooks | ✅ 完了 | `0bf3a31` |
+| G8 frontend settings | ✅ 完了 | `8a669cf` |
+| G9 frontend cloud | ✅ レビューのみ（適用なし） | `0f855c0`（docs） |
+| G10 frontend pages/utils | ✅ 完了 | （このコミット） |
+
+各グループの「見送った」項目は将来の `/code-review` や独立リファクタで扱う候補。
+特に G2/G3/G4 で挙がった以下は影響範囲は大きいが価値も大きい:
+
+- **`SessionMutationResult` のサービス→app バブルアップ削除**（G2/G4持ち越し）
+- **`MemoCloudService` のサービス→リポジトリ依存への置換**（G2/G4持ち越し）
+- **`storage.BlobKind` 定数をサービス層から domain へ移す**（G1持ち越し）
+- **`ApplyPullResult` の同期プロトコルロジックをサービス層へ移す**（G3持ち越し）
+
