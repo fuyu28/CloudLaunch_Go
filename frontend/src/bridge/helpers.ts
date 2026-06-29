@@ -153,6 +153,9 @@ export function toCloudMemoInfo(c: modelsServices.CloudMemoInfo): CloudMemoInfo 
 // 定型変換ヘルパ
 // ---------------------------------------------------------------------------
 
+/** 各ブリッジ呼び出しが共通で使う既定のフォールバックメッセージ。 */
+export const DEFAULT_ERROR_MESSAGE = "エラー";
+
 /**
  * Go API レスポンスを `ApiResult<T>` に変換する定型ヘルパ。
  *
@@ -165,7 +168,7 @@ export function toCloudMemoInfo(c: modelsServices.CloudMemoInfo): CloudMemoInfo 
  */
 export function toApiResult<T>(
   result: { success: boolean; data?: unknown; error?: { message?: string } },
-  fallbackMessage: string,
+  fallbackMessage: string = DEFAULT_ERROR_MESSAGE,
   mapData?: (data: unknown) => T,
 ): ApiResult<T> {
   if (result.success) {
@@ -176,13 +179,48 @@ export function toApiResult<T>(
 }
 
 /**
+ * 配列を返す Go API レスポンスを `ApiResult<T[]>` に変換する。
+ * `data ?? []` を `mapItem` で要素ごとに変換する。
+ */
+export function toApiResultArray<TItem, TOut>(
+  result: { success: boolean; data?: TItem[] | null; error?: { message?: string } },
+  mapItem: (item: TItem) => TOut,
+  fallbackMessage: string = DEFAULT_ERROR_MESSAGE,
+): ApiResult<TOut[]> {
+  if (result.success) {
+    return { success: true, data: (result.data ?? []).map(mapItem) };
+  }
+  return { success: false, message: result.error?.message ?? fallbackMessage };
+}
+
+/**
  * data なし(void)の Go API レスポンスを `ApiResult<void>` に変換する定型ヘルパ。
  */
 export function toApiResultVoid(
   result: { success: boolean; error?: { message?: string } },
-  fallbackMessage: string,
+  fallbackMessage: string = DEFAULT_ERROR_MESSAGE,
 ): ApiResult<void> {
   return result.success
     ? { success: true }
     : { success: false, message: result.error?.message ?? fallbackMessage };
+}
+
+/**
+ * 例外オブジェクトから人間向けメッセージを抽出する。
+ * - `Error` インスタンス → `.message`
+ * - 文字列 → そのまま
+ * - その他で truthy → `JSON.stringify`
+ * - falsy → `fallback`
+ */
+export function getErrorMessage(error: unknown, fallback: string = DEFAULT_ERROR_MESSAGE): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
 }

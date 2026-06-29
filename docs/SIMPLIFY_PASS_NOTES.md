@@ -203,6 +203,31 @@
 2. **`main.go` の panic 再 throw と `logging/recover.go` の panic swallow** — 意図的に挙動を分けている（main は再 throw / バックグラウンド goroutine は swallow）。共通化すべきでない。
 3. **domain 層には behavior が一切なく Clean Architecture 上クリーン** — 修正不要。
 
-## G6〜G10
+## G6: frontend bridge/*
 
-（フロントエンドへ移行。着手時に追記）
+対象: `frontend/src/bridge/*` (Wailsバインディングラッパー、19ファイル約1.3k行)
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Reuse | `helpers.ts` に共通定数 `DEFAULT_ERROR_MESSAGE = "エラー"` を追加し、既存の `toApiResult` / `toApiResultVoid` のフォールバック引数をデフォルト化 → 全モジュールで20+箇所の `, "エラー"` を削除 |
+| Reuse | `helpers.ts` に `toApiResultArray<TItem, TOut>` を追加。`memo.ts` / `cloudData.ts` の `(result.data ?? []).map(fn)` パターン7+箇所を1行化 |
+| Reuse / Simplification | `helpers.ts` に `getErrorMessage(error, fallback)` を追加。`erogameScape.ts` の同一エラー抽出ロジック2箇所と `game.ts` を集約 |
+| Simplification | `memo.ts`, `cloudData.ts`, `file.ts`, `game.ts`, `erogameScape.ts` で残っていた手書きの `success ? {success:true,data:...} : {success:false,message:...}` ターナリ20+箇所を `toApiResult`/`toApiResultArray` で置換 |
+
+### 見送った（将来の課題）
+
+レビューで挙がった altitude 系（バリデーション/エラー処理を hooks 層へ移管、`processMonitor.ts` のサイレントエラーを ApiResult 化、`database.ts updatePlayStatus` の read-update-read 解消等）は、**G7（hooks）で hooks 側と一緒に見直す**方が綺麗。今回は bridge 内の純粋な重複削減に絞った。
+
+1. **`erogameScape.ts` / `game.ts` の `try/catch` バリデーション** — bridge が入力 trim や空チェックも担っている。**G7 で hooks に移管を検討**。
+2. **`processMonitor.ts` の silent error swallowing** — `getMonitoringStatus` / `getProcessSnapshot` がエラー時に空配列を返している。`ApiResult<T>` に統一すべきだが、呼び出し側のコンポーネントも合わせて修正が必要。**G7 で再検討**。
+3. **`database.ts updatePlayStatus` の read-update-read** — 読み出し→変換→更新→再読み出しの3往復。バックエンドAPI追加かhooks化で改善可能だが behavior change を伴う。**見送り**。
+4. **`loadImage.ts` の `loadImageFromWeb`** — 単純pass-through。削除候補だが呼び出し元の対応を伴う。**G10 で再検討**。
+5. **`credential.ts` / `database.ts` の PascalCase payload マッピング** — Go側がPascalCaseを期待するため必須。reviewerも「dedupは難しい」と評価。**現状維持**。
+6. **`settings.ts` の 9 update メソッド** — factory化は可能だが明示的な現状の方が読みやすい。**現状維持**。
+
+## G7〜G10
+
+（着手時に追記）

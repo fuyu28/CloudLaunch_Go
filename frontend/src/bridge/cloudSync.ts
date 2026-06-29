@@ -54,7 +54,7 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
         },
       };
     },
-    push: async (gameId) => toApiResultVoid(await PushSync(gameId), "エラー"),
+    push: async (gameId) => toApiResultVoid(await PushSync(gameId)),
     pull: async (gameId, deleteUntracked = false) => {
       const result = await PullSync(gameId, deleteUntracked);
       return result.success
@@ -67,7 +67,7 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
         ? { success: true, data: result.data as PullResult }
         : { success: false, message: result.error?.message ?? "エラー" };
     },
-    deleteFromCloud: async (gameId) => toApiResultVoid(await DeleteGameFromCloud(gameId), "エラー"),
+    deleteFromCloud: async (gameId) => toApiResultVoid(await DeleteGameFromCloud(gameId)),
     onProgress: (callback: (event: SyncProgressEvent) => void) => {
       EventsOn("sync:progress", callback);
       return () => EventsOff("sync:progress");

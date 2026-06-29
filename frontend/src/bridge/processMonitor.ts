@@ -41,9 +41,8 @@ export function createProcessMonitorBridge(): WindowApi["processMonitor"] {
         }>;
       };
     },
-    pauseSession: async (gameId) => toApiResultVoid(await PauseMonitoringSession(gameId), "エラー"),
-    resumeSession: async (gameId) =>
-      toApiResultVoid(await ResumeMonitoringSession(gameId), "エラー"),
-    endSession: async (gameId) => toApiResultVoid(await EndMonitoringSession(gameId), "エラー"),
+    pauseSession: async (gameId) => toApiResultVoid(await PauseMonitoringSession(gameId)),
+    resumeSession: async (gameId) => toApiResultVoid(await ResumeMonitoringSession(gameId)),
+    endSession: async (gameId) => toApiResultVoid(await EndMonitoringSession(gameId)),
   };
 }

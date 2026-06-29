@@ -3,21 +3,20 @@
  */
 
 import { LaunchGame, CaptureGameScreenshot } from "../../wailsjs/go/app/App";
-import { toApiResultVoid } from "./helpers";
+import { getErrorMessage, toApiResult, toApiResultVoid } from "./helpers";
 import type { WindowApi } from "./types";
 
 export function createGameBridge(): WindowApi["game"] {
   return {
-    launchGame: async (exePath) => toApiResultVoid(await LaunchGame(exePath), "エラー"),
+    launchGame: async (exePath) => toApiResultVoid(await LaunchGame(exePath)),
     captureWindow: async (gameId) => {
       try {
-        const result = await CaptureGameScreenshot(gameId);
-        return result.success
-          ? { success: true, data: result.data as string }
-          : { success: false, message: result.error?.message ?? "エラー" };
+        return toApiResult<string>(await CaptureGameScreenshot(gameId));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "スクリーンショットに失敗しました";
-        return { success: false, message };
+        return {
+          success: false,
+          message: getErrorMessage(error, "スクリーンショットに失敗しました"),
+        };
       }
     },
   };

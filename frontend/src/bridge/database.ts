@@ -40,7 +40,7 @@ export function createDatabaseBridge(): WindowApi["database"] {
         SaveFolderPath: game.saveFolderPath ?? undefined,
       };
       const result = await CreateGame(payload);
-      return toApiResultVoid(result, "エラー");
+      return toApiResultVoid(result);
     },
     updateGame: async (id, game) => {
       const payload = {
@@ -56,9 +56,9 @@ export function createDatabaseBridge(): WindowApi["database"] {
         CurrentRouteID: undefined,
       };
       const result = await UpdateGame(id, payload as unknown as modelsServices.GameUpdateInput);
-      return toApiResultVoid(result, "エラー");
+      return toApiResultVoid(result);
     },
-    deleteGame: async (id) => toApiResultVoid(await DeleteGame(id), "エラー"),
+    deleteGame: async (id) => toApiResultVoid(await DeleteGame(id)),
     updatePlayStatus: async (gameId, playStatus: PlayStatus) => {
       const current = await GetGameByID(gameId);
       if (!current.success || !current.data) {
@@ -101,7 +101,7 @@ export function createDatabaseBridge(): WindowApi["database"] {
         RouteID: undefined,
       };
       const result = await CreateSession(payload as unknown as modelsServices.SessionInput);
-      return toApiResultVoid(result, "エラー");
+      return toApiResultVoid(result);
     },
     getPlaySessions: async (gameId) => {
       const result = await ListSessionsByGame(gameId);
@@ -110,8 +110,7 @@ export function createDatabaseBridge(): WindowApi["database"] {
         : { success: false, message: result.error?.message ?? "エラー" };
     },
     updateSessionName: async (sessionId, sessionName) =>
-      toApiResultVoid(await UpdateSessionName(sessionId, sessionName), "エラー"),
-    deletePlaySession: async (sessionId) =>
-      toApiResultVoid(await DeleteSession(sessionId), "エラー"),
+      toApiResultVoid(await UpdateSessionName(sessionId, sessionName)),
+    deletePlaySession: async (sessionId) => toApiResultVoid(await DeleteSession(sessionId)),
   };
 }
