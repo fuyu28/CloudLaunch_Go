@@ -12,6 +12,30 @@ import {
   screenshotHotkeyNotifyAtom,
 } from "../state/settings";
 
+type SettingResult = { success: boolean; message?: string };
+
+/**
+ * 「状態を更新 → バックエンドに反映 → 失敗時 toast.error / 成功時 toast.success」の定型を集約する。
+ * successMessage は文字列、または値から文字列を生成する関数を受け取る（未指定で成功トーストなし）。
+ */
+async function applySetting<T>(
+  setter: (value: T) => void,
+  apply: (value: T) => Promise<SettingResult>,
+  value: T,
+  errorMessage: string,
+  successMessage?: string | ((value: T) => string),
+): Promise<void> {
+  setter(value);
+  const result = await apply(value);
+  if (!result.success) {
+    toast.error(errorMessage);
+    return;
+  }
+  if (successMessage !== undefined) {
+    toast.success(typeof successMessage === "function" ? successMessage(value) : successMessage);
+  }
+}
+
 export function useScreenshotSettings() {
   const [screenshotSyncEnabled, setScreenshotSyncEnabled] = useAtom(screenshotSyncEnabledAtom);
   const [screenshotUploadJpeg, setScreenshotUploadJpeg] = useAtom(screenshotUploadJpegAtom);
@@ -22,55 +46,60 @@ export function useScreenshotSettings() {
   const [screenshotHotkeyNotify, setScreenshotHotkeyNotify] = useAtom(screenshotHotkeyNotifyAtom);
   const [isCapturingHotkey, setIsCapturingHotkey] = useState(false);
 
-  const handleScreenshotSyncEnabledChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotSyncEnabled(enabled);
-    const result = await window.api.settings.updateScreenshotSyncEnabled(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット同期の更新に失敗しました");
-      return;
-    }
-    toast.success(`スクリーンショット同期を${enabled ? "有効" : "無効"}にしました`);
-  };
+  const settings = window.api.settings;
 
-  const handleScreenshotUploadJpegChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotUploadJpeg(enabled);
-    const result = await window.api.settings.updateScreenshotUploadJpeg(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット形式の更新に失敗しました");
-      return;
-    }
-    toast.success(`スクリーンショットを${enabled ? "JPEG" : "PNG"}でアップロードします`);
-  };
+  const handleScreenshotSyncEnabledChange = (enabled: boolean): Promise<void> =>
+    applySetting(
+      setScreenshotSyncEnabled,
+      settings.updateScreenshotSyncEnabled,
+      enabled,
+      "スクリーンショット同期の更新に失敗しました",
+      (v) => `スクリーンショット同期を${v ? "有効" : "無効"}にしました`,
+    );
 
-  const handleScreenshotJpegQualityChange = async (value: number): Promise<void> => {
-    const nextValue = Math.min(100, Math.max(1, value));
-    setScreenshotJpegQuality(nextValue);
-    const result = await window.api.settings.updateScreenshotJpegQuality(nextValue);
-    if (!result.success) {
-      toast.error("スクリーンショット品質の更新に失敗しました");
-      return;
-    }
-  };
+  const handleScreenshotUploadJpegChange = (enabled: boolean): Promise<void> =>
+    applySetting(
+      setScreenshotUploadJpeg,
+      settings.updateScreenshotUploadJpeg,
+      enabled,
+      "スクリーンショット形式の更新に失敗しました",
+      (v) => `スクリーンショットを${v ? "JPEG" : "PNG"}でアップロードします`,
+    );
 
-  const handleScreenshotClientOnlyChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotClientOnly(enabled);
-    const result = await window.api.settings.updateScreenshotClientOnly(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット設定の更新に失敗しました");
-      return;
-    }
-    toast.success(enabled ? "タイトルバーを除外して撮影します" : "タイトルバーを含めて撮影します");
-  };
+  const handleScreenshotJpegQualityChange = (value: number): Promise<void> =>
+    applySetting(
+      setScreenshotJpegQuality,
+      settings.updateScreenshotJpegQuality,
+      Math.min(100, Math.max(1, value)),
+      "スクリーンショット品質の更新に失敗しました",
+    );
 
-  const handleScreenshotLocalJpegChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotLocalJpeg(enabled);
-    const result = await window.api.settings.updateScreenshotLocalJpeg(enabled);
-    if (!result.success) {
-      toast.error("スクリーンショット設定の更新に失敗しました");
-      return;
-    }
-    toast.success(enabled ? "ローカル保存をJPEGにします" : "ローカル保存をPNGにします");
-  };
+  const handleScreenshotClientOnlyChange = (enabled: boolean): Promise<void> =>
+    applySetting(
+      setScreenshotClientOnly,
+      settings.updateScreenshotClientOnly,
+      enabled,
+      "スクリーンショット設定の更新に失敗しました",
+      (v) => (v ? "タイトルバーを除外して撮影します" : "タイトルバーを含めて撮影します"),
+    );
+
+  const handleScreenshotLocalJpegChange = (enabled: boolean): Promise<void> =>
+    applySetting(
+      setScreenshotLocalJpeg,
+      settings.updateScreenshotLocalJpeg,
+      enabled,
+      "スクリーンショット設定の更新に失敗しました",
+      (v) => (v ? "ローカル保存をJPEGにします" : "ローカル保存をPNGにします"),
+    );
+
+  const handleScreenshotHotkeyNotifyChange = (enabled: boolean): Promise<void> =>
+    applySetting(
+      setScreenshotHotkeyNotify,
+      settings.updateScreenshotHotkeyNotify,
+      enabled,
+      "ホットキー通知の更新に失敗しました",
+      (v) => (v ? "ホットキー通知を有効にしました" : "ホットキー通知を無効にしました"),
+    );
 
   const applyScreenshotHotkey = async (value: string, showToast: boolean): Promise<void> => {
     const trimmed = value.trim();
@@ -80,7 +109,7 @@ export function useScreenshotSettings() {
       }
       return;
     }
-    const result = await window.api.settings.updateScreenshotHotkey(trimmed);
+    const result = await settings.updateScreenshotHotkey(trimmed);
     if (!result.success) {
       if (showToast) {
         toast.error(result.message || "ホットキーの更新に失敗しました");
@@ -95,16 +124,6 @@ export function useScreenshotSettings() {
   const handleScreenshotHotkeyChange = async (value: string): Promise<void> => {
     setScreenshotHotkey(value);
     await applyScreenshotHotkey(value, true);
-  };
-
-  const handleScreenshotHotkeyNotifyChange = async (enabled: boolean): Promise<void> => {
-    setScreenshotHotkeyNotify(enabled);
-    const result = await window.api.settings.updateScreenshotHotkeyNotify(enabled);
-    if (!result.success) {
-      toast.error("ホットキー通知の更新に失敗しました");
-      return;
-    }
-    toast.success(enabled ? "ホットキー通知を有効にしました" : "ホットキー通知を無効にしました");
   };
 
   const normalizeHotkeyFromEvent = (event: KeyboardEvent): string | null => {
@@ -137,33 +156,17 @@ export function useScreenshotSettings() {
     return [...modifiers, mainKey].join("+");
   };
 
+  // 初回マウント時にLocalStorage設定をバックエンドへ同期する。
+  // 個々の handle* と違って各設定値が変わるたびではなく、起動時の1回だけ送る意図のため deps は [] のまま。
   useEffect(() => {
-    void window.api.settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotJpegQuality(screenshotJpegQuality);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotClientOnly(screenshotClientOnly);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
-  }, []);
-
-  useEffect(() => {
-    // 初回マウント時にLocalStorage設定をバックエンドへ同期する。
+    void settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
+    void settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
+    void settings.updateScreenshotJpegQuality(screenshotJpegQuality);
+    void settings.updateScreenshotClientOnly(screenshotClientOnly);
+    void settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
+    void settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
     void applyScreenshotHotkey(screenshotHotkey, false);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

@@ -33,7 +33,7 @@ export function useFileSelection(): {
       setIsBrowsing(true);
       try {
         const result = await window.api.file.selectFile(filters);
-        if (result.success && result.data !== undefined && result.data !== undefined) {
+        if (result.success && result.data !== undefined) {
           onSuccess(result.data);
         } else {
           handleApiError(
@@ -57,7 +57,7 @@ export function useFileSelection(): {
     setIsBrowsing(true);
     try {
       const result = await window.api.file.selectFolder();
-      if (result.success && result.data !== undefined && result.data !== undefined) {
+      if (result.success && result.data !== undefined) {
         onSuccess(result.data);
       } else {
         handleApiError(

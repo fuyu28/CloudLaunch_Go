@@ -228,6 +228,27 @@
 5. **`credential.ts` / `database.ts` の PascalCase payload マッピング** — Go側がPascalCaseを期待するため必須。reviewerも「dedupは難しい」と評価。**現状維持**。
 6. **`settings.ts` の 9 update メソッド** — factory化は可能だが明示的な現状の方が読みやすい。**現状維持**。
 
-## G7〜G10
+## G7: frontend hooks/*
+
+対象: `frontend/src/hooks/*` (useScreenshotSettings / useFileSelection ほか)
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Simplification | `useScreenshotSettings.ts`: 「setState → updateAPI → 失敗 toast.error / 成功 toast.success」を `applySetting<T>` ジェネリックヘルパーに集約。6つの handler の重複（約60行）を圧縮。**意図的な mount-only sync** の useEffect は1つに統合（コメントで意図を明記） |
+| Simplification | `useFileSelection.ts`: `result.data !== undefined && result.data !== undefined` の冗長な重複条件を削除 |
+
+### 見送った（将来の課題）
+
+1. **`useScreenshotSettings.ts` の mount-only useEffect が「バグ」だというレビュアー指摘** — 直前のコメント「初回マウント時にLocalStorage設定をバックエンドへ同期する」で意図的だと判明。**バグではない**ので /simplify の対象外。
+2. **進捗リスナー（push/pull）の重複** — `useGameSaveData.ts` と `useUploadAfterSession.ts` で似たパターン。前者は `react-hot-toast` 直接、後者は `toastHandler` 経由でインターフェースが違うため、共通化に書き換え+インターフェース統一が要る。**G8/G9 で再検討候補**。
+3. **`useUploadAfterSession.ts` の `if (toastId) ... else ...` パターン3箇所** — `showLoading` が undefined を返しうるかの確認が必要。波及確認のコスト vs 削減効果が見合わない。**現状維持**。
+4. **`useCloudData.ts` の `buildCloudDataFromTree` フルツリー再構築** — 1ゲーム詳細展開時にツリー全体を再構築。挙動を変えずに直接更新するには細かい注意が必要。**G9 で cloud 全体と一緒に再検討**。
+5. **`useScreenshotSettings.ts` の `isCapturingHotkey` ローカル UI 状態** — コンポーネントへ移すべきという altitude 指摘だが、フック側がイベント captures も管理しているので分離が単純ではない。**現状維持**。
+6. **bridge レイヤーの altitude 持ち越し**（erogameScape の validation、processMonitor の silent エラー swallow） — hooks 側で対応するなら呼び出し側 components まで波及するため**G9/G10 と合わせて見直す候補**。
+
+## G8〜G10
 
 （着手時に追記）
