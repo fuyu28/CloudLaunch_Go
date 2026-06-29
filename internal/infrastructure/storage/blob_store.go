@@ -2,16 +2,15 @@
 package storage
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"CloudLaunch_Go/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -40,8 +39,7 @@ func contentTypeForKind(kind string) string {
 }
 
 func blobHashBytes(data []byte) string {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
+	return util.Sha256Hex(data)
 }
 
 // ResolveSafeRelativePath は baseDir 配下のスラッシュ区切り相対パスを解決する。
@@ -109,15 +107,7 @@ func PutBlob(ctx context.Context, client *s3.Client, bucket, gameID, kind, hash 
 	if exists {
 		return nil
 	}
-	key := blobKey(gameID, kind, hash)
-	ct := contentTypeForKind(kind)
-	_, err = client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      &bucket,
-		Key:         &key,
-		Body:        bytes.NewReader(data),
-		ContentType: &ct,
-	})
-	return err
+	return UploadBytes(ctx, client, bucket, blobKey(gameID, kind, hash), data, contentTypeForKind(kind))
 }
 
 // GetBlob はS3からブロブを取得する。
@@ -231,14 +221,7 @@ func PutBlobs(
 				if ctx.Err() != nil {
 					return
 				}
-				key := blobKey(gameID, BlobKindObject, t.hash)
-				ct := contentTypeForKind(BlobKindObject)
-				_, putErr := client.PutObject(ctx, &s3.PutObjectInput{
-					Bucket:      &bucket,
-					Key:         &key,
-					Body:        bytes.NewReader(t.data),
-					ContentType: &ct,
-				})
+				putErr := UploadBytes(ctx, client, bucket, blobKey(gameID, BlobKindObject, t.hash), t.data, contentTypeForKind(BlobKindObject))
 				if putErr != nil {
 					errOnce.Do(func() {
 						firstErr = putErr

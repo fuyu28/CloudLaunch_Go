@@ -114,6 +114,41 @@
      正しくは Game/Memo の repository インターフェースに依存すべきだが、コンストラクタ・app層の組み立て変更を伴うため見送り。
    - `wrapServiceError`（memo_cloud 内のみ使用）を `service_error.go` へ寄せる案は、現状単一ファイル利用のため据え置き。
 
-## G3〜G10
+## G3: infrastructure
+
+対象: `internal/infrastructure/db/repository.go` / `db.go` / `migrations.go` /
+`storage/*` / `credentials/*` + G2持ち越し（バッチメソッド）
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Reuse / Altitude（持ち越し） | `internal/util/hash.go` に `Sha256Hex` を新設し、`services/content_hash.go` の `hashBytes` と `storage/blob_store.go` の `blobHashBytes` から呼ぶよう統合（G1からの持ち越し） |
+| Reuse | `blob_store.go` の `PutBlob` / `PutBlobs` 内ワーカーで重複していた `client.PutObject(...)` 呼び出し2箇所を、既存の `UploadBytes()` 経由に統一 |
+| Simplification | `repository.go`: 同じ SELECT カラム列を Game(4箇所) / Memo(5箇所) / Route(3箇所) / PlaySession(3箇所) で繰り返していたのを `*SelectCols` パッケージ定数化（列追加時の更新漏れ防止） |
+| Simplification | `repository.go`: 5つのListメソッドで重複していた「QueryContext → defer Close → loop → scan → append」を `queryAll[T]` ジェネリックヘルパーに集約（各メソッドが10行台→1行） |
+| Simplification | `repository.go`: `normalizeSortDirection` の switch を `strings.EqualFold` ベースの if に簡素化 |
+| Efficiency（G2持ち越し） | `repository.go` に `ListPlaySessionsByGames(ctx, gameIDs)` を新設し、`MaintenanceService.ExportGameData` の per-game N+1 をバッチ1クエリに（`WHERE gameId IN (?, ?, ...)`） |
+| Efficiency（G2持ち越し） | `repository.go` に `UpdateRouteOrders(ctx, items)` を新設し、`RouteService.UpdateRouteOrders` の逐次 UPDATE を単一トランザクションに |
+| Altitude | `domain.RouteOrderItem` を新設し、サービス層の `RouteOrderUpdate`（API入力）と分離 |
+
+### 見送った（将来の課題）
+
+1. **`ApplyPullResult` がリポジトリにある（Altitude #1）** — 「存在しない Route 参照は NULL に正規化」という同期プロトコル固有のビジネスルールがリポジトリ層に混入している。
+   深い修正案: サービス層に「sync transaction executor」を作り、リポジトリには個別の CRUD（`UpsertGameSync` / `DeletePlaySessionsByGame` / `UpsertPlaySessionSync`）だけ残す。
+   - 影響範囲: サービス層・トランザクションスコープ・リポジトリインターフェース。大規模リファクタになるため見送り。
+2. **`BlobKind` enum がストレージ層にある（Altitude #3）** — `commits` / `trees` / `meta` / `objects` という同期プロトコル概念。
+   深い修正案: ストレージ層は `(gameID, key)` の不透明キーだけを扱い、サービス層が key を組み立てる。
+   - 影響範囲: `PutBlob` / `GetBlob` / `ListBlobHashes` のシグネチャと全呼び出し元。波及が広いため見送り。
+3. **`normalizeSortColumn` のホワイトリスト** — インフラ層に許可カラム名がある（軽い altitude 懸念）が、SQL インジェクション防御として infra に置く方が安全。現状維持。
+
+### G4 で再検討する持ち越し（G2から）
+
+これらは引き続き G4（app層）で再検討:
+- **`SessionMutationResult` がサービス層に app の関心を持ち込んでいる** — `gameId` を返す理由は app の async sync 用。深い修正は app 層で `repository.GetPlaySessionByID(sessionID)` を呼んで `gameId` を取り出す等。
+- **`MemoCloudService` が `*GameService` / `*MemoService` に依存** — サービス間依存。app 層のコンストラクタ組立を見直すタイミングで再検討。
+
+## G4〜G10
 
 （着手時に追記）

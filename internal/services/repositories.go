@@ -50,6 +50,7 @@ type RouteRepository interface {
 	UpdateRoute(ctx context.Context, route domain.Route) (*domain.Route, error)
 	DeleteRoute(ctx context.Context, routeID string) error
 	UpdateRouteOrder(ctx context.Context, routeID string, order int64) error
+	UpdateRouteOrders(ctx context.Context, items []domain.RouteOrderItem) error
 	GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
@@ -74,7 +75,7 @@ type ContentSyncRepository interface {
 // MaintenanceRepository は MaintenanceService が必要とする永続化境界を定義する。
 type MaintenanceRepository interface {
 	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
-	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
+	ListPlaySessionsByGames(ctx context.Context, gameIDs []string) (map[string][]domain.PlaySession, error)
 }
 
 // ScreenshotRepository は ScreenshotService が必要とする永続化境界を定義する。

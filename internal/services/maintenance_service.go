@@ -95,14 +95,20 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 		return GameExportResult{}, newServiceError("ゲーム一覧の取得に失敗しました", err.Error())
 	}
 
+	gameIDs := make([]string, 0, len(games))
+	for _, game := range games {
+		gameIDs = append(gameIDs, game.ID)
+	}
+	sessionsByGame, err := service.repository.ListPlaySessionsByGames(ctx, gameIDs)
+	if err != nil {
+		service.logger.Error("セッション取得に失敗しました", "error", err, "operation", "ExportGameData.listSessions")
+		return GameExportResult{}, newServiceError("セッション取得に失敗しました", err.Error())
+	}
+
 	stats := make([]GameExportStatistic, 0, len(games))
 	sessionRows := make([]domain.PlaySession, 0, len(games)*2)
 	for _, game := range games {
-		sessions, err := service.repository.ListPlaySessionsByGame(ctx, game.ID)
-		if err != nil {
-			service.logger.Error("セッション取得に失敗しました", "error", err, "operation", "ExportGameData.listSessions", "gameId", game.ID)
-			return GameExportResult{}, newServiceError("セッション取得に失敗しました", err.Error())
-		}
+		sessions := sessionsByGame[game.ID]
 		sessionRows = append(sessionRows, sessions...)
 
 		var total int64

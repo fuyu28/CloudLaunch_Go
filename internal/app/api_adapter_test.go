@@ -123,6 +123,9 @@ func (r noopAppRouteRepository) DeleteRoute(ctx context.Context, routeID string)
 func (r noopAppRouteRepository) UpdateRouteOrder(ctx context.Context, routeID string, order int64) error {
 	return nil
 }
+func (r noopAppRouteRepository) UpdateRouteOrders(ctx context.Context, items []domain.RouteOrderItem) error {
+	return nil
+}
 func (r noopAppRouteRepository) GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error) {
 	return nil, nil
 }

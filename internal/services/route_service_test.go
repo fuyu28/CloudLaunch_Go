@@ -11,15 +11,16 @@ import (
 )
 
 type fakeRouteRepository struct {
-	listRoutesByGameFn func(ctx context.Context, gameID string) ([]domain.Route, error)
-	createRouteFn      func(ctx context.Context, route domain.Route) (*domain.Route, error)
-	getRouteByIDFn     func(ctx context.Context, routeID string) (*domain.Route, error)
-	updateRouteFn      func(ctx context.Context, route domain.Route) (*domain.Route, error)
-	deleteRouteFn      func(ctx context.Context, routeID string) error
-	updateRouteOrderFn func(ctx context.Context, routeID string, order int64) error
-	getRouteStatsFn    func(ctx context.Context, gameID string) ([]domain.RouteStat, error)
-	getGameByIDFn      func(ctx context.Context, gameID string) (*domain.Game, error)
-	updateGameFn       func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	listRoutesByGameFn  func(ctx context.Context, gameID string) ([]domain.Route, error)
+	createRouteFn       func(ctx context.Context, route domain.Route) (*domain.Route, error)
+	getRouteByIDFn      func(ctx context.Context, routeID string) (*domain.Route, error)
+	updateRouteFn       func(ctx context.Context, route domain.Route) (*domain.Route, error)
+	deleteRouteFn       func(ctx context.Context, routeID string) error
+	updateRouteOrderFn  func(ctx context.Context, routeID string, order int64) error
+	updateRouteOrdersFn func(ctx context.Context, items []domain.RouteOrderItem) error
+	getRouteStatsFn     func(ctx context.Context, gameID string) ([]domain.RouteStat, error)
+	getGameByIDFn       func(ctx context.Context, gameID string) (*domain.Game, error)
+	updateGameFn        func(ctx context.Context, game domain.Game) (*domain.Game, error)
 }
 
 func (r fakeRouteRepository) ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error) {
@@ -46,6 +47,10 @@ func (r fakeRouteRepository) UpdateRouteOrder(ctx context.Context, routeID strin
 	return r.updateRouteOrderFn(ctx, routeID, order)
 }
 
+func (r fakeRouteRepository) UpdateRouteOrders(ctx context.Context, items []domain.RouteOrderItem) error {
+	return r.updateRouteOrdersFn(ctx, items)
+}
+
 func (r fakeRouteRepository) GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error) {
 	return r.getRouteStatsFn(ctx, gameID)
 }
@@ -60,15 +65,16 @@ func (r fakeRouteRepository) UpdateGame(ctx context.Context, game domain.Game) (
 
 func newFullFakeRouteRepository() fakeRouteRepository {
 	return fakeRouteRepository{
-		listRoutesByGameFn: func(ctx context.Context, gameID string) ([]domain.Route, error) { return nil, nil },
-		createRouteFn:      func(ctx context.Context, route domain.Route) (*domain.Route, error) { return &route, nil },
-		getRouteByIDFn:     func(ctx context.Context, routeID string) (*domain.Route, error) { return nil, nil },
-		updateRouteFn:      func(ctx context.Context, route domain.Route) (*domain.Route, error) { return &route, nil },
-		deleteRouteFn:      func(ctx context.Context, routeID string) error { return nil },
-		updateRouteOrderFn: func(ctx context.Context, routeID string, order int64) error { return nil },
-		getRouteStatsFn:    func(ctx context.Context, gameID string) ([]domain.RouteStat, error) { return nil, nil },
-		getGameByIDFn:      func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
-		updateGameFn:       func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listRoutesByGameFn:  func(ctx context.Context, gameID string) ([]domain.Route, error) { return nil, nil },
+		createRouteFn:       func(ctx context.Context, route domain.Route) (*domain.Route, error) { return &route, nil },
+		getRouteByIDFn:      func(ctx context.Context, routeID string) (*domain.Route, error) { return nil, nil },
+		updateRouteFn:       func(ctx context.Context, route domain.Route) (*domain.Route, error) { return &route, nil },
+		deleteRouteFn:       func(ctx context.Context, routeID string) error { return nil },
+		updateRouteOrderFn:  func(ctx context.Context, routeID string, order int64) error { return nil },
+		updateRouteOrdersFn: func(ctx context.Context, items []domain.RouteOrderItem) error { return nil },
+		getRouteStatsFn:     func(ctx context.Context, gameID string) ([]domain.RouteStat, error) { return nil, nil },
+		getGameByIDFn:       func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:        func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 	}
 }
 

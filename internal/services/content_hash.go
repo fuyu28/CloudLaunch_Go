@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/util"
 )
 
 func hashBytes(data []byte) domain.BlobHash {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
+	return util.Sha256Hex(data)
 }
 
 func hashFile(path string) (domain.BlobHash, []byte, error) {
