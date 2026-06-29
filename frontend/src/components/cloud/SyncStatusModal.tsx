@@ -7,16 +7,10 @@
  * 競合（conflict）は専用の SyncConflictModal で扱うため、ここでは扱わない。
  */
 
-import {
-  FaDesktop,
-  FaCloud,
-  FaCloudUploadAlt,
-  FaCloudDownloadAlt,
-  FaCheckCircle,
-} from "react-icons/fa";
+import { FaCloud, FaCloudUploadAlt, FaCloudDownloadAlt, FaCheckCircle } from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+import { SyncMetaCardPair } from "./SyncMetaCardPair";
 import type { SyncStatus, SyncMetaSnapshot } from "src/wailsBridge";
 
 type SyncStatusModalProps = {
@@ -53,8 +47,6 @@ export default function SyncStatusModal({
   onUpload,
   onDownload,
 }: SyncStatusModalProps): React.JSX.Element {
-  const { formatDateWithTime } = useTimeFormat();
-
   const views: Record<Exclude<SyncStatus, "conflict">, StatusView> = {
     in_sync: {
       icon: <FaCheckCircle className="text-success" />,
@@ -80,10 +72,22 @@ export default function SyncStatusModal({
     },
   };
 
-  const view = views[status as Exclude<SyncStatus, "conflict">] ?? views.in_sync;
+  // 競合はこのモーダルでは扱わない（呼び出し側で SyncConflictModal に振り分け済み）
+  const view = status === "conflict" ? views.in_sync : views[status];
 
   const showUpload = status === "push_needed" || (status === "never_synced" && hasSaveFolder);
   const showDownload = status === "pull_needed";
+
+  const actionButton = (
+    icon: React.ReactNode,
+    label: string,
+    onClick: () => void,
+  ): React.JSX.Element => (
+    <button type="button" className="btn btn-primary" onClick={onClick} disabled={isProcessing}>
+      {isProcessing ? <span className="loading loading-spinner loading-xs" /> : icon}
+      {label}
+    </button>
+  );
 
   return (
     <BaseModal
@@ -97,36 +101,8 @@ export default function SyncStatusModal({
           <button type="button" className="btn" onClick={onClose} disabled={isProcessing}>
             閉じる
           </button>
-          {showUpload && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={onUpload}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <span className="loading loading-spinner loading-xs" />
-              ) : (
-                <FaCloudUploadAlt />
-              )}
-              アップロード
-            </button>
-          )}
-          {showDownload && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={onDownload}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <span className="loading loading-spinner loading-xs" />
-              ) : (
-                <FaCloudDownloadAlt />
-              )}
-              ダウンロード
-            </button>
-          )}
+          {showUpload && actionButton(<FaCloudUploadAlt />, "アップロード", onUpload)}
+          {showDownload && actionButton(<FaCloudDownloadAlt />, "ダウンロード", onDownload)}
         </div>
       }
     >
@@ -141,53 +117,7 @@ export default function SyncStatusModal({
         </div>
 
         {/* ローカル / クラウドの情報 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-base-300 bg-base-100 p-3 space-y-2">
-            <div className="flex items-center gap-2 font-medium text-sm">
-              <FaDesktop className="text-base-content/70" />
-              ローカル
-            </div>
-            {localMeta ? (
-              <dl className="text-xs text-base-content/75 space-y-1">
-                <div>
-                  <dt className="inline">デバイス: </dt>
-                  <dd className="inline font-medium text-base-content">{localMeta.deviceName}</dd>
-                </div>
-                <div>
-                  <dt className="inline">更新日時: </dt>
-                  <dd className="inline font-medium text-base-content">
-                    {formatDateWithTime(localMeta.createdAt)}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-xs text-base-content/60">情報なし</p>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-primary/30 bg-base-100 p-3 space-y-2">
-            <div className="flex items-center gap-2 font-medium text-sm">
-              <FaCloud className="text-primary" />
-              クラウド
-            </div>
-            {remoteMeta ? (
-              <dl className="text-xs text-base-content/75 space-y-1">
-                <div>
-                  <dt className="inline">デバイス: </dt>
-                  <dd className="inline font-medium text-base-content">{remoteMeta.deviceName}</dd>
-                </div>
-                <div>
-                  <dt className="inline">更新日時: </dt>
-                  <dd className="inline font-medium text-base-content">
-                    {formatDateWithTime(remoteMeta.createdAt)}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-xs text-base-content/60">情報なし</p>
-            )}
-          </div>
-        </div>
+        <SyncMetaCardPair localMeta={localMeta} remoteMeta={remoteMeta} />
 
         <p className="text-xs text-base-content/60">対象: {gameTitle}</p>
       </div>

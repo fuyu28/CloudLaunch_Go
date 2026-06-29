@@ -1,7 +1,7 @@
 import { FaDesktop, FaCloud } from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";
-import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+import { SyncMetaCardPair } from "./SyncMetaCardPair";
 import type { SyncMetaSnapshot } from "src/wailsBridge";
 
 type SyncConflictModalProps = {
@@ -25,8 +25,6 @@ export default function SyncConflictModal({
   onUseRemote,
   isResolving,
 }: SyncConflictModalProps): React.JSX.Element {
-  const { formatDateWithTime } = useTimeFormat();
-
   return (
     <BaseModal
       id="sync-conflict-modal"
@@ -66,55 +64,11 @@ export default function SyncConflictModal({
           どちらのデータを使用するか選択してください。
         </p>
 
-        <div className="grid grid-cols-2 gap-3">
-          {/* ローカル */}
-          <div className="rounded-lg border border-base-300 bg-base-100 p-3 space-y-2">
-            <div className="flex items-center gap-2 font-medium text-sm">
-              <FaDesktop className="text-warning" />
-              ローカル
-            </div>
-            {localMeta ? (
-              <dl className="text-xs text-base-content/70 space-y-1">
-                <div>
-                  <dt className="inline">デバイス: </dt>
-                  <dd className="inline font-medium text-base-content">{localMeta.deviceName}</dd>
-                </div>
-                <div>
-                  <dt className="inline">更新日時: </dt>
-                  <dd className="inline font-medium text-base-content">
-                    {formatDateWithTime(localMeta.createdAt)}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-xs text-base-content/50">情報なし</p>
-            )}
-          </div>
-
-          {/* クラウド */}
-          <div className="rounded-lg border border-primary/30 bg-base-100 p-3 space-y-2">
-            <div className="flex items-center gap-2 font-medium text-sm">
-              <FaCloud className="text-primary" />
-              クラウド
-            </div>
-            {remoteMeta ? (
-              <dl className="text-xs text-base-content/70 space-y-1">
-                <div>
-                  <dt className="inline">デバイス: </dt>
-                  <dd className="inline font-medium text-base-content">{remoteMeta.deviceName}</dd>
-                </div>
-                <div>
-                  <dt className="inline">更新日時: </dt>
-                  <dd className="inline font-medium text-base-content">
-                    {formatDateWithTime(remoteMeta.createdAt)}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-xs text-base-content/50">情報なし</p>
-            )}
-          </div>
-        </div>
+        <SyncMetaCardPair
+          localMeta={localMeta}
+          remoteMeta={remoteMeta}
+          localIconClassName="text-warning"
+        />
 
         <div className="alert alert-warning py-2">
           <span className="text-xs">

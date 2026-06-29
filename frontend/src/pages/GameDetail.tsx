@@ -52,9 +52,8 @@ export default function GameDetail(): React.JSX.Element {
   } | null>(null);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  // 同期確認モーダル（状態表示）
+  // 同期確認モーダル（状態表示）。null = 非表示
   const [syncStatusDetail, setSyncStatusDetail] = useState<SyncStatusDetail | null>(null);
-  const [isSyncStatusOpen, setIsSyncStatusOpen] = useState(false);
   const [isSyncActionRunning, setIsSyncActionRunning] = useState(false);
   // 同期管理外（untracked）ファイルの削除確認モーダル状態
   const [untrackedDeletes, setUntrackedDeletes] = useState<string[] | null>(null);
@@ -455,7 +454,6 @@ export default function GameDetail(): React.JSX.Element {
         return;
       }
       setSyncStatusDetail(detail);
-      setIsSyncStatusOpen(true);
     } catch (error) {
       logger.error("同期状態の取得エラー:", {
         component: "GameDetail",
@@ -476,7 +474,7 @@ export default function GameDetail(): React.JSX.Element {
       const op = await push(game.id);
       if (op.ok) {
         showToast("クラウドにアップロードしました", "success");
-        setIsSyncStatusOpen(false);
+        setSyncStatusDetail(null);
         await refreshGameData();
       } else {
         showToast(op.message || "アップロードに失敗しました", "error");
@@ -494,14 +492,14 @@ export default function GameDetail(): React.JSX.Element {
       const op = await pull(game.id);
       if (op.ok && op.applied === false) {
         // 同期管理外ファイルの削除確認が必要（ここまでローカル無変更）
-        setIsSyncStatusOpen(false);
+        setSyncStatusDetail(null);
         setUntrackedDeletes(op.untrackedDeletes ?? []);
         setUntrackedConfirmKind("pull");
         return;
       }
       if (op.ok) {
         showToast("クラウドからダウンロードしました", "success");
-        setIsSyncStatusOpen(false);
+        setSyncStatusDetail(null);
         await refreshGameData();
       } else {
         showToast(op.message || "ダウンロードに失敗しました", "error");
@@ -658,8 +656,8 @@ export default function GameDetail(): React.JSX.Element {
       {/* 同期状態の確認（アップロード/ダウンロードはここで選択して実行） */}
       {syncStatusDetail && (
         <SyncStatusModal
-          isOpen={isSyncStatusOpen}
-          onClose={() => setIsSyncStatusOpen(false)}
+          isOpen
+          onClose={() => setSyncStatusDetail(null)}
           gameTitle={game.title}
           status={syncStatusDetail.status}
           localMeta={syncStatusDetail.localMeta}
