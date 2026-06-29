@@ -61,6 +61,39 @@
 
 ---
 
-## G2〜G10
+## G2: services その他
+
+対象: `maintenance_service.go` / `memo_cloud_service.go` / `route_service.go` ほか既存変更
+コミット: （このグループのコミット）
+
+### 適用した
+
+| 観点 | 内容 |
+|------|------|
+| Simplification | `route_service.go`: 「`requireNonEmpty` → 警告ログ → `newServiceError`」の検証パターンが7箇所重複していたのを `requireField` メソッドに集約（約4行×7→1行×7） |
+| Simplification | `memo_cloud_service.go`: 4メソッドで重複していた「S3設定解決 → エラーlog → `newServiceError`」を `resolveS3OrError` ヘルパーに集約 |
+| Simplification | `maintenance_service.go`: `applyRestoredAppData` と `recoverAppDataFromRollback` で完全重複していた DB再オープン+ランタイム再開フック呼び出し（10行）を `reopenAndResume` に集約 |
+| Altitude | `maintenance_service.go` に局所定義されていた `MaintenanceRepository` を `repositories.go` に移し、全リポジトリ境界の single-source を維持 |
+
+### 見送った（将来の課題）
+
+1. **`memo_cloud_service.go` の Details append（`recordSyncError` 化）** — `resultData.Details = append(..., fmt.Sprintf(...))` が10箇所以上。
+   ヘルパー化で意図は明確になるが行数削減効果が小さく、置換箇所が多い割にリスクが上回るため見送り。
+2. **`memo_cloud_service.go` L111 のキー直構築**（`fmt.Sprintf("games/%s/memo/%s", …)`）。
+   他は `memo.BuildMemoPath()` を使うが、ここはタイトルでなく**ファイル名**ベースのため引数が合わず据え置き。
+   memo パッケージにファイル名版ヘルパーを足すなら統一できる。
+3. **`maintenance_service.go` の trim+空チェック3箇所** — エラーメッセージが各々異なり、汎用ヘルパーにしても綺麗にならないため見送り。
+4. **効率（Efficiency）系はすべて見送り**:
+   - `ExportGameData` の per-game `ListPlaySessionsByGame`（N+1）→ `WHERE game_id IN (...)` バッチ化はリポジトリ拡張が必要（**G3 で repository を見るときに再検討**）。
+   - `route_service.UpdateRouteOrders` の逐次 UPDATE → バッチ UPDATE も同様にリポジトリ拡張が必要。
+   - `GetCloudMemos` の `games/` 全列挙＋メモパスフィルタ、単一ゲーム同期での全ゲーム取得 → 挙動が変わりうるため据え置き。
+5. **Altitude（設計）系の大物は見送り**（app層・コンストラクタ・新インターフェースへ波及するため）:
+   - **`SessionMutationResult` が app層の関心（`gameId` による async sync）をサービス層へ持ち込んでいる**。
+     深い修正は `(*domain.PlaySession, error)` を返す等。app層（`api.go`）と合わせて **G4 で再検討**。
+   - **`MemoCloudService` が `*GameService` / `*MemoService` に依存**（リポジトリ境界でなくサービス実体）。
+     正しくは Game/Memo の repository インターフェースに依存すべきだが、コンストラクタ・app層の組み立て変更を伴うため見送り。
+   - `wrapServiceError`（memo_cloud 内のみ使用）を `service_error.go` へ寄せる案は、現状単一ファイル利用のため据え置き。
+
+## G3〜G10
 
 （着手時に追記）

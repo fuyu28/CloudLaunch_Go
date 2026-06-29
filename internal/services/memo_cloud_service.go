@@ -64,10 +64,9 @@ func NewMemoCloudService(
 }
 
 func (service *MemoCloudService) GetCloudMemos(ctx context.Context) ([]CloudMemoInfo, error) {
-	cfg, credential, err := service.resolveDefaultS3Config(ctx)
+	cfg, credential, err := service.resolveS3OrError(ctx, "GetCloudMemos", "クラウドメモ取得に失敗しました")
 	if err != nil {
-		service.logger.Error("クラウドメモ取得に失敗しました", "error", err, "operation", "GetCloudMemos.getDefaultS3Client")
-		return nil, newServiceError("クラウドメモ取得に失敗しました", err.Error())
+		return nil, err
 	}
 	objects, err := service.objectStore.ListObjects(ctx, cfg, credential, "games/")
 	if err != nil {
@@ -99,10 +98,9 @@ func (service *MemoCloudService) GetCloudMemos(ctx context.Context) ([]CloudMemo
 }
 
 func (service *MemoCloudService) DownloadMemoFromCloud(ctx context.Context, gameID string, memoFileName string) (string, error) {
-	cfg, credential, err := service.resolveDefaultS3Config(ctx)
+	cfg, credential, err := service.resolveS3OrError(ctx, "DownloadMemoFromCloud", "メモのダウンロードに失敗しました")
 	if err != nil {
-		service.logger.Error("メモのダウンロードに失敗しました", "error", err, "operation", "DownloadMemoFromCloud.getDefaultS3Client")
-		return "", newServiceError("メモのダウンロードに失敗しました", err.Error())
+		return "", err
 	}
 	if strings.TrimSpace(gameID) == "" || strings.TrimSpace(memoFileName) == "" {
 		service.logger.Warn("メモのダウンロード入力が不正です", "operation", "DownloadMemoFromCloud", "gameId", gameID, "memoFileName", memoFileName)
@@ -118,10 +116,9 @@ func (service *MemoCloudService) DownloadMemoFromCloud(ctx context.Context, game
 }
 
 func (service *MemoCloudService) UploadMemoToCloud(ctx context.Context, memoID string) error {
-	cfg, credential, err := service.resolveDefaultS3Config(ctx)
+	cfg, credential, err := service.resolveS3OrError(ctx, "UploadMemoToCloud", "メモのアップロードに失敗しました")
 	if err != nil {
-		service.logger.Error("メモのアップロードに失敗しました", "error", err, "operation", "UploadMemoToCloud.getDefaultS3Client")
-		return newServiceError("メモのアップロードに失敗しました", err.Error())
+		return err
 	}
 	memoData, err := service.memoService.GetMemoByID(ctx, strings.TrimSpace(memoID))
 	if err != nil {
@@ -150,10 +147,9 @@ func (service *MemoCloudService) UploadMemoToCloud(ctx context.Context, memoID s
 }
 
 func (service *MemoCloudService) SyncMemosFromCloud(ctx context.Context, gameID string) (MemoSyncResult, error) {
-	cfg, credential, err := service.resolveDefaultS3Config(ctx)
+	cfg, credential, err := service.resolveS3OrError(ctx, "SyncMemosFromCloud", "メモ同期に失敗しました")
 	if err != nil {
-		service.logger.Error("メモ同期に失敗しました", "error", err, "operation", "SyncMemosFromCloud.getDefaultS3Client")
-		return MemoSyncResult{}, newServiceError("メモ同期に失敗しました", err.Error())
+		return MemoSyncResult{}, err
 	}
 
 	resultData := MemoSyncResult{
@@ -413,6 +409,17 @@ func (service *MemoCloudService) resolveDefaultS3Config(ctx context.Context) (st
 		return storage.S3Config{}, credentials.Credential{}, errors.New("認証情報がありません")
 	}
 	return resolveS3Config(service.config, credential), *credential, nil
+}
+
+// resolveS3OrError は既定の S3 設定を解決し、失敗時はログを出して ServiceError を返す。
+// op はログの operation 名のプレフィックス、errMessage はユーザー向けメッセージ。
+func (service *MemoCloudService) resolveS3OrError(ctx context.Context, op, errMessage string) (storage.S3Config, credentials.Credential, error) {
+	cfg, credential, err := service.resolveDefaultS3Config(ctx)
+	if err != nil {
+		service.logger.Error(errMessage, "error", err, "operation", op+".getDefaultS3Client")
+		return storage.S3Config{}, credentials.Credential{}, newServiceError(errMessage, err.Error())
+	}
+	return cfg, credential, nil
 }
 
 func wrapServiceError(err error, fallbackMessage string) error {

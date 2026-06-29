@@ -21,6 +21,16 @@ func NewRouteService(repository RouteRepository, logger *slog.Logger) *RouteServ
 	return &RouteService{repository: repository, logger: logger}
 }
 
+// requireField は必須の文字列フィールドを検証し、空なら警告ログを出して ServiceError を返す。
+func (service *RouteService) requireField(value, field, errMessage string) (string, error) {
+	trimmed, detail, ok := requireNonEmpty(value, field)
+	if !ok {
+		service.logger.Warn(errMessage, "detail", detail, field, value)
+		return "", newServiceError(errMessage, detail)
+	}
+	return trimmed, nil
+}
+
 // ListRoutesByGame はゲームIDでルート一覧を取得する。
 func (service *RouteService) ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error) {
 	routes, error := service.repository.ListRoutesByGame(ctx, strings.TrimSpace(gameID))
@@ -54,10 +64,9 @@ func (service *RouteService) CreateRoute(ctx context.Context, input RouteInput) 
 
 // UpdateRoute はルートを更新する。
 func (service *RouteService) UpdateRoute(ctx context.Context, routeID string, input RouteUpdateInput) (*domain.Route, error) {
-	trimmedID, detail, ok := requireNonEmpty(routeID, "routeID")
-	if !ok {
-		service.logger.Warn("ルートIDが不正です", "detail", detail, "routeId", routeID)
-		return nil, newServiceError("ルートIDが不正です", detail)
+	trimmedID, err := service.requireField(routeID, "routeID", "ルートIDが不正です")
+	if err != nil {
+		return nil, err
 	}
 
 	route, error := service.repository.GetRouteByID(ctx, trimmedID)
@@ -83,10 +92,9 @@ func (service *RouteService) UpdateRoute(ctx context.Context, routeID string, in
 
 // DeleteRoute はルートを削除する。
 func (service *RouteService) DeleteRoute(ctx context.Context, routeID string) error {
-	trimmedID, detail, ok := requireNonEmpty(routeID, "routeID")
-	if !ok {
-		service.logger.Warn("ルートIDが不正です", "detail", detail, "routeId", routeID)
-		return newServiceError("ルートIDが不正です", detail)
+	trimmedID, err := service.requireField(routeID, "routeID", "ルートIDが不正です")
+	if err != nil {
+		return err
 	}
 
 	if error := service.repository.DeleteRoute(ctx, trimmedID); error != nil {
@@ -98,15 +106,12 @@ func (service *RouteService) DeleteRoute(ctx context.Context, routeID string) er
 
 // UpdateRouteOrders はルートの並び順を更新する。
 func (service *RouteService) UpdateRouteOrders(ctx context.Context, gameID string, orders []RouteOrderUpdate) error {
-	_, detail, ok := requireNonEmpty(gameID, "gameID")
-	if !ok {
-		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
-		return newServiceError("ゲームIDが不正です", detail)
+	if _, err := service.requireField(gameID, "gameID", "ゲームIDが不正です"); err != nil {
+		return err
 	}
 	for _, order := range orders {
-		if _, detail, ok := requireNonEmpty(order.ID, "routeID"); !ok {
-			service.logger.Warn("ルートIDが不正です", "detail", detail, "routeId", order.ID)
-			return newServiceError("ルートIDが不正です", detail)
+		if _, err := service.requireField(order.ID, "routeID", "ルートIDが不正です"); err != nil {
+			return err
 		}
 		if order.Order < 0 {
 			service.logger.Warn("ルート順序が不正です", "routeId", order.ID, "order", order.Order)
@@ -122,10 +127,9 @@ func (service *RouteService) UpdateRouteOrders(ctx context.Context, gameID strin
 
 // GetRouteStats はルートの統計を取得する。
 func (service *RouteService) GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error) {
-	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
-	if !ok {
-		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
-		return nil, newServiceError("ゲームIDが不正です", detail)
+	trimmedGameID, err := service.requireField(gameID, "gameID", "ゲームIDが不正です")
+	if err != nil {
+		return nil, err
 	}
 	stats, error := service.repository.GetRouteStats(ctx, trimmedGameID)
 	if error != nil {
@@ -137,15 +141,13 @@ func (service *RouteService) GetRouteStats(ctx context.Context, gameID string) (
 
 // SetCurrentRoute はゲームの現在ルートを設定する。
 func (service *RouteService) SetCurrentRoute(ctx context.Context, gameID string, routeID string) error {
-	trimmedGameID, detail, ok := requireNonEmpty(gameID, "gameID")
-	if !ok {
-		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
-		return newServiceError("ゲームIDが不正です", detail)
+	trimmedGameID, err := service.requireField(gameID, "gameID", "ゲームIDが不正です")
+	if err != nil {
+		return err
 	}
-	trimmedRouteID, detail, ok := requireNonEmpty(routeID, "routeID")
-	if !ok {
-		service.logger.Warn("ルートIDが不正です", "detail", detail, "routeId", routeID)
-		return newServiceError("ルートIDが不正です", detail)
+	trimmedRouteID, err := service.requireField(routeID, "routeID", "ルートIDが不正です")
+	if err != nil {
+		return err
 	}
 	game, error := service.repository.GetGameByID(ctx, trimmedGameID)
 	if error != nil {

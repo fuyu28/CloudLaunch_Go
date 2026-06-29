@@ -71,6 +71,12 @@ type ContentSyncRepository interface {
 	UpsertSetting(ctx context.Context, key, value string) error
 }
 
+// MaintenanceRepository は MaintenanceService が必要とする永続化境界を定義する。
+type MaintenanceRepository interface {
+	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
+}
+
 // ScreenshotRepository は ScreenshotService が必要とする永続化境界を定義する。
 type ScreenshotRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
