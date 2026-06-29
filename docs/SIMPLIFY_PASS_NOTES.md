@@ -1,5 +1,25 @@
 # Simplify Pass Notes
 
+> **⏸ 再開ポイント（2026-06-30 時点で中断）**
+> - 作業ブランチ: `refactor/simplify-pass`（`refactor/ui-readability` から分岐）。作業ツリーはクリーン。
+> - 完了済み: **G1**(`cf7bba4`) / 検討記録(`00248ce`) / **G2**(`920c8b3`)。各コミットは `go test ./... ` と
+>   `./scripts/run-all-lint-format.sh` を通過済み。
+> - **次にやること: G3（infrastructure: `internal/infrastructure/db/repository.go` / `storage/*` / `credentials/*`）から再開。**
+> - 再開手順:
+>   1. `git switch refactor/simplify-pass` でこのブランチに戻る。
+>   2. このファイル末尾の「G3〜G10」と各グループの「見送った」メモを確認。
+>   3. 対象グループを4観点（reuse/simplification/efficiency/altitude）で並列レビュー → 適用 →
+>      `go test`(or `bun run test`) + lint → グループ単位でコミット → このファイルに追記。
+> - **G3 で必ず再検討する持ち越し**（G2から）:
+>   - `ExportGameData` の N+1（per-game `ListPlaySessionsByGame`）→ `WHERE game_id IN (...)` バッチ化。
+>   - `route_service.UpdateRouteOrders` の逐次 UPDATE → バッチ UPDATE。
+>   - いずれも `repository.go` にバッチメソッドを足せるか確認する。
+> - **G4 で必ず再検討する持ち越し**（G2から）:
+>   - `SessionMutationResult` が app層の関心（`gameId` での async sync）をサービス層に持ち込んでいる件。
+>   - `MemoCloudService` がサービス実体（`*GameService`/`*MemoService`）に依存している件。
+> - 進捗トラッキング: タスク #1,#2 完了 / #3〜#10 pending。
+
+
 `refactor/ui-readability` → `main` の全差分（約1.6万行）を対象に、コード品質改善
 （reuse / simplification / efficiency / altitude の4観点）を順番に適用していく作業の記録。
 
