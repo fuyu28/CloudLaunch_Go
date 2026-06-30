@@ -59,6 +59,7 @@ ManifestDPIAware true
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+!insertmacro MUI_PAGE_COMPONENTS # ショートカット作成有無の確認ページ
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
@@ -79,7 +80,8 @@ Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
 
-Section
+Section "${INFO_PRODUCTNAME}" SecMain
+    SectionIn RO # 本体は外せない必須セクション
     !insertmacro wails.setShellContext
 
     !insertmacro wails.webview2runtime
@@ -88,14 +90,30 @@ Section
 
     !insertmacro wails.files
 
-    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
 SectionEnd
+
+Section "スタートメニューにショートカットを作成" SecStartMenu
+    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+SectionEnd
+
+Section "デスクトップにショートカットを作成" SecDesktop
+    CreateShortcut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+SectionEnd
+
+# Components ページのチェックボックスにマウスホバーした際の説明文
+LangString DESC_SecMain      ${LANG_JAPANESE} "${INFO_PRODUCTNAME} 本体(必須)"
+LangString DESC_SecStartMenu ${LANG_JAPANESE} "スタートメニューに ${INFO_PRODUCTNAME} のショートカットを追加します"
+LangString DESC_SecDesktop   ${LANG_JAPANESE} "デスクトップに ${INFO_PRODUCTNAME} のショートカットを追加します"
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecMain}      $(DESC_SecMain)
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecStartMenu} $(DESC_SecStartMenu)
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop}   $(DESC_SecDesktop)
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "uninstall"
     !insertmacro wails.setShellContext
