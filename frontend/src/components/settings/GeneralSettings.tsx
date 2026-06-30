@@ -56,6 +56,18 @@ export default function GeneralSettings(): React.JSX.Element {
   // オフラインモード変更ハンドラー
   const handleOfflineModeChange = async (enabled: boolean): Promise<void> => {
     setOfflineMode(enabled);
+    // バックエンド ContentSyncService にも反映しないと、process_monitor 経由の
+    // 自動同期や直接の cloudSync.Push 呼び出しが UI 設定を無視して S3 にアクセスし続ける。
+    const result = await window.api.settings.updateOfflineMode(enabled);
+    if (!result.success) {
+      logger.error("オフラインモード設定の更新エラー:", {
+        component: "GeneralSettings",
+        function: "handleOfflineModeChange",
+        data: result.message,
+      });
+      toast.error("オフラインモードの更新に失敗しました");
+      return;
+    }
     if (enabled) {
       toast.success("オフラインモードを有効にしました");
     } else {

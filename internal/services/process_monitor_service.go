@@ -549,6 +549,11 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 		go func(gameID string) {
 			defer logging.Recover(service.logger, "process-monitor.afterPlayPush")
 			if err := service.cloudSync.Push(context.Background(), gameID, nil); err != nil {
+				// オフラインモードはユーザーが明示的に同期を抑止しているので warn 級にしない。
+				if errors.Is(err, ErrOffline) {
+					service.logger.Debug("オフラインモードのためクラウド同期をスキップ", "gameId", gameID)
+					return
+				}
 				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
 		}(game.GameID)

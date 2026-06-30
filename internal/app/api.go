@@ -295,6 +295,17 @@ func (app *App) UpdateAutoTracking(enabled bool) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateOfflineMode はオフラインモードの ON/OFF を切り替える。
+// ON の間は ContentSyncService.Push/Pull/DeleteFromCloud が ErrOffline を返し、
+// process_monitor からの自動同期も静かにスキップされる。フロントエンドの atom
+// 状態は永続化されているため、起動時にもこの API を再度呼んでバックエンドへ同期させる。
+func (app *App) UpdateOfflineMode(enabled bool) result.ApiResult[bool] {
+	if app.ContentSyncService != nil {
+		app.ContentSyncService.SetOfflineMode(enabled)
+	}
+	return result.OkResult(true)
+}
+
 // UpdateUploadConcurrency はアップロード同時実行数を更新する。
 func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 	if value <= 0 {
