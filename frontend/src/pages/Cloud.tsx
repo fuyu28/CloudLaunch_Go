@@ -13,12 +13,15 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useAtomValue } from "jotai";
 
 import { CloudBreadcrumb } from "@renderer/components/cloud/CloudBreadcrumb";
 import { CloudContent } from "@renderer/components/cloud/CloudContent";
 import { CloudDeleteModal } from "@renderer/components/cloud/CloudDeleteModal";
 import { CloudFileDetailsModal } from "@renderer/components/cloud/CloudFileDetailsModal";
 import { CloudHeader, type ViewMode } from "@renderer/components/cloud/CloudHeader";
+
+import { isValidCredsAtom } from "@renderer/state/credentials";
 
 import { useCloudData } from "@renderer/hooks/useCloudData";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
@@ -51,6 +54,7 @@ export default function Cloud(): React.JSX.Element {
 
   const validateCreds = useValidateCreds();
   const { isOfflineMode } = useOfflineMode();
+  const isValidCreds = useAtomValue(isValidCredsAtom);
 
   // クラウドデータ管理フック
   const {
@@ -243,6 +247,17 @@ export default function Cloud(): React.JSX.Element {
         onRefresh={() => fetchCloudData()}
         onDeleteAll={handleDeleteAll}
       />
+
+      {/* 取得不能状態の案内: リストが空に見える理由を明示する */}
+      {isOfflineMode ? (
+        <div className="alert alert-warning text-sm mb-4">
+          オフラインモードのため、クラウドデータを取得できません
+        </div>
+      ) : !isValidCreds ? (
+        <div className="alert alert-warning text-sm mb-4">
+          クラウド認証情報が未設定のため、クラウドデータを取得できません
+        </div>
+      ) : null}
 
       {/* パンくずリスト */}
       <CloudBreadcrumb
