@@ -363,6 +363,13 @@ func (s *ContentSyncService) pushCheckRemoteHead(ctx context.Context, bstore con
 	if game.LocalSyncHead != nil {
 		localSyncHead = *game.LocalSyncHead
 	}
+	// localSyncHead が空のままリモートが存在する場合は「同期基準を一度も持ったことがない /
+	// DeleteFromCloud 直後に他端末が再 Push した」ケース。常に conflict 扱いにすると
+	// ユーザーはまず Pull or ResolveConflict せざるを得ず、Status() 側が PullNeeded として
+	// 扱っているのと整合しない。Pull を促すための明示エラーで返す。
+	if localSyncHead == "" {
+		return "", fmt.Errorf("リモートにデータがあります。Pull で取り込むか、ローカルを採用するなら同期確認画面から選択してください")
+	}
 	if contentFingerprint(remoteMeta) != localSyncHead {
 		return "", fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
 	}
