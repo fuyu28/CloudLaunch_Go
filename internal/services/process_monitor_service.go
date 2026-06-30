@@ -15,9 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"CloudLaunch_Go/internal/db"
-	"CloudLaunch_Go/internal/models"
-	"CloudLaunch_Go/internal/storage"
+	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/unicode"
@@ -57,9 +56,10 @@ type normalizedProcess struct {
 
 // ProcessMonitorService はゲームプロセス監視を提供する。
 type ProcessMonitorService struct {
-	repository         *db.Repository
+	repository         ProcessMonitorRepository
 	logger             *slog.Logger
 	cloudSync          *CloudSyncService
+	processProvider    func() ([]ProcessInfo, string)
 	monitoredGames     map[string]*MonitoringGame
 	autoTracking       bool
 	monitoringInterval *time.Ticker
@@ -71,7 +71,7 @@ type ProcessMonitorService struct {
 }
 
 // NewProcessMonitorService は ProcessMonitorService を生成する。
-func NewProcessMonitorService(repository *db.Repository, logger *slog.Logger, cloudSync *CloudSyncService) *ProcessMonitorService {
+func NewProcessMonitorService(repository ProcessMonitorRepository, logger *slog.Logger, cloudSync *CloudSyncService) *ProcessMonitorService {
 	return &ProcessMonitorService{
 		repository:         repository,
 		logger:             logger,
@@ -147,18 +147,18 @@ func (service *ProcessMonitorService) UpdateAutoTracking(enabled bool) {
 }
 
 // GetMonitoringStatus は監視状態を返す。
-func (service *ProcessMonitorService) GetMonitoringStatus() []models.MonitoringGameStatus {
+func (service *ProcessMonitorService) GetMonitoringStatus() []domain.MonitoringGameStatus {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 
-	status := make([]models.MonitoringGameStatus, 0, len(service.monitoredGames))
+	status := make([]domain.MonitoringGameStatus, 0, len(service.monitoredGames))
 	now := time.Now()
 	for _, game := range service.monitoredGames {
 		playTime := game.AccumulatedTime
 		if game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd {
 			playTime += int64(now.Sub(*game.PlayStartTime).Seconds())
 		}
-		status = append(status, models.MonitoringGameStatus{
+		status = append(status, domain.MonitoringGameStatus{
 			GameID:            game.GameID,
 			GameTitle:         game.GameTitle,
 			ExeName:           game.ExeName,
@@ -241,28 +241,28 @@ func latestGameActivityAt(game *MonitoringGame) *time.Time {
 }
 
 // GetProcessSnapshot は現在のプロセス一覧と正規化後の値を取得する。
-func (service *ProcessMonitorService) GetProcessSnapshot() models.ProcessSnapshot {
+func (service *ProcessMonitorService) GetProcessSnapshot() domain.ProcessSnapshot {
 	processes, source := service.getProcesses()
 
-	items := make([]models.ProcessSnapshotItem, 0, len(processes))
+	items := make([]domain.ProcessSnapshotItem, 0, len(processes))
 	for _, proc := range processes {
-		items = append(items, models.ProcessSnapshotItem{
+		items = append(items, domain.ProcessSnapshotItem{
 			Name:           proc.Name,
 			Pid:            proc.Pid,
 			Cmd:            proc.Cmd,
 			NormalizedName: normalizeProcessToken(proc.Name),
-			NormalizedCmd:  normalizeProcessToken(proc.Cmd),
+			NormalizedCmd:  normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
-	return models.ProcessSnapshot{
+	return domain.ProcessSnapshot{
 		Source: source,
 		Items:  items,
 	}
 }
 
 func (service *ProcessMonitorService) addMonitoredGame(gameID string, title string, exePath string) {
-	exeName := filepath.Base(exePath)
+	exeName := windowsPathBase(exePath)
 	service.monitoredGames[gameID] = &MonitoringGame{
 		GameID:          gameID,
 		GameTitle:       title,
@@ -322,7 +322,7 @@ func (service *ProcessMonitorService) ResumeSession(gameID string) bool {
 		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
 			info:          proc,
 			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessToken(proc.Cmd),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -392,7 +392,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
 			info:          proc,
 			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessToken(proc.Cmd),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -482,7 +482,7 @@ func (service *ProcessMonitorService) checkProcesses() {
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
 	sessionName := "自動記録 - " + game.ExeName
 	ctx := context.Background()
-	_, err := service.repository.CreatePlaySession(ctx, models.PlaySession{
+	_, err := service.repository.CreatePlaySession(ctx, domain.PlaySession{
 		GameID:      game.GameID,
 		PlayedAt:    endedAt,
 		Duration:    game.AccumulatedTime,
@@ -521,9 +521,8 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
 	if service.cloudSync != nil {
 		go func(gameID string) {
-			result := service.cloudSync.SyncGame(context.Background(), "default", gameID)
-			if !result.Success {
-				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", result.Error)
+			if _, err := service.cloudSync.SyncGame(context.Background(), "default", gameID); err != nil {
+				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
 		}(game.GameID)
 	}
@@ -567,7 +566,7 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 	}
 
 	ctx := context.Background()
-	games, err := service.repository.ListGames(ctx, "", models.PlayStatus(""), "title", "asc")
+	games, err := service.repository.ListGames(ctx, "", domain.PlayStatus(""), "title", "asc")
 	if err != nil || len(games) == 0 {
 		return
 	}
@@ -584,7 +583,7 @@ func (service *ProcessMonitorService) autoAddGamesFromDatabase(processes []Proce
 		if game.ExePath == "" || game.ExePath == UnconfiguredExePath {
 			continue
 		}
-		exeName := filepath.Base(game.ExePath)
+		exeName := windowsPathBase(game.ExePath)
 		normalizedExe := normalizeProcessToken(exeName)
 		if _, ok := processNames[normalizedExe]; !ok {
 			continue
@@ -627,8 +626,8 @@ func (service *ProcessMonitorService) matchGameProcess(
 		return false
 	}
 
-	normalizedExePath := normalizeProcessToken(gameExePath)
-	normalizedExeDir := normalizeProcessToken(filepath.Dir(gameExePath))
+	normalizedExePath := normalizeProcessToken(normalizeWindowsPathSeparators(gameExePath))
+	normalizedExeDir := normalizeProcessToken(windowsPathDir(gameExePath))
 	procCmd := proc.normalizedCmd
 	if procCmd == normalizedExePath {
 		return true
@@ -654,7 +653,7 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 		return nil, nil
 	}
 
-	exeName := filepath.Base(trimmed)
+	exeName := windowsPathBase(trimmed)
 	if !strings.HasSuffix(strings.ToLower(exeName), ".exe") {
 		exeName += ".exe"
 	}
@@ -667,7 +666,7 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
 			info:          proc,
 			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessToken(proc.Cmd),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
 		})
 	}
 
@@ -829,6 +828,9 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 }
 
 func (service *ProcessMonitorService) getProcesses() ([]ProcessInfo, string) {
+	if service.processProvider != nil {
+		return service.processProvider()
+	}
 	processes, err := service.getProcessesNative()
 	if err == nil {
 		return processes, "native"
@@ -848,4 +850,8 @@ func normalizeProcessToken(value string) string {
 		return ""
 	}
 	return norm.NFC.String(strings.ToLower(value))
+}
+
+func normalizeProcessPathToken(value string) string {
+	return normalizeProcessToken(normalizeWindowsPathSeparators(value))
 }

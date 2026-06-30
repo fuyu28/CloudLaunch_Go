@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/db"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/db"
 	"CloudLaunch_Go/internal/logging"
 	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/services"
@@ -21,19 +21,19 @@ type App struct {
 	ctx                 context.Context
 	Config              config.Config
 	Logger              *slog.Logger
-	Database            *db.Repository
 	GameService         *services.GameService
 	SessionService      *services.SessionService
-	ChapterService      *services.ChapterService
+	RouteService        *services.RouteService
 	MemoService         *services.MemoService
 	MemoFiles           *memo.FileManager
-	UploadService       *services.UploadService
 	CredentialService   *services.CredentialService
 	CloudService        *services.CloudService
 	CloudSyncService    *services.CloudSyncService
 	ErogameScapeService *services.ErogameScapeService
 	ProcessMonitor      *services.ProcessMonitorService
 	ScreenshotService   *services.ScreenshotService
+	MemoCloudService    *services.MemoCloudService
+	MaintenanceService  *services.MaintenanceService
 	HotkeyService       services.HotkeyService
 	dbConnection        *sql.DB
 	autoTracking        bool
@@ -69,37 +69,15 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, error
 	}
 
-	cloudService := services.NewCloudService(cfg, credentialStore, logger)
-	cloudSync := services.NewCloudSyncService(cfg, credentialStore, repository, logger)
-	erogameScapeService := services.NewErogameScapeService(cfg, logger)
-	var processMonitor *services.ProcessMonitorService
-	if runtime.GOOS == "windows" {
-		processMonitor = services.NewProcessMonitorService(repository, logger, cloudSync)
-	} else {
-		logger.Info("非Windows環境のためプロセス監視を無効化します", "goos", runtime.GOOS)
-	}
-	screenshotService := services.NewScreenshotService(cfg, repository, logger)
-
 	app := &App{
-		Config:              cfg,
-		Logger:              logger,
-		Database:            repository,
-		GameService:         services.NewGameService(repository, logger),
-		SessionService:      services.NewSessionService(repository, logger),
-		ChapterService:      services.NewChapterService(repository, logger),
-		MemoService:         services.NewMemoService(repository, memoFiles, logger),
-		MemoFiles:           memoFiles,
-		UploadService:       services.NewUploadService(repository, logger),
-		CredentialService:   services.NewCredentialService(credentialStore, logger),
-		CloudService:        cloudService,
-		CloudSyncService:    cloudSync,
-		ErogameScapeService: erogameScapeService,
-		ProcessMonitor:      processMonitor,
-		ScreenshotService:   screenshotService,
-		dbConnection:        connection,
-		autoTracking:        true,
-		isMonitoring:        false,
+		Config:       cfg,
+		Logger:       logger,
+		MemoFiles:    memoFiles,
+		dbConnection: connection,
+		autoTracking: true,
+		isMonitoring: false,
 	}
+	app.configureServices(repository, credentialStore)
 
 	logger.Info("CloudLaunch backend initialized")
 	return app, nil
@@ -140,4 +118,30 @@ func (app *App) Shutdown(ctx context.Context) error {
 		return app.dbConnection.Close()
 	}
 	return nil
+}
+
+func (app *App) configureServices(repository *db.Repository, credentialStore credentials.Store) {
+	app.GameService = services.NewGameService(repository, app.Logger)
+	app.SessionService = services.NewSessionService(repository, app.Logger)
+	app.RouteService = services.NewRouteService(repository, app.Logger)
+	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
+	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
+	app.CloudService = services.NewCloudService(app.Config, credentialStore, app.Logger)
+	app.CloudSyncService = services.NewCloudSyncService(app.Config, credentialStore, repository, app.Logger)
+	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
+	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.CloudSyncService)
+	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)
+	app.MemoCloudService = services.NewMemoCloudService(app.Config, credentialStore, app.GameService, app.MemoService, app.Logger)
+	app.MaintenanceService = services.NewMaintenanceService(
+		app.Config,
+		repository,
+		app.Logger,
+		services.MaintenanceRuntimeHooks{
+			CreateDatabaseSnapshot:    app.createDatabaseSnapshot,
+			StopRuntimeServices:       app.stopRuntimeServicesForRestore,
+			CloseDatabaseConnection:   app.closeDatabaseConnection,
+			ReopenDatabaseAndServices: app.reopenDatabaseAndServices,
+			ResumeRuntimeServices:     app.resumeRuntimeServicesAfterRestore,
+		},
+	)
 }

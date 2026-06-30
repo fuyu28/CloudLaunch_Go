@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/models"
+	"CloudLaunch_Go/internal/domain"
 	"golang.org/x/sys/windows"
 )
 
@@ -66,7 +66,7 @@ func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGa
 		"output", fullPath,
 	)
 
-	if err := service.captureWithScreenClip(ctx, fullPath, tmpPath); err != nil {
+	if err := service.captureFunc(ctx, fullPath, tmpPath); err != nil {
 		if errors.Is(err, ErrNoNewScreenshot) {
 			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", gameID)
 			return "", "", err
@@ -84,7 +84,7 @@ func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGa
 func (service *ScreenshotService) resolveHotkeyGame(
 	ctx context.Context,
 	preferredGameID string,
-) (*models.Game, error) {
+) (*domain.Game, error) {
 	trimmed := strings.TrimSpace(preferredGameID)
 	if trimmed == "" {
 		return nil, nil

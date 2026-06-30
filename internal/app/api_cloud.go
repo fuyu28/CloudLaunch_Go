@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/result"
-	"CloudLaunch_Go/internal/storage"
 	"CloudLaunch_Go/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -221,9 +221,9 @@ func (app *App) GetCloudFileDetails(prefix string) result.ApiResult[[]CloudFileD
 // GetCloudFileDetailsByGame はゲームIDから詳細を取得する。
 func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudFileDetailsResult] {
 	ctx := app.context()
-	game, error := app.Database.GetGameByID(ctx, gameID)
-	if error != nil {
-		return errorResultWithLog[CloudFileDetailsResult](app, "ゲーム取得に失敗しました", error, "operation", "GetCloudFileDetailsByGame.getGameByID", "gameId", gameID)
+	game, err := app.GameService.GetGameByID(ctx, gameID)
+	if err != nil {
+		return serviceErrorResult[CloudFileDetailsResult](err, "ゲーム取得に失敗しました")
 	}
 	if game == nil {
 		return result.OkResult(CloudFileDetailsResult{Exists: false, Files: []CloudFileDetail{}})
@@ -275,13 +275,38 @@ func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHa
 	return result.OkResult(metadata)
 }
 
+func resolveSaveHashUpdatedAt(raw string, now func() time.Time) (time.Time, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return now(), nil
+	}
+
+	updatedAt, err := time.Parse(time.RFC3339Nano, trimmed)
+	if err == nil {
+		return updatedAt, nil
+	}
+
+	updatedAt, fallbackErr := time.Parse(time.RFC3339, trimmed)
+	if fallbackErr == nil {
+		return updatedAt, nil
+	}
+
+	return time.Time{}, err
+}
+
 // SaveCloudSaveHash はクラウドにセーブデータハッシュを保存する。
-func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[bool] {
+func (app *App) SaveCloudSaveHash(gameID string, hash string, updatedAtRaw string) result.ApiResult[bool] {
 	trimmed := strings.TrimSpace(gameID)
 	trimmedHash := strings.TrimSpace(hash)
 	if trimmed == "" || trimmedHash == "" {
 		app.Logger.Warn("入力が不正です", "operation", "SaveCloudSaveHash", "gameId", gameID)
 		return result.ErrorResult[bool]("入力が不正です", "gameID or hash is empty")
+	}
+
+	updatedAt, err := resolveSaveHashUpdatedAt(updatedAtRaw, time.Now)
+	if err != nil {
+		app.Logger.Warn("日時の形式が不正です", "operation", "SaveCloudSaveHash", "updatedAt", updatedAtRaw)
+		return result.ErrorResult[bool]("入力が不正です", "updatedAt must be RFC3339")
 	}
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
@@ -291,7 +316,7 @@ func (app *App) SaveCloudSaveHash(gameID string, hash string) result.ApiResult[b
 	key := createSaveHashPath(trimmed)
 	metadata := storage.SaveHashMetadata{
 		Hash:      trimmedHash,
-		UpdatedAt: time.Now(),
+		UpdatedAt: updatedAt,
 	}
 	if error := storage.SaveSaveHash(ctx, client, bucket, key, metadata); error != nil {
 		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.saveSaveHash", "key", key)
@@ -395,18 +420,17 @@ func (app *App) getDefaultS3Client(ctx context.Context) (*s3.Client, string, err
 }
 
 func (app *App) resolveS3Config(ctx context.Context) (storage.S3Config, credentials.Credential, error) {
-	credResult := app.CredentialService.LoadCredential(ctx, "default")
-	if !credResult.Success || credResult.Data == nil {
+	credential, err := app.CredentialService.LoadCredential(ctx, "default")
+	if err != nil || credential == nil {
 		return storage.S3Config{}, credentials.Credential{}, errors.New("認証情報がありません")
 	}
-	credential := *credResult.Data
 	return storage.S3Config{
 		Endpoint:       util.FirstNonEmpty(credential.Endpoint, app.Config.S3Endpoint),
 		Region:         util.FirstNonEmpty(credential.Region, app.Config.S3Region),
 		Bucket:         util.FirstNonEmpty(credential.BucketName, app.Config.S3Bucket),
 		ForcePathStyle: app.Config.S3ForcePathStyle,
 		UseTLS:         app.Config.S3UseTLS,
-	}, credential, nil
+	}, *credential, nil
 }
 
 func detectGamePrefix(key string) string {

@@ -64,10 +64,25 @@ import {
   OpenLogsDirectory,
   LoadCloudMetadata,
   SaveCredential,
+  DeleteCloudGame,
   SelectFile,
   SelectFolder,
+  ExportGameData,
+  CreateFullBackup,
+  RestoreFullBackup,
+  CaptureGameScreenshot,
+  SearchErogameScape,
+  ReportError,
+  ReportLog,
   UpdateAutoTracking,
   UpdateOfflineMode,
+  UpdateScreenshotClientOnly,
+  UpdateScreenshotHotkey,
+  UpdateScreenshotHotkeyNotify,
+  UpdateScreenshotJpegQuality,
+  UpdateScreenshotLocalJpeg,
+  UpdateScreenshotSyncEnabled,
+  UpdateScreenshotUploadJpeg,
   UpdateUploadConcurrency,
   UpdateTransferRetryCount,
   UpdateGame,
@@ -106,6 +121,13 @@ export type WindowApi = {
     updateScreenshotHotkey: (combo: string) => Promise<ApiResult<void>>;
     updateScreenshotHotkeyNotify: (enabled: boolean) => Promise<ApiResult<void>>;
   };
+  maintenance: {
+    exportGameData: (
+      outputDir: string,
+    ) => Promise<ApiResult<{ jsonPath: string; csvPath: string }>>;
+    createFullBackup: (outputDir: string) => Promise<ApiResult<string>>;
+    restoreFullBackup: (backupPath: string) => Promise<ApiResult<void>>;
+  };
   file: {
     selectFile: (filters?: { name: string; extensions: string[] }[]) => Promise<ApiResult<string>>;
     selectFolder: () => Promise<ApiResult<string>>;
@@ -124,11 +146,7 @@ export type WindowApi = {
     createGame: (game: InputGameData) => Promise<ApiResult<void>>;
     updateGame: (id: string, game: InputGameData) => Promise<ApiResult<void>>;
     deleteGame: (id: string) => Promise<ApiResult<void>>;
-    updatePlayStatus: (
-      gameId: string,
-      playStatus: PlayStatus,
-      clearedAt?: Date,
-    ) => Promise<ApiResult<GameType>>;
+    updatePlayStatus: (gameId: string, playStatus: PlayStatus) => Promise<ApiResult<GameType>>;
     createSession: (
       duration: number,
       gameId: string,
@@ -184,7 +202,11 @@ export type WindowApi = {
       getCloudHash: (
         gameId: string,
       ) => Promise<ApiResult<{ hash: string; updatedAt: Date } | null>>;
-      saveCloudHash: (gameId: string, hash: string) => Promise<ApiResult<void>>;
+      saveCloudHash: (
+        gameId: string,
+        hash: string,
+        updatedAt?: Date | string | null,
+      ) => Promise<ApiResult<void>>;
     };
   };
   loadImage: {
@@ -266,6 +288,38 @@ export type WindowApi = {
   };
 };
 
+function normalizeApiDate(value: Date | string | number | null | undefined): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === "string" && value.startsWith("0001-01-01T00:00:00")) {
+    return new Date(Number.NaN);
+  }
+  return new Date(value ?? Number.NaN);
+}
+
+function normalizeCloudDirectoryNode(node: CloudDirectoryNode): CloudDirectoryNode {
+  return {
+    ...node,
+    lastModified: normalizeApiDate(node.lastModified),
+    children: node.children?.map(normalizeCloudDirectoryNode),
+  };
+}
+
+function normalizeCloudDataItem(item: CloudDataItem): CloudDataItem {
+  return {
+    ...item,
+    lastModified: normalizeApiDate(item.lastModified),
+  };
+}
+
+function normalizeCloudFileDetail(file: CloudFileDetail): CloudFileDetail {
+  return {
+    ...file,
+    lastModified: normalizeApiDate(file.lastModified),
+  };
+}
+
 export const createWailsBridge = (): WindowApi => {
   return {
     window: {
@@ -308,58 +362,66 @@ export const createWailsBridge = (): WindowApi => {
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotSyncEnabled: async (enabled) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotSyncEnabled"](
-          enabled,
-        );
-        return result && result.success
+        const result = await UpdateScreenshotSyncEnabled(enabled);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotUploadJpeg: async (enabled) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotUploadJpeg"](
-          enabled,
-        );
-        return result && result.success
+        const result = await UpdateScreenshotUploadJpeg(enabled);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotJpegQuality: async (value) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotJpegQuality"](
-          value,
-        );
-        return result && result.success
+        const result = await UpdateScreenshotJpegQuality(value);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotClientOnly: async (enabled) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotClientOnly"](
-          enabled,
-        );
-        return result && result.success
+        const result = await UpdateScreenshotClientOnly(enabled);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotLocalJpeg: async (enabled) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotLocalJpeg"](
-          enabled,
-        );
-        return result && result.success
+        const result = await UpdateScreenshotLocalJpeg(enabled);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotHotkey: async (combo) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotHotkey"](combo);
-        return result && result.success
+        const result = await UpdateScreenshotHotkey(combo);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
       updateScreenshotHotkeyNotify: async (enabled) => {
-        const result = await (window as any)["go"]["app"]["App"]["UpdateScreenshotHotkeyNotify"](
-          enabled,
-        );
-        return result && result.success
+        const result = await UpdateScreenshotHotkeyNotify(enabled);
+        return result.success
           ? { success: true }
-          : { success: false, message: result?.error?.message ?? "エラー" };
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+    },
+    maintenance: {
+      exportGameData: async (outputDir) => {
+        const result = await ExportGameData(outputDir);
+        return result.success
+          ? { success: true, data: result.data as { jsonPath: string; csvPath: string } }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      createFullBackup: async (outputDir) => {
+        const result = await CreateFullBackup(outputDir);
+        return result.success
+          ? { success: true, data: result.data as string }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      restoreFullBackup: async (backupPath) => {
+        const result = await RestoreFullBackup(backupPath);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
       },
     },
     file: {
@@ -433,9 +495,8 @@ export const createWailsBridge = (): WindowApi => {
           ImagePath: game.imagePath ?? null,
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
-          PlayStatus: game.playStatus ?? "unplayed",
           ClearedAt: null,
-          CurrentChapter: null,
+          CurrentRouteID: null,
         };
         const result = await UpdateGame(id, payload);
         return result.success
@@ -448,12 +509,13 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      updatePlayStatus: async (gameId, playStatus, clearedAt) => {
+      updatePlayStatus: async (gameId, playStatus) => {
         const current = await GetGameByID(gameId);
         if (!current.success || !current.data) {
           return { success: false, message: current.error?.message ?? "ゲーム取得に失敗しました" };
         }
         const game = current.data as GameType;
+        const clearedAt = playStatus === "played" ? new Date() : null;
         const updatePayload = {
           Title: game.title,
           Publisher: game.publisher,
@@ -461,8 +523,8 @@ export const createWailsBridge = (): WindowApi => {
           ExePath: game.exePath,
           SaveFolderPath: game.saveFolderPath ?? null,
           PlayStatus: playStatus,
-          ClearedAt: clearedAt ?? null,
-          CurrentChapter: game.currentChapter ?? null,
+          ClearedAt: clearedAt,
+          CurrentRouteID: game.currentRouteId ?? null,
         };
         const result = await UpdateGame(gameId, updatePayload);
         if (!result.success) {
@@ -480,8 +542,7 @@ export const createWailsBridge = (): WindowApi => {
           PlayedAt: new Date(),
           Duration: duration,
           SessionName: sessionName ?? null,
-          ChapterID: null,
-          UploadID: null,
+          RouteID: null,
         };
         const result = await CreateSession(payload);
         return result.success
@@ -643,13 +704,19 @@ export const createWailsBridge = (): WindowApi => {
       listCloudData: async () => {
         const result = await ListCloudData();
         return result.success
-          ? { success: true, data: (result.data ?? []) as CloudDataItem[] }
+          ? {
+              success: true,
+              data: ((result.data ?? []) as CloudDataItem[]).map(normalizeCloudDataItem),
+            }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       getDirectoryTree: async () => {
         const result = await GetDirectoryTree();
         return result.success
-          ? { success: true, data: (result.data ?? []) as CloudDirectoryNode[] }
+          ? {
+              success: true,
+              data: ((result.data ?? []) as CloudDirectoryNode[]).map(normalizeCloudDirectoryNode),
+            }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
       deleteCloudData: async (path) => {
@@ -667,7 +734,10 @@ export const createWailsBridge = (): WindowApi => {
       getCloudFileDetails: async (path) => {
         const result = await GetCloudFileDetails(path);
         return result.success
-          ? { success: true, data: (result.data ?? []) as CloudFileDetail[] }
+          ? {
+              success: true,
+              data: ((result.data ?? []) as CloudFileDetail[]).map(normalizeCloudFileDetail),
+            }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
     },
@@ -700,10 +770,12 @@ export const createWailsBridge = (): WindowApi => {
           return result.success
             ? {
                 success: true,
-                data: result.data as {
-                  exists: boolean;
-                  totalSize: number;
-                  files: CloudFileDetail[];
+                data: {
+                  exists: Boolean(result.data?.exists),
+                  totalSize: Number(result.data?.totalSize ?? 0),
+                  files: ((result.data?.files ?? []) as CloudFileDetail[]).map(
+                    normalizeCloudFileDetail,
+                  ),
                 },
               }
             : { success: false, message: result.error?.message ?? "エラー" };
@@ -722,8 +794,14 @@ export const createWailsBridge = (): WindowApi => {
             ? { success: true, data: result.data as { hash: string; updatedAt: Date } | null }
             : { success: false, message: result.error?.message ?? "エラー" };
         },
-        saveCloudHash: async (gameId, hash) => {
-          const result = await SaveCloudSaveHash(gameId, hash);
+        saveCloudHash: async (gameId, hash, updatedAt) => {
+          const normalizedUpdatedAt =
+            updatedAt instanceof Date
+              ? updatedAt.toISOString()
+              : typeof updatedAt === "string"
+                ? updatedAt
+                : "";
+          const result = await SaveCloudSaveHash(gameId, hash, normalizedUpdatedAt);
           return result.success
             ? { success: true }
             : { success: false, message: result.error?.message ?? "エラー" };
@@ -822,10 +900,10 @@ export const createWailsBridge = (): WindowApi => {
       },
       deleteGame: async (gameId) => {
         try {
-          const result = await (window as any)["go"]["app"]["App"]["DeleteCloudGame"](gameId);
-          return result && result.success
+          const result = await DeleteCloudGame(gameId);
+          return result.success
             ? { success: true }
-            : { success: false, message: result?.error?.message ?? "エラー" };
+            : { success: false, message: result.error?.message ?? "エラー" };
         } catch (error) {
           const message = error instanceof Error ? error.message : "削除に失敗しました";
           return { success: false, message };
@@ -841,10 +919,10 @@ export const createWailsBridge = (): WindowApi => {
       },
       captureWindow: async (gameId) => {
         try {
-          const result = await (window as any)["go"]["app"]["App"]["CaptureGameScreenshot"](gameId);
-          return result && result.success
+          const result = await CaptureGameScreenshot(gameId);
+          return result.success
             ? { success: true, data: result.data as string }
-            : { success: false, message: result?.error?.message ?? "エラー" };
+            : { success: false, message: result.error?.message ?? "エラー" };
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "スクリーンショットに失敗しました";
@@ -882,10 +960,7 @@ export const createWailsBridge = (): WindowApi => {
           return { success: false, message: "検索ワードを入力してください" };
         }
         try {
-          const result = await (window as any)["go"]["app"]["App"]["SearchErogameScape"](
-            trimmed,
-            pageUrl ?? "",
-          );
+          const result = await SearchErogameScape(trimmed, pageUrl ?? "");
           return { success: true, data: result as ErogameScapeSearchResult };
         } catch (error) {
           let message = "批評空間の検索に失敗しました";
@@ -902,24 +977,14 @@ export const createWailsBridge = (): WindowApi => {
     },
     errorReport: {
       reportError: (payload) => {
-        const reportError = (window as any)?.go?.app?.App?.ReportError;
-        if (typeof reportError === "function") {
-          void reportError(payload).catch((error: unknown) => {
-            console.error("ReportError failed", error, payload);
-          });
-          return;
-        }
-        console.error(payload);
+        void ReportError(payload).catch((error: unknown) => {
+          console.error("ReportError failed", error, payload);
+        });
       },
       reportLog: (payload) => {
-        const reportLog = (window as any)?.go?.app?.App?.ReportLog;
-        if (typeof reportLog === "function") {
-          void reportLog(payload).catch((error: unknown) => {
-            console.error("ReportLog failed", error, payload);
-          });
-          return;
-        }
-        console.log(payload);
+        void ReportLog(payload).catch((error: unknown) => {
+          console.error("ReportLog failed", error, payload);
+        });
       },
     },
   };

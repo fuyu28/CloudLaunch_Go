@@ -28,3 +28,7 @@ frontend/.vite/
 
 # Env
 .env
+
+# Runtime / temp
+tmp/
+.codex

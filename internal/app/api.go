@@ -15,178 +15,206 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+	"CloudLaunch_Go/internal/infrastructure/storage"
 	"CloudLaunch_Go/internal/logging"
-	"CloudLaunch_Go/internal/models"
 	"CloudLaunch_Go/internal/result"
 	"CloudLaunch_Go/internal/services"
-	"CloudLaunch_Go/internal/storage"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ListGames はゲーム一覧を取得する。
-func (app *App) ListGames(searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]models.Game] {
+func (app *App) ListGames(searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]domain.Game] {
 	ctx := app.context()
 	status := normalizePlayStatus(filter)
-	return app.GameService.ListGames(ctx, searchText, status, sortBy, sortDirection)
+	games, err := app.GameService.ListGames(ctx, searchText, status, sortBy, sortDirection)
+	return serviceResult(games, err, "ゲーム一覧取得に失敗しました")
 }
 
 // GetGameByID はゲームを取得する。
-func (app *App) GetGameByID(gameID string) result.ApiResult[*models.Game] {
-	return app.GameService.GetGameByID(app.context(), gameID)
+func (app *App) GetGameByID(gameID string) result.ApiResult[*domain.Game] {
+	game, err := app.GameService.GetGameByID(app.context(), gameID)
+	return serviceResult(game, err, "ゲーム取得に失敗しました")
 }
 
 // CreateGame はゲームを作成する。
-func (app *App) CreateGame(input services.GameInput) result.ApiResult[*models.Game] {
-	created := app.GameService.CreateGame(app.context(), input)
-	if created.Success && created.Data != nil {
-		app.syncGameAsync(created.Data.ID)
+func (app *App) CreateGame(input services.GameInput) result.ApiResult[*domain.Game] {
+	created, err := app.GameService.CreateGame(app.context(), input)
+	if err != nil {
+		return serviceErrorResult[*domain.Game](err, "ゲーム作成に失敗しました")
 	}
-	return created
+	if created != nil {
+		app.syncGameAsync(created.ID)
+	}
+	return result.OkResult(created)
 }
 
 // UpdateGame はゲームを更新する。
-func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result.ApiResult[*models.Game] {
-	updated := app.GameService.UpdateGame(app.context(), gameID, input)
-	if updated.Success && updated.Data != nil {
-		app.syncGameAsync(updated.Data.ID)
+func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result.ApiResult[*domain.Game] {
+	updated, err := app.GameService.UpdateGame(app.context(), gameID, input)
+	if err != nil {
+		return serviceErrorResult[*domain.Game](err, "ゲーム更新に失敗しました")
 	}
-	return updated
+	if updated != nil {
+		app.syncGameAsync(updated.ID)
+	}
+	return result.OkResult(updated)
 }
 
 // UpdatePlayTime はプレイ時間を更新する。
-func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
-	return app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
+func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*domain.Game] {
+	game, err := app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
+	return serviceResult(game, err, "プレイ時間更新に失敗しました")
 }
 
 // DeleteGame はゲームを削除する。
 func (app *App) DeleteGame(gameID string) result.ApiResult[bool] {
-	return app.GameService.DeleteGame(app.context(), gameID)
+	if err := app.GameService.DeleteGame(app.context(), gameID); err != nil {
+		return serviceErrorResult[bool](err, "ゲーム削除に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
-// ListChaptersByGame は章一覧を取得する。
-func (app *App) ListChaptersByGame(gameID string) result.ApiResult[[]models.Chapter] {
-	return app.ChapterService.ListChaptersByGame(app.context(), gameID)
+// ListRoutesByGame はルート一覧を取得する。
+func (app *App) ListRoutesByGame(gameID string) result.ApiResult[[]domain.Route] {
+	routes, err := app.RouteService.ListRoutesByGame(app.context(), gameID)
+	return serviceResult(routes, err, "ルート取得に失敗しました")
 }
 
-// CreateChapter は章を作成する。
-func (app *App) CreateChapter(input services.ChapterInput) result.ApiResult[*models.Chapter] {
-	return app.ChapterService.CreateChapter(app.context(), input)
+// CreateRoute はルートを作成する。
+func (app *App) CreateRoute(input services.RouteInput) result.ApiResult[*domain.Route] {
+	route, err := app.RouteService.CreateRoute(app.context(), input)
+	return serviceResult(route, err, "ルート作成に失敗しました")
 }
 
-// UpdateChapter は章を更新する。
-func (app *App) UpdateChapter(chapterID string, input services.ChapterUpdateInput) result.ApiResult[*models.Chapter] {
-	return app.ChapterService.UpdateChapter(app.context(), chapterID, input)
+// UpdateRoute はルートを更新する。
+func (app *App) UpdateRoute(routeID string, input services.RouteUpdateInput) result.ApiResult[*domain.Route] {
+	route, err := app.RouteService.UpdateRoute(app.context(), routeID, input)
+	return serviceResult(route, err, "ルート更新に失敗しました")
 }
 
-// UpdateChapterOrders は章の並び順を更新する。
-func (app *App) UpdateChapterOrders(gameID string, orders []services.ChapterOrderUpdate) result.ApiResult[bool] {
-	return app.ChapterService.UpdateChapterOrders(app.context(), gameID, orders)
+// UpdateRouteOrders はルートの並び順を更新する。
+func (app *App) UpdateRouteOrders(gameID string, orders []services.RouteOrderUpdate) result.ApiResult[bool] {
+	if err := app.RouteService.UpdateRouteOrders(app.context(), gameID, orders); err != nil {
+		return serviceErrorResult[bool](err, "ルート順序更新に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
-// GetChapterStats は章の統計を取得する。
-func (app *App) GetChapterStats(gameID string) result.ApiResult[[]models.ChapterStat] {
-	return app.ChapterService.GetChapterStats(app.context(), gameID)
+// GetRouteStats はルートの統計を取得する。
+func (app *App) GetRouteStats(gameID string) result.ApiResult[[]domain.RouteStat] {
+	stats, err := app.RouteService.GetRouteStats(app.context(), gameID)
+	return serviceResult(stats, err, "ルート統計取得に失敗しました")
 }
 
-// SetCurrentChapter はゲームの現在章を設定する。
-func (app *App) SetCurrentChapter(gameID string, chapterID string) result.ApiResult[bool] {
-	return app.ChapterService.SetCurrentChapter(app.context(), gameID, chapterID)
+// SetCurrentRoute はゲームの現在ルートを設定する。
+func (app *App) SetCurrentRoute(gameID string, routeID string) result.ApiResult[bool] {
+	if err := app.RouteService.SetCurrentRoute(app.context(), gameID, routeID); err != nil {
+		return serviceErrorResult[bool](err, "現在ルート更新に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
-// DeleteChapter は章を削除する。
-func (app *App) DeleteChapter(chapterID string) result.ApiResult[bool] {
-	return app.ChapterService.DeleteChapter(app.context(), chapterID)
+// DeleteRoute はルートを削除する。
+func (app *App) DeleteRoute(routeID string) result.ApiResult[bool] {
+	if err := app.RouteService.DeleteRoute(app.context(), routeID); err != nil {
+		return serviceErrorResult[bool](err, "ルート削除に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 // CreateSession はセッションを作成する。
-func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*models.PlaySession] {
-	created := app.SessionService.CreateSession(app.context(), input)
-	if created.Success && created.Data != nil {
-		app.syncGameAsync(created.Data.GameID)
+func (app *App) CreateSession(input services.SessionInput) result.ApiResult[*domain.PlaySession] {
+	created, err := app.SessionService.CreateSession(app.context(), input)
+	if err != nil {
+		return serviceErrorResult[*domain.PlaySession](err, "セッション作成に失敗しました")
 	}
-	return created
+	if created != nil {
+		app.syncGameAsync(created.GameID)
+	}
+	return result.OkResult(created)
 }
 
 // ListSessionsByGame はセッション一覧を取得する。
-func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]models.PlaySession] {
-	return app.SessionService.ListSessionsByGame(app.context(), gameID)
+func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]domain.PlaySession] {
+	sessions, err := app.SessionService.ListSessionsByGame(app.context(), gameID)
+	return serviceResult(sessions, err, "セッション取得に失敗しました")
 }
 
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
-	var gameID string
-	if app.Database != nil {
-		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
-			gameID = session.GameID
-		}
+	deleted, err := app.SessionService.DeleteSession(app.context(), sessionID)
+	if err != nil {
+		return serviceErrorResult[bool](err, "セッション削除に失敗しました")
 	}
-	deleted := app.SessionService.DeleteSession(app.context(), sessionID)
-	if deleted.Success && gameID != "" {
-		app.syncGameAsync(gameID)
+	if deleted.GameID != "" {
+		app.syncGameAsync(deleted.GameID)
 	}
-	return deleted
+	return result.OkResult(true)
 }
 
-// UpdateSessionChapter はセッション章を更新する。
-func (app *App) UpdateSessionChapter(sessionID string, chapterID *string) result.ApiResult[bool] {
-	var gameID string
-	if app.Database != nil {
-		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
-			gameID = session.GameID
-		}
+// UpdateSessionRoute はセッションのルートを更新する。
+func (app *App) UpdateSessionRoute(sessionID string, routeID *string) result.ApiResult[bool] {
+	updated, err := app.SessionService.UpdateSessionRoute(app.context(), sessionID, routeID)
+	if err != nil {
+		return serviceErrorResult[bool](err, "セッションルート更新に失敗しました")
 	}
-	updated := app.SessionService.UpdateSessionChapter(app.context(), sessionID, chapterID)
-	if updated.Success && gameID != "" {
-		app.syncGameAsync(gameID)
+	if updated.GameID != "" {
+		app.syncGameAsync(updated.GameID)
 	}
-	return updated
+	return result.OkResult(true)
 }
 
 // UpdateSessionName はセッション名を更新する。
 func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	var gameID string
-	if app.Database != nil {
-		if session, err := app.Database.GetPlaySessionByID(app.context(), sessionID); err == nil && session != nil {
-			gameID = session.GameID
-		}
+	updated, err := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
+	if err != nil {
+		return serviceErrorResult[bool](err, "セッション名更新に失敗しました")
 	}
-	updated := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
-	if updated.Success && gameID != "" {
-		app.syncGameAsync(gameID)
+	if updated.GameID != "" {
+		app.syncGameAsync(updated.GameID)
 	}
-	return updated
+	return result.OkResult(true)
 }
 
 // CreateMemo はメモを作成する。
-func (app *App) CreateMemo(input services.MemoInput) result.ApiResult[*models.Memo] {
-	return app.MemoService.CreateMemo(app.context(), input)
+func (app *App) CreateMemo(input services.MemoInput) result.ApiResult[*domain.Memo] {
+	memo, err := app.MemoService.CreateMemo(app.context(), input)
+	return serviceResult(memo, err, "メモ作成に失敗しました")
 }
 
 // UpdateMemo はメモを更新する。
-func (app *App) UpdateMemo(memoID string, input services.MemoUpdateInput) result.ApiResult[*models.Memo] {
-	return app.MemoService.UpdateMemo(app.context(), memoID, input)
+func (app *App) UpdateMemo(memoID string, input services.MemoUpdateInput) result.ApiResult[*domain.Memo] {
+	memo, err := app.MemoService.UpdateMemo(app.context(), memoID, input)
+	return serviceResult(memo, err, "メモ更新に失敗しました")
 }
 
 // GetMemoByID はメモを取得する。
-func (app *App) GetMemoByID(memoID string) result.ApiResult[*models.Memo] {
-	return app.MemoService.GetMemoByID(app.context(), memoID)
+func (app *App) GetMemoByID(memoID string) result.ApiResult[*domain.Memo] {
+	memo, err := app.MemoService.GetMemoByID(app.context(), memoID)
+	return serviceResult(memo, err, "メモ取得に失敗しました")
 }
 
 // ListAllMemos は全メモを取得する。
-func (app *App) ListAllMemos() result.ApiResult[[]models.Memo] {
-	return app.MemoService.ListAllMemos(app.context())
+func (app *App) ListAllMemos() result.ApiResult[[]domain.Memo] {
+	memos, err := app.MemoService.ListAllMemos(app.context())
+	return serviceResult(memos, err, "メモ取得に失敗しました")
 }
 
 // ListMemosByGame はメモ一覧を取得する。
-func (app *App) ListMemosByGame(gameID string) result.ApiResult[[]models.Memo] {
-	return app.MemoService.ListMemosByGame(app.context(), gameID)
+func (app *App) ListMemosByGame(gameID string) result.ApiResult[[]domain.Memo] {
+	memos, err := app.MemoService.ListMemosByGame(app.context(), gameID)
+	return serviceResult(memos, err, "メモ取得に失敗しました")
 }
 
 // DeleteMemo はメモを削除する。
 func (app *App) DeleteMemo(memoID string) result.ApiResult[bool] {
-	return app.MemoService.DeleteMemo(app.context(), memoID)
+	if err := app.MemoService.DeleteMemo(app.context(), memoID); err != nil {
+		return serviceErrorResult[bool](err, "メモ削除に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 // FileFilterInput はファイル選択フィルタを表す。
@@ -408,18 +436,18 @@ func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool
 }
 
 // GetMonitoringStatus は監視状態を取得する。
-func (app *App) GetMonitoringStatus() result.ApiResult[[]models.MonitoringGameStatus] {
+func (app *App) GetMonitoringStatus() result.ApiResult[[]domain.MonitoringGameStatus] {
 	if app.ProcessMonitor == nil {
-		return result.OkResult([]models.MonitoringGameStatus{})
+		return result.OkResult([]domain.MonitoringGameStatus{})
 	}
 	status := app.ProcessMonitor.GetMonitoringStatus()
 	return result.OkResult(status)
 }
 
 // GetProcessSnapshot はプロセス一覧のデバッグ情報を取得する。
-func (app *App) GetProcessSnapshot() result.ApiResult[models.ProcessSnapshot] {
+func (app *App) GetProcessSnapshot() result.ApiResult[domain.ProcessSnapshot] {
 	if app.ProcessMonitor == nil {
-		return result.OkResult(models.ProcessSnapshot{Source: "none", Items: []models.ProcessSnapshotItem{}})
+		return result.OkResult(domain.ProcessSnapshot{Source: "none", Items: []domain.ProcessSnapshotItem{}})
 	}
 	snapshot := app.ProcessMonitor.GetProcessSnapshot()
 	return result.OkResult(snapshot)
@@ -567,19 +595,12 @@ func (app *App) OpenLogsDirectory() result.ApiResult[string] {
 	return result.OkResult(path)
 }
 
-// CreateUpload はアップロード履歴を作成する。
-func (app *App) CreateUpload(input services.UploadInput) result.ApiResult[*models.Upload] {
-	return app.UploadService.CreateUpload(app.context(), input)
-}
-
-// ListUploadsByGame はアップロード履歴を取得する。
-func (app *App) ListUploadsByGame(gameID string) result.ApiResult[[]models.Upload] {
-	return app.UploadService.ListUploadsByGame(app.context(), gameID)
-}
-
 // SaveCredential は認証情報を保存する。
 func (app *App) SaveCredential(key string, input services.CredentialInput) result.ApiResult[bool] {
-	return app.CredentialService.SaveCredential(app.context(), key, input)
+	if err := app.CredentialService.SaveCredential(app.context(), key, input); err != nil {
+		return serviceErrorResult[bool](err, "認証情報保存に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 // LoadCredential は認証情報を取得する。
@@ -589,22 +610,30 @@ func (app *App) LoadCredential(key string) result.ApiResult[*services.Credential
 
 // DeleteCredential は認証情報を削除する。
 func (app *App) DeleteCredential(key string) result.ApiResult[bool] {
-	return app.CredentialService.DeleteCredential(app.context(), key)
+	if err := app.CredentialService.DeleteCredential(app.context(), key); err != nil {
+		return serviceErrorResult[bool](err, "認証情報削除に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 // UploadFolder はフォルダをクラウドへアップロードする。
 func (app *App) UploadFolder(credentialKey string, folderPath string, prefix string) result.ApiResult[storage.UploadSummary] {
-	return app.CloudService.UploadFolder(app.context(), credentialKey, folderPath, prefix)
+	summary, err := app.CloudService.UploadFolder(app.context(), credentialKey, folderPath, prefix)
+	return serviceResult(summary, err, "フォルダアップロードに失敗しました")
 }
 
 // SaveCloudMetadata はメタ情報をクラウドに保存する。
 func (app *App) SaveCloudMetadata(credentialKey string, metadata storage.CloudMetadata) result.ApiResult[bool] {
-	return app.CloudService.SaveCloudMetadata(app.context(), credentialKey, metadata)
+	if err := app.CloudService.SaveCloudMetadata(app.context(), credentialKey, metadata); err != nil {
+		return serviceErrorResult[bool](err, "メタ情報保存に失敗しました")
+	}
+	return result.OkResult(true)
 }
 
 // LoadCloudMetadata はメタ情報をクラウドから取得する。
 func (app *App) LoadCloudMetadata(credentialKey string) result.ApiResult[*storage.CloudMetadata] {
-	return app.CloudService.LoadCloudMetadata(app.context(), credentialKey)
+	metadata, err := app.CloudService.LoadCloudMetadata(app.context(), credentialKey)
+	return serviceResult(metadata, err, "メタ情報取得に失敗しました")
 }
 
 // LaunchGame は指定された実行ファイルを起動する。
@@ -751,35 +780,32 @@ func openPath(path string) error {
 }
 
 // normalizePlayStatus はUIのフィルタ文字列をモデル値へ変換する。
-func normalizePlayStatus(filter string) models.PlayStatus {
+func normalizePlayStatus(filter string) domain.PlayStatus {
 	value := strings.ToLower(strings.TrimSpace(filter))
 	switch value {
 	case "unplayed":
-		return models.PlayStatusUnplayed
+		return domain.PlayStatusUnplayed
 	case "playing":
-		return models.PlayStatusPlaying
+		return domain.PlayStatusPlaying
 	case "played":
-		return models.PlayStatusPlayed
+		return domain.PlayStatusPlayed
 	default:
 		return ""
 	}
 }
 
 // toCredentialOutput は内部認証情報をUI向けに変換する。
-func toCredentialOutput(resultData result.ApiResult[*credentials.Credential]) result.ApiResult[*services.CredentialOutput] {
-	if !resultData.Success {
-		return result.ApiResult[*services.CredentialOutput]{
-			Success: false,
-			Error:   resultData.Error,
-		}
+func toCredentialOutput(credential *credentials.Credential, err error) result.ApiResult[*services.CredentialOutput] {
+	if err != nil {
+		return serviceErrorResult[*services.CredentialOutput](err, "認証情報取得に失敗しました")
 	}
-	if resultData.Data == nil {
+	if credential == nil {
 		return result.OkResult[*services.CredentialOutput](nil)
 	}
 	return result.OkResult(&services.CredentialOutput{
-		AccessKeyID: resultData.Data.AccessKeyID,
-		BucketName:  resultData.Data.BucketName,
-		Region:      resultData.Data.Region,
-		Endpoint:    resultData.Data.Endpoint,
+		AccessKeyID: credential.AccessKeyID,
+		BucketName:  credential.BucketName,
+		Region:      credential.Region,
+		Endpoint:    credential.Endpoint,
 	})
 }

@@ -8,19 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"CloudLaunch_Go/internal/db"
-	"CloudLaunch_Go/internal/models"
-	"CloudLaunch_Go/internal/result"
+	"CloudLaunch_Go/internal/domain"
 )
 
 // GameService はゲーム関連の操作を提供する。
 type GameService struct {
-	repository *db.Repository
+	repository GameRepository
 	logger     *slog.Logger
 }
 
 // NewGameService は GameService を生成する。
-func NewGameService(repository *db.Repository, logger *slog.Logger) *GameService {
+func NewGameService(repository GameRepository, logger *slog.Logger) *GameService {
 	return &GameService{repository: repository, logger: logger}
 }
 
@@ -28,79 +26,84 @@ func NewGameService(repository *db.Repository, logger *slog.Logger) *GameService
 func (service *GameService) ListGames(
 	ctx context.Context,
 	searchText string,
-	filter models.PlayStatus,
+	filter domain.PlayStatus,
 	sortBy string,
 	sortDirection string,
-) result.ApiResult[[]models.Game] {
+) ([]domain.Game, error) {
 	games, error := service.repository.ListGames(ctx, strings.TrimSpace(searchText), filter, sortBy, sortDirection)
 	if error != nil {
 		service.logger.Error("ゲーム一覧取得に失敗", "error", error)
-		return result.ErrorResult[[]models.Game]("ゲーム一覧取得に失敗しました", error.Error())
+		return nil, newServiceError("ゲーム一覧取得に失敗しました", error.Error())
 	}
-	return result.OkResult(games)
+	return games, nil
 }
 
 // GetGameByID はID指定でゲームを取得する。
-func (service *GameService) GetGameByID(ctx context.Context, gameID string) result.ApiResult[*models.Game] {
+func (service *GameService) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	game, error := service.repository.GetGameByID(ctx, strings.TrimSpace(gameID))
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
-		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
+		return nil, newServiceError("ゲーム取得に失敗しました", error.Error())
 	}
-	return result.OkResult(game)
+	return game, nil
 }
 
 // CreateGame はゲームを新規作成する。
-func (service *GameService) CreateGame(ctx context.Context, input GameInput) result.ApiResult[*models.Game] {
+func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*domain.Game, error) {
 	if error := validateGameInput(input); error != nil {
 		service.logger.Warn("ゲーム入力が不正です", "error", error)
-		return result.ErrorResult[*models.Game]("ゲーム入力が不正です", error.Error())
+		return nil, newServiceError("ゲーム入力が不正です", error.Error())
 	}
 
-	game := models.Game{
+	game := domain.Game{
 		Title:          strings.TrimSpace(input.Title),
 		Publisher:      strings.TrimSpace(input.Publisher),
 		ImagePath:      input.ImagePath,
 		ExePath:        strings.TrimSpace(input.ExePath),
 		SaveFolderPath: input.SaveFolderPath,
-		PlayStatus:     models.PlayStatusUnplayed,
+		PlayStatus:     domain.PlayStatusUnplayed,
 		TotalPlayTime:  0,
 	}
 
 	created, error := service.repository.CreateGame(ctx, game)
 	if error != nil {
 		service.logger.Error("ゲーム作成に失敗", "error", error)
-		return result.ErrorResult[*models.Game]("ゲーム作成に失敗しました", error.Error())
+		return nil, newServiceError("ゲーム作成に失敗しました", error.Error())
 	}
 
 	if created != nil {
-		_, _ = service.repository.CreateChapter(ctx, models.Chapter{
-			Name:   "第1章",
+		_, _ = service.repository.CreateRoute(ctx, domain.Route{
+			Name:   "メインルート",
 			Order:  1,
 			GameID: created.ID,
 		})
 	}
 
 	service.logger.Info("ゲームを作成", "title", game.Title)
-	return result.OkResult(created)
+	return created, nil
 }
 
 // UpdateGame はゲーム情報を更新する。
-func (service *GameService) UpdateGame(ctx context.Context, gameID string, input GameUpdateInput) result.ApiResult[*models.Game] {
+func (service *GameService) UpdateGame(ctx context.Context, gameID string, input GameUpdateInput) (*domain.Game, error) {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
-		return result.ErrorResult[*models.Game]("ゲームIDが不正です", detail)
+		return nil, newServiceError("ゲームIDが不正です", detail)
 	}
 
 	current, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
-		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
+		return nil, newServiceError("ゲーム取得に失敗しました", error.Error())
 	}
 	if current == nil {
 		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedID)
-		return result.ErrorResult[*models.Game]("ゲームが見つかりません", "指定されたIDが存在しません")
+		return nil, newServiceError("ゲームが見つかりません", "指定されたIDが存在しません")
+	}
+
+	if input.PlayStatus != "" && !domain.IsValidPlayStatus(input.PlayStatus) {
+		service.logger.Warn("playStatus が不正です", "playStatus", input.PlayStatus)
+		return nil, newServiceError("playStatus が不正です", string(input.PlayStatus))
 	}
 
 	current.Title = strings.TrimSpace(input.Title)
@@ -108,36 +111,39 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.ImagePath = input.ImagePath
 	current.ExePath = strings.TrimSpace(input.ExePath)
 	current.SaveFolderPath = input.SaveFolderPath
+	current.ClearedAt = input.ClearedAt
+	current.CurrentRouteID = input.CurrentRouteID
 	if input.PlayStatus != "" {
 		current.PlayStatus = input.PlayStatus
 	}
-	current.ClearedAt = input.ClearedAt
-	current.CurrentChapter = input.CurrentChapter
+	if input.ClearedAt != nil {
+		current.PlayStatus = domain.PlayStatusPlayed
+	}
 
 	updated, error := service.repository.UpdateGame(ctx, *current)
 	if error != nil {
 		service.logger.Error("ゲーム更新に失敗", "error", error)
-		return result.ErrorResult[*models.Game]("ゲーム更新に失敗しました", error.Error())
+		return nil, newServiceError("ゲーム更新に失敗しました", error.Error())
 	}
-	return result.OkResult(updated)
+	return updated, nil
 }
 
 // UpdatePlayTime はプレイ時間と最終プレイ日時を更新する。
-func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*models.Game] {
+func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) (*domain.Game, error) {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
-		return result.ErrorResult[*models.Game]("ゲームIDが不正です", detail)
+		return nil, newServiceError("ゲームIDが不正です", detail)
 	}
 
 	current, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("ゲーム取得に失敗", "error", error)
-		return result.ErrorResult[*models.Game]("ゲーム取得に失敗しました", error.Error())
+		return nil, newServiceError("ゲーム取得に失敗しました", error.Error())
 	}
 	if current == nil {
 		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedID)
-		return result.ErrorResult[*models.Game]("ゲームが見つかりません", "指定されたIDが存在しません")
+		return nil, newServiceError("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
 	current.TotalPlayTime = totalPlayTime
@@ -146,24 +152,24 @@ func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, t
 	updated, error := service.repository.UpdateGame(ctx, *current)
 	if error != nil {
 		service.logger.Error("プレイ時間更新に失敗", "error", error)
-		return result.ErrorResult[*models.Game]("プレイ時間更新に失敗しました", error.Error())
+		return nil, newServiceError("プレイ時間更新に失敗しました", error.Error())
 	}
-	return result.OkResult(updated)
+	return updated, nil
 }
 
 // DeleteGame はゲームを削除する。
-func (service *GameService) DeleteGame(ctx context.Context, gameID string) result.ApiResult[bool] {
+func (service *GameService) DeleteGame(ctx context.Context, gameID string) error {
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
-		return result.ErrorResult[bool]("ゲームIDが不正です", detail)
+		return newServiceError("ゲームIDが不正です", detail)
 	}
 
 	if error := service.repository.DeleteGame(ctx, trimmedID); error != nil {
 		service.logger.Error("ゲーム削除に失敗", "error", error)
-		return result.ErrorResult[bool]("ゲーム削除に失敗しました", error.Error())
+		return newServiceError("ゲーム削除に失敗しました", error.Error())
 	}
-	return result.OkResult(true)
+	return nil
 }
 
 // GameInput はゲーム作成入力を表す。
@@ -182,9 +188,9 @@ type GameUpdateInput struct {
 	ImagePath      *string
 	ExePath        string
 	SaveFolderPath *string
-	PlayStatus     models.PlayStatus
+	PlayStatus     domain.PlayStatus
 	ClearedAt      *time.Time
-	CurrentChapter *string
+	CurrentRouteID *string
 }
 
 // validateGameInput はゲーム作成入力の簡易検証を行う。

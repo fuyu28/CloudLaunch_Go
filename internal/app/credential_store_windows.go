@@ -5,7 +5,7 @@ package app
 
 import (
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/credentials"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
 )
 
 func newCredentialStore(cfg config.Config) credentials.Store {

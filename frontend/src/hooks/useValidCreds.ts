@@ -41,13 +41,14 @@ export function useValidateCreds(): () => Promise<boolean> {
    */
   const validate = useCallback(async () => {
     try {
-      const { success, err } = await window.api.credential.validateSavedCredential();
+      const result = await window.api.credential.validateSavedCredential();
+      const { success } = result;
       setIsValidCreds(success);
       if (!success) {
         logger.error("Credential validation failed:", {
           component: "useValidCreds",
           function: "unknown",
-          data: err?.message ?? "不明なエラー",
+          data: result.message ?? "不明なエラー",
         });
       }
       return success;

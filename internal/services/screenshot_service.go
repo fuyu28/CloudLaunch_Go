@@ -12,12 +12,11 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/config"
-	"CloudLaunch_Go/internal/db"
 )
 
 // ScreenshotService はゲームウィンドウのスクリーンショット取得を提供する。
 type ScreenshotService struct {
-	repository *db.Repository
+	repository ScreenshotRepository
 	logger     *slog.Logger
 	appDataDir string
 	// Snipping Tool運用では自動適用できないため、設定互換性のために保持する。
@@ -26,16 +25,18 @@ type ScreenshotService struct {
 	jpegQuality int
 	fileLogger  *slog.Logger
 	logFile     *os.File
+	// captureFunc はプラットフォーム依存のキャプチャ実装。テストで差し替え可能。
+	captureFunc func(ctx context.Context, fullPath string, tmpPath string) error
 }
 
 // NewScreenshotService は ScreenshotService を生成する。
 func NewScreenshotService(
 	cfg config.Config,
-	repository *db.Repository,
+	repository ScreenshotRepository,
 	logger *slog.Logger,
 ) *ScreenshotService {
 	fileLogger, logFile := newScreenshotFileLogger(cfg.AppDataDir, cfg.LogLevel)
-	return &ScreenshotService{
+	s := &ScreenshotService{
 		repository:  repository,
 		logger:      logger,
 		appDataDir:  cfg.AppDataDir,
@@ -45,6 +46,8 @@ func NewScreenshotService(
 		fileLogger:  fileLogger,
 		logFile:     logFile,
 	}
+	s.captureFunc = s.captureWithScreenClip
+	return s
 }
 
 // SetClientOnly はキャプチャ対象をクライアント領域のみにするか更新する。
@@ -99,7 +102,7 @@ func (service *ScreenshotService) CaptureGameScreenshot(ctx context.Context, gam
 		"localJpeg", service.localJpeg,
 	)
 
-	if err := service.captureWithScreenClip(ctx, fullPath, tmpPath); err != nil {
+	if err := service.captureFunc(ctx, fullPath, tmpPath); err != nil {
 		if errors.Is(err, ErrNoNewScreenshot) {
 			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", game.ID)
 			return "", err

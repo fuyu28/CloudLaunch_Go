@@ -316,17 +316,7 @@ export default function GameDetail(): React.JSX.Element {
 
       setIsUpdatingStatus(true);
       try {
-        // 現在のゲームデータを使用してupdateGameを呼び出し
-        const updateData = {
-          title: game.title,
-          publisher: game.publisher,
-          imagePath: game.imagePath,
-          exePath: game.exePath,
-          saveFolderPath: game.saveFolderPath,
-          playStatus: newStatus,
-        };
-
-        const result = await window.api.database.updateGame(game.id, updateData);
+        const result = await window.api.database.updatePlayStatus(game.id, newStatus);
 
         if (result.success) {
           showToast("プレイステータスを更新しました", "success");

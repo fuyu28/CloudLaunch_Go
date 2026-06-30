@@ -14,10 +14,9 @@ func (app *App) GetMemoRootDir() result.ApiResult[string] {
 
 // GetMemoFilePath はメモIDからファイルパスを推定する。
 func (app *App) GetMemoFilePath(memoID string) result.ApiResult[string] {
-	memoData, error := app.Database.GetMemoByID(app.context(), memoID)
-	if error != nil {
-		app.Logger.Error("メモ取得に失敗しました", "operation", "GetMemoFilePath", "memoId", memoID, "error", error)
-		return result.ErrorResult[string]("メモ取得に失敗しました", error.Error())
+	memoData, err := app.MemoService.GetMemoByID(app.context(), memoID)
+	if err != nil {
+		return serviceErrorResult[string](err, "メモ取得に失敗しました")
 	}
 	if memoData == nil {
 		app.Logger.Warn("メモが見つかりません", "operation", "GetMemoFilePath", "memoId", memoID)
