@@ -4,9 +4,7 @@ package services
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -172,11 +170,6 @@ func readClipboardImageHash(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return hashBytes(imageBytes), nil
-}
-
-func hashBytes(value []byte) string {
-	sum := sha256.Sum256(value)
-	return hex.EncodeToString(sum[:])
 }
 
 func readClipboardImageBytes(ctx context.Context) ([]byte, error) {

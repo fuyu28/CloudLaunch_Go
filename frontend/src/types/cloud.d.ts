@@ -69,7 +69,7 @@ export type CloudGameMetadata = {
   id: string;
   title: string;
   publisher: string;
-  imageKey?: string;
+  imageHash?: string;
   playStatus: PlayStatus;
   totalPlayTime: number;
   lastPlayed?: Date | string | null;

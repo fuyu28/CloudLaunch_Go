@@ -1,4 +1,4 @@
-// @fileoverview 批評空間取り込み用のエラー型を定義する。
+// 批評空間取り込み用のエラー型を定義する。
 package services
 
 import "fmt"

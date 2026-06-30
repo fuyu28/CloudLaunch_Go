@@ -34,7 +34,6 @@ import {
   offlineModeAtom,
   autoTrackingAtom,
   transferConcurrencyAtom,
-  transferRetryCountAtom,
   screenshotSyncEnabledAtom,
   screenshotUploadJpegAtom,
   screenshotJpegQualityAtom,
@@ -66,7 +65,6 @@ export default function GeneralSettings(): React.JSX.Element {
   const [offlineMode, setOfflineMode] = useAtom(offlineModeAtom);
   const [autoTracking, setAutoTracking] = useAtom(autoTrackingAtom);
   const [transferConcurrency, setTransferConcurrency] = useAtom(transferConcurrencyAtom);
-  const [transferRetryCount, setTransferRetryCount] = useAtom(transferRetryCountAtom);
   const [screenshotSyncEnabled, setScreenshotSyncEnabled] = useAtom(screenshotSyncEnabledAtom);
   const [screenshotUploadJpeg, setScreenshotUploadJpeg] = useAtom(screenshotUploadJpegAtom);
   const [screenshotJpegQuality, setScreenshotJpegQuality] = useAtom(screenshotJpegQualityAtom);
@@ -96,24 +94,10 @@ export default function GeneralSettings(): React.JSX.Element {
   // オフラインモード変更ハンドラー
   const handleOfflineModeChange = async (enabled: boolean): Promise<void> => {
     setOfflineMode(enabled);
-    try {
-      const result = await window.api.settings.updateOfflineMode(enabled);
-      if (!result.success) {
-        toast.error("オフラインモードの更新に失敗しました");
-        return;
-      }
-      if (enabled) {
-        toast.success("オフラインモードを有効にしました");
-      } else {
-        toast.success("オフラインモードを無効にしました");
-      }
-    } catch (error) {
-      logger.error("オフラインモード更新エラー:", {
-        component: "GeneralSettings",
-        function: "handleOfflineModeChange",
-        data: error,
-      });
-      toast.error("オフラインモードの更新に失敗しました");
+    if (enabled) {
+      toast.success("オフラインモードを有効にしました");
+    } else {
+      toast.success("オフラインモードを無効にしました");
     }
   };
 
@@ -169,34 +153,6 @@ export default function GeneralSettings(): React.JSX.Element {
     const nextValue = Math.min(32, Math.max(1, value));
     setTransferConcurrency(nextValue);
     await applyTransferConcurrency(nextValue, true);
-  };
-
-  const applyTransferRetryCount = async (value: number, showToast: boolean): Promise<void> => {
-    try {
-      const result = await window.api.settings.updateTransferRetryCount(value);
-      if (!result.success) {
-        if (showToast) {
-          toast.error("リトライ回数の更新に失敗しました");
-        }
-      } else if (showToast) {
-        toast.success(`リトライ回数を ${value} に設定しました`);
-      }
-    } catch (error) {
-      logger.error("リトライ回数設定の更新エラー:", {
-        component: "GeneralSettings",
-        function: "unknown",
-        data: error,
-      });
-      if (showToast) {
-        toast.error("リトライ回数の更新に失敗しました");
-      }
-    }
-  };
-
-  const handleTransferRetryCountChange = async (value: number): Promise<void> => {
-    const nextValue = Math.min(10, Math.max(0, value));
-    setTransferRetryCount(nextValue);
-    await applyTransferRetryCount(nextValue, true);
   };
 
   const handleScreenshotSyncEnabledChange = async (enabled: boolean): Promise<void> => {
@@ -339,23 +295,52 @@ export default function GeneralSettings(): React.JSX.Element {
       return;
     }
     setIsSyncingAll(true);
+    const toastId = toast.loading("全ゲームを同期中…");
     try {
-      const result = await window.api.cloudSync.syncAllGames();
-      if (!result.success || !result.data) {
-        toast.error(result.message || "クラウド同期に失敗しました");
-        return;
+      const games = await window.api.database.listGames("", "all", "title", "asc");
+      let uploaded = 0;
+      let downloaded = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (const game of games) {
+        if (!game.saveFolderPath) continue;
+
+        const statusResult = await window.api.cloudSync.status(game.id);
+        if (!statusResult.success || !statusResult.data) {
+          failed++;
+          continue;
+        }
+
+        const { status } = statusResult.data;
+        if (status === "push_needed") {
+          const r = await window.api.cloudSync.push(game.id);
+          if (r.success) uploaded++;
+          else failed++;
+        } else if (status === "pull_needed") {
+          const r = await window.api.cloudSync.pull(game.id);
+          // 同期管理外ファイルの削除確認が必要な場合は破壊を避けてスキップ（詳細画面で確認）
+          if (r.success && r.data && !r.data.applied) skipped++;
+          else if (r.success) downloaded++;
+          else failed++;
+        }
       }
-      const summary = result.data;
-      toast.success(
-        `同期完了: アップロード${summary.uploadedGames}件 / ダウンロード${summary.downloadedGames}件`,
-      );
+
+      const parts: string[] = [];
+      if (uploaded > 0) parts.push(`アップロード${uploaded}件`);
+      if (downloaded > 0) parts.push(`ダウンロード${downloaded}件`);
+      const suffix =
+        (failed > 0 ? `（${failed}件失敗）` : "") + (skipped > 0 ? `（${skipped}件要確認）` : "");
+      const message =
+        parts.length > 0 ? `同期完了: ${parts.join(" / ")}${suffix}` : "すべて最新の状態です";
+      toast.success(message, { id: toastId });
     } catch (error) {
       logger.error("全ゲーム同期エラー:", {
         component: "GeneralSettings",
         function: "handleSyncAllGames",
         data: error,
       });
-      toast.error("クラウド同期に失敗しました");
+      toast.error("クラウド同期に失敗しました", { id: toastId });
     } finally {
       setIsSyncingAll(false);
     }
@@ -452,14 +437,6 @@ export default function GeneralSettings(): React.JSX.Element {
 
   useEffect(() => {
     void applyTransferConcurrency(transferConcurrency, false);
-  }, []);
-
-  useEffect(() => {
-    void applyTransferRetryCount(transferRetryCount, false);
-  }, []);
-
-  useEffect(() => {
-    void window.api.settings.updateOfflineMode(offlineMode);
   }, []);
 
   useEffect(() => {
@@ -766,28 +743,6 @@ export default function GeneralSettings(): React.JSX.Element {
                     </p>
                   </div>
                 </label>
-              </div>
-
-              <div className="form-control mt-4">
-                <label className="label p-0 mb-2">
-                  <span className="label-text font-medium">リトライ回数</span>
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={1}
-                    className="input input-bordered input-sm w-24"
-                    value={transferRetryCount}
-                    onChange={(e) => setTransferRetryCount(Number(e.target.value))}
-                    onBlur={(e) => handleTransferRetryCountChange(Number(e.target.value))}
-                  />
-                  <span className="text-xs text-base-content/50">0〜10</span>
-                </div>
-                <p className="text-xs text-base-content/50 mt-2">
-                  アップロード/ダウンロード共通のリトライ回数です
-                </p>
               </div>
 
               <div className="form-control mt-4">

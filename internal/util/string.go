@@ -2,7 +2,7 @@ package util
 
 import "strings"
 
-// FirstNonEmpty returns the first non-empty string after trimming spaces.
+// FirstNonEmpty はスペースをトリムした後、最初の空でない文字列を返す。
 func FirstNonEmpty(values ...string) string {
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)

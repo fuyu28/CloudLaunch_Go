@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useState, memo } from "react";
-import { FaUpload, FaDownload, FaCloud, FaCloudDownloadAlt, FaFile } from "react-icons/fa";
+import { FaUpload, FaDownload, FaCloud, FaCloudDownloadAlt, FaFile, FaSync } from "react-icons/fa";
 
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
@@ -49,6 +49,10 @@ type CloudDataCardProps = {
   onUpload: () => Promise<void>;
   /** ダウンロード処理 */
   onDownload: () => Promise<void>;
+  /** 同期確認処理（省略可） */
+  onSync?: () => Promise<void>;
+  /** 同期確認中か */
+  isSyncing?: boolean;
 };
 
 /**
@@ -65,6 +69,8 @@ function CloudDataCard({
   isDownloading,
   onUpload,
   onDownload,
+  onSync,
+  isSyncing = false,
 }: CloudDataCardProps): React.JSX.Element {
   const { formatDateWithTime } = useTimeFormat();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
@@ -191,11 +197,38 @@ function CloudDataCard({
           </h3>
           {/* アクションボタン */}
           <div className="card-actions justify-end gap-2">
+            {onSync && (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={onSync}
+                disabled={
+                  !isValidCreds || isSyncing || isUploading || isDownloading || isOfflineMode
+                }
+                title="同期状態を確認してコンフリクトを解決する"
+              >
+                {isSyncing ? (
+                  <>
+                    <span className="loading loading-spinner loading-xs"></span>
+                    確認中...
+                  </>
+                ) : (
+                  <>
+                    <FaSync />
+                    同期確認
+                  </>
+                )}
+              </button>
+            )}
             <button
               className="btn btn-outline btn-sm"
               onClick={handleUpload}
               disabled={
-                !hasSaveFolder || !isValidCreds || isUploading || isDownloading || isOfflineMode
+                !hasSaveFolder ||
+                !isValidCreds ||
+                isUploading ||
+                isDownloading ||
+                isSyncing ||
+                isOfflineMode
               }
             >
               {isUploading ? (
@@ -214,7 +247,12 @@ function CloudDataCard({
               className="btn btn-primary btn-sm"
               onClick={handleDownload}
               disabled={
-                !cloudData.exists || !isValidCreds || isUploading || isDownloading || isOfflineMode
+                !cloudData.exists ||
+                !isValidCreds ||
+                isUploading ||
+                isDownloading ||
+                isSyncing ||
+                isOfflineMode
               }
             >
               {isDownloading ? (

@@ -1,4 +1,4 @@
-// @fileoverview API用の共通ヘルパーを提供する。
+// API用の共通ヘルパーを提供する。
 package app
 
 import (

@@ -1,4 +1,4 @@
-// @fileoverview Wails バインディング用の API メソッドを提供する。
+// Wails バインディング用の API メソッドを提供する。
 package app
 
 import (
@@ -336,22 +336,6 @@ func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 		return result.ErrorResult[bool]("同時実行数が不正です", "valueが不正です")
 	}
 	app.Config.S3UploadConcurrency = value
-	if app.CloudService != nil {
-		app.CloudService.SetUploadConcurrency(value)
-	}
-	return result.OkResult(true)
-}
-
-// UpdateTransferRetryCount はアップロード/ダウンロードのリトライ回数を更新する。
-func (app *App) UpdateTransferRetryCount(value int) result.ApiResult[bool] {
-	if value < 0 {
-		app.Logger.Warn("リトライ回数が不正です", "operation", "UpdateTransferRetryCount", "value", value)
-		return result.ErrorResult[bool]("リトライ回数が不正です", "valueが不正です")
-	}
-	app.Config.S3TransferRetryCount = value
-	if app.CloudService != nil {
-		app.CloudService.SetTransferRetryCount(value)
-	}
 	return result.OkResult(true)
 }
 
@@ -451,20 +435,6 @@ func (app *App) GetProcessSnapshot() result.ApiResult[domain.ProcessSnapshot] {
 	}
 	snapshot := app.ProcessMonitor.GetProcessSnapshot()
 	return result.OkResult(snapshot)
-}
-
-// ComputeLocalSaveHash はローカルセーブデータのハッシュを計算する。
-func (app *App) ComputeLocalSaveHash(localPath string) result.ApiResult[string] {
-	trimmed := strings.TrimSpace(localPath)
-	if trimmed == "" {
-		app.Logger.Warn("パスが不正です", "operation", "ComputeLocalSaveHash", "localPath", localPath)
-		return result.ErrorResult[string]("パスが不正です", "localPath is empty")
-	}
-	hash, err := storage.HashDirectory(trimmed)
-	if err != nil {
-		return errorResultWithLog[string](app, "ハッシュ計算に失敗しました", err, "operation", "ComputeLocalSaveHash.hashDirectory", "localPath", trimmed)
-	}
-	return result.OkResult(hash)
 }
 
 // PauseMonitoringSession はセッションを中断する。
@@ -614,26 +584,6 @@ func (app *App) DeleteCredential(key string) result.ApiResult[bool] {
 		return serviceErrorResult[bool](err, "認証情報削除に失敗しました")
 	}
 	return result.OkResult(true)
-}
-
-// UploadFolder はフォルダをクラウドへアップロードする。
-func (app *App) UploadFolder(credentialKey string, folderPath string, prefix string) result.ApiResult[storage.UploadSummary] {
-	summary, err := app.CloudService.UploadFolder(app.context(), credentialKey, folderPath, prefix)
-	return serviceResult(summary, err, "フォルダアップロードに失敗しました")
-}
-
-// SaveCloudMetadata はメタ情報をクラウドに保存する。
-func (app *App) SaveCloudMetadata(credentialKey string, metadata storage.CloudMetadata) result.ApiResult[bool] {
-	if err := app.CloudService.SaveCloudMetadata(app.context(), credentialKey, metadata); err != nil {
-		return serviceErrorResult[bool](err, "メタ情報保存に失敗しました")
-	}
-	return result.OkResult(true)
-}
-
-// LoadCloudMetadata はメタ情報をクラウドから取得する。
-func (app *App) LoadCloudMetadata(credentialKey string) result.ApiResult[*storage.CloudMetadata] {
-	metadata, err := app.CloudService.LoadCloudMetadata(app.context(), credentialKey)
-	return serviceResult(metadata, err, "メタ情報取得に失敗しました")
 }
 
 // LaunchGame は指定された実行ファイルを起動する。

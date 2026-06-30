@@ -1,4 +1,4 @@
-// @fileoverview 批評空間（ErogameScape）からゲーム情報を取得する。
+// 批評空間（ErogameScape）からゲーム情報を取得する。
 package services
 
 import (

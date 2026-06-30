@@ -1,4 +1,4 @@
-// @fileoverview API結果型とエラー型を提供する。
+// API結果型とエラー型を提供する。
 package result
 
 import "time"

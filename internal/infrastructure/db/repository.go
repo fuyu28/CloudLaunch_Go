@@ -1,4 +1,4 @@
-// @fileoverview データベース操作の基本CRUDを提供する。
+// データベース操作の基本CRUDを提供する。
 package db
 
 import (
@@ -26,7 +26,7 @@ func NewRepository(connection *sql.DB) *Repository {
 func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game" WHERE id = ?
 	`, gameID)
@@ -49,7 +49,7 @@ func (repository *Repository) GetGameByExePath(ctx context.Context, exePath stri
 	}
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game" WHERE lower(exePath) = lower(?)
 	`, trimmed)
@@ -75,7 +75,7 @@ func (repository *Repository) ListGames(
 	queryBuilder := strings.Builder{}
 	queryBuilder.WriteString(`
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game"
 	`)
@@ -316,10 +316,12 @@ func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID 
 }
 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
+// playedAt が同値のときも順序が安定するよう id を第2ソートキーにしている。
+// （sessions.json のシリアライズ結果が環境ごとにブレてハッシュが変わるのを防ぐ）
 func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []domain.PlaySession, err error) {
 	rows, err := repository.connection.QueryContext(ctx, `
 		SELECT id, gameId, playedAt, duration, sessionName, routeId, updatedAt
-		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC
+		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC, id
 	`, gameID)
 	if err != nil {
 		return nil, err
@@ -396,6 +398,59 @@ func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
 	return error
 }
 
+// SetLocalSyncHead はゲームの localSyncHead を更新する。
+func (repository *Repository) SetLocalSyncHead(ctx context.Context, gameID, hash string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		UPDATE "Game" SET localSyncHead = ? WHERE id = ?
+	`, hash, gameID)
+	return err
+}
+
+// GetLocalSaveTree はゲームの localSaveTree（前回同期した SaveSnapshot JSON）を取得する。
+// 未設定の場合は "" を返す。
+func (repository *Repository) GetLocalSaveTree(ctx context.Context, gameID string) (string, error) {
+	var value sql.NullString
+	err := repository.connection.QueryRowContext(ctx, `
+		SELECT localSaveTree FROM "Game" WHERE id = ?
+	`, gameID).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return value.String, nil
+}
+
+// SetLocalSaveTree はゲームの localSaveTree を更新する。
+func (repository *Repository) SetLocalSaveTree(ctx context.Context, gameID, tree string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		UPDATE "Game" SET localSaveTree = ? WHERE id = ?
+	`, tree, gameID)
+	return err
+}
+
+// GetSetting は Settings テーブルから値を取得する。存在しない場合は "" を返す。
+func (repository *Repository) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := repository.connection.QueryRowContext(ctx, `
+		SELECT value FROM "Settings" WHERE key = ?
+	`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+// UpsertSetting は Settings テーブルに値を追加または更新する。
+func (repository *Repository) UpsertSetting(ctx context.Context, key, value string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "Settings" (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, key, value)
+	return err
+}
+
 // UpsertPlaySessionSync はID指定でセッションを追加/更新する。
 func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
 	_, error := repository.connection.ExecContext(ctx, `
@@ -411,6 +466,109 @@ func (repository *Repository) UpsertPlaySessionSync(ctx context.Context, session
 	`, session.ID, session.GameID, session.PlayedAt, session.Duration, session.SessionName,
 		session.RouteID, session.UpdatedAt)
 	return error
+}
+
+// routeExistsTx は tx 内で Route が存在するか確認する。存在しなければ NULL 正規化のため nil を返す。
+func routeExistsTx(ctx context.Context, tx *sql.Tx, routeID *string) (*string, error) {
+	if routeID == nil || *routeID == "" {
+		return nil, nil
+	}
+	var dummy int
+	err := tx.QueryRowContext(ctx, `SELECT 1 FROM "Route" WHERE id = ?`, *routeID).Scan(&dummy)
+	if err == sql.ErrNoRows {
+		return nil, nil // ローカルに該当 Route が無い → NULL に正規化
+	}
+	if err != nil {
+		return nil, err
+	}
+	return routeID, nil
+}
+
+// ApplyPullResult は Pull のローカル反映を単一トランザクションで実行する。
+// 存在しない Route 参照（currentRouteId / routeId）は NULL に正規化して FK 違反を防ぐ。
+func (repository *Repository) ApplyPullResult(
+	ctx context.Context,
+	game domain.Game,
+	sessions []domain.PlaySession,
+	syncHead, saveTree string,
+) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	game.CurrentRouteID, err = routeExistsTx(ctx, tx, game.CurrentRouteID)
+	if err != nil {
+		return err
+	}
+
+	if _, err = tx.ExecContext(ctx, `
+		INSERT INTO "Game" (
+			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+			localSaveHash, localSaveHashUpdatedAt,
+			totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			publisher = excluded.publisher,
+			imagePath = excluded.imagePath,
+			exePath = excluded.exePath,
+			saveFolderPath = excluded.saveFolderPath,
+			createdAt = excluded.createdAt,
+			updatedAt = excluded.updatedAt,
+			localSaveHash = excluded.localSaveHash,
+			localSaveHashUpdatedAt = excluded.localSaveHashUpdatedAt,
+			totalPlayTime = excluded.totalPlayTime,
+			lastPlayed = excluded.lastPlayed,
+			clearedAt = excluded.clearedAt,
+			playStatus = excluded.playStatus,
+			currentRouteId = excluded.currentRouteId
+	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
+		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.PlayStatus, game.CurrentRouteID); err != nil {
+		return err
+	}
+
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+
+	for _, session := range sessions {
+		var routeID *string
+		routeID, err = routeExistsTx(ctx, tx, session.RouteID)
+		if err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, routeId, updatedAt)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				gameId = excluded.gameId,
+				playedAt = excluded.playedAt,
+				duration = excluded.duration,
+				sessionName = excluded.sessionName,
+				routeId = excluded.routeId,
+				updatedAt = excluded.updatedAt
+		`, session.ID, game.ID, session.PlayedAt, session.Duration, session.SessionName,
+			routeID, session.UpdatedAt); err != nil {
+			return err
+		}
+	}
+
+	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSyncHead = ? WHERE id = ?`, syncHead, game.ID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSaveTree = ? WHERE id = ?`, saveTree, game.ID); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // UpdatePlaySessionRoute はセッションのルートを更新する。
@@ -632,6 +790,7 @@ func scanGame(row scanner) (*domain.Game, error) {
 		saveFolderPath         sql.NullString
 		localSaveHash          sql.NullString
 		localSaveHashUpdatedAt sql.NullTime
+		localSyncHead          sql.NullString
 		lastPlayed             sql.NullTime
 		clearedAt              sql.NullTime
 		currentRouteId         sql.NullString
@@ -649,6 +808,7 @@ func scanGame(row scanner) (*domain.Game, error) {
 		&game.UpdatedAt,
 		&localSaveHash,
 		&localSaveHashUpdatedAt,
+		&localSyncHead,
 		&game.TotalPlayTime,
 		&lastPlayed,
 		&clearedAt,
@@ -663,6 +823,7 @@ func scanGame(row scanner) (*domain.Game, error) {
 	game.SaveFolderPath = nullStringPtr(saveFolderPath)
 	game.LocalSaveHash = nullStringPtr(localSaveHash)
 	game.LocalSaveHashUpdatedAt = nullTimePtr(localSaveHashUpdatedAt)
+	game.LocalSyncHead = nullStringPtr(localSyncHead)
 	game.LastPlayed = nullTimePtr(lastPlayed)
 	game.ClearedAt = nullTimePtr(clearedAt)
 	game.CurrentRouteID = nullStringPtr(currentRouteId)
@@ -737,7 +898,7 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 func (repository *Repository) findLatestGame(ctx context.Context, title string, exePath string) (*domain.Game, error) {
 	row := repository.connection.QueryRowContext(ctx, `
 		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
 		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
 		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
 	`, title, exePath)

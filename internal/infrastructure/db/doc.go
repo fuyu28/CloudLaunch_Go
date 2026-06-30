@@ -1,2 +1,2 @@
-// Package db provides SQLite access and migrations.
+// Package db は SQLite アクセスとマイグレーションを提供する。
 package db

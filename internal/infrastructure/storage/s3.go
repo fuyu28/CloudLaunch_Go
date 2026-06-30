@@ -1,4 +1,4 @@
-// @fileoverview S3互換ストレージクライアントの生成を提供する。
+// S3互換ストレージクライアントの生成を提供する。
 package storage
 
 import (

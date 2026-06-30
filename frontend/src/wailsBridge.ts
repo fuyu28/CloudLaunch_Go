@@ -22,7 +22,38 @@ import type {
 } from "src/types/memo";
 import type { Creds } from "src/types/creds";
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "./hooks/useCloudData";
-import type { CloudMetadata } from "src/types/cloud";
+
+export type SyncStatus = "never_synced" | "in_sync" | "push_needed" | "pull_needed" | "conflict";
+
+export type SyncStatusDetail = {
+  status: SyncStatus;
+  localMeta?: SyncMetaSnapshot;
+  remoteMeta?: SyncMetaSnapshot;
+};
+
+export type SyncMetaSnapshot = {
+  "game.json": string;
+  "sessions.json": string;
+  saves: string;
+  deviceName: string;
+  createdAt: Date;
+};
+
+export type SyncProgressEvent = {
+  operation: "push" | "pull";
+  current: number;
+  total: number;
+};
+
+/**
+ * Pull / ResolveConflict(リモート採用) の結果。
+ * applied=false かつ untrackedDeletes が非空のときは「未追跡ファイルの削除確認待ち」で、
+ * この時点ではローカルに変更が加わっていない。確認後 deleteUntracked=true で再実行する。
+ */
+export type PullResult = {
+  applied: boolean;
+  untrackedDeletes?: string[];
+};
 
 import {
   CreateGame,
@@ -43,8 +74,10 @@ import {
   DownloadMemoFromCloud,
   UploadMemoToCloud,
   SyncMemosFromCloud,
-  SyncAllGames,
-  SyncGame,
+  SyncStatus,
+  PushSync,
+  PullSync,
+  ResolveConflict,
   GetCloudFileDetails,
   GetCloudFileDetailsByGame,
   GetDirectoryTree,
@@ -59,12 +92,11 @@ import {
   ListSessionsByGame,
   LoadImageFromLocal,
   LoadCredential,
-  DownloadSaveData,
   OpenFolder,
   OpenLogsDirectory,
+  DeleteGameFromCloud,
   LoadCloudMetadata,
   SaveCredential,
-  DeleteCloudGame,
   SelectFile,
   SelectFolder,
   ExportGameData,
@@ -75,7 +107,6 @@ import {
   ReportError,
   ReportLog,
   UpdateAutoTracking,
-  UpdateOfflineMode,
   UpdateScreenshotClientOnly,
   UpdateScreenshotHotkey,
   UpdateScreenshotHotkeyNotify,
@@ -84,22 +115,23 @@ import {
   UpdateScreenshotSyncEnabled,
   UpdateScreenshotUploadJpeg,
   UpdateUploadConcurrency,
-  UpdateTransferRetryCount,
   UpdateGame,
   UpdateMemo,
   UpdateSessionName,
-  UploadFolder,
   PauseMonitoringSession,
   ResumeMonitoringSession,
   EndMonitoringSession,
-  ComputeLocalSaveHash,
-  GetCloudSaveHash,
-  SaveCloudSaveHash,
   ValidateCredential,
   ValidateSavedCredential,
   FetchFromErogameScape,
 } from "../wailsjs/go/app/App";
-import { WindowMinimise, WindowToggleMaximise, Quit } from "../wailsjs/runtime/runtime";
+import {
+  WindowMinimise,
+  WindowToggleMaximise,
+  Quit,
+  EventsOn,
+  EventsOff,
+} from "../wailsjs/runtime/runtime";
 
 export type WindowApi = {
   window: {
@@ -110,9 +142,7 @@ export type WindowApi = {
   };
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;
-    updateOfflineMode: (enabled: boolean) => Promise<ApiResult<void>>;
     updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>;
-    updateTransferRetryCount: (value: number) => Promise<ApiResult<void>>;
     updateScreenshotSyncEnabled: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotUploadJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotJpegQuality: (value: number) => Promise<ApiResult<void>>;
@@ -184,29 +214,11 @@ export type WindowApi = {
     deleteFile: (path: string) => Promise<ApiResult<void>>;
     getCloudFileDetails: (path: string) => Promise<ApiResult<CloudFileDetail[]>>;
   };
-  cloudMetadata: {
-    loadCloudMetadata: () => Promise<ApiResult<CloudMetadata>>;
-  };
   saveData: {
-    upload: {
-      uploadSaveDataFolder: (localPath: string, remotePath: string) => Promise<ApiResult<void>>;
-    };
     download: {
-      downloadSaveData: (localPath: string, remotePath: string) => Promise<ApiResult<void>>;
       getCloudFileDetails: (
         gameId: string,
       ) => Promise<ApiResult<{ exists: boolean; totalSize: number; files: CloudFileDetail[] }>>;
-    };
-    hash: {
-      computeLocalHash: (localPath: string) => Promise<ApiResult<string>>;
-      getCloudHash: (
-        gameId: string,
-      ) => Promise<ApiResult<{ hash: string; updatedAt: Date } | null>>;
-      saveCloudHash: (
-        gameId: string,
-        hash: string,
-        updatedAt?: Date | string | null,
-      ) => Promise<ApiResult<void>>;
     };
   };
   loadImage: {
@@ -229,30 +241,26 @@ export type WindowApi = {
       }>;
     }>;
   };
+  cloudMetadata: {
+    loadCloudMetadata: () => Promise<
+      ApiResult<{
+        version: number;
+        updatedAt: Date;
+        games: import("src/types/cloud").CloudGameMetadata[];
+      }>
+    >;
+  };
   cloudSync: {
-    syncAllGames: () => Promise<
-      ApiResult<{
-        uploadedGames: number;
-        downloadedGames: number;
-        uploadedSessions: number;
-        downloadedSessions: number;
-        uploadedImages: number;
-        downloadedImages: number;
-        skippedGames: number;
-      }>
-    >;
-    syncGame: (gameId: string) => Promise<
-      ApiResult<{
-        uploadedGames: number;
-        downloadedGames: number;
-        uploadedSessions: number;
-        downloadedSessions: number;
-        uploadedImages: number;
-        downloadedImages: number;
-        skippedGames: number;
-      }>
-    >;
-    deleteGame: (gameId: string) => Promise<ApiResult<void>>;
+    status: (gameId: string) => Promise<ApiResult<SyncStatusDetail>>;
+    push: (gameId: string) => Promise<ApiResult<void>>;
+    pull: (gameId: string, deleteUntracked?: boolean) => Promise<ApiResult<PullResult>>;
+    resolveConflict: (
+      gameId: string,
+      useLocal: boolean,
+      deleteUntracked?: boolean,
+    ) => Promise<ApiResult<PullResult>>;
+    deleteFromCloud: (gameId: string) => Promise<ApiResult<void>>;
+    onProgress: (callback: (event: SyncProgressEvent) => void) => () => void;
   };
   game: {
     launchGame: (exePath: string) => Promise<ApiResult<void>>;
@@ -343,20 +351,8 @@ export const createWailsBridge = (): WindowApi => {
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
       },
-      updateOfflineMode: async (enabled) => {
-        const result = await UpdateOfflineMode(enabled);
-        return result.success
-          ? { success: true }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
       updateUploadConcurrency: async (value) => {
         const result = await UpdateUploadConcurrency(value);
-        return result.success
-          ? { success: true }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
-      updateTransferRetryCount: async (value) => {
-        const result = await UpdateTransferRetryCount(value);
         return result.success
           ? { success: true }
           : { success: false, message: result.error?.message ?? "エラー" };
@@ -741,30 +737,8 @@ export const createWailsBridge = (): WindowApi => {
           : { success: false, message: result.error?.message ?? "エラー" };
       },
     },
-    cloudMetadata: {
-      loadCloudMetadata: async () => {
-        const result = await LoadCloudMetadata("default");
-        return result.success && result.data
-          ? { success: true, data: result.data as CloudMetadata }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
-    },
     saveData: {
-      upload: {
-        uploadSaveDataFolder: async (localPath, remotePath) => {
-          const result = await UploadFolder("default", localPath, remotePath);
-          return result.success
-            ? { success: true }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        },
-      },
       download: {
-        downloadSaveData: async (localPath, remotePath) => {
-          const result = await DownloadSaveData(localPath, remotePath);
-          return result.success
-            ? { success: true }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        },
         getCloudFileDetails: async (gameId) => {
           const result = await GetCloudFileDetailsByGame(gameId);
           return result.success
@@ -778,32 +752,6 @@ export const createWailsBridge = (): WindowApi => {
                   ),
                 },
               }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        },
-      },
-      hash: {
-        computeLocalHash: async (localPath) => {
-          const result = await ComputeLocalSaveHash(localPath);
-          return result.success
-            ? { success: true, data: result.data as string }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        },
-        getCloudHash: async (gameId) => {
-          const result = await GetCloudSaveHash(gameId);
-          return result.success
-            ? { success: true, data: result.data as { hash: string; updatedAt: Date } | null }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        },
-        saveCloudHash: async (gameId, hash, updatedAt) => {
-          const normalizedUpdatedAt =
-            updatedAt instanceof Date
-              ? updatedAt.toISOString()
-              : typeof updatedAt === "string"
-                ? updatedAt
-                : "";
-          const result = await SaveCloudSaveHash(gameId, hash, normalizedUpdatedAt);
-          return result.success
-            ? { success: true }
             : { success: false, message: result.error?.message ?? "エラー" };
         },
       },
@@ -863,51 +811,83 @@ export const createWailsBridge = (): WindowApi => {
           : { success: false, message: result.error?.message ?? "エラー" };
       },
     },
-    cloudSync: {
-      syncAllGames: async () => {
-        const result = await SyncAllGames();
-        return result.success
-          ? {
-              success: true,
-              data: result.data as {
-                uploadedGames: number;
-                downloadedGames: number;
-                uploadedSessions: number;
-                downloadedSessions: number;
-                uploadedImages: number;
-                downloadedImages: number;
-                skippedGames: number;
-              },
-            }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
-      syncGame: async (gameId) => {
-        const result = await SyncGame(gameId);
-        return result.success
-          ? {
-              success: true,
-              data: result.data as {
-                uploadedGames: number;
-                downloadedGames: number;
-                uploadedSessions: number;
-                downloadedSessions: number;
-                uploadedImages: number;
-                downloadedImages: number;
-                skippedGames: number;
-              },
-            }
-          : { success: false, message: result.error?.message ?? "エラー" };
-      },
-      deleteGame: async (gameId) => {
-        try {
-          const result = await DeleteCloudGame(gameId);
-          return result.success
-            ? { success: true }
-            : { success: false, message: result.error?.message ?? "エラー" };
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "削除に失敗しました";
-          return { success: false, message };
+    cloudMetadata: {
+      loadCloudMetadata: async () => {
+        const result = await LoadCloudMetadata();
+        if (!result.success || !result.data) {
+          return { success: false, message: result.error?.message ?? "エラー" };
         }
+        return {
+          success: true,
+          data: result.data as {
+            version: number;
+            updatedAt: Date;
+            games: import("src/types/cloud").CloudGameMetadata[];
+          },
+        };
+      },
+    },
+    cloudSync: {
+      status: async (gameId) => {
+        const result = await SyncStatus(gameId);
+        if (!result.success) {
+          return { success: false, message: result.error?.message ?? "エラー" };
+        }
+        const raw = result.data as {
+          status: SyncStatus;
+          localMeta?: {
+            "game.json": string;
+            "sessions.json": string;
+            saves: string;
+            deviceName: string;
+            createdAt: string;
+          };
+          remoteMeta?: {
+            "game.json": string;
+            "sessions.json": string;
+            saves: string;
+            deviceName: string;
+            createdAt: string;
+          };
+        };
+        const normalizeMeta = (m?: typeof raw.localMeta): SyncMetaSnapshot | undefined =>
+          m ? { ...m, createdAt: new Date(m.createdAt) } : undefined;
+        return {
+          success: true,
+          data: {
+            status: raw.status,
+            localMeta: normalizeMeta(raw.localMeta),
+            remoteMeta: normalizeMeta(raw.remoteMeta),
+          },
+        };
+      },
+      push: async (gameId) => {
+        const result = await PushSync(gameId);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      pull: async (gameId, deleteUntracked = false) => {
+        const result = await PullSync(gameId, deleteUntracked);
+        return result.success
+          ? { success: true, data: result.data as PullResult }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      resolveConflict: async (gameId, useLocal, deleteUntracked = false) => {
+        const result = await ResolveConflict(gameId, useLocal, deleteUntracked);
+        return result.success
+          ? { success: true, data: result.data as PullResult }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      deleteFromCloud: async (gameId) => {
+        const result = await DeleteGameFromCloud(gameId);
+        return result.success
+          ? { success: true }
+          : { success: false, message: result.error?.message ?? "エラー" };
+      },
+      onProgress: (callback) => {
+        EventsOn("sync:progress", callback);
+        return () => EventsOff("sync:progress");
       },
     },
     game: {

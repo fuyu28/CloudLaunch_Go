@@ -1,4 +1,4 @@
-// @fileoverview サービス層の入力検証ヘルパーを提供する。
+// サービス層の入力検証ヘルパーを提供する。
 package services
 
 import "strings"

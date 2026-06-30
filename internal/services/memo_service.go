@@ -1,4 +1,4 @@
-// @fileoverview メモ管理のビジネスロジックを提供する。
+// メモ管理のビジネスロジックを提供する。
 package services
 
 import (

@@ -1,4 +1,4 @@
-// @fileoverview メモのクラウド同期APIを提供する。
+// メモのクラウド同期APIを提供する。
 package app
 
 import (

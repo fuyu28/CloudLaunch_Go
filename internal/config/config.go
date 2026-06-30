@@ -1,4 +1,4 @@
-// @fileoverview アプリ設定の読み込みとデフォルト値を定義する。
+// アプリ設定の読み込みとデフォルト値を定義する。
 package config
 
 import (
@@ -26,9 +26,6 @@ type Config struct {
 	S3ForcePathStyle       bool
 	S3UseTLS               bool
 	S3UploadConcurrency    int
-	S3TransferRetryCount   int
-	CloudMetadataKey       string
-	CloudImagesPrefix      string
 	CredentialNamespace    string
 }
 
@@ -54,9 +51,6 @@ func LoadFromEnv() Config {
 		S3ForcePathStyle:       getEnvBool("CLOUDLAUNCH_S3_FORCE_PATH_STYLE", false),
 		S3UseTLS:               getEnvBool("CLOUDLAUNCH_S3_USE_TLS", true),
 		S3UploadConcurrency:    getEnvInt("CLOUDLAUNCH_S3_UPLOAD_CONCURRENCY", 6),
-		S3TransferRetryCount:   getEnvInt("CLOUDLAUNCH_S3_RETRY_COUNT", 3),
-		CloudMetadataKey:       getEnv("CLOUDLAUNCH_CLOUD_METADATA_KEY", "games.json"),
-		CloudImagesPrefix:      getEnv("CLOUDLAUNCH_CLOUD_IMAGES_PREFIX", "images/"),
 		CredentialNamespace:    getEnv("CLOUDLAUNCH_CREDENTIAL_NAMESPACE", "CloudLaunch"),
 	}
 }

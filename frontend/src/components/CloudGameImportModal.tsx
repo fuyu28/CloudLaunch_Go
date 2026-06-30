@@ -152,9 +152,16 @@ export default function CloudGameImportModal({
 
   const importGame = useCallback(
     async (game: CloudGameMetadata): Promise<boolean> => {
-      const result = await window.api.cloudSync.syncGame(game.id);
+      const result = await window.api.cloudSync.pull(game.id);
       if (!result.success) {
         toast.error(result.message ?? "クラウドゲームの追加に失敗しました");
+        return false;
+      }
+      if (result.data && !result.data.applied) {
+        // 同期対象外のローカルファイルがある場合は破壊を避けて中断（詳細画面で確認）
+        toast.error(
+          "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
+        );
         return false;
       }
 

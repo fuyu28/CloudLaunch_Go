@@ -1,69 +1,28 @@
 /**
- * @fileoverview セーブデータアップロードとハッシュ同期の共通処理
+ * @fileoverview セーブデータアップロードとダウンロードの共通処理
  */
 
 import type { ApiResult } from "src/types/result";
-
-import { createRemotePath } from "@renderer/utils";
+import type { PullResult } from "src/wailsBridge";
 
 type UploadSaveDataInput = {
   gameId: string;
-  saveFolderPath: string;
-  localHash?: string;
-  localUpdatedAt?: Date | string | null;
 };
 
-type DownloadSaveDataInput = {
+type PullSaveDataInput = {
   gameId: string;
-  saveFolderPath: string;
+  /** 同期管理外のローカル固有ファイルの削除を承認するか（既定 false=確認を返す） */
+  deleteUntracked?: boolean;
 };
-
-async function syncGameMetadata(gameId: string, actionLabel: string): Promise<ApiResult<void>> {
-  const syncResult = await window.api.cloudSync.syncGame(gameId);
-  if (syncResult.success) {
-    return { success: true };
-  }
-
-  return {
-    success: false,
-    message: `${actionLabel}後のセッション同期に失敗しました: ${syncResult.message ?? "エラー"}`,
-  };
-}
 
 export async function uploadSaveDataAndSyncHash(
   input: UploadSaveDataInput,
 ): Promise<ApiResult<void>> {
-  const remotePath = createRemotePath(input.gameId);
-  const uploadResult = await window.api.saveData.upload.uploadSaveDataFolder(
-    input.saveFolderPath,
-    remotePath,
-  );
-  if (!uploadResult.success) {
-    return uploadResult;
-  }
-
-  const hash =
-    input.localHash ??
-    (await window.api.saveData.hash.computeLocalHash(input.saveFolderPath)).data ??
-    null;
-  if (hash) {
-    await window.api.saveData.hash.saveCloudHash(input.gameId, hash, input.localUpdatedAt ?? null);
-  }
-
-  return syncGameMetadata(input.gameId, "セーブデータアップロード");
+  return window.api.cloudSync.push(input.gameId);
 }
 
 export async function downloadSaveDataAndSyncMetadata(
-  input: DownloadSaveDataInput,
-): Promise<ApiResult<void>> {
-  const remotePath = createRemotePath(input.gameId);
-  const downloadResult = await window.api.saveData.download.downloadSaveData(
-    input.saveFolderPath,
-    remotePath,
-  );
-  if (!downloadResult.success) {
-    return downloadResult;
-  }
-
-  return syncGameMetadata(input.gameId, "セーブデータダウンロード");
+  input: PullSaveDataInput,
+): Promise<ApiResult<PullResult>> {
+  return window.api.cloudSync.pull(input.gameId, input.deleteUntracked ?? false);
 }

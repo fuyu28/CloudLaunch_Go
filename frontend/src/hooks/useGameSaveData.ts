@@ -23,8 +23,11 @@
 
 import { useState, useCallback } from "react";
 
-import { handleApiError, withLoadingToast } from "@renderer/utils/errorHandler";
+import toast from "react-hot-toast";
 
+import { handleApiError, handleUnexpectedError } from "@renderer/utils/errorHandler";
+
+import type { SyncProgressEvent } from "src/wailsBridge";
 import type { GameType } from "src/types/game";
 import {
   downloadSaveDataAndSyncMetadata,
@@ -56,13 +59,7 @@ export function useGameSaveData(): GameSaveDataResult {
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  /**
-   * セーブデータをクラウドにアップロードする
-   *
-   * @param game アップロード対象のゲーム
-   */
   const uploadSaveData = useCallback(async (game: GameType): Promise<void> => {
-    // セーブフォルダパスの存在チェック
     if (!game.saveFolderPath) {
       handleApiError({
         success: false,
@@ -72,32 +69,31 @@ export function useGameSaveData(): GameSaveDataResult {
     }
 
     setIsUploading(true);
+    const toastId = toast.loading("セーブデータをアップロード中…");
+    const unsubscribe = window.api.cloudSync.onProgress((event: SyncProgressEvent) => {
+      if (event.operation === "push" && event.total > 0) {
+        toast.loading(`セーブデータをアップロード中… ${event.current}/${event.total}`, {
+          id: toastId,
+        });
+      }
+    });
 
     try {
-      // アップロード実行（トースト付き）
-      await withLoadingToast(
-        () =>
-          uploadSaveDataAndSyncHash({
-            gameId: game.id,
-            saveFolderPath: game.saveFolderPath!,
-            localUpdatedAt: game.localSaveHashUpdatedAt ?? null,
-          }),
-        "セーブデータをアップロード中…",
-        "セーブデータのアップロードに成功しました。",
-        "セーブデータのアップロード",
-      );
+      const result = await uploadSaveDataAndSyncHash({ gameId: game.id });
+      if (result.success) {
+        toast.success("セーブデータのアップロードに成功しました。", { id: toastId });
+      } else {
+        toast.error(result.message || "エラーが発生しました", { id: toastId });
+      }
+    } catch (error) {
+      handleUnexpectedError(error, "セーブデータのアップロード", toastId);
     } finally {
+      unsubscribe();
       setIsUploading(false);
     }
   }, []);
 
-  /**
-   * セーブデータをクラウドからダウンロードする
-   *
-   * @param game ダウンロード対象のゲーム
-   */
   const downloadSaveData = useCallback(async (game: GameType): Promise<void> => {
-    // セーブフォルダパスの存在チェック
     if (!game.saveFolderPath) {
       handleApiError({
         success: false,
@@ -107,19 +103,33 @@ export function useGameSaveData(): GameSaveDataResult {
     }
 
     setIsDownloading(true);
+    const toastId = toast.loading("セーブデータをダウンロード中…");
+    const unsubscribe = window.api.cloudSync.onProgress((event: SyncProgressEvent) => {
+      if (event.operation === "pull" && event.total > 0) {
+        toast.loading(`セーブデータをダウンロード中… ${event.current}/${event.total}`, {
+          id: toastId,
+        });
+      }
+    });
 
     try {
-      await withLoadingToast(
-        () =>
-          downloadSaveDataAndSyncMetadata({
-            gameId: game.id,
-            saveFolderPath: game.saveFolderPath!,
-          }),
-        "セーブデータをダウンロード中…",
-        "セーブデータのダウンロードに成功しました。",
-        "セーブデータのダウンロード",
-      );
+      const result = await downloadSaveDataAndSyncMetadata({ gameId: game.id });
+      if (result.success && result.data && !result.data.applied) {
+        // 同期管理外のローカルファイルを削除する必要があり確認待ち。
+        // ここでは破壊的削除を避けてダウンロードせず、ゲーム詳細の「同期」から確認する案内を出す。
+        toast.error(
+          "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
+          { id: toastId },
+        );
+      } else if (result.success) {
+        toast.success("セーブデータのダウンロードに成功しました。", { id: toastId });
+      } else {
+        toast.error(result.message || "エラーが発生しました", { id: toastId });
+      }
+    } catch (error) {
+      handleUnexpectedError(error, "セーブデータのダウンロード", toastId);
     } finally {
+      unsubscribe();
       setIsDownloading(false);
     }
   }, []);

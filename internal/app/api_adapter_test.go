@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,44 +14,6 @@ import (
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/services"
 )
-
-type noopAppCloudSyncRepository struct{}
-
-func (noopAppCloudSyncRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
-	return nil, nil
-}
-
-func (noopAppCloudSyncRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
-	return nil, nil
-}
-
-func (noopAppCloudSyncRepository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
-	return nil, nil
-}
-
-func (noopAppCloudSyncRepository) UpsertGameSync(ctx context.Context, game domain.Game) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) DeletePlaySessionsByGame(ctx context.Context, gameID string) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) UpsertPlaySessionSync(ctx context.Context, session domain.PlaySession) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
-	return 0, nil
-}
-
-func (noopAppCloudSyncRepository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
-	return nil
-}
-
-func (noopAppCloudSyncRepository) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
-	return nil
-}
 
 type noopAppGameRepository struct {
 	listErr   error
@@ -219,46 +182,6 @@ func (store *adapterTestCredentialStore) Delete(ctx context.Context, key string)
 
 func newAdapterTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
-func TestAppSyncAllGamesConvertsServiceError(t *testing.T) {
-	t.Parallel()
-
-	cloudSync := services.NewCloudSyncService(config.Config{}, nil, noopAppCloudSyncRepository{}, newAdapterTestLogger())
-	cloudSync.SetOfflineMode(true)
-	app := &App{
-		Logger:           newAdapterTestLogger(),
-		CloudSyncService: cloudSync,
-	}
-
-	result := app.SyncAllGames()
-
-	if result.Success {
-		t.Fatalf("expected sync failure, got success: %#v", result)
-	}
-	if result.Error == nil || result.Error.Message != "オフラインモードのため同期できません" {
-		t.Fatalf("expected converted service error, got %#v", result.Error)
-	}
-}
-
-func TestAppDeleteCloudGameConvertsServiceError(t *testing.T) {
-	t.Parallel()
-
-	cloudSync := services.NewCloudSyncService(config.Config{}, nil, noopAppCloudSyncRepository{}, newAdapterTestLogger())
-	cloudSync.SetOfflineMode(true)
-	app := &App{
-		Logger:           newAdapterTestLogger(),
-		CloudSyncService: cloudSync,
-	}
-
-	result := app.DeleteCloudGame("game-1")
-
-	if result.Success {
-		t.Fatalf("expected delete failure, got success: %#v", result)
-	}
-	if result.Error == nil || result.Error.Message != "オフラインモードのため削除できません" {
-		t.Fatalf("expected converted service error, got %#v", result.Error)
-	}
 }
 
 func TestAppGetCloudMemosConvertsServiceError(t *testing.T) {
@@ -457,7 +380,7 @@ func TestAppSaveCredentialConvertsServiceError(t *testing.T) {
 		CredentialService: services.NewCredentialService(&adapterTestCredentialStore{}, newAdapterTestLogger()),
 	}
 
-	// empty input triggers validation error in CredentialService
+	// 空の入力は CredentialService でバリデーションエラーになる
 	result := app.SaveCredential("key", services.CredentialInput{})
 
 	if result.Success {
@@ -483,5 +406,62 @@ func TestAppLoadCredentialConvertsServiceError(t *testing.T) {
 	}
 	if result.Error == nil || result.Error.Message != "認証情報取得に失敗しました" {
 		t.Fatalf("expected converted service error, got %#v", result.Error)
+	}
+}
+
+func TestDeleteCloudDataRejectsEmptyOrWildcardPath(t *testing.T) {
+	t.Parallel()
+
+	app := &App{}
+	cases := []string{"", "   ", "*"}
+	for _, tc := range cases {
+		result := app.DeleteCloudData(tc)
+		if result.Success {
+			t.Fatalf("DeleteCloudData(%q) succeeded, want error", tc)
+		}
+		if result.Error == nil || result.Error.Detail == "" {
+			t.Fatalf("DeleteCloudData(%q) should return error detail", tc)
+		}
+	}
+}
+
+func TestDeleteFileRejectsEmptyKey(t *testing.T) {
+	t.Parallel()
+
+	app := &App{}
+	result := app.DeleteFile("   ")
+	if result.Success {
+		t.Fatal("DeleteFile succeeded, want error")
+	}
+	if result.Error == nil || result.Error.Detail == "" {
+		t.Fatal("DeleteFile should return error detail")
+	}
+}
+
+func TestNormalizeDeletePrefixSeparatesExactKeyAndChildren(t *testing.T) {
+	t.Parallel()
+
+	exact, children, ok := normalizeDeletePrefix("games/game-1/")
+	if !ok {
+		t.Fatal("expected prefix to be valid")
+	}
+	if exact != "games/game-1" {
+		t.Fatalf("exact = %q, want %q", exact, "games/game-1")
+	}
+	if children != "games/game-1/" {
+		t.Fatalf("children = %q, want %q", children, "games/game-1/")
+	}
+	if strings.HasPrefix("games/game-10/", children) {
+		t.Fatal("child prefix should not match sibling game IDs")
+	}
+}
+
+func TestNormalizeDeletePrefixRejectsEmptyOrWildcard(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []string{"", " ", "*", "/"} {
+		if exact, children, ok := normalizeDeletePrefix(tc); ok {
+			t.Fatalf("normalizeDeletePrefix(%q) = %q, %q, true; want invalid", tc, exact, children)
+		}
 	}
 }

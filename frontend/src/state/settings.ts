@@ -63,12 +63,6 @@ export const autoTrackingAtom = atomWithStorage<boolean>("autoTracking", true);
 export const transferConcurrencyAtom = atomWithStorage<number>("transferConcurrency", 6);
 
 /**
- * リトライ回数設定atom（アップロード/ダウンロード共通）
- * LocalStorageに自動保存される
- */
-export const transferRetryCountAtom = atomWithStorage<number>("transferRetryCount", 3);
-
-/**
  * スクリーンショット同期設定atom
  * LocalStorageに自動保存される
  */

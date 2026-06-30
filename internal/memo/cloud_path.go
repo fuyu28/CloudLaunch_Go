@@ -1,4 +1,4 @@
-// @fileoverview クラウド上のメモパスを生成・解析する。
+// クラウド上のメモパスを生成・解析する。
 package memo
 
 import (

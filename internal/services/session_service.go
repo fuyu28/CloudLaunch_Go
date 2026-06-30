@@ -1,4 +1,4 @@
-// @fileoverview プレイセッション管理を提供する。
+// プレイセッション管理を提供する。
 package services
 
 import (
@@ -22,7 +22,7 @@ func NewSessionService(repository SessionRepository, logger *slog.Logger) *Sessi
 	return &SessionService{repository: repository, logger: logger}
 }
 
-// SessionMutationResult represents metadata that the Wails adapter can use after a session write.
+// SessionMutationResult はセッション書き込み後に Wails アダプターが使用するメタデータを表す。
 type SessionMutationResult struct {
 	GameID string `json:"gameId"`
 }

@@ -1,2 +1,2 @@
-// Package models defines core domain models.
+// Package domain はコアドメインモデルを定義する。
 package domain

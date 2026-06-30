@@ -1,4 +1,4 @@
-// @fileoverview 批評空間の検索結果を取得する。
+// 批評空間の検索結果を取得する。
 package services
 
 import (

@@ -1,4 +1,4 @@
-// @fileoverview アプリケーション全体の初期化とサービス公開を行う。
+// アプリケーション全体の初期化とサービス公開を行う。
 package app
 
 import (
@@ -27,8 +27,7 @@ type App struct {
 	MemoService         *services.MemoService
 	MemoFiles           *memo.FileManager
 	CredentialService   *services.CredentialService
-	CloudService        *services.CloudService
-	CloudSyncService    *services.CloudSyncService
+	ContentSyncService  *services.ContentSyncService
 	ErogameScapeService *services.ErogameScapeService
 	ProcessMonitor      *services.ProcessMonitorService
 	ScreenshotService   *services.ScreenshotService
@@ -38,6 +37,7 @@ type App struct {
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
+	syncCoalescer       *asyncCoalescer
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -126,10 +126,17 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.RouteService = services.NewRouteService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
-	app.CloudService = services.NewCloudService(app.Config, credentialStore, app.Logger)
-	app.CloudSyncService = services.NewCloudSyncService(app.Config, credentialStore, repository, app.Logger)
+	app.ContentSyncService = services.NewContentSyncService(app.Config, credentialStore, repository, app.Logger)
+	app.syncCoalescer = newAsyncCoalescer(func(id string) {
+		if err := app.ContentSyncService.Push(app.context(), id, nil); err != nil {
+			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
+		}
+	})
+	app.syncCoalescer.onPanic = func(id string, recovered any) {
+		app.Logger.Error("クラウド同期中に panic を回収", "gameId", id, "recovered", recovered)
+	}
 	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
-	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.CloudSyncService)
+	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.ContentSyncService)
 	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)
 	app.MemoCloudService = services.NewMemoCloudService(app.Config, credentialStore, app.GameService, app.MemoService, app.Logger)
 	app.MaintenanceService = services.NewMaintenanceService(

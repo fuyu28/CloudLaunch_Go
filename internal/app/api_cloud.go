@@ -1,4 +1,4 @@
-// @fileoverview クラウド関連のAPIを提供する。
+// クラウド関連のAPIを提供する。
 package app
 
 import (
@@ -163,31 +163,40 @@ func (app *App) GetDirectoryTree() result.ApiResult[[]CloudDirectoryNode] {
 
 // DeleteCloudData は指定パス配下を削除する。
 func (app *App) DeleteCloudData(path string) result.ApiResult[bool] {
+	exactKey, childPrefix, ok := normalizeDeletePrefix(path)
+	if !ok {
+		return result.ErrorResult[bool]("削除対象のパスが不正です", "delete prefix is empty or wildcard")
+	}
+
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.getDefaultS3Client")
 	}
 
-	prefix := strings.TrimSpace(path)
-	if prefix == "*" || prefix == "" {
-		prefix = ""
+	if error := storage.DeleteObject(ctx, client, bucket, exactKey); error != nil {
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteExactObject", "key", exactKey)
 	}
-	if error := storage.DeleteObjectsByPrefix(ctx, client, bucket, prefix); error != nil {
-		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteByPrefix", "prefix", prefix)
+	if error := storage.DeleteObjectsByPrefix(ctx, client, bucket, childPrefix); error != nil {
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteCloudData.deleteByPrefix", "prefix", childPrefix)
 	}
 	return result.OkResult(true)
 }
 
 // DeleteFile は単一ファイルを削除する。
 func (app *App) DeleteFile(key string) result.ApiResult[bool] {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return result.ErrorResult[bool]("削除対象のファイルが不正です", "delete object key is empty")
+	}
+
 	ctx := app.context()
 	client, bucket, error := app.getDefaultS3Client(ctx)
 	if error != nil {
 		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.getDefaultS3Client")
 	}
-	if error := storage.DeleteObject(ctx, client, bucket, key); error != nil {
-		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.deleteObject", "key", key)
+	if error := storage.DeleteObject(ctx, client, bucket, trimmed); error != nil {
+		return errorResultWithLog[bool](app, "削除に失敗しました", error, "operation", "DeleteFile.deleteObject", "key", trimmed)
 	}
 	return result.OkResult(true)
 }
@@ -250,99 +259,6 @@ func (app *App) GetCloudFileDetailsByGame(gameID string) result.ApiResult[CloudF
 		total += obj.Size
 	}
 	return result.OkResult(CloudFileDetailsResult{Exists: len(files) > 0, TotalSize: total, Files: files})
-}
-
-// GetCloudSaveHash はクラウド上のセーブデータハッシュを取得する。
-func (app *App) GetCloudSaveHash(gameID string) result.ApiResult[*storage.SaveHashMetadata] {
-	trimmed := strings.TrimSpace(gameID)
-	if trimmed == "" {
-		app.Logger.Warn("ゲームIDが不正です", "operation", "GetCloudSaveHash", "gameId", gameID)
-		return result.ErrorResult[*storage.SaveHashMetadata]("ゲームIDが不正です", "gameID is empty")
-	}
-	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[*storage.SaveHashMetadata](app, "取得に失敗しました", error, "operation", "GetCloudSaveHash.getDefaultS3Client", "gameId", trimmed)
-	}
-	key := createSaveHashPath(trimmed)
-	metadata, error := storage.LoadSaveHash(ctx, client, bucket, key)
-	if error != nil {
-		if storage.IsNotFoundError(error) {
-			return result.OkResult[*storage.SaveHashMetadata](nil)
-		}
-		return errorResultWithLog[*storage.SaveHashMetadata](app, "取得に失敗しました", error, "operation", "GetCloudSaveHash.loadSaveHash", "key", key)
-	}
-	return result.OkResult(metadata)
-}
-
-func resolveSaveHashUpdatedAt(raw string, now func() time.Time) (time.Time, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return now(), nil
-	}
-
-	updatedAt, err := time.Parse(time.RFC3339Nano, trimmed)
-	if err == nil {
-		return updatedAt, nil
-	}
-
-	updatedAt, fallbackErr := time.Parse(time.RFC3339, trimmed)
-	if fallbackErr == nil {
-		return updatedAt, nil
-	}
-
-	return time.Time{}, err
-}
-
-// SaveCloudSaveHash はクラウドにセーブデータハッシュを保存する。
-func (app *App) SaveCloudSaveHash(gameID string, hash string, updatedAtRaw string) result.ApiResult[bool] {
-	trimmed := strings.TrimSpace(gameID)
-	trimmedHash := strings.TrimSpace(hash)
-	if trimmed == "" || trimmedHash == "" {
-		app.Logger.Warn("入力が不正です", "operation", "SaveCloudSaveHash", "gameId", gameID)
-		return result.ErrorResult[bool]("入力が不正です", "gameID or hash is empty")
-	}
-
-	updatedAt, err := resolveSaveHashUpdatedAt(updatedAtRaw, time.Now)
-	if err != nil {
-		app.Logger.Warn("日時の形式が不正です", "operation", "SaveCloudSaveHash", "updatedAt", updatedAtRaw)
-		return result.ErrorResult[bool]("入力が不正です", "updatedAt must be RFC3339")
-	}
-	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.getDefaultS3Client", "gameId", trimmed)
-	}
-	key := createSaveHashPath(trimmed)
-	metadata := storage.SaveHashMetadata{
-		Hash:      trimmedHash,
-		UpdatedAt: updatedAt,
-	}
-	if error := storage.SaveSaveHash(ctx, client, bucket, key, metadata); error != nil {
-		return errorResultWithLog[bool](app, "保存に失敗しました", error, "operation", "SaveCloudSaveHash.saveSaveHash", "key", key)
-	}
-	return result.OkResult(true)
-}
-
-// DownloadSaveData はクラウドからダウンロードする。
-func (app *App) DownloadSaveData(localPath string, remotePath string) result.ApiResult[bool] {
-	ctx := app.context()
-	client, bucket, error := app.getDefaultS3Client(ctx)
-	if error != nil {
-		return errorResultWithLog[bool](app, "ダウンロードに失敗しました", error, "operation", "DownloadSaveData.getDefaultS3Client", "remotePath", remotePath)
-	}
-	if error := storage.DownloadPrefix(
-		ctx,
-		client,
-		bucket,
-		remotePath,
-		localPath,
-		app.Config.S3UploadConcurrency,
-		app.Config.S3TransferRetryCount,
-	); error != nil {
-		return errorResultWithLog[bool](app, "ダウンロードに失敗しました", error, "operation", "DownloadSaveData.downloadPrefix", "remotePath", remotePath, "localPath", localPath)
-	}
-	return result.OkResult(true)
 }
 
 // LoadImageFromLocal はローカル画像をBase64で返す。
@@ -460,8 +376,12 @@ func createGamePrefix(gameID string) string {
 	return "games/" + strings.TrimSpace(gameID) + "/"
 }
 
-func createSaveHashPath(gameID string) string {
-	return "games/" + strings.TrimSpace(gameID) + "/save_hash.json"
+func normalizeDeletePrefix(pathValue string) (exactKey string, childPrefix string, ok bool) {
+	trimmed := strings.Trim(strings.TrimSpace(pathValue), "/")
+	if trimmed == "" || trimmed == "*" {
+		return "", "", false
+	}
+	return trimmed, trimmed + "/", true
 }
 
 func detectImageMime(path string) string {
