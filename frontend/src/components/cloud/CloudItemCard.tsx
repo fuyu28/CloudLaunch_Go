@@ -123,7 +123,8 @@ export function DirectoryNodeCard({
   };
 
   // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
-  // 未取得（children が undefined）のあいだはファイル数・サイズを「—」で表示する。
+  // 未取得（children が undefined）のあいだはファイル数・サイズ行を出さない。
+  // 取得済みになったゲーム配下のディレクトリ／ファイルでは従来どおり表示する。
   const isLoaded = !node.isDirectory || node.children !== undefined;
   const totalSize = node.isDirectory ? sumSizesRecursively(node) : node.size;
 
@@ -145,15 +146,17 @@ export function DirectoryNodeCard({
             <h3 className="font-medium text-base-content truncate" title={node.name}>
               {node.name}
             </h3>
-            <div className="text-sm text-base-content/70 space-y-1">
-              {node.isDirectory && (
-                <div className="flex items-center gap-2">
-                  <FiFile className="text-xs" />
-                  <span>{isLoaded ? `${countFilesRecursively(node)} ファイル` : "— ファイル"}</span>
-                </div>
-              )}
-              <div>{isLoaded ? formatFileSize(totalSize) : "—"}</div>
-            </div>
+            {isLoaded && (
+              <div className="text-sm text-base-content/70 space-y-1">
+                {node.isDirectory && (
+                  <div className="flex items-center gap-2">
+                    <FiFile className="text-xs" />
+                    <span>{countFilesRecursively(node)} ファイル</span>
+                  </div>
+                )}
+                <div>{formatFileSize(totalSize)}</div>
+              </div>
+            )}
           </div>
         </div>
 
