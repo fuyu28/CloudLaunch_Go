@@ -239,7 +239,7 @@ func TestBuildMetaSnapshotReturnsConsistentHashes(t *testing.T) {
 		{ID: "s1", GameID: "game-1", PlayedAt: now, Duration: 3600, UpdatedAt: now},
 	}
 
-	result, err := buildMetaSnapshot(game, sessions, "", "sha256_of_saves", "TestPC")
+	result, err := buildMetaSnapshot(game, sessions, "", "sha256_of_saves", "TestPC", 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestBuildMetaSnapshotImageHashOmittedWhenEmpty(t *testing.T) {
 	now := time.Now().UTC()
 	game := domain.Game{ID: "g1", Title: "T", PlayStatus: domain.PlayStatusUnplayed, CreatedAt: now, UpdatedAt: now}
 
-	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC")
+	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

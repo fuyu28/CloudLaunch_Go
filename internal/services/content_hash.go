@@ -285,12 +285,18 @@ type metaBuildResult struct {
 }
 
 // buildMetaSnapshot はゲーム情報・セッション・セーブハッシュから MetaSnapshot を構築する。
+//
+// fileCount / totalSize はクラウド一覧での表示用キャッシュ。Push 経路では実値を、
+// Status 経路（buildLocalMeta）では 0,0 を渡して構わない（fingerprint 比較・UI 表示
+// どちらもこれらのフィールドを参照しない）。
 func buildMetaSnapshot(
 	game domain.Game,
 	sessions []domain.PlaySession,
 	imageHash domain.BlobHash,
 	savesHash domain.BlobHash,
 	deviceName string,
+	fileCount int64,
+	totalSize int64,
 ) (metaBuildResult, error) {
 	gameJSON, err := json.Marshal(cloudGame{
 		ID:             game.ID,
@@ -331,6 +337,8 @@ func buildMetaSnapshot(
 		Saves:        savesHash,
 		DeviceName:   deviceName,
 		CreatedAt:    time.Now().UTC(),
+		FileCount:    fileCount,
+		TotalSize:    totalSize,
 	}
 	metaBytes, err := json.Marshal(meta)
 	if err != nil {

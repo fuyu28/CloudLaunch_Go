@@ -217,7 +217,9 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 		return metaBuildResult{}, err
 	}
 	savesHash := hashBytes(saveSnapJSON)
-	return buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName)
+	// Status 経路は contentFingerprint しか参照しないため、サマリ表示用キャッシュは
+	// 埋めない（0 を渡す）。実値は Push 時の pushBuildLocalMeta 側で書き込む。
+	return buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName, 0, 0)
 }
 
 // Status は現在の同期状態を返す。
@@ -412,7 +414,15 @@ func (s *ContentSyncService) pushBuildLocalMeta(ctx context.Context, gameID stri
 		}
 	}
 
-	meta, err := buildMetaSnapshot(*game, sessions, imageHash, savesHash, deviceName)
+	// クラウド一覧の表示で別 GET を増やさずにファイル数 / 総サイズを出せるよう、
+	// commit にスナップショット時点のキャッシュとして書き込む。dedup を意識せず
+	// 「ユーザーが見るファイル単位」で合計するため saveSnap.Files を走査する。
+	fileCount := int64(len(saveSnap.Files))
+	var totalSize int64
+	for _, h := range saveSnap.Files {
+		totalSize += int64(len(saveBlobs[h]))
+	}
+	meta, err := buildMetaSnapshot(*game, sessions, imageHash, savesHash, deviceName, fileCount, totalSize)
 	if err != nil {
 		return metaBuildResult{}, nil, "", nil, "", nil, err
 	}
@@ -980,13 +990,18 @@ func (s *ContentSyncService) ListCloudGameViews(ctx context.Context) ([]CloudGam
 	return views, nil
 }
 
-// CloudGameSummary は1ゲームの軽量サマリ（ファイル一覧・サイズを含まない）を表す。
-// クラウドデータ管理の初期表示ではタイトル一覧のみが必要なため、
-// セーブツリーの解析や objects の列挙（サイズ解決）は行わない。
+// CloudGameSummary は1ゲームの軽量サマリ（ファイル一覧を含まない）を表す。
+// クラウドデータ管理の初期表示用。
+//
+// FileCount / TotalSize は MetaSnapshot に書かれたスナップショット時点の
+// キャッシュ。Push 時に書き込まれた commit からは値が入り、旧 commit からは
+// 0 が返る（表示側で「未取得」扱い）。セーブツリー解析や objects 列挙は不要。
 type CloudGameSummary struct {
 	GameID       string    `json:"gameId"`
 	Title        string    `json:"title"`
 	LastModified time.Time `json:"lastModified"`
+	FileCount    int64     `json:"fileCount"`
+	TotalSize    int64     `json:"totalSize"`
 }
 
 // buildCloudGameSummary は HEAD→commit→game.json のみを読み取り、軽量サマリを復元する。
@@ -999,7 +1014,13 @@ func (s *ContentSyncService) buildCloudGameSummary(ctx context.Context, bstore *
 	if meta == nil {
 		return nil, nil
 	}
-	return &CloudGameSummary{GameID: gameID, Title: title, LastModified: meta.CreatedAt}, nil
+	return &CloudGameSummary{
+		GameID:       gameID,
+		Title:        title,
+		LastModified: meta.CreatedAt,
+		FileCount:    meta.FileCount,
+		TotalSize:    meta.TotalSize,
+	}, nil
 }
 
 // ListCloudGameSummaries は全ゲームの軽量サマリ（Title 昇順）を返す。

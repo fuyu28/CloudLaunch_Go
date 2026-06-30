@@ -308,7 +308,7 @@ func setupRemoteState(
 		t.Fatalf("putBlob saveSnap: %v", err)
 	}
 
-	meta, err := buildMetaSnapshot(game, sessions, "", savesHash, "testdevice")
+	meta, err := buildMetaSnapshot(game, sessions, "", savesHash, "testdevice", 0, 0)
 	if err != nil {
 		t.Fatalf("buildMetaSnapshot: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestContentSyncServicePullRejectsEscapingSavePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	meta, err := buildMetaSnapshot(game, nil, "", savesHash, "testdevice")
+	meta, err := buildMetaSnapshot(game, nil, "", savesHash, "testdevice", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -739,7 +739,7 @@ func TestContentSyncServicePullRejectsMismatchedRemoteGameID(t *testing.T) {
 
 	remoteGame := game
 	remoteGame.ID = "other-game"
-	meta, err := buildMetaSnapshot(remoteGame, nil, "", savesHash, "testdevice")
+	meta, err := buildMetaSnapshot(remoteGame, nil, "", savesHash, "testdevice", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -901,7 +901,7 @@ func TestContentSyncServiceStatusReturnsPullNeeded(t *testing.T) {
 	}
 	localSaveSnapJSON, _ := json.Marshal(localSaveSnap)
 	localSavesHash := hashBytes(localSaveSnapJSON)
-	localMeta, err := buildMetaSnapshot(game, sessions, "", localSavesHash, "testdevice")
+	localMeta, err := buildMetaSnapshot(game, sessions, "", localSavesHash, "testdevice", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -951,7 +951,7 @@ func TestContentSyncServiceStatusReturnsConflict(t *testing.T) {
 	}
 	baseSaveSnapJSON, _ := json.Marshal(baseSaveSnap)
 	baseSavesHash := hashBytes(baseSaveSnapJSON)
-	baseMeta, err := buildMetaSnapshot(game, nil, "", baseSavesHash, "testdevice")
+	baseMeta, err := buildMetaSnapshot(game, nil, "", baseSavesHash, "testdevice", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
