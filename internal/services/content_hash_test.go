@@ -263,6 +263,50 @@ func TestBuildMetaSnapshotReturnsConsistentHashes(t *testing.T) {
 	}
 }
 
+// TestBuildMetaSnapshotPersistsStatsCache は FileCount / TotalSize が
+// 非 0 値で渡されたとき SnapshotBytes に保存され、unmarshal で復元できることを
+// 検証する（JSON タグのタイポを検出するため）。
+func TestBuildMetaSnapshotPersistsStatsCache(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
+	game := domain.Game{
+		ID:        "game-1",
+		Title:     "Test",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	const wantFileCount int64 = 42
+	const wantTotalSize int64 = 1024 * 1024 * 7
+
+	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC", wantFileCount, wantTotalSize)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 1. Snapshot 構造体側に値が入っているか
+	if result.Snapshot.FileCount != wantFileCount {
+		t.Errorf("Snapshot.FileCount = %d, want %d", result.Snapshot.FileCount, wantFileCount)
+	}
+	if result.Snapshot.TotalSize != wantTotalSize {
+		t.Errorf("Snapshot.TotalSize = %d, want %d", result.Snapshot.TotalSize, wantTotalSize)
+	}
+
+	// 2. SnapshotBytes を unmarshal して値が読み戻せるか
+	//    （これにより JSON タグ名のタイポを検出する）
+	var roundtrip domain.MetaSnapshot
+	if err := json.Unmarshal(result.SnapshotBytes, &roundtrip); err != nil {
+		t.Fatalf("unmarshal SnapshotBytes: %v", err)
+	}
+	if roundtrip.FileCount != wantFileCount {
+		t.Errorf("roundtrip FileCount = %d, want %d", roundtrip.FileCount, wantFileCount)
+	}
+	if roundtrip.TotalSize != wantTotalSize {
+		t.Errorf("roundtrip TotalSize = %d, want %d", roundtrip.TotalSize, wantTotalSize)
+	}
+}
+
 // TestApplyDeletionsPreservesUnrelatedEmptyDir は、削除したファイルの祖先でない
 // 「元から空のディレクトリ」を applyDeletions が消さないことを確認する。
 func TestApplyDeletionsPreservesUnrelatedEmptyDir(t *testing.T) {
