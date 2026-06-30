@@ -9,6 +9,8 @@ type asyncCoalescer struct {
 	mu       sync.Mutex
 	inFlight map[string]bool
 	pending  map[string]bool
+	stopped  bool
+	wg       sync.WaitGroup
 	run      func(id string)
 	// onPanic は run が panic を起こした際に回収した値とともに呼ばれる（任意）。
 	onPanic func(id string, recovered any)
@@ -24,16 +26,35 @@ func newAsyncCoalescer(run func(id string)) *asyncCoalescer {
 }
 
 // trigger は id のタスクを要求する。既に実行中なら完了後の再実行をマークするだけで即座に返る。
+// stop 後の trigger は no-op となる（バックアップ復元中などに新規同期が走るのを防ぐ）。
 func (c *asyncCoalescer) trigger(id string) {
 	c.mu.Lock()
+	if c.stopped {
+		c.mu.Unlock()
+		return
+	}
 	if c.inFlight[id] {
 		c.pending[id] = true
 		c.mu.Unlock()
 		return
 	}
 	c.inFlight[id] = true
+	c.wg.Add(1)
 	c.mu.Unlock()
-	go c.loop(id)
+	go func() {
+		defer c.wg.Done()
+		c.loop(id)
+	}()
+}
+
+// stop は新規 trigger を無効化し、実行中の loop が完了するまで待つ。
+// 戻った後は run が呼ばれることはない。バックアップ復元のように DB 接続を閉じる前に
+// 同期 goroutine を確実に静止させる用途で使う。多重呼び出しは安全。
+func (c *asyncCoalescer) stop() {
+	c.mu.Lock()
+	c.stopped = true
+	c.mu.Unlock()
+	c.wg.Wait()
 }
 
 // loop は id のタスクを実行し、実行中に再要求があれば1回だけ追加実行してから終了する。
@@ -49,6 +70,13 @@ func (c *asyncCoalescer) loop(id string) {
 			return
 		}
 		c.mu.Lock()
+		// stop 中なら pending を消化せず即座に終了する（DB が閉じられる前に静止する）。
+		if c.stopped {
+			delete(c.pending, id)
+			delete(c.inFlight, id)
+			c.mu.Unlock()
+			return
+		}
 		if c.pending[id] {
 			delete(c.pending, id)
 			c.mu.Unlock()
