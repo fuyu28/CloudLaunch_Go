@@ -219,20 +219,17 @@ export function useCloudData(): UseCloudDataReturn {
   );
 
   /**
-   * カードビューでディレクトリに移動
+   * カードビューでディレクトリに移動。
+   * directoryName はノード名そのものを受け取り、"/" による分割は行わない
+   * （ゲーム名に "/" を含む場合に誤分解されないようにする）。
    */
-  const navigateToDirectory = useCallback(
-    (directoryName: string): void => {
-      const trimmed = directoryName.trim();
-      if (trimmed === "") {
-        return;
-      }
-      const segments = trimmed.split("/").filter((segment) => segment.length > 0);
-      const newPath = segments.length > 1 ? segments : [...state.currentPath, trimmed];
-      setState((prev) => ({ ...prev, currentPath: newPath }));
-    },
-    [state.currentPath],
-  );
+  const navigateToDirectory = useCallback((directoryName: string): void => {
+    const trimmed = directoryName.trim();
+    if (trimmed === "") {
+      return;
+    }
+    setState((prev) => ({ ...prev, currentPath: [...prev.currentPath, trimmed] }));
+  }, []);
 
   /**
    * カードビューで親ディレクトリに戻る
