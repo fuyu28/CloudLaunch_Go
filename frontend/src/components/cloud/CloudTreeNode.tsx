@@ -10,9 +10,7 @@ import type { CloudDirectoryNode } from "src/types/cloud";
 import {
   formatFileSize,
   formatDate,
-  countFilesRecursively,
-  isCloudNodeLoaded,
-  sumSizesRecursively,
+  computeCloudNodeMetrics,
   latestModifiedRecursively,
 } from "@renderer/utils/cloudUtils";
 
@@ -44,17 +42,16 @@ export default function CloudTreeNode({
 }: CloudTreeNodeProps): React.JSX.Element {
   const isExpanded = expandedNodes.has(node.path);
   const hasChildren = node.children && node.children.length > 0;
-  // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
-  // 未取得（children が undefined）でも展開ボタンを残して取得を促す。
-  const childrenLoaded = isCloudNodeLoaded(node);
   const isLoading = loadingGameIds?.has(node.path) ?? false;
+  // 表示用メトリクスとナビゲーション可否を共通ヘルパーから取り出す。
+  // childrenLoaded は未取得ゲームの展開ボタン表示／ローディング案内に使う。
+  const {
+    childrenLoaded,
+    count: displayCount,
+    size: displaySize,
+    hasMetrics,
+  } = computeCloudNodeMetrics(node);
   const isExpandable = node.isDirectory && (hasChildren || !childrenLoaded);
-  // 表示用の集計：取得済みなら配下から、未取得なら commit メタ由来のサマリ値を使う。
-  // ロード済みなら 0 件でも「0 ファイル / 0 B」を出し、未取得かつサマリも空のとき
-  // （旧 commit など）だけ「—」を出す。
-  const displayCount = childrenLoaded ? countFilesRecursively(node) : (node.fileCount ?? 0);
-  const displaySize = node.isDirectory && childrenLoaded ? sumSizesRecursively(node) : node.size;
-  const hasMetrics = !node.isDirectory || childrenLoaded || displayCount > 0;
   const displayLastModified = node.isDirectory
     ? latestModifiedRecursively(node)
     : node.lastModified;
