@@ -54,6 +54,10 @@ func (storageCloudObjectStore) DownloadObject(ctx context.Context, cfg storage.S
 }
 
 // normalizeImageExt はコンテンツタイプから画像拡張子を決定する。
+// 既知の画像フォーマット（jpeg/png/gif/webp/bmp/avif）はそれぞれの拡張子に正規化。
+// 不明な content-type は ".png" を返すが、これは「拡張子が嘘」になる失敗モード
+// （webp バイトを .png 名で保存するなど）の原因なので、新しいフォーマットは
+// 必ずこのテーブルに追加する。
 func normalizeImageExt(ext string, contentType string) string {
 	trimmed := strings.ToLower(strings.TrimSpace(ext))
 	if trimmed != "" {
@@ -62,14 +66,21 @@ func normalizeImageExt(ext string, contentType string) string {
 		}
 		return "." + trimmed
 	}
-	if strings.Contains(contentType, "png") {
+	contentType = strings.ToLower(contentType)
+	switch {
+	case strings.Contains(contentType, "png"):
+		return ".png"
+	case strings.Contains(contentType, "gif"):
+		return ".gif"
+	case strings.Contains(contentType, "jpeg"), strings.Contains(contentType, "jpg"):
+		return ".jpg"
+	case strings.Contains(contentType, "webp"):
+		return ".webp"
+	case strings.Contains(contentType, "bmp"):
+		return ".bmp"
+	case strings.Contains(contentType, "avif"):
+		return ".avif"
+	default:
 		return ".png"
 	}
-	if strings.Contains(contentType, "gif") {
-		return ".gif"
-	}
-	if strings.Contains(contentType, "jpeg") || strings.Contains(contentType, "jpg") {
-		return ".jpg"
-	}
-	return ".png"
 }
