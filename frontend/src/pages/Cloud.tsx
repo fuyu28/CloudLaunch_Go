@@ -73,14 +73,21 @@ export default function Cloud(): React.JSX.Element {
    * カード ⇄ ツリーの切替時は、もう一方のビュー由来の閲覧状態（カードビューの
    * currentPath とツリービューの expandedNodes）が見えないところで残らないように
    * リセットする。残したままだとパンくずやツリーの展開状態が不整合な見え方になる。
+   *
+   * CloudHeader のビュー切替ボタンは押すたびに同じモードでも onViewModeChange を
+   * 発火するため、アクティブな側を再クリックしたときに閲覧位置をリセットしないよう
+   * mode === viewMode で早期 return する。
    */
   const handleViewModeChange = useCallback(
     (mode: ViewMode): void => {
+      if (mode === viewMode) {
+        return;
+      }
       setViewMode(mode);
       setExpandedNodes(new Set());
       navigateToPath([]);
     },
-    [navigateToPath],
+    [navigateToPath, viewMode],
   );
 
   /**
