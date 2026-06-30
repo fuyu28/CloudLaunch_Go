@@ -64,8 +64,16 @@ func validateSaveDir(saveDir string) error {
 // walkSaveFiles は saveDir 配下の通常ファイルを走査し、各ファイルについて
 // 絶対パスとスラッシュ区切りの相対パスで fn を呼ぶ。
 // シンボリックリンクとディレクトリはスキップする（リンク先実体の漏洩・誤上書きを防ぐ）。
+//
+// saveDir 自体がディレクトリへのシンボリックリンクである場合は、filepath.Walk が
+// 内部で Lstat を使うため root がスキップされ全件無視される。これを避けるため、
+// 走査前に root だけ EvalSymlinks で解決する。配下のシンボリックリンクはスキップ対象。
 func walkSaveFiles(saveDir string, fn func(absPath, relPath string) error) error {
-	return filepath.Walk(saveDir, func(walkPath string, info os.FileInfo, err error) error {
+	root, err := filepath.EvalSymlinks(saveDir)
+	if err != nil {
+		return err
+	}
+	return filepath.Walk(root, func(walkPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -75,7 +83,7 @@ func walkSaveFiles(saveDir string, fn func(absPath, relPath string) error) error
 		if info.IsDir() {
 			return nil
 		}
-		rel, rerr := filepath.Rel(saveDir, walkPath)
+		rel, rerr := filepath.Rel(root, walkPath)
 		if rerr != nil {
 			return rerr
 		}

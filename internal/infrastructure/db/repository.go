@@ -242,9 +242,10 @@ func (repository *Repository) UpdateRouteOrder(ctx context.Context, routeID stri
 	return error
 }
 
-// UpdateRouteOrders は複数ルートの順序更新を単一トランザクションで実行する。
+// UpdateRouteOrders は gameID 配下のルートの順序更新を単一トランザクションで実行する。
 // 部分失敗を防ぎ、行数ぶんのラウンドトリップを1トランザクションに収める。
-func (repository *Repository) UpdateRouteOrders(ctx context.Context, items []domain.RouteOrderItem) (err error) {
+// WHERE 句に gameId 条件を含むため、誤って他ゲームの Route ID を渡しても無視される。
+func (repository *Repository) UpdateRouteOrders(ctx context.Context, gameID string, items []domain.RouteOrderItem) (err error) {
 	if len(items) == 0 {
 		return nil
 	}
@@ -258,7 +259,7 @@ func (repository *Repository) UpdateRouteOrders(ctx context.Context, items []dom
 		}
 	}()
 	for _, item := range items {
-		if _, execErr := tx.ExecContext(ctx, `UPDATE "Route" SET "order" = ? WHERE id = ?`, item.Order, item.ID); execErr != nil {
+		if _, execErr := tx.ExecContext(ctx, `UPDATE "Route" SET "order" = ? WHERE id = ? AND gameId = ?`, item.Order, item.ID, gameID); execErr != nil {
 			return execErr
 		}
 	}

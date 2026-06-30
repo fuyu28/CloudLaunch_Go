@@ -4,6 +4,7 @@
 
 import {
   UpdateAutoTracking,
+  UpdateOfflineMode,
   UpdateUploadConcurrency,
   UpdateScreenshotSyncEnabled,
   UpdateScreenshotUploadJpeg,
@@ -19,6 +20,7 @@ import type { WindowApi } from "./types";
 export function createSettingsBridge(): WindowApi["settings"] {
   return {
     updateAutoTracking: async (enabled) => toApiResultVoid(await UpdateAutoTracking(enabled)),
+    updateOfflineMode: async (enabled) => toApiResultVoid(await UpdateOfflineMode(enabled)),
     updateUploadConcurrency: async (value) => toApiResultVoid(await UpdateUploadConcurrency(value)),
     updateScreenshotSyncEnabled: async (enabled) =>
       toApiResultVoid(await UpdateScreenshotSyncEnabled(enabled)),

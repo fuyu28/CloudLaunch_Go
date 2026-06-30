@@ -323,3 +323,92 @@
 - **`storage.BlobKind` 定数をサービス層から domain へ移す**（G1持ち越し）
 - **`ApplyPullResult` の同期プロトコルロジックをサービス層へ移す**（G3持ち越し）
 
+---
+
+# 後処理：見送り項目の最終判定（2026-06-30）
+
+`/code-review` を経て、上記の見送り項目すべてに最終判定を入れた。
+**今後の参照先**:
+
+- `docs/REFACTOR_BACKLOG.md` — アーキ系・挙動変更系（独立 PR で順次対応）
+- `docs/PERF_BACKLOG.md` — 効率系（要計測）
+
+## 現状維持で確定（バックログ化しない）
+
+レビュアー指摘どおりに残すか、検討の結果「変えない方が良い」と確定したもの。
+将来また同種の指摘が来ても、ここに記録があるので再議論しなくて済む。
+
+| 項目 | 場所 | 理由 |
+|------|------|------|
+| PascalCase payload マッピング | `bridge/credential.ts`, `bridge/database.ts` | Wails の Go 構造体タグ規約上必須 |
+| `settings.ts` の 9 update メソッド | `bridge/settings.ts` | 明示的な現状の方が読みやすい |
+| `BehaviorTab` の独自トグル markup | `components/settings/BehaviorTab.tsx` | `SettingsToggle` と DOM 構造が違い統一すると挙動が変わる |
+| `normalizeSortColumn` ホワイトリスト | `infrastructure/db/repository.go` | SQL injection 防御として infra に置く方が安全 |
+| `app.go` の closure が `*App` を捕捉 | `internal/app/app.go::configureServices` | `*App` はプロセス唯一のルートで GC されない |
+| `useScreenshotSettings` の `isCapturingHotkey` | `hooks/useScreenshotSettings.ts` | フックがイベント captures も管理しており分離は不自然 |
+| `useUploadAfterSession` の `if (toastId)` | `hooks/useUploadAfterSession.ts` | `showLoading` が undefined を返しうるかの確認コストに見合わない |
+| `MainLayout` のページラベル lookup | `layouts/MainLayout.tsx` | 5 要素未満で実害なし |
+| `saveDataUpload.ts` の薄い indirection | `utils/saveDataUpload.ts` | テスト対象なので残す |
+| `globalErrorHandlers.ts` 併用 | `utils/globalErrorHandlers.ts` | 設計上の suggestion でありコード重複ではない |
+| `domain` 層に behavior が無いこと | `internal/domain/` | Clean Architecture 上クリーン |
+| `config.go` の `getEnv*` 同型 | `internal/config/config.go` | 3 つしかなく現状の方が明快 |
+| panic 戦略の差異 | `main.go` ／ `logging/recover.go` | 意図的に分けている（再 throw vs swallow） |
+| `UpdateScreenshotHotkey` rollback の二度 start | `internal/app/api.go` | エラー経路のみ・体感影響なし |
+
+## REFACTOR_BACKLOG へ移管
+
+| 項目 | 移管先 ID |
+|------|----------|
+| `SessionMutationResult` バブルアップ | A1 |
+| `MemoCloudService` のサービス間依存 | A2 |
+| `storage.BlobKind*` がサービス層に漏出 | A3 |
+| `ApplyPullResult` のビジネスルール混入 | A4 |
+| `api_cloud.go::buildGameDirectoryNode`（~70行） | A5 |
+| `sync_coalescer` ポリシーの二重化 | A6 |
+| `database.ts::updatePlayStatus` の read-update-read | B1 |
+| `GeneralSettings.tsx` ハンドラのフック化 | B2 |
+| `CloudGameImportModal.tsx` の conflict 検出ロジック | B3 |
+| `pages/Cloud.tsx` の `path: "*"` センチネル | B4 |
+| `CloudGameImportModal.tsx` の dual fetch + cache 重複 | B5 |
+| `memo_cloud_service.go` の Details append → ヘルパー化 | C1 |
+| `memo_cloud_service.go` L111 のキー直構築 | C2 |
+| `wrapServiceError` を `service_error.go` へ移動 | C3 |
+
+`/code-review` の Angle G（altitude）が独立して指摘した次の項目も合流:
+
+| 項目 | 移管先 ID |
+|------|----------|
+| `process_monitor` の Windows 専用コード（要 `_windows.go` 化） | A7 |
+| `MaintenanceRuntimeHooks` を単一ポートに | A8 |
+| ゲーム入力検証の fe/be 二重定義 | A9 |
+| `state/settings.ts` の localStorage キー散在 | A10 |
+
+## PERF_BACKLOG へ移管
+
+| 項目 | 移管先 ID |
+|------|----------|
+| `MaintenanceService.ExportGameData` の per-game N+1 | （G3 で解消済み） |
+| `RouteService.UpdateRouteOrders` の逐次 UPDATE | （G3 で解消済み） |
+| `GetCloudMemos` の `games/` 全列挙 + 単一ゲーム同期での全ゲーム取得 | P4 |
+| `useCloudData.ts::buildCloudDataFromTree` フルツリー再構築 | P6 |
+| `GeneralSettings.tsx` の atom 購読の絞り込み | P7 |
+
+`/code-review` Angle F が独立して指摘した分も合流:
+
+| 項目 | 移管先 ID |
+|------|----------|
+| ProcessMonitor 2 秒 tick の全件正規化 | P1 |
+| `saveSession` のセーブツリー二重 hash | P2 |
+| `pullDownloadSaves` の単一スレッド hash | P3 |
+| `MemoCloudService` の AWS config 再生成 + N+1 | P4 |
+| `Home.tsx::resolveWarnings` のキーストロークごと IPC stat | P5 |
+
+## 結論
+
+このドキュメントの「見送った」項目はすべて行き先が決まった。
+- 現状維持確定: 14 件 → 上の表に記録
+- REFACTOR_BACKLOG.md: 18 件
+- PERF_BACKLOG.md: 7 件（+ G3 で解消済み 2 件）
+
+今後 `/code-review` で同種の指摘が来たら、上の表を見て「既に判断済み」を確認できる。
+

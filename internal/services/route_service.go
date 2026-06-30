@@ -105,8 +105,12 @@ func (service *RouteService) DeleteRoute(ctx context.Context, routeID string) er
 }
 
 // UpdateRouteOrders はルートの並び順を一括更新する。
+// gameID は単なる引数検証だけでなく、リポジトリ層の UPDATE で WHERE gameId = ? に
+// 反映されるため、誤って他ゲームの Route ID が混入してもサイレントに他ゲームを
+// 並べ替えることはない（更新行数 0 で素通りする）。
 func (service *RouteService) UpdateRouteOrders(ctx context.Context, gameID string, orders []RouteOrderUpdate) error {
-	if _, err := service.requireField(gameID, "gameID", "ゲームIDが不正です"); err != nil {
+	trimmedGameID, err := service.requireField(gameID, "gameID", "ゲームIDが不正です")
+	if err != nil {
 		return err
 	}
 	items := make([]domain.RouteOrderItem, 0, len(orders))
@@ -120,7 +124,7 @@ func (service *RouteService) UpdateRouteOrders(ctx context.Context, gameID strin
 		}
 		items = append(items, domain.RouteOrderItem{ID: order.ID, Order: order.Order})
 	}
-	if err := service.repository.UpdateRouteOrders(ctx, items); err != nil {
+	if err := service.repository.UpdateRouteOrders(ctx, trimmedGameID, items); err != nil {
 		service.logger.Error("ルート順序更新に失敗", "error", err)
 		return newServiceError("ルート順序更新に失敗しました", err.Error())
 	}

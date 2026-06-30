@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"CloudLaunch_Go/internal/config"
@@ -20,6 +22,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+// ErrOffline はオフラインモード設定時に Push/Pull/DeleteFromCloud が返すセンチネル。
+// 呼び出し側はこれを errors.Is で判定し、自動同期パスでは静かにスキップし、
+// ユーザー操作パスでは UI に「オフラインモードです」を表示する。
+var ErrOffline = errors.New("オフラインモードのため同期しません")
 
 // ProgressFunc はセーブファイルの転送進捗を報告するコールバック。
 type ProgressFunc func(current, total int)
@@ -89,6 +96,19 @@ type ContentSyncService struct {
 	logger       *slog.Logger
 	newBlobStore func(ctx context.Context) (contentBlobStore, error)
 	gameLocks    sync.Map // gameID → *sync.Mutex（同一ゲームの Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
+	offline      atomic.Bool
+}
+
+// SetOfflineMode はオフラインモードの ON/OFF を切り替える。
+// ON の間は Push / Pull / DeleteFromCloud が ErrOffline を返し、
+// 自動同期（process_monitor 経由）も静かにスキップされる。
+func (s *ContentSyncService) SetOfflineMode(enabled bool) {
+	s.offline.Store(enabled)
+}
+
+// IsOffline は現在のオフラインモード状態を返す。
+func (s *ContentSyncService) IsOffline() bool {
+	return s.offline.Load()
 }
 
 // NewContentSyncService は ContentSyncService を生成する。
@@ -273,7 +293,11 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 }
 
 // Push はローカルデータをリモートにアップロードする。同一ゲームの同期と直列化される。
+// オフラインモード時は ErrOffline を返す（自動同期は process_monitor 側で握りつぶす）。
 func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress ProgressFunc) error {
+	if s.offline.Load() {
+		return ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	return s.push(ctx, gameID, onProgress, false)
 }
@@ -338,6 +362,13 @@ func (s *ContentSyncService) pushCheckRemoteHead(ctx context.Context, bstore con
 	localSyncHead := ""
 	if game.LocalSyncHead != nil {
 		localSyncHead = *game.LocalSyncHead
+	}
+	// localSyncHead が空のままリモートが存在する場合は「同期基準を一度も持ったことがない /
+	// DeleteFromCloud 直後に他端末が再 Push した」ケース。常に conflict 扱いにすると
+	// ユーザーはまず Pull or ResolveConflict せざるを得ず、Status() 側が PullNeeded として
+	// 扱っているのと整合しない。Pull を促すための明示エラーで返す。
+	if localSyncHead == "" {
+		return "", fmt.Errorf("リモートにデータがあります。Pull で取り込むか、ローカルを採用するなら同期確認画面から選択してください")
 	}
 	if contentFingerprint(remoteMeta) != localSyncHead {
 		return "", fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
@@ -443,7 +474,11 @@ func (s *ContentSyncService) pushFinalizeHead(ctx context.Context, bstore conten
 
 // Pull はリモートデータをローカルに適用する。同一ゲームの同期と直列化される。
 // 詳細な挙動（deleteUntracked による未追跡ファイル削除確認）は内部の pull を参照。
+// オフラインモード時は ErrOffline を返す。
 func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
+	if s.offline.Load() {
+		return domain.PullResult{}, ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	return s.pull(ctx, gameID, onProgress, deleteUntracked)
 }
@@ -544,7 +579,7 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
-	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, meta, saveSnapBytes)
+	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes)
 }
 
 // pullPlanDeletions はリモートのセーブスナップショットとローカルの base tree を突き合わせ、
@@ -656,7 +691,8 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 }
 
 // pullApplyToDB はリモートのゲーム情報・セッション・同期基準・base tree を単一トランザクションで反映する。
-func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
+// localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
+func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
 	// ゲーム情報・セッション・localSyncHead・localSaveTree を単一トランザクションで反映する。
 	// 部分失敗による DB 不整合と、同期対象外 Route 参照による FK 違反を防ぐ。
 	updatedGame := domain.Game{
@@ -673,6 +709,13 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 		CurrentRouteID: cloudG.CurrentRouteID,
 		CreatedAt:      cloudG.CreatedAt,
 		UpdatedAt:      cloudG.UpdatedAt,
+	}
+	// マシン固有フィールド（process_monitor.saveSession が書き込む LocalSaveHash 等）は
+	// ApplyPullResult が ON CONFLICT DO UPDATE で excluded.* を書くため、ここで明示的に
+	// 引き継がないと毎回 NULL に潰される。UI の「最終同期」表示が壊れる原因になっていた。
+	if localGame != nil {
+		updatedGame.LocalSaveHash = localGame.LocalSaveHash
+		updatedGame.LocalSaveHashUpdatedAt = localGame.LocalSaveHashUpdatedAt
 	}
 	sessions := make([]domain.PlaySession, 0, len(cloudSessions))
 	for _, cs := range cloudSessions {
@@ -695,7 +738,11 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 
 // ResolveConflict はコンフリクトを手動解決する。同一ゲームの同期と直列化される。
 // useLocal=false（リモート採用）は Pull と同様に未追跡ファイルの削除確認を経由する。
+// オフラインモード時は ErrOffline を返す。
 func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string, useLocal, deleteUntracked bool) (domain.PullResult, error) {
+	if s.offline.Load() {
+		return domain.PullResult{}, ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	if useLocal {
 		if err := s.push(ctx, gameID, nil, true); err != nil {
@@ -707,7 +754,11 @@ func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string,
 }
 
 // DeleteFromCloud はゲームのリモートデータを削除し、ローカルの同期基準もクリアする。同一ゲームの同期と直列化される。
+// オフラインモード時は ErrOffline を返す。
 func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string) error {
+	if s.offline.Load() {
+		return ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {

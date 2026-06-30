@@ -50,7 +50,9 @@ type RouteRepository interface {
 	UpdateRoute(ctx context.Context, route domain.Route) (*domain.Route, error)
 	DeleteRoute(ctx context.Context, routeID string) error
 	UpdateRouteOrder(ctx context.Context, routeID string, order int64) error
-	UpdateRouteOrders(ctx context.Context, items []domain.RouteOrderItem) error
+	// UpdateRouteOrders は gameID 配下のルートのみを対象に順序を一括更新する。
+	// gameID を指定外の Route ID は無視する（更新行数 0）。
+	UpdateRouteOrders(ctx context.Context, gameID string, items []domain.RouteOrderItem) error
 	GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)

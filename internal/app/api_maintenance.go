@@ -64,6 +64,13 @@ func (app *App) stopRuntimeServicesForRestore() {
 	if app.ScreenshotService != nil {
 		_ = app.ScreenshotService.Close()
 	}
+	// 同期 goroutine が古い DB 接続を触ったまま Close → 「database is closed」 panic
+	// になるのを防ぐため、DB を閉じる前に in-flight な Push を確実に静止させる。
+	// reopenDatabaseAndServices が新しい coalescer に差し替えるため、ここで停止した
+	// インスタンスは以後使われない。
+	if app.syncCoalescer != nil {
+		app.syncCoalescer.stop()
+	}
 }
 
 func (app *App) reopenDatabaseAndServices() error {

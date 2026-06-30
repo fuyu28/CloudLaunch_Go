@@ -443,3 +443,53 @@ func TestBuildSaveTreeIgnoresSymlinks(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildSaveTreeFollowsSymlinkedRoot は saveFolderPath 自体がディレクトリへの
+// シンボリックリンクである場合でも、配下の通常ファイルがちゃんとスナップショットに
+// 入ることを確認する。これが崩れると Push が空の SaveSnapshot をアップロードして
+// 他端末で Pull した時に全セーブが消える。
+func TestBuildSaveTreeFollowsSymlinkedRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink 権限の都合で Windows ではスキップ")
+	}
+	t.Parallel()
+
+	target := t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, "save.dat"), []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(target, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "sub", "deep.dat"), []byte("nested"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	linkParent := t.TempDir()
+	linkPath := filepath.Join(linkParent, "saves")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Skipf("symlink を作成できない環境: %v", err)
+	}
+
+	tree, err := buildSaveTree(linkPath)
+	if err != nil {
+		t.Fatalf("buildSaveTree: %v", err)
+	}
+	if _, ok := tree.Files["save.dat"]; !ok {
+		t.Fatal("symlink root 配下の通常ファイルがスナップショットから抜けている")
+	}
+	if _, ok := tree.Files["sub/deep.dat"]; !ok {
+		t.Fatal("symlink root 配下のサブディレクトリ内ファイルが抜けている")
+	}
+
+	snap, blobs, err := buildSaveSnapshot(linkPath)
+	if err != nil {
+		t.Fatalf("buildSaveSnapshot: %v", err)
+	}
+	if len(snap.Files) != 2 {
+		t.Fatalf("buildSaveSnapshot の Files = %d, want 2", len(snap.Files))
+	}
+	if len(blobs) != 2 {
+		t.Fatalf("buildSaveSnapshot の blobs = %d, want 2", len(blobs))
+	}
+}
