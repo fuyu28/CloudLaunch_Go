@@ -28,8 +28,8 @@ const GameCard = memo(function GameCard({
     <div
       className="
         bg-base-100 rounded-xl overflow-hidden
-        shadow-lg transform transition
-        hover:shadow-xl
+        border border-base-300/70 shadow-sm
+        transition-shadow hover:shadow-md
       "
     >
       <Link to={`/game/${game.id}`}>
@@ -71,9 +71,9 @@ const GameCard = memo(function GameCard({
             </button>
           </div>
         </div>
-        <div className="p-2 h-20">
-          <h3 className="text-base font-semibold line-clamp-2">{game.title}</h3>
-          <p className="text-sm text-base-content line-clamp-2">{game.publisher}</p>
+        <div className="px-3 py-2.5 h-20">
+          <h3 className="text-[15px] font-semibold leading-snug line-clamp-2">{game.title}</h3>
+          <p className="mt-0.5 text-xs text-base-content/60 line-clamp-1">{game.publisher}</p>
         </div>
       </Link>
     </div>

@@ -8,6 +8,7 @@
  * DaisyUIの標準テーマ一覧
  */
 export const DAISYUI_THEMES = [
+  "cloudlaunch",
   "light",
   "dark",
   "cupcake",

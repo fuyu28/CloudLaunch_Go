@@ -64,6 +64,8 @@ export type WindowApi = {
     toggleMaximize: () => Promise<void>;
     close: () => Promise<void>;
     openFolder: (path: string) => Promise<void>;
+    /** 実行プラットフォーム（"windows" / "darwin" / "linux"）を返す */
+    getPlatform: () => Promise<string>;
   };
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;

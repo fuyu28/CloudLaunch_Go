@@ -94,7 +94,7 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   }, [memos]);
 
   return (
-    <div className="card bg-base-100 shadow-xl h-full">
+    <div className="card bg-base-100 border border-base-300/60 shadow-md h-full">
       <div className="card-body">
         {/* ヘッダー */}
         <div className="flex items-center justify-between mb-4">
@@ -146,7 +146,7 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
           </div>
         ) : (
           <div className="text-center py-6 flex-1 flex flex-col justify-center">
-            <div className="text-base-content/60">
+            <div className="text-base-content/75">
               <FaBookOpen className="mx-auto text-4xl mb-3 opacity-50" />
               <p className="text-sm font-medium mb-1">メモがありません</p>
               <p className="text-xs opacity-75">ゲームについてのメモを作成しましょう</p>

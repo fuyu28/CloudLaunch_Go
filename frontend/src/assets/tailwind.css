@@ -7,6 +7,60 @@
 }
 @plugin 'tailwind-scrollbar';
 
+/* ───────────────────────────────────────────────────────────
+   独自テーマ: cloudlaunch
+   ゲームのセーブをクラウド管理するアプリ。落ち着いたバイオレットを
+   ブランドカラーに、背景は寒色寄りのごく淡いグレーで階層を作る。
+   文字は純黒を避けた濃いスレートで、地味すぎず目に優しい配色に。
+   ─────────────────────────────────────────────────────────── */
+@plugin "daisyui/theme" {
+  name: "cloudlaunch";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(99% 0.003 285);
+  --color-base-200: oklch(96.5% 0.006 286);
+  --color-base-300: oklch(91.5% 0.011 286);
+  --color-base-content: oklch(30% 0.03 281);
+
+  --color-primary: oklch(56% 0.2 285);
+  --color-primary-content: oklch(98% 0.012 285);
+  --color-secondary: oklch(62% 0.12 248);
+  --color-secondary-content: oklch(98% 0.01 248);
+  --color-accent: oklch(70% 0.12 196);
+  --color-accent-content: oklch(24% 0.04 200);
+  --color-neutral: oklch(34% 0.022 285);
+  --color-neutral-content: oklch(96% 0.005 285);
+
+  --color-info: oklch(64% 0.13 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(64% 0.14 152);
+  --color-success-content: oklch(98% 0.01 152);
+  --color-warning: oklch(80% 0.13 78);
+  --color-warning-content: oklch(30% 0.05 78);
+  --color-error: oklch(61% 0.2 25);
+  --color-error-content: oklch(98% 0.012 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.9rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* 文字を滑らかに（テーマ非依存の地の改善） */
+@layer base {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
 /* ルート要素を固定し、Webview 全体の横方向ラバーバンド（2本指スワイプによる
    オーバースクロール / 戻る・進むジェスチャ）を無効化する。
    縦スクロールは内側の <main> など各スクロールコンテナが担当するため、

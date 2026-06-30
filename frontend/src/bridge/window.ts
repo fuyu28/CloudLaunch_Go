@@ -2,7 +2,12 @@
  * @fileoverview ウィンドウ操作ブリッジ。
  */
 
-import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
+import {
+  WindowMinimise,
+  WindowToggleMaximise,
+  Quit,
+  Environment,
+} from "../../wailsjs/runtime/runtime";
 import { OpenFolder } from "../../wailsjs/go/app/App";
 import type { WindowApi } from "./types";
 
@@ -19,6 +24,10 @@ export function createWindowBridge(): WindowApi["window"] {
     },
     openFolder: async (path) => {
       await OpenFolder(path);
+    },
+    getPlatform: async () => {
+      const env = await Environment();
+      return env.platform;
     },
   };
 }

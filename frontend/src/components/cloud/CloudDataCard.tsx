@@ -188,7 +188,9 @@ function CloudDataCard({
   const disabledClasses = getOfflineDisabledClasses(isOfflineMode);
 
   return (
-    <div className={`card bg-base-100 shadow-xl h-full ${disabledClasses}`}>
+    <div
+      className={`card bg-base-100 border border-base-300/60 shadow-md h-full ${disabledClasses}`}
+    >
       <div className="card-body flex flex-col h-full">
         <div className="flex justify-between items-center pb-4">
           <h3 className="card-title flex items-center gap-2">
@@ -204,7 +206,7 @@ function CloudDataCard({
                 disabled={
                   !isValidCreds || isSyncing || isUploading || isDownloading || isOfflineMode
                 }
-                title="同期状態を確認してコンフリクトを解決する"
+                title="ローカルとクラウドの同期状態を確認する"
               >
                 {isSyncing ? (
                   <>
@@ -277,12 +279,12 @@ function CloudDataCard({
               <div className="badge badge-warning badge-lg gap-2">オフラインモード</div>
             </div>
           ) : isLoading || isFileDetailsLoading ? (
-            <div className="flex items-center gap-2 text-base-content/60">
+            <div className="flex items-center gap-2 text-base-content/75">
               <span className="loading loading-spinner loading-sm"></span>
               <span>データ情報を取得中...</span>
             </div>
           ) : cloudData.exists && fileDetails ? (
-            <div className="space-y-7">
+            <div className="space-y-4">
               {/* 基本情報 */}
               <div className="bg-base-200 p-3 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
@@ -293,7 +295,7 @@ function CloudDataCard({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-sm text-base-content/70">
+                <div className="grid grid-cols-2 gap-2 text-sm text-base-content/80">
                   <div>ファイル数: {fileDetails.files.length}</div>
                   <div>総容量: {formatFileSize(fileDetails.totalSize)}</div>
                 </div>
@@ -315,7 +317,7 @@ function CloudDataCard({
                           className="flex justify-between items-center text-xs p-1 hover:bg-base-300 rounded"
                         >
                           <span className="font-mono truncate flex-1 mr-2">{file.name}</span>
-                          <div className="flex gap-2 text-base-content/60">
+                          <div className="flex gap-2 text-base-content/70">
                             <span>{formatFileSize(file.size)}</span>
                             <span>{formatDateWithTime(file.lastModified)}</span>
                           </div>
@@ -328,7 +330,7 @@ function CloudDataCard({
             </div>
           ) : (
             <div className="bg-base-200 p-3 rounded-lg">
-              <div className="flex items-center gap-2 text-base-content/60">
+              <div className="flex items-center gap-2 text-base-content/75">
                 <FaCloud />
                 <span>クラウドデータは存在しません</span>
               </div>

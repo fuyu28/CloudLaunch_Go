@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/debug"
 
 	"CloudLaunch_Go/internal/app"
@@ -39,15 +40,22 @@ func main() {
 		}
 	}()
 
+	// フレームレスは Windows のみ。Windows では独自のタイトルバー（最小化/最大化/閉じる）を
+	// 描画する。macOS / Linux ではネイティブのウィンドウ装飾を使い、独自ボタンは表示しない
+	// （フロント側でプラットフォームを判定して出し分ける）。
+	frameless := runtime.GOOS == "windows"
+
 	err = wails.Run(&options.App{
 		Title:     "CloudLaunch",
 		Width:     1200,
 		Height:    800,
-		Frameless: true,
+		Frameless: frameless,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		// cloudlaunch テーマの base-200 に合わせた淡い色。初期描画の暗いちらつきや
+		// フレームレス時の角の隙間が目立たないようにする。
+		BackgroundColour: &options.RGBA{R: 243, G: 243, B: 247, A: 1},
 		OnStartup:        backend.Startup,
 		OnShutdown: func(ctx context.Context) {
 			_ = backend.Shutdown(ctx)

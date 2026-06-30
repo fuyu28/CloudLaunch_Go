@@ -7,6 +7,7 @@ import { useParams, useNavigate, Navigate } from "react-router-dom";
 import CloudDataCard from "@renderer/components/cloud/CloudDataCard";
 import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import SyncConflictModal from "@renderer/components/cloud/SyncConflictModal";
+import SyncStatusModal from "@renderer/components/cloud/SyncStatusModal";
 import UntrackedDeleteModal from "@renderer/components/cloud/UntrackedDeleteModal";
 import GameInfo from "@renderer/components/game/GameInfo";
 import GameFormModal from "@renderer/components/game/GameModal";
@@ -26,7 +27,7 @@ import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { logger } from "@renderer/utils/logger";
 
 import type { GameType } from "src/types/game";
-import type { SyncMetaSnapshot } from "src/wailsBridge";
+import type { SyncMetaSnapshot, SyncStatusDetail } from "src/wailsBridge";
 
 export default function GameDetail(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -51,6 +52,9 @@ export default function GameDetail(): React.JSX.Element {
   } | null>(null);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  // 同期確認モーダル（状態表示）。null = 非表示
+  const [syncStatusDetail, setSyncStatusDetail] = useState<SyncStatusDetail | null>(null);
+  const [isSyncActionRunning, setIsSyncActionRunning] = useState(false);
   // 同期管理外（untracked）ファイルの削除確認モーダル状態
   const [untrackedDeletes, setUntrackedDeletes] = useState<string[] | null>(null);
   // 確認後に再実行する操作の種別（通常 pull か、コンフリクトのリモート採用か）
@@ -427,16 +431,83 @@ export default function GameDetail(): React.JSX.Element {
     setUntrackedConfirmKind(null);
   }, []);
 
+  // 「同期確認」は状態を取得して表示するだけにとどめ、
+  // 実際のアップロード/ダウンロードはモーダル内でユーザーが選んで実行する。
   const handleSyncCheck = useCallback(async (): Promise<void> => {
     if (!game) return;
     if (!checkNetworkFeature("同期確認")) return;
     setIsSyncing(true);
     try {
-      await handleSyncGame(true);
+      const statusResult = await getStatus(game.id);
+      if (!statusResult.success || !statusResult.data) {
+        showToast(
+          (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
+          "error",
+        );
+        return;
+      }
+      const detail = statusResult.data;
+      if (detail.status === "conflict") {
+        // 競合は専用モーダルで解決する
+        setConflictMeta({ localMeta: detail.localMeta, remoteMeta: detail.remoteMeta });
+        setIsConflictModalOpen(true);
+        return;
+      }
+      setSyncStatusDetail(detail);
+    } catch (error) {
+      logger.error("同期状態の取得エラー:", {
+        component: "GameDetail",
+        function: "handleSyncCheck",
+        data: error,
+      });
+      showToast("同期状態の取得に失敗しました", "error");
     } finally {
       setIsSyncing(false);
     }
-  }, [game, handleSyncGame, checkNetworkFeature]);
+  }, [game, checkNetworkFeature, getStatus, showToast]);
+
+  // 同期確認モーダルからのアップロード実行
+  const handleSyncUpload = useCallback(async (): Promise<void> => {
+    if (!game) return;
+    setIsSyncActionRunning(true);
+    try {
+      const op = await push(game.id);
+      if (op.ok) {
+        showToast("クラウドにアップロードしました", "success");
+        setSyncStatusDetail(null);
+        await refreshGameData();
+      } else {
+        showToast(op.message || "アップロードに失敗しました", "error");
+      }
+    } finally {
+      setIsSyncActionRunning(false);
+    }
+  }, [game, push, showToast, refreshGameData]);
+
+  // 同期確認モーダルからのダウンロード実行
+  const handleSyncDownload = useCallback(async (): Promise<void> => {
+    if (!game) return;
+    setIsSyncActionRunning(true);
+    try {
+      const op = await pull(game.id);
+      if (op.ok && op.applied === false) {
+        // 同期管理外ファイルの削除確認が必要（ここまでローカル無変更）
+        setSyncStatusDetail(null);
+        setUntrackedDeletes(op.untrackedDeletes ?? []);
+        setUntrackedConfirmKind("pull");
+        return;
+      }
+      if (op.ok) {
+        showToast("クラウドからダウンロードしました", "success");
+        setSyncStatusDetail(null);
+        await refreshGameData();
+      } else {
+        showToast(op.message || "ダウンロードに失敗しました", "error");
+      }
+    } finally {
+      setIsSyncActionRunning(false);
+    }
+  }, [game, pull, showToast, refreshGameData]);
 
   // プレイステータス変更のハンドラー
   const handleStatusChange = useCallback(
@@ -488,50 +559,52 @@ export default function GameDetail(): React.JSX.Element {
   }
 
   return (
-    <div className="bg-base-200 px-6 ">
-      {/* 上段：ゲーム情報カード */}
-      <div className="mb-5">
-        <GameInfo
-          game={game}
-          isUpdatingStatus={isUpdatingStatus}
-          isLaunching={isLaunching}
-          onStatusChange={(status) =>
-            handleStatusChange(status as "unplayed" | "playing" | "played")
-          }
-          onLaunchGame={handleLaunchGameWithSync}
-          onEditGame={openEdit}
-          onDeleteGame={openDelete}
-        />
-      </div>
+    <div className="px-6 py-6">
+      <div className="mx-auto max-w-6xl space-y-5">
+        {/* 上段：ゲーム情報カード */}
+        <div>
+          <GameInfo
+            game={game}
+            isUpdatingStatus={isUpdatingStatus}
+            isLaunching={isLaunching}
+            onStatusChange={(status) =>
+              handleStatusChange(status as "unplayed" | "playing" | "played")
+            }
+            onLaunchGame={handleLaunchGameWithSync}
+            onEditGame={openEdit}
+            onDeleteGame={openDelete}
+          />
+        </div>
 
-      {/* 中段：プレイ統計 */}
-      <div className="mb-5">
-        <PlayStatistics
-          game={game}
-          refreshKey={refreshKey}
-          onAddPlaySession={handleOpenPlaySessionModal}
-          onOpenProcessManagement={() => setIsProcessModalOpen(true)}
-        />
-      </div>
+        {/* 中段：プレイ統計 */}
+        <div>
+          <PlayStatistics
+            game={game}
+            refreshKey={refreshKey}
+            onAddPlaySession={handleOpenPlaySessionModal}
+            onOpenProcessManagement={() => setIsProcessModalOpen(true)}
+          />
+        </div>
 
-      {/* 下段：その他の管理機能 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* クラウドデータ管理カード */}
-        <CloudDataCard
-          gameId={game.id}
-          gameTitle={game.title}
-          hasSaveFolder={!!game.saveFolderPath}
-          isValidCreds={isValidCreds}
-          isUploading={isUploading}
-          isDownloading={isDownloading}
-          isSyncing={isSyncing}
-          onUpload={handleUploadSaveData}
-          onDownload={handleDownloadSaveData}
-          onSync={handleSyncCheck}
-        />
+        {/* 下段：その他の管理機能 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* クラウドデータ管理カード */}
+          <CloudDataCard
+            gameId={game.id}
+            gameTitle={game.title}
+            hasSaveFolder={!!game.saveFolderPath}
+            isValidCreds={isValidCreds}
+            isUploading={isUploading}
+            isDownloading={isDownloading}
+            isSyncing={isSyncing}
+            onUpload={handleUploadSaveData}
+            onDownload={handleDownloadSaveData}
+            onSync={handleSyncCheck}
+          />
 
-        {/* メモ管理カード */}
-        <MemoCard gameId={game.id} />
+          {/* メモ管理カード */}
+          <MemoCard gameId={game.id} />
+        </div>
       </div>
 
       {/* モーダル */}
@@ -579,6 +652,22 @@ export default function GameDetail(): React.JSX.Element {
         onSubmit={handleAddPlaySession}
         gameTitle={game.title}
       />
+
+      {/* 同期状態の確認（アップロード/ダウンロードはここで選択して実行） */}
+      {syncStatusDetail && (
+        <SyncStatusModal
+          isOpen
+          onClose={() => setSyncStatusDetail(null)}
+          gameTitle={game.title}
+          status={syncStatusDetail.status}
+          localMeta={syncStatusDetail.localMeta}
+          remoteMeta={syncStatusDetail.remoteMeta}
+          hasSaveFolder={!!game.saveFolderPath}
+          isProcessing={isSyncActionRunning}
+          onUpload={handleSyncUpload}
+          onDownload={handleSyncDownload}
+        />
+      )}
 
       {/* コンフリクト解決 */}
       <SyncConflictModal

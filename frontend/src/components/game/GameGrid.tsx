@@ -37,19 +37,23 @@ const GameGrid = memo(function GameGrid({
   if (games.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-0">
-        <div className="text-center text-base-content/50">
-          <p className="text-lg mb-2">ゲームが見つかりませんでした</p>
-          <p className="text-sm">検索条件を変更するか、新しいゲームを追加してください</p>
+        <div className="text-center">
+          <p className="text-lg font-medium text-base-content/80 mb-2">
+            ゲームが見つかりませんでした
+          </p>
+          <p className="text-sm text-base-content/60">
+            検索条件を変更するか、新しいゲームを追加してください
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent min-h-0">
+    <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-base-content/30 scrollbar-track-transparent min-h-0">
       <div className="relative">
         <div
-          className="grid gap-4 justify-center px-6 pb-6"
+          className="grid gap-5 justify-center px-6 pb-6"
           style={{ gridTemplateColumns: "repeat(auto-fill, 220px)" }}
         >
           {games.map((game) => (

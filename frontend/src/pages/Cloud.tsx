@@ -369,10 +369,10 @@ export default function Cloud(): React.JSX.Element {
       />
 
       {/* ゲーム情報同期 */}
-      <div className="card bg-base-100 shadow-xl mb-4">
+      <div className="card bg-base-100 border border-base-300/60 shadow-md mb-4">
         <div className="card-body">
           <h3 className="font-semibold text-lg">ゲーム情報の同期</h3>
-          <p className="text-sm text-base-content/60 mb-4">
+          <p className="text-sm text-base-content/75 mb-4">
             タイトル・プレイ情報・セッションをクラウドと同期します
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

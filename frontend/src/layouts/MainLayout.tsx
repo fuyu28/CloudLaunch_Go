@@ -1,6 +1,6 @@
 import { themeAtom } from "@renderer/state/settings";
 import { useAtom } from "jotai";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import { FaEdit } from "react-icons/fa";
 import { FiMenu, FiCloud, FiArrowLeft } from "react-icons/fi";
@@ -15,6 +15,9 @@ export default function MainLayout(): React.JSX.Element {
   const navigate = useNavigate();
   const drawerRef = useRef<HTMLInputElement>(null);
   const [currentTheme] = useAtom(themeAtom);
+  // Windows のみフレームレス＝独自のウィンドウ操作ボタンを表示する。
+  // macOS / Linux はネイティブ装飾を使うため非表示にする。
+  const [isWindows, setIsWindows] = useState(false);
   const isHome = location.pathname === "/";
   const isSettings = location.pathname === "/settings";
   const isMemo = location.pathname === "/memo" || location.pathname.startsWith("/memo/");
@@ -39,6 +42,17 @@ export default function MainLayout(): React.JSX.Element {
     document.documentElement.setAttribute("data-theme", currentTheme);
   }, [currentTheme]);
 
+  // 実行プラットフォームを判定（独自ウィンドウ操作ボタンの出し分け用）
+  useEffect(() => {
+    let active = true;
+    void window.api.window.getPlatform().then((platform) => {
+      if (active) setIsWindows(platform === "windows");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="drawer drawer-mobile min-h-screen bg-base-200 wails-no-drag">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" ref={drawerRef} />
@@ -52,16 +66,22 @@ export default function MainLayout(): React.JSX.Element {
           fixed left-0 z-50
           h-full w-56
           bg-base-100
-          border-r border-base-200
-          pt-10 pb-2 px-2
-          rounded-tr-lg rounded-br-lg
+          border-r border-base-300
+          pt-4 pb-3 px-3
+          rounded-tr-2xl rounded-br-2xl
           shadow-lg
           transform transition-transform duration-200 ease-out
         "
         >
           <div className="flex flex-col h-full">
+            {/* ブランド */}
+            <div className="flex items-center gap-2 px-2 pb-4 mb-2 border-b border-base-200">
+              <FiCloud className="text-xl text-primary" />
+              <span className="font-semibold tracking-tight">CloudLaunch</span>
+            </div>
+
             {/* 上部メニュー */}
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               <li>
                 <NavLink
                   to="/"
@@ -107,7 +127,7 @@ export default function MainLayout(): React.JSX.Element {
             </ul>
 
             {/* 下部メニューは mt-auto で下端へ */}
-            <ul className="space-y-2 mt-auto">
+            <ul className="space-y-1 mt-auto">
               <li>
                 <NavLink
                   to="/settings"
@@ -134,7 +154,7 @@ export default function MainLayout(): React.JSX.Element {
           className="
           relative
           flex items-center
-          h-10 bg-base-100 shadow
+          h-12 bg-base-100 border-b border-base-300
           select-none wails-drag
         "
         >
@@ -173,33 +193,41 @@ export default function MainLayout(): React.JSX.Element {
           )}
 
           {/* 中央タイトルもドラッグ可能 */}
-          <h1 className="flex-1 text-center text-lg font-medium leading-none">{pageLabel}</h1>
+          <h1 className="flex-1 text-center text-lg font-semibold tracking-tight leading-none">
+            {pageLabel}
+          </h1>
 
-          {/* ウィンドウ操作ボタン群 */}
-          <div className="absolute inset-y-0 right-0 flex wails-no-drag">
-            <button
-              onClick={() => window.api.window.minimize()}
-              className="h-10 window-control flex items-center justify-center hover:bg-base-300"
-            >
-              <VscChromeMinimize />
-            </button>
-            <button
-              onClick={() => window.api.window.toggleMaximize()}
-              className="h-10 window-control flex items-center justify-center hover:bg-base-300"
-            >
-              <VscChromeMaximize />
-            </button>
-            <button
-              onClick={() => window.api.window.close()}
-              className="h-10 window-control flex items-center justify-center hover:bg-error hover:text-error-content"
-            >
-              <VscChromeClose />
-            </button>
-          </div>
+          {/* ウィンドウ操作ボタン群（Windows のフレームレス時のみ）。
+              macOS / Linux はネイティブ装飾を使うため表示しない。 */}
+          {isWindows && (
+            <div className="absolute inset-y-0 right-0 flex wails-no-drag">
+              <button
+                onClick={() => window.api.window.minimize()}
+                aria-label="最小化"
+                className="h-full window-control flex items-center justify-center text-base-content/70 hover:bg-base-200 hover:text-base-content transition-colors"
+              >
+                <VscChromeMinimize className="text-[15px]" />
+              </button>
+              <button
+                onClick={() => window.api.window.toggleMaximize()}
+                aria-label="最大化"
+                className="h-full window-control flex items-center justify-center text-base-content/70 hover:bg-base-200 hover:text-base-content transition-colors"
+              >
+                <VscChromeMaximize className="text-[15px]" />
+              </button>
+              <button
+                onClick={() => window.api.window.close()}
+                aria-label="閉じる"
+                className="h-full window-control flex items-center justify-center text-base-content/70 hover:bg-error hover:text-error-content transition-colors"
+              >
+                <VscChromeClose className="text-[15px]" />
+              </button>
+            </div>
+          )}
         </header>
 
         {/* ページ固有部分 */}
-        <main className="flex-1 pt-4 overflow-y-auto scrollbar-thin scrollbar-thumb-base-content/20 scrollbar-track-transparent min-h-0">
+        <main className="flex-1 pt-6 overflow-y-auto scrollbar-thin scrollbar-thumb-base-content/30 scrollbar-track-transparent min-h-0">
           <Outlet />
         </main>
 
