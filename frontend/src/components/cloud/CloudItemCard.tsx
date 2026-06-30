@@ -125,11 +125,13 @@ export function DirectoryNodeCard({
 
   // children を取得済みなら配下を集計、未取得なら commit メタ由来の
   // node.fileCount / node.size（=サマリの fileCount / totalSize）を使う。
-  // どちらも取れない旧 commit ではゼロになり hasMetrics=false で行を隠す。
+  // ロード済みなら 0 件でも「0 ファイル / 0 B」を出し、未取得かつサマリも空のとき
+  // （旧 commit など）だけ非表示にする。これでロード済み空ディレクトリと未取得を
+  // 表示で区別する。
   const childrenLoaded = isCloudNodeLoaded(node);
   const displayCount = childrenLoaded ? countFilesRecursively(node) : (node.fileCount ?? 0);
   const displaySize = node.isDirectory && childrenLoaded ? sumSizesRecursively(node) : node.size;
-  const hasMetrics = !node.isDirectory || displayCount > 0;
+  const hasMetrics = !node.isDirectory || childrenLoaded || displayCount > 0;
 
   return (
     <div

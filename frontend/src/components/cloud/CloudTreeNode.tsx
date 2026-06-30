@@ -50,10 +50,11 @@ export default function CloudTreeNode({
   const isLoading = loadingGameIds?.has(node.path) ?? false;
   const isExpandable = node.isDirectory && (hasChildren || !childrenLoaded);
   // 表示用の集計：取得済みなら配下から、未取得なら commit メタ由来のサマリ値を使う。
-  // 旧 commit など値が無いものは hasMetrics=false で「—」を出す。
+  // ロード済みなら 0 件でも「0 ファイル / 0 B」を出し、未取得かつサマリも空のとき
+  // （旧 commit など）だけ「—」を出す。
   const displayCount = childrenLoaded ? countFilesRecursively(node) : (node.fileCount ?? 0);
   const displaySize = node.isDirectory && childrenLoaded ? sumSizesRecursively(node) : node.size;
-  const hasMetrics = !node.isDirectory || displayCount > 0;
+  const hasMetrics = !node.isDirectory || childrenLoaded || displayCount > 0;
   const displayLastModified = node.isDirectory
     ? latestModifiedRecursively(node)
     : node.lastModified;
