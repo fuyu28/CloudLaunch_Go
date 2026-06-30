@@ -67,6 +67,12 @@ type Memo struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// RouteOrderItem はルート順序の一括更新1件分を表す。
+type RouteOrderItem struct {
+	ID    string
+	Order int64
+}
+
 // RouteStat はルート統計の出力を表す。
 type RouteStat struct {
 	RouteID      string  `json:"routeId"`

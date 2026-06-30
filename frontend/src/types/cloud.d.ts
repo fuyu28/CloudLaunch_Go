@@ -60,6 +60,11 @@ export type CloudDirectoryNode = {
   children?: CloudDirectoryNode[];
   /** S3オブジェクトキー（ファイルの場合） */
   objectKey?: string;
+  /**
+   * トップレベル（ゲーム）の遅延取得状態でも commit メタから持ち越したファイル数。
+   * children を取得済みのノードでは undefined（countFilesRecursively で算出する）。
+   */
+  fileCount?: number;
 };
 
 /**

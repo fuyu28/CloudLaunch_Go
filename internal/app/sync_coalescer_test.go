@@ -143,3 +143,73 @@ func TestAsyncCoalescerRecoversFromPanic(t *testing.T) {
 		}
 	}
 }
+
+// TestAsyncCoalescerStopWaitsForInFlightAndBlocksNewTriggers は、stop が
+// 実行中の run の完了を待ち、stop 後の trigger は run を起動しないことを確認する。
+// バックアップ復元で DB を閉じる前に同期 goroutine を静止させる用途で必要。
+func TestAsyncCoalescerStopWaitsForInFlightAndBlocksNewTriggers(t *testing.T) {
+	released := make(chan struct{})
+	started := make(chan struct{}, 1)
+	var calls int
+	var mu sync.Mutex
+	c := newAsyncCoalescer(func(_ string) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-released
+	})
+
+	c.trigger("g1")
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first run did not start")
+	}
+
+	// stop を別 goroutine で開始し、in-flight run の完了待ちでブロックすること。
+	stopDone := make(chan struct{})
+	go func() {
+		c.stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+		t.Fatal("stop returned before the in-flight run finished")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// stop 中の trigger は run を起動してはいけない（既存 in-flight が終わっても
+	// pending を消化しない）。
+	c.trigger("g1")
+	c.trigger("g2")
+
+	close(released)
+
+	select {
+	case <-stopDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stop did not return after in-flight run completed")
+	}
+
+	mu.Lock()
+	got := calls
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("calls = %d, want 1 (stop 後の trigger は run を起動しない)", got)
+	}
+
+	// stop 後の trigger も何度呼んでも安全（no-op）。
+	c.trigger("g1")
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	got = calls
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("post-stop trigger increased calls to %d", got)
+	}
+}

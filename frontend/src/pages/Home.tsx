@@ -21,6 +21,7 @@ import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { isValidCredsAtom } from "@renderer/state/credentials";
+import { buildSaveSyncMessage } from "@renderer/utils/saveSyncMessage";
 import { checkDirectoryExists, checkFileExists } from "@renderer/utils/fileValidation";
 import {
   searchWordAtom,
@@ -147,26 +148,13 @@ export default function Home(): React.ReactElement {
     };
   }, [visibleGames]);
 
-  const toValidDate = useCallback(
-    (value: Date | string | number | null | undefined): Date | null => {
-      if (!value) return null;
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    },
-    [],
-  );
-
-  const buildSaveSyncMessage = useCallback(
+  const buildSyncMessage = useCallback(
     (
       title: string,
       localUpdatedAt: Date | string | number | null | undefined,
       cloudUpdatedAt: Date | string | number | null | undefined,
-    ) => {
-      const localDate = toValidDate(localUpdatedAt);
-      const cloudDate = toValidDate(cloudUpdatedAt);
-      return `${title} のセーブデータがクラウドと異なります。\nローカル最終更新: ${formatDateWithTime(localDate)}\nクラウド最終更新: ${formatDateWithTime(cloudDate)}\nダウンロードしますか？`;
-    },
-    [formatDateWithTime, toValidDate],
+    ) => buildSaveSyncMessage(formatDateWithTime, title, localUpdatedAt, cloudUpdatedAt),
+    [formatDateWithTime],
   );
 
   const handleAddGame = createGameAndRefreshList;
@@ -237,11 +225,7 @@ export default function Home(): React.ReactElement {
       const { status, remoteMeta } = statusResult.data;
       if (status === "pull_needed" || status === "conflict") {
         setSaveSyncMessage(
-          buildSaveSyncMessage(
-            game.title,
-            game.localSaveHashUpdatedAt,
-            remoteMeta?.createdAt ?? null,
-          ),
+          buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
         );
         setPendingLaunchGame(game);
         setIsDownloadConfirmOpen(true);
@@ -250,14 +234,7 @@ export default function Home(): React.ReactElement {
 
       await launchGameDirect(game);
     },
-    [
-      gameActionLoading,
-      isOfflineMode,
-      isValidCreds,
-      launchGameDirect,
-      getStatus,
-      buildSaveSyncMessage,
-    ],
+    [gameActionLoading, isOfflineMode, isValidCreds, launchGameDirect, getStatus, buildSyncMessage],
   );
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {

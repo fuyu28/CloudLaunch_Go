@@ -7,12 +7,7 @@
 import { FiFolder, FiFile, FiTrash2 } from "react-icons/fi";
 
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
-import {
-  formatFileSize,
-  formatDate,
-  countFilesRecursively,
-  sumSizesRecursively,
-} from "@renderer/utils/cloudUtils";
+import { formatFileSize, formatDate, computeCloudNodeMetrics } from "@renderer/utils/cloudUtils";
 
 /**
  * クラウドデータアイテムカードのプロパティ
@@ -122,10 +117,7 @@ export function DirectoryNodeCard({
     }
   };
 
-  // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
-  // 未取得（children が undefined）のあいだはファイル数・サイズを「—」で表示する。
-  const isLoaded = !node.isDirectory || node.children !== undefined;
-  const totalSize = node.isDirectory ? sumSizesRecursively(node) : node.size;
+  const { count: displayCount, size: displaySize, hasMetrics } = computeCloudNodeMetrics(node);
 
   return (
     <div
@@ -145,15 +137,17 @@ export function DirectoryNodeCard({
             <h3 className="font-medium text-base-content truncate" title={node.name}>
               {node.name}
             </h3>
-            <div className="text-sm text-base-content/70 space-y-1">
-              {node.isDirectory && (
-                <div className="flex items-center gap-2">
-                  <FiFile className="text-xs" />
-                  <span>{isLoaded ? `${countFilesRecursively(node)} ファイル` : "— ファイル"}</span>
-                </div>
-              )}
-              <div>{isLoaded ? formatFileSize(totalSize) : "—"}</div>
-            </div>
+            {hasMetrics && (
+              <div className="text-sm text-base-content/70 space-y-1">
+                {node.isDirectory && (
+                  <div className="flex items-center gap-2">
+                    <FiFile className="text-xs" />
+                    <span>{displayCount} ファイル</span>
+                  </div>
+                )}
+                <div>{formatFileSize(displaySize)}</div>
+              </div>
+            )}
           </div>
         </div>
 

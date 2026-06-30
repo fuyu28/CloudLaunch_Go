@@ -10,12 +10,20 @@ type SaveSnapshot struct {
 }
 
 // MetaSnapshot はある時点のゲームデータ全体を表す（git のコミット相当）。
+//
+// FileCount / TotalSize はクラウド一覧で「セーブツリーを別途取得せずに」
+// ファイル数と総サイズを表示するためのスナップショット時点のキャッシュ。
+// 同期判定（contentFingerprint）には含まれず、欠落しても整合性に影響しない。
+// 旧クライアントが書いた commit には値が無いため omitempty + ゼロ値時は
+// 表示側で「未取得」として扱う。
 type MetaSnapshot struct {
 	GameJSON     BlobHash  `json:"game.json"`
 	SessionsJSON BlobHash  `json:"sessions.json"`
 	Saves        BlobHash  `json:"saves"`
 	DeviceName   string    `json:"deviceName"`
 	CreatedAt    time.Time `json:"createdAt"`
+	FileCount    int64     `json:"fileCount,omitempty"`
+	TotalSize    int64     `json:"totalSize,omitempty"`
 }
 
 type SyncStatus string

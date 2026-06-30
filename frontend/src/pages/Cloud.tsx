@@ -20,22 +20,17 @@ import { CloudContent } from "@renderer/components/cloud/CloudContent";
 import { CloudDeleteModal } from "@renderer/components/cloud/CloudDeleteModal";
 import { CloudFileDetailsModal } from "@renderer/components/cloud/CloudFileDetailsModal";
 import { CloudHeader, type ViewMode } from "@renderer/components/cloud/CloudHeader";
-import ConfirmModal from "@renderer/components/common/ConfirmModal";
-import { FiAlertTriangle } from "react-icons/fi";
 
 import { isValidCredsAtom } from "@renderer/state/credentials";
 
 import { useCloudData } from "@renderer/hooks/useCloudData";
-import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
-import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
 import { logger } from "@renderer/utils/logger";
 
 import { countFilesRecursively, sumSizesRecursively } from "@renderer/utils/cloudUtils";
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
-import type { GameType } from "src/types/game";
 
 /**
  * クラウドデータ管理ページメインコンポーネント
@@ -56,21 +51,10 @@ export default function Cloud(): React.JSX.Element {
     files: [],
     loading: false,
   });
-  const [games, setGames] = useState<GameType[]>([]);
-  const [selectedGameId, setSelectedGameId] = useState<string>("");
-  const [isSyncingGame, setIsSyncingGame] = useState(false);
-  const [isLoadingGames, setIsLoadingGames] = useState(false);
-  const [deleteGameTarget, setDeleteGameTarget] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
-  const [isDeletingGame, setIsDeletingGame] = useState(false);
 
-  const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
-  const { showToast } = useToastHandler();
   const { isOfflineMode } = useOfflineMode();
-  const { getStatus, push, pull } = useCloudSync(isOfflineMode);
+  const isValidCreds = useAtomValue(isValidCredsAtom);
 
   // クラウドデータ管理フック
   const {
@@ -88,6 +72,27 @@ export default function Cloud(): React.JSX.Element {
     deleteGameFromCloud,
     deleteAllGamesFromCloud,
   } = useCloudData();
+
+  /**
+   * カード ⇄ ツリーの切替時は、もう一方のビュー由来の閲覧状態（カードビューの
+   * currentPath とツリービューの expandedNodes）が見えないところで残らないように
+   * リセットする。残したままだとパンくずやツリーの展開状態が不整合な見え方になる。
+   *
+   * CloudHeader のビュー切替ボタンは押すたびに同じモードでも onViewModeChange を
+   * 発火するため、アクティブな側を再クリックしたときに閲覧位置をリセットしないよう
+   * mode === viewMode で早期 return する。
+   */
+  const handleViewModeChange = useCallback(
+    (mode: ViewMode): void => {
+      if (mode === viewMode) {
+        return;
+      }
+      setViewMode(mode);
+      setExpandedNodes(new Set());
+      navigateToPath([]);
+    },
+    [navigateToPath, viewMode],
+  );
 
   /**
    * ディレクトリ（ゲームまたはサブフォルダ）を開く。
@@ -110,127 +115,6 @@ export default function Cloud(): React.JSX.Element {
     currentPath.length > 0 ? directoryTree.find((node) => node.name === currentPath[0]) : undefined;
   // 開いているゲームのファイル一覧をまだ取得中かどうか
   const isOpenGameLoading = openGameNode ? loadingGameIds.has(openGameNode.path) : false;
-
-  const fetchGames = useCallback(async (): Promise<void> => {
-    setIsLoadingGames(true);
-    try {
-      const gameList = await window.api.database.listGames("", "all", "title", "asc");
-      setGames(gameList);
-      if (gameList.length > 0) {
-        setSelectedGameId((prev) =>
-          gameList.some((game) => game.id === prev) ? prev : gameList[0].id,
-        );
-      } else {
-        setSelectedGameId("");
-      }
-    } catch (error) {
-      logger.error("ゲーム一覧の取得に失敗しました:", {
-        component: "Cloud",
-        function: "fetchGames",
-        data: error,
-      });
-      showToast("ゲーム一覧の取得に失敗しました", "error");
-      setGames([]);
-      setSelectedGameId("");
-    } finally {
-      setIsLoadingGames(false);
-    }
-  }, [showToast]);
-
-  const handleSyncSelectedGame = useCallback(async (): Promise<void> => {
-    if (!selectedGameId) {
-      showToast("同期するゲームを選択してください", "error");
-      return;
-    }
-    if (isOfflineMode) {
-      showToast("オフラインモードでは同期できません", "error");
-      return;
-    }
-    setIsSyncingGame(true);
-    try {
-      const statusResult = await getStatus(selectedGameId);
-      if (!statusResult.success || !statusResult.data) {
-        showToast(
-          (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
-          "error",
-        );
-        return;
-      }
-      const { status } = statusResult.data;
-      if (status === "in_sync") {
-        showToast("すでに最新の状態です", "success");
-        return;
-      }
-      if (status === "never_synced") {
-        showToast("クラウドにデータがありません", "error");
-        return;
-      }
-      if (status === "push_needed") {
-        const op = await push(selectedGameId);
-        if (!op.ok) {
-          showToast(op.message || "アップロードに失敗しました", "error");
-          return;
-        }
-        showToast("クラウドにアップロードしました", "success");
-      } else if (status === "pull_needed") {
-        const op = await pull(selectedGameId);
-        if (!op.ok) {
-          showToast(op.message || "ダウンロードに失敗しました", "error");
-          return;
-        }
-        if (op.ok && op.applied === false) {
-          showToast(
-            "同期対象外のローカルファイルがあります。詳細画面の「同期」から確認してください",
-            "error",
-          );
-          return;
-        }
-        showToast("クラウドからダウンロードしました", "success");
-      } else {
-        showToast("コンフリクトが発生しています。詳細画面から解決してください", "error");
-      }
-    } catch (error) {
-      logger.error("ゲーム同期エラー:", {
-        component: "Cloud",
-        function: "handleSyncSelectedGame",
-        data: error,
-      });
-      showToast("クラウド同期に失敗しました", "error");
-    } finally {
-      setIsSyncingGame(false);
-    }
-  }, [selectedGameId, isOfflineMode, showToast, getStatus, push, pull]);
-
-  const handleDeleteSelectedGame = useCallback(async (): Promise<void> => {
-    if (!selectedGameId) {
-      showToast("削除するゲームを選択してください", "error");
-      return;
-    }
-    if (isOfflineMode) {
-      showToast("オフラインモードでは削除できません", "error");
-      return;
-    }
-    setIsDeletingGame(true);
-    try {
-      const result = await window.api.cloudSync.deleteFromCloud(selectedGameId);
-      if (!result.success) {
-        showToast(result.message || "クラウド削除に失敗しました", "error");
-        return;
-      }
-      showToast("クラウドデータを削除しました", "success");
-      fetchCloudData();
-    } catch (error) {
-      logger.error("クラウド削除エラー:", {
-        component: "Cloud",
-        function: "handleDeleteSelectedGame",
-        data: error,
-      });
-      showToast("クラウド削除に失敗しました", "error");
-    } finally {
-      setIsDeletingGame(false);
-      setDeleteGameTarget(null);
-    }
-  }, [fetchCloudData, isOfflineMode, selectedGameId, showToast]);
 
   /**
    * ツリーノードの展開・折りたたみ
@@ -351,16 +235,12 @@ export default function Cloud(): React.JSX.Element {
     }
   }, [validateCreds, isOfflineMode]);
 
-  useEffect(() => {
-    fetchGames();
-  }, [fetchGames]);
-
   return (
     <div className="container mx-auto px-4 py-6">
       {/* ヘッダー */}
       <CloudHeader
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         cloudData={cloudData}
         directoryTree={directoryTree}
         loading={loading}
@@ -368,68 +248,16 @@ export default function Cloud(): React.JSX.Element {
         onDeleteAll={handleDeleteAll}
       />
 
-      {/* ゲーム情報同期 */}
-      <div className="card bg-base-100 border border-base-300/60 shadow-md mb-4">
-        <div className="card-body">
-          <h3 className="font-semibold text-lg">ゲーム情報の同期</h3>
-          <p className="text-sm text-base-content/75 mb-4">
-            タイトル・プレイ情報・セッションをクラウドと同期します
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              className="select select-bordered w-full sm:max-w-xs"
-              value={selectedGameId}
-              onChange={(event) => setSelectedGameId(event.target.value)}
-              disabled={isLoadingGames || games.length === 0}
-            >
-              {games.length === 0 ? (
-                <option value="">ゲームがありません</option>
-              ) : (
-                <option value="">ゲームを選択</option>
-              )}
-              {games.map((game) => (
-                <option key={game.id} value={game.id}>
-                  {game.title}
-                </option>
-              ))}
-            </select>
-            <button
-              className="btn btn-outline btn-sm w-fit"
-              onClick={handleSyncSelectedGame}
-              disabled={isSyncingGame || isOfflineMode || !selectedGameId}
-            >
-              {isSyncingGame ? "同期中..." : "選択したゲームを同期"}
-            </button>
-            <button
-              className="btn btn-error btn-sm w-fit"
-              onClick={() => {
-                const target = games.find((game) => game.id === selectedGameId);
-                if (!target) {
-                  showToast("削除するゲームを選択してください", "error");
-                  return;
-                }
-                setDeleteGameTarget({ id: target.id, title: target.title });
-              }}
-              disabled={isDeletingGame || isOfflineMode || !selectedGameId}
-            >
-              {isDeletingGame ? "削除中..." : "選択したゲームを削除"}
-            </button>
-            <button
-              className="btn btn-ghost btn-sm w-fit"
-              onClick={fetchGames}
-              disabled={isLoadingGames}
-            >
-              {isLoadingGames ? "更新中..." : "一覧を更新"}
-            </button>
-          </div>
-          {!isOfflineMode && !isValidCreds && (
-            <p className="text-xs text-error mt-3">クラウド認証情報が未設定です</p>
-          )}
-          {isOfflineMode && (
-            <p className="text-xs text-warning mt-3">オフラインモードのため同期できません</p>
-          )}
+      {/* 取得不能状態の案内: リストが空に見える理由を明示する */}
+      {isOfflineMode ? (
+        <div className="alert alert-warning text-sm mb-4">
+          オフラインモードのため、クラウドデータを取得できません
         </div>
-      </div>
+      ) : !isValidCreds ? (
+        <div className="alert alert-warning text-sm mb-4">
+          クラウド認証情報が未設定のため、クラウドデータを取得できません
+        </div>
+      ) : null}
 
       {/* パンくずリスト */}
       <CloudBreadcrumb
@@ -461,31 +289,6 @@ export default function Cloud(): React.JSX.Element {
         onCancel={() => setDeleteConfirm(null)}
         onConfirm={handleDelete}
         cloudData={cloudData}
-      />
-
-      <ConfirmModal
-        id="delete-cloud-game-modal"
-        isOpen={!!deleteGameTarget}
-        onCancel={() => setDeleteGameTarget(null)}
-        onConfirm={handleDeleteSelectedGame}
-        title="クラウドゲームの削除"
-        message={
-          deleteGameTarget
-            ? `「${deleteGameTarget.title}」のクラウドデータを完全に削除しますか？`
-            : ""
-        }
-        confirmText="削除"
-        cancelText="キャンセル"
-        confirmVariant="error"
-        details={{
-          icon: <FiAlertTriangle className="text-error" />,
-          subText: deleteGameTarget ? `GameID: ${deleteGameTarget.id}` : undefined,
-          warnings: [
-            { text: "削除されたデータは復元できません" },
-            { text: "games.jsonの情報も削除されます", highlight: true },
-            { text: "セーブ・サムネイル・セッション・メモも削除されます" },
-          ],
-        }}
       />
 
       {/* ファイル詳細モーダル */}

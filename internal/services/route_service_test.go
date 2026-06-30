@@ -11,15 +11,16 @@ import (
 )
 
 type fakeRouteRepository struct {
-	listRoutesByGameFn func(ctx context.Context, gameID string) ([]domain.Route, error)
-	createRouteFn      func(ctx context.Context, route domain.Route) (*domain.Route, error)
-	getRouteByIDFn     func(ctx context.Context, routeID string) (*domain.Route, error)
-	updateRouteFn      func(ctx context.Context, route domain.Route) (*domain.Route, error)
-	deleteRouteFn      func(ctx context.Context, routeID string) error
-	updateRouteOrderFn func(ctx context.Context, routeID string, order int64) error
-	getRouteStatsFn    func(ctx context.Context, gameID string) ([]domain.RouteStat, error)
-	getGameByIDFn      func(ctx context.Context, gameID string) (*domain.Game, error)
-	updateGameFn       func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	listRoutesByGameFn  func(ctx context.Context, gameID string) ([]domain.Route, error)
+	createRouteFn       func(ctx context.Context, route domain.Route) (*domain.Route, error)
+	getRouteByIDFn      func(ctx context.Context, routeID string) (*domain.Route, error)
+	updateRouteFn       func(ctx context.Context, route domain.Route) (*domain.Route, error)
+	deleteRouteFn       func(ctx context.Context, routeID string) error
+	updateRouteOrderFn  func(ctx context.Context, routeID string, order int64) error
+	updateRouteOrdersFn func(ctx context.Context, gameID string, items []domain.RouteOrderItem) error
+	getRouteStatsFn     func(ctx context.Context, gameID string) ([]domain.RouteStat, error)
+	getGameByIDFn       func(ctx context.Context, gameID string) (*domain.Game, error)
+	updateGameFn        func(ctx context.Context, game domain.Game) (*domain.Game, error)
 }
 
 func (r fakeRouteRepository) ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error) {
@@ -46,6 +47,10 @@ func (r fakeRouteRepository) UpdateRouteOrder(ctx context.Context, routeID strin
 	return r.updateRouteOrderFn(ctx, routeID, order)
 }
 
+func (r fakeRouteRepository) UpdateRouteOrders(ctx context.Context, gameID string, items []domain.RouteOrderItem) error {
+	return r.updateRouteOrdersFn(ctx, gameID, items)
+}
+
 func (r fakeRouteRepository) GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error) {
 	return r.getRouteStatsFn(ctx, gameID)
 }
@@ -66,9 +71,12 @@ func newFullFakeRouteRepository() fakeRouteRepository {
 		updateRouteFn:      func(ctx context.Context, route domain.Route) (*domain.Route, error) { return &route, nil },
 		deleteRouteFn:      func(ctx context.Context, routeID string) error { return nil },
 		updateRouteOrderFn: func(ctx context.Context, routeID string, order int64) error { return nil },
-		getRouteStatsFn:    func(ctx context.Context, gameID string) ([]domain.RouteStat, error) { return nil, nil },
-		getGameByIDFn:      func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
-		updateGameFn:       func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		updateRouteOrdersFn: func(ctx context.Context, gameID string, items []domain.RouteOrderItem) error {
+			return nil
+		},
+		getRouteStatsFn: func(ctx context.Context, gameID string) ([]domain.RouteStat, error) { return nil, nil },
+		getGameByIDFn:   func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:    func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 	}
 }
 
@@ -163,5 +171,37 @@ func TestRouteServiceUpdateRouteOrdersRejectsNegativeOrder(t *testing.T) {
 
 	if err := service.UpdateRouteOrders(context.Background(), "game-1", []RouteOrderUpdate{{ID: "route-1", Order: -1}}); err == nil {
 		t.Fatalf("expected invalid order to fail")
+	}
+}
+
+// TestRouteServiceUpdateRouteOrdersForwardsGameID は、サービスが gameID を
+// リポジトリ層に正しく引き渡すことを確認する。リポジトリ SQL は
+// `WHERE id = ? AND gameId = ?` で絞り込むため、gameID を渡さないと別ゲームの
+// route ID が混入したリクエストでサイレントに他ゲームを並べ替えてしまう。
+func TestRouteServiceUpdateRouteOrdersForwardsGameID(t *testing.T) {
+	t.Parallel()
+
+	repo := newFullFakeRouteRepository()
+	var capturedGameID string
+	var capturedItems []domain.RouteOrderItem
+	repo.updateRouteOrdersFn = func(ctx context.Context, gameID string, items []domain.RouteOrderItem) error {
+		capturedGameID = gameID
+		capturedItems = items
+		return nil
+	}
+	service := NewRouteService(repo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	err := service.UpdateRouteOrders(context.Background(), " game-1 ", []RouteOrderUpdate{
+		{ID: "route-a", Order: 0},
+		{ID: "route-b", Order: 1},
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if capturedGameID != "game-1" {
+		t.Fatalf("gameID = %q, want %q (trim 済み)", capturedGameID, "game-1")
+	}
+	if len(capturedItems) != 2 || capturedItems[0].ID != "route-a" || capturedItems[1].ID != "route-b" {
+		t.Fatalf("items を順序通りに引き渡せていない: %#v", capturedItems)
 	}
 }

@@ -22,15 +22,52 @@ func NewRepository(connection *sql.DB) *Repository {
 	return &Repository{connection: connection}
 }
 
+// 同じカラム並びで SELECT する箇所をまとめ、列追加時の更新漏れを防ぐ。
+const (
+	gameSelectCols = `id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
+		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId`
+	routeSelectCols       = `id, name, "order", gameId, createdAt`
+	playSessionSelectCols = `id, gameId, playedAt, duration, sessionName, routeId, updatedAt`
+	memoSelectCols        = `id, title, content, gameId, createdAt, updatedAt`
+)
+
+// queryAll は QueryContext → 行ごとの scan → defer Close をまとめる。
+// scan は1行ぶんを domain 型に変換する関数。
+func queryAll[T any](
+	ctx context.Context,
+	conn *sql.DB,
+	query string,
+	scan func(scanner) (*T, error),
+	args ...any,
+) (results []T, err error) {
+	rows, err := conn.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	results = make([]T, 0)
+	for rows.Next() {
+		item, scanErr := scan(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		results = append(results, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 // GetGameByID はID指定でゲームを取得する。
 func (repository *Repository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
-		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
-		FROM "Game" WHERE id = ?
-	`, gameID)
-
+	row := repository.connection.QueryRowContext(ctx, `SELECT `+gameSelectCols+` FROM "Game" WHERE id = ?`, gameID)
 	game, error := scanGame(row)
 	if error == sql.ErrNoRows {
 		return nil, nil
@@ -47,13 +84,7 @@ func (repository *Repository) GetGameByExePath(ctx context.Context, exePath stri
 	if trimmed == "" {
 		return nil, errors.New("exePath is empty")
 	}
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
-		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
-		FROM "Game" WHERE lower(exePath) = lower(?)
-	`, trimmed)
-
+	row := repository.connection.QueryRowContext(ctx, `SELECT `+gameSelectCols+` FROM "Game" WHERE lower(exePath) = lower(?)`, trimmed)
 	game, error := scanGame(row)
 	if error == sql.ErrNoRows {
 		return nil, nil
@@ -71,14 +102,9 @@ func (repository *Repository) ListGames(
 	filter domain.PlayStatus,
 	sortBy string,
 	sortDirection string,
-) (games []domain.Game, err error) {
+) ([]domain.Game, error) {
 	queryBuilder := strings.Builder{}
-	queryBuilder.WriteString(`
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
-		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
-		FROM "Game"
-	`)
+	queryBuilder.WriteString(`SELECT ` + gameSelectCols + ` FROM "Game"`)
 
 	whereClauses := make([]string, 0, 2)
 	args := make([]any, 0, 2)
@@ -97,33 +123,8 @@ func (repository *Repository) ListGames(
 		queryBuilder.WriteString(strings.Join(whereClauses, " AND "))
 	}
 
-	orderBy := normalizeSortColumn(sortBy)
-	direction := normalizeSortDirection(sortDirection)
-	_, _ = fmt.Fprintf(&queryBuilder, " ORDER BY %s %s", orderBy, direction)
-
-	rows, err := repository.connection.QueryContext(ctx, queryBuilder.String(), args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	games = make([]domain.Game, 0)
-	for rows.Next() {
-		game, err := scanGame(rows)
-		if err != nil {
-			return nil, err
-		}
-		games = append(games, *game)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return games, nil
+	_, _ = fmt.Fprintf(&queryBuilder, " ORDER BY %s %s", normalizeSortColumn(sortBy), normalizeSortDirection(sortDirection))
+	return queryAll(ctx, repository.connection, queryBuilder.String(), scanGame, args...)
 }
 
 // CreateGame はゲームを作成して返す。
@@ -216,33 +217,10 @@ func (repository *Repository) CreateRoute(ctx context.Context, route domain.Rout
 }
 
 // ListRoutesByGame はゲームIDでルート一覧を取得する。
-func (repository *Repository) ListRoutesByGame(ctx context.Context, gameID string) (routes []domain.Route, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, name, "order", gameId, createdAt
-		FROM "Route" WHERE gameId = ? ORDER BY "order" ASC
-	`, gameID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	routes = make([]domain.Route, 0)
-	for rows.Next() {
-		route, err := scanRoute(rows)
-		if err != nil {
-			return nil, err
-		}
-		routes = append(routes, *route)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return routes, nil
+func (repository *Repository) ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error) {
+	return queryAll(ctx, repository.connection,
+		`SELECT `+routeSelectCols+` FROM "Route" WHERE gameId = ? ORDER BY "order" ASC`,
+		scanRoute, gameID)
 }
 
 // UpdateRoute はルートを更新して返す。
@@ -264,12 +242,33 @@ func (repository *Repository) UpdateRouteOrder(ctx context.Context, routeID stri
 	return error
 }
 
+// UpdateRouteOrders は gameID 配下のルートの順序更新を単一トランザクションで実行する。
+// 部分失敗を防ぎ、行数ぶんのラウンドトリップを1トランザクションに収める。
+// WHERE 句に gameId 条件を含むため、誤って他ゲームの Route ID を渡しても無視される。
+func (repository *Repository) UpdateRouteOrders(ctx context.Context, gameID string, items []domain.RouteOrderItem) (err error) {
+	if len(items) == 0 {
+		return nil
+	}
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	for _, item := range items {
+		if _, execErr := tx.ExecContext(ctx, `UPDATE "Route" SET "order" = ? WHERE id = ? AND gameId = ?`, item.Order, item.ID, gameID); execErr != nil {
+			return execErr
+		}
+	}
+	return tx.Commit()
+}
+
 // GetRouteByID はルートIDでルートを取得する。
 func (repository *Repository) GetRouteByID(ctx context.Context, routeID string) (*domain.Route, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, name, "order", gameId, createdAt FROM "Route" WHERE id = ?
-	`, routeID)
-
+	row := repository.connection.QueryRowContext(ctx, `SELECT `+routeSelectCols+` FROM "Route" WHERE id = ?`, routeID)
 	route, error := scanRoute(row)
 	if error == sql.ErrNoRows {
 		return nil, nil
@@ -301,10 +300,7 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session dom
 
 // GetPlaySessionByID はID指定でセッションを取得する。
 func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, routeId, updatedAt
-		FROM "PlaySession" WHERE id = ?
-	`, sessionID)
+	row := repository.connection.QueryRowContext(ctx, `SELECT `+playSessionSelectCols+` FROM "PlaySession" WHERE id = ?`, sessionID)
 	session, error := scanPlaySession(row)
 	if error == sql.ErrNoRows {
 		return nil, nil
@@ -318,39 +314,46 @@ func (repository *Repository) GetPlaySessionByID(ctx context.Context, sessionID 
 // ListPlaySessionsByGame はゲームIDでセッション一覧を取得する。
 // playedAt が同値のときも順序が安定するよう id を第2ソートキーにしている。
 // （sessions.json のシリアライズ結果が環境ごとにブレてハッシュが変わるのを防ぐ）
-func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) (sessions []domain.PlaySession, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, routeId, updatedAt
-		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC, id
-	`, gameID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	sessions = make([]domain.PlaySession, 0)
-	for rows.Next() {
-		session, err := scanPlaySession(rows)
-		if err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, *session)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return sessions, nil
+func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
+	return queryAll(ctx, repository.connection,
+		`SELECT `+playSessionSelectCols+` FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC, id`,
+		scanPlaySession, gameID)
 }
 
 // DeletePlaySession はセッションを削除する。
 func (repository *Repository) DeletePlaySession(ctx context.Context, sessionID string) error {
 	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE id = ?`, sessionID)
 	return error
+}
+
+// ListPlaySessionsByGames は複数ゲームのセッションを一括取得し、gameID→sessions の map を返す。
+// N+1 を避けたい一括処理（エクスポート等）で使う。空入力なら空 map を返す。
+func (repository *Repository) ListPlaySessionsByGames(ctx context.Context, gameIDs []string) (map[string][]domain.PlaySession, error) {
+	result := make(map[string][]domain.PlaySession, len(gameIDs))
+	for _, id := range gameIDs {
+		result[id] = nil
+	}
+	if len(gameIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(gameIDs))
+	args := make([]any, len(gameIDs))
+	for i, id := range gameIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := `SELECT ` + playSessionSelectCols + ` FROM "PlaySession" WHERE gameId IN (` +
+		strings.Join(placeholders, ",") + `) ORDER BY playedAt DESC, id`
+
+	sessions, err := queryAll(ctx, repository.connection, query, scanPlaySession, args...)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range sessions {
+		result[s.GameID] = append(result[s.GameID], s)
+	}
+	return result, nil
 }
 
 // DeletePlaySessionsByGame はゲームID配下のセッションを削除する。
@@ -613,11 +616,7 @@ func (repository *Repository) UpdateMemo(ctx context.Context, memo domain.Memo) 
 
 // GetMemoByID はメモIDでメモを取得する。
 func (repository *Repository) GetMemoByID(ctx context.Context, memoID string) (*domain.Memo, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, content, gameId, createdAt, updatedAt
-		FROM "Memo" WHERE id = ?
-	`, memoID)
-
+	row := repository.connection.QueryRowContext(ctx, `SELECT `+memoSelectCols+` FROM "Memo" WHERE id = ?`, memoID)
 	memo, error := scanMemo(row)
 	if error == sql.ErrNoRows {
 		return nil, nil
@@ -630,11 +629,7 @@ func (repository *Repository) GetMemoByID(ctx context.Context, memoID string) (*
 
 // FindMemoByTitle はゲームIDとタイトルでメモを取得する。
 func (repository *Repository) FindMemoByTitle(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, content, gameId, createdAt, updatedAt
-		FROM "Memo" WHERE gameId = ? AND title = ? LIMIT 1
-	`, gameID, title)
-
+	row := repository.connection.QueryRowContext(ctx, `SELECT `+memoSelectCols+` FROM "Memo" WHERE gameId = ? AND title = ? LIMIT 1`, gameID, title)
 	memo, error := scanMemo(row)
 	if error == sql.ErrNoRows {
 		return nil, nil
@@ -646,33 +641,10 @@ func (repository *Repository) FindMemoByTitle(ctx context.Context, gameID string
 }
 
 // ListMemosByGame はゲームIDでメモ一覧を取得する。
-func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string) (memos []domain.Memo, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, title, content, gameId, createdAt, updatedAt
-		FROM "Memo" WHERE gameId = ? ORDER BY updatedAt DESC
-	`, gameID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	memos = make([]domain.Memo, 0)
-	for rows.Next() {
-		memo, err := scanMemo(rows)
-		if err != nil {
-			return nil, err
-		}
-		memos = append(memos, *memo)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return memos, nil
+func (repository *Repository) ListMemosByGame(ctx context.Context, gameID string) ([]domain.Memo, error) {
+	return queryAll(ctx, repository.connection,
+		`SELECT `+memoSelectCols+` FROM "Memo" WHERE gameId = ? ORDER BY updatedAt DESC`,
+		scanMemo, gameID)
 }
 
 // GetRouteStats はルートごとの統計を取得する。
@@ -728,33 +700,10 @@ func (repository *Repository) GetRouteStats(ctx context.Context, gameID string) 
 }
 
 // ListAllMemos は全メモを取得する。
-func (repository *Repository) ListAllMemos(ctx context.Context) (memos []domain.Memo, err error) {
-	rows, err := repository.connection.QueryContext(ctx, `
-		SELECT id, title, content, gameId, createdAt, updatedAt
-		FROM "Memo" ORDER BY updatedAt DESC
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	memos = make([]domain.Memo, 0)
-	for rows.Next() {
-		memo, err := scanMemo(rows)
-		if err != nil {
-			return nil, err
-		}
-		memos = append(memos, *memo)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return memos, nil
+func (repository *Repository) ListAllMemos(ctx context.Context) ([]domain.Memo, error) {
+	return queryAll(ctx, repository.connection,
+		`SELECT `+memoSelectCols+` FROM "Memo" ORDER BY updatedAt DESC`,
+		scanMemo)
 }
 
 // DeleteMemo はメモを削除する。
@@ -775,12 +724,10 @@ func normalizeSortColumn(sortBy string) string {
 
 // normalizeSortDirection はソート方向をSQL用に整形する。
 func normalizeSortDirection(direction string) string {
-	switch strings.ToLower(direction) {
-	case "desc":
+	if strings.EqualFold(direction, "desc") {
 		return "DESC"
-	default:
-		return "ASC"
 	}
+	return "ASC"
 }
 
 // scanGame は1行分のゲームデータを読み取る。
@@ -896,39 +843,33 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 
 // findLatestGame は直近作成のゲームを取得する。
 func (repository *Repository) findLatestGame(ctx context.Context, title string, exePath string) (*domain.Game, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-		       localSaveHash, localSaveHashUpdatedAt, localSyncHead,
-		       totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
-		FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1
-	`, title, exePath)
+	row := repository.connection.QueryRowContext(ctx,
+		`SELECT `+gameSelectCols+` FROM "Game" WHERE title = ? AND exePath = ? ORDER BY createdAt DESC LIMIT 1`,
+		title, exePath)
 	return scanGame(row)
 }
 
 // findLatestRoute は直近作成のルートを取得する。
 func (repository *Repository) findLatestRoute(ctx context.Context, gameID string, name string) (*domain.Route, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, name, "order", gameId, createdAt
-		FROM "Route" WHERE gameId = ? AND name = ? ORDER BY createdAt DESC LIMIT 1
-	`, gameID, name)
+	row := repository.connection.QueryRowContext(ctx,
+		`SELECT `+routeSelectCols+` FROM "Route" WHERE gameId = ? AND name = ? ORDER BY createdAt DESC LIMIT 1`,
+		gameID, name)
 	return scanRoute(row)
 }
 
 // findLatestPlaySession は直近のプレイセッションを取得する。
 func (repository *Repository) findLatestPlaySession(ctx context.Context, gameID string) (*domain.PlaySession, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, gameId, playedAt, duration, sessionName, routeId, updatedAt
-		FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1
-	`, gameID)
+	row := repository.connection.QueryRowContext(ctx,
+		`SELECT `+playSessionSelectCols+` FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1`,
+		gameID)
 	return scanPlaySession(row)
 }
 
 // findLatestMemo は直近のメモを取得する。
 func (repository *Repository) findLatestMemo(ctx context.Context, gameID string, title string) (*domain.Memo, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT id, title, content, gameId, createdAt, updatedAt
-		FROM "Memo" WHERE gameId = ? AND title = ? ORDER BY createdAt DESC LIMIT 1
-	`, gameID, title)
+	row := repository.connection.QueryRowContext(ctx,
+		`SELECT `+memoSelectCols+` FROM "Memo" WHERE gameId = ? AND title = ? ORDER BY createdAt DESC LIMIT 1`,
+		gameID, title)
 	return scanMemo(row)
 }
 

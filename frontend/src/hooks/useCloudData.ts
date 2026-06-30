@@ -11,10 +11,9 @@ import { logger } from "@renderer/utils/logger";
 
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 import {
-  countFilesRecursively,
+  computeCloudNodeMetrics,
   getNodesByPath,
   latestModifiedRecursively,
-  sumSizesRecursively,
 } from "@renderer/utils/cloudUtils";
 
 export type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
@@ -48,20 +47,13 @@ export type UseCloudDataReturn = {
 
 function buildCloudDataFromTree(tree: CloudDirectoryNode[]): CloudDataItem[] {
   return tree.map((node) => {
-    if (node.isDirectory) {
-      return {
-        name: node.name,
-        totalSize: sumSizesRecursively(node),
-        fileCount: countFilesRecursively(node),
-        lastModified: latestModifiedRecursively(node),
-        remotePath: node.path,
-      };
-    }
+    const { childrenLoaded, count, size } = computeCloudNodeMetrics(node);
     return {
       name: node.name,
-      totalSize: node.size,
-      fileCount: 1,
-      lastModified: node.lastModified,
+      totalSize: size,
+      fileCount: count,
+      lastModified:
+        node.isDirectory && childrenLoaded ? latestModifiedRecursively(node) : node.lastModified,
       remotePath: node.path,
     };
   });
@@ -121,13 +113,16 @@ export function useCloudData(): UseCloudDataReturn {
 
       const summaries = result.data ?? [];
       // 各ゲームを「未取得（children: undefined）」のトップノードとして表示する。
+      // commit メタにファイル数 / 総サイズが保存されていればここで持ち回し、
+      // ナビゲートしなくてもカード／ツリーに表示できるようにする。
       const topNodes: CloudDirectoryNode[] = summaries.map((summary) => ({
         name: summary.name,
         path: summary.remotePath,
         isDirectory: true,
-        size: 0,
+        size: summary.totalSize,
         lastModified: summary.lastModified,
         children: undefined,
+        fileCount: summary.fileCount,
       }));
 
       loadedGamesRef.current.clear();
@@ -219,20 +214,17 @@ export function useCloudData(): UseCloudDataReturn {
   );
 
   /**
-   * カードビューでディレクトリに移動
+   * カードビューでディレクトリに移動。
+   * directoryName はノード名そのものを受け取り、"/" による分割は行わない
+   * （ゲーム名に "/" を含む場合に誤分解されないようにする）。
    */
-  const navigateToDirectory = useCallback(
-    (directoryName: string): void => {
-      const trimmed = directoryName.trim();
-      if (trimmed === "") {
-        return;
-      }
-      const segments = trimmed.split("/").filter((segment) => segment.length > 0);
-      const newPath = segments.length > 1 ? segments : [...state.currentPath, trimmed];
-      setState((prev) => ({ ...prev, currentPath: newPath }));
-    },
-    [state.currentPath],
-  );
+  const navigateToDirectory = useCallback((directoryName: string): void => {
+    const trimmed = directoryName.trim();
+    if (trimmed === "") {
+      return;
+    }
+    setState((prev) => ({ ...prev, currentPath: [...prev.currentPath, trimmed] }));
+  }, []);
 
   /**
    * カードビューで親ディレクトリに戻る

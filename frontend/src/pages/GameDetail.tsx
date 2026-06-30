@@ -25,6 +25,7 @@ import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
 import { logger } from "@renderer/utils/logger";
+import { buildSaveSyncMessage } from "@renderer/utils/saveSyncMessage";
 
 import type { GameType } from "src/types/game";
 import type { SyncMetaSnapshot, SyncStatusDetail } from "src/wailsBridge";
@@ -164,26 +165,13 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [game, downloadSaveData, checkNetworkFeature]);
 
-  const toValidDate = useCallback(
-    (value: Date | string | number | null | undefined): Date | null => {
-      if (!value) return null;
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    },
-    [],
-  );
-
-  const buildSaveSyncMessage = useCallback(
+  const buildSyncMessage = useCallback(
     (
       title: string,
       localUpdatedAt: Date | string | number | null | undefined,
       cloudUpdatedAt: Date | string | number | null | undefined,
-    ) => {
-      const localDate = toValidDate(localUpdatedAt);
-      const cloudDate = toValidDate(cloudUpdatedAt);
-      return `${title} のセーブデータがクラウドと異なります。\nローカル最終更新: ${formatDateWithTime(localDate)}\nクラウド最終更新: ${formatDateWithTime(cloudDate)}\nダウンロードしますか？`;
-    },
-    [formatDateWithTime, toValidDate],
+    ) => buildSaveSyncMessage(formatDateWithTime, title, localUpdatedAt, cloudUpdatedAt),
+    [formatDateWithTime],
   );
 
   // プレイセッション追加関連のコールバック
@@ -342,17 +330,13 @@ export default function GameDetail(): React.JSX.Element {
     const { status, remoteMeta } = statusResult.data;
     if (status === "pull_needed" || status === "conflict") {
       setSaveSyncMessage(
-        buildSaveSyncMessage(
-          game.title,
-          game.localSaveHashUpdatedAt,
-          remoteMeta?.createdAt ?? null,
-        ),
+        buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
       );
       setIsDownloadConfirmOpen(true);
       return;
     }
     await launchGameDirect();
-  }, [game, isOfflineMode, isValidCreds, launchGameDirect, getStatus, buildSaveSyncMessage]);
+  }, [game, isOfflineMode, isValidCreds, launchGameDirect, getStatus, buildSyncMessage]);
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);

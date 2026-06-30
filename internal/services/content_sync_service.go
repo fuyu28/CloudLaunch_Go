@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"CloudLaunch_Go/internal/config"
@@ -20,6 +22,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+// ErrOffline はオフラインモード設定時に Push/Pull/DeleteFromCloud が返すセンチネル。
+// 呼び出し側はこれを errors.Is で判定し、自動同期パスでは静かにスキップし、
+// ユーザー操作パスでは UI に「オフラインモードです」を表示する。
+var ErrOffline = errors.New("オフラインモードのため同期しません")
 
 // ProgressFunc はセーブファイルの転送進捗を報告するコールバック。
 type ProgressFunc func(current, total int)
@@ -89,6 +96,19 @@ type ContentSyncService struct {
 	logger       *slog.Logger
 	newBlobStore func(ctx context.Context) (contentBlobStore, error)
 	gameLocks    sync.Map // gameID → *sync.Mutex（同一ゲームの Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
+	offline      atomic.Bool
+}
+
+// SetOfflineMode はオフラインモードの ON/OFF を切り替える。
+// ON の間は Push / Pull / DeleteFromCloud が ErrOffline を返し、
+// 自動同期（process_monitor 経由）も静かにスキップされる。
+func (s *ContentSyncService) SetOfflineMode(enabled bool) {
+	s.offline.Store(enabled)
+}
+
+// IsOffline は現在のオフラインモード状態を返す。
+func (s *ContentSyncService) IsOffline() bool {
+	return s.offline.Load()
 }
 
 // NewContentSyncService は ContentSyncService を生成する。
@@ -197,7 +217,9 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 		return metaBuildResult{}, err
 	}
 	savesHash := hashBytes(saveSnapJSON)
-	return buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName)
+	// Status 経路は contentFingerprint しか参照しないため、サマリ表示用キャッシュは
+	// 埋めない（0 を渡す）。実値は Push 時の pushBuildLocalMeta 側で書き込む。
+	return buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName, 0, 0)
 }
 
 // Status は現在の同期状態を返す。
@@ -273,7 +295,11 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 }
 
 // Push はローカルデータをリモートにアップロードする。同一ゲームの同期と直列化される。
+// オフラインモード時は ErrOffline を返す（自動同期は process_monitor 側で握りつぶす）。
 func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress ProgressFunc) error {
+	if s.offline.Load() {
+		return ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	return s.push(ctx, gameID, onProgress, false)
 }
@@ -317,32 +343,39 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 // ローカルの同期基準とズレていればコンフリクトとして中断する。
 // 戻り値の expectedHead は writeHEAD 直前の再確認（pushFinalizeHead）で使う。
 func (s *ContentSyncService) pushCheckRemoteHead(ctx context.Context, bstore contentBlobStore, gameID string, game *domain.Game, force bool) (string, error) {
-	expectedHead := ""
-	if !force {
-		remoteHead, err := bstore.readHEAD(ctx, gameID)
-		if err != nil {
-			return "", err
-		}
-		expectedHead = remoteHead
-		if remoteHead != "" {
-			remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
-			if err != nil {
-				return "", err
-			}
-			var remoteMeta domain.MetaSnapshot
-			if err := json.Unmarshal(remoteMetaBytes, &remoteMeta); err != nil {
-				return "", err
-			}
-			localSyncHead := ""
-			if game.LocalSyncHead != nil {
-				localSyncHead = *game.LocalSyncHead
-			}
-			if contentFingerprint(remoteMeta) != localSyncHead {
-				return "", fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
-			}
-		}
+	if force {
+		return "", nil
 	}
-	return expectedHead, nil
+	remoteHead, err := bstore.readHEAD(ctx, gameID)
+	if err != nil {
+		return "", err
+	}
+	if remoteHead == "" {
+		return "", nil
+	}
+	remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
+	if err != nil {
+		return "", err
+	}
+	var remoteMeta domain.MetaSnapshot
+	if err := json.Unmarshal(remoteMetaBytes, &remoteMeta); err != nil {
+		return "", err
+	}
+	localSyncHead := ""
+	if game.LocalSyncHead != nil {
+		localSyncHead = *game.LocalSyncHead
+	}
+	// localSyncHead が空のままリモートが存在する場合は「同期基準を一度も持ったことがない /
+	// DeleteFromCloud 直後に他端末が再 Push した」ケース。常に conflict 扱いにすると
+	// ユーザーはまず Pull or ResolveConflict せざるを得ず、Status() 側が PullNeeded として
+	// 扱っているのと整合しない。Pull を促すための明示エラーで返す。
+	if localSyncHead == "" {
+		return "", fmt.Errorf("リモートにデータがあります。Pull で取り込むか、ローカルを採用するなら同期確認画面から選択してください")
+	}
+	if contentFingerprint(remoteMeta) != localSyncHead {
+		return "", fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
+	}
+	return remoteHead, nil
 }
 
 // pushBuildLocalMeta はゲームの現在のローカル状態から push 用の MetaSnapshot と
@@ -381,7 +414,15 @@ func (s *ContentSyncService) pushBuildLocalMeta(ctx context.Context, gameID stri
 		}
 	}
 
-	meta, err := buildMetaSnapshot(*game, sessions, imageHash, savesHash, deviceName)
+	// クラウド一覧の表示で別 GET を増やさずにファイル数 / 総サイズを出せるよう、
+	// commit にスナップショット時点のキャッシュとして書き込む。dedup を意識せず
+	// 「ユーザーが見るファイル単位」で合計するため saveSnap.Files を走査する。
+	fileCount := int64(len(saveSnap.Files))
+	var totalSize int64
+	for _, h := range saveSnap.Files {
+		totalSize += int64(len(saveBlobs[h]))
+	}
+	meta, err := buildMetaSnapshot(*game, sessions, imageHash, savesHash, deviceName, fileCount, totalSize)
 	if err != nil {
 		return metaBuildResult{}, nil, "", nil, "", nil, err
 	}
@@ -443,7 +484,11 @@ func (s *ContentSyncService) pushFinalizeHead(ctx context.Context, bstore conten
 
 // Pull はリモートデータをローカルに適用する。同一ゲームの同期と直列化される。
 // 詳細な挙動（deleteUntracked による未追跡ファイル削除確認）は内部の pull を参照。
+// オフラインモード時は ErrOffline を返す。
 func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
+	if s.offline.Load() {
+		return domain.PullResult{}, ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	return s.pull(ctx, gameID, onProgress, deleteUntracked)
 }
@@ -544,7 +589,7 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
-	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, meta, saveSnapBytes)
+	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes)
 }
 
 // pullPlanDeletions はリモートのセーブスナップショットとローカルの base tree を突き合わせ、
@@ -626,13 +671,10 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 			}
 		}
 
-		alreadyDone := total - len(needsDownload)
-		if onProgress != nil {
-			onProgress(alreadyDone, total)
-		}
-
 		var wrappedProgress func(int, int)
 		if onProgress != nil {
+			alreadyDone := total - len(needsDownload)
+			onProgress(alreadyDone, total)
 			wrappedProgress = func(downloaded, _ int) {
 				onProgress(alreadyDone+downloaded, total)
 			}
@@ -659,7 +701,8 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 }
 
 // pullApplyToDB はリモートのゲーム情報・セッション・同期基準・base tree を単一トランザクションで反映する。
-func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
+// localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
+func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
 	// ゲーム情報・セッション・localSyncHead・localSaveTree を単一トランザクションで反映する。
 	// 部分失敗による DB 不整合と、同期対象外 Route 参照による FK 違反を防ぐ。
 	updatedGame := domain.Game{
@@ -676,6 +719,13 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 		CurrentRouteID: cloudG.CurrentRouteID,
 		CreatedAt:      cloudG.CreatedAt,
 		UpdatedAt:      cloudG.UpdatedAt,
+	}
+	// マシン固有フィールド（process_monitor.saveSession が書き込む LocalSaveHash 等）は
+	// ApplyPullResult が ON CONFLICT DO UPDATE で excluded.* を書くため、ここで明示的に
+	// 引き継がないと毎回 NULL に潰される。UI の「最終同期」表示が壊れる原因になっていた。
+	if localGame != nil {
+		updatedGame.LocalSaveHash = localGame.LocalSaveHash
+		updatedGame.LocalSaveHashUpdatedAt = localGame.LocalSaveHashUpdatedAt
 	}
 	sessions := make([]domain.PlaySession, 0, len(cloudSessions))
 	for _, cs := range cloudSessions {
@@ -698,7 +748,11 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 
 // ResolveConflict はコンフリクトを手動解決する。同一ゲームの同期と直列化される。
 // useLocal=false（リモート採用）は Pull と同様に未追跡ファイルの削除確認を経由する。
+// オフラインモード時は ErrOffline を返す。
 func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string, useLocal, deleteUntracked bool) (domain.PullResult, error) {
+	if s.offline.Load() {
+		return domain.PullResult{}, ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	if useLocal {
 		if err := s.push(ctx, gameID, nil, true); err != nil {
@@ -710,7 +764,11 @@ func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string,
 }
 
 // DeleteFromCloud はゲームのリモートデータを削除し、ローカルの同期基準もクリアする。同一ゲームの同期と直列化される。
+// オフラインモード時は ErrOffline を返す。
 func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string) error {
+	if s.offline.Load() {
+		return ErrOffline
+	}
 	defer s.lockGame(gameID)()
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
@@ -732,6 +790,38 @@ func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string)
 	return nil
 }
 
+// fanOutGames は gameIDs をまたいで fn を最大 concurrency 並列で実行し、
+// nil でない結果を gameIDs の順序で集めて返す。concurrency<=0 のときは既定値 6 を使う。
+func fanOutGames[T any](gameIDs []string, concurrency int, fn func(gameID string) *T) []T {
+	if concurrency <= 0 {
+		concurrency = 6
+	}
+	if concurrency > len(gameIDs) {
+		concurrency = len(gameIDs)
+	}
+	results := make([]*T, len(gameIDs))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, concurrency)
+	for i, gameID := range gameIDs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, id string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[idx] = fn(id)
+		}(i, gameID)
+	}
+	wg.Wait()
+
+	out := make([]T, 0, len(gameIDs))
+	for _, r := range results {
+		if r != nil {
+			out = append(out, *r)
+		}
+	}
+	return out
+}
+
 // LoadCloudMetadata はクラウド上の全ゲームのメタ情報を返す。
 // ゲームごとの取得（readHEAD + commit + game.json）を S3UploadConcurrency 並列で実行する。
 // 取得・解析に失敗したゲームは警告ログを出してスキップする。結果は gameIDs の順序を保つ。
@@ -747,38 +837,9 @@ func (s *ContentSyncService) LoadCloudMetadata(ctx context.Context) ([]CloudGame
 	if len(gameIDs) == 0 {
 		return nil, nil
 	}
-
-	concurrency := s.config.S3UploadConcurrency
-	if concurrency <= 0 {
-		concurrency = 6
-	}
-	if concurrency > len(gameIDs) {
-		concurrency = len(gameIDs)
-	}
-
-	infos := make([]*CloudGameInfo, len(gameIDs))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, concurrency)
-	for i, gameID := range gameIDs {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(idx int, id string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			if info := s.loadCloudGameInfo(ctx, bstore, id); info != nil {
-				infos[idx] = info
-			}
-		}(i, gameID)
-	}
-	wg.Wait()
-
-	results := make([]CloudGameInfo, 0, len(gameIDs))
-	for _, info := range infos {
-		if info != nil {
-			results = append(results, *info)
-		}
-	}
-	return results, nil
+	return fanOutGames(gameIDs, s.config.S3UploadConcurrency, func(id string) *CloudGameInfo {
+		return s.loadCloudGameInfo(ctx, bstore, id)
+	}), nil
 }
 
 // CloudLogicalFile はクラウド上の論理セーブファイル1件を表す。
@@ -807,25 +868,26 @@ func (s *ContentSyncService) GetCloudGameView(ctx context.Context, gameID string
 	return s.buildCloudGameView(ctx, bstore, gameID)
 }
 
-// buildCloudGameView は与えられた blob store を使って1ゲームの論理ビューを復元する。
-// サイズ解決のため bstore は内部に S3 クライアントとバケットを保持している必要がある。
-func (s *ContentSyncService) buildCloudGameView(ctx context.Context, bstore *s3BlobStore, gameID string) (*CloudGameView, error) {
+// loadCloudCommit は gameID の HEAD からコミット（MetaSnapshot）と game.json 由来のタイトルを読む。
+// HEAD 未設定やコミット解析失敗時は (nil, "", nil) を返す（クラウドデータ無し扱い）。
+// タイトル取得に失敗した場合は gameID にフォールバックする。
+func (s *ContentSyncService) loadCloudCommit(ctx context.Context, bstore contentBlobStore, gameID string) (*domain.MetaSnapshot, string, error) {
 	head, err := bstore.readHEAD(ctx, gameID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if head == "" {
-		return nil, nil
+		return nil, "", nil
 	}
 
 	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	var meta domain.MetaSnapshot
 	if err := json.Unmarshal(metaBytes, &meta); err != nil {
 		s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
-		return nil, nil
+		return nil, "", nil
 	}
 
 	// Title: game.json から取得。失敗時は gameID にフォールバックする。
@@ -839,6 +901,19 @@ func (s *ContentSyncService) buildCloudGameView(ctx context.Context, bstore *s3B
 		} else {
 			s.logger.Warn("game.json取得失敗（Titleをフォールバック）", "gameId", gameID, "error", gerr)
 		}
+	}
+	return &meta, title, nil
+}
+
+// buildCloudGameView は与えられた blob store を使って1ゲームの論理ビューを復元する。
+// サイズ解決のため bstore は内部に S3 クライアントとバケットを保持している必要がある。
+func (s *ContentSyncService) buildCloudGameView(ctx context.Context, bstore *s3BlobStore, gameID string) (*CloudGameView, error) {
+	meta, title, err := s.loadCloudCommit(ctx, bstore, gameID)
+	if err != nil {
+		return nil, err
+	}
+	if meta == nil {
+		return nil, nil
 	}
 
 	// saves tree から relPath→hash を取得する。
@@ -903,65 +978,49 @@ func (s *ContentSyncService) ListCloudGameViews(ctx context.Context) ([]CloudGam
 		return nil, err
 	}
 
-	views := make([]CloudGameView, 0, len(gameIDs))
-	for _, gameID := range gameIDs {
-		view, verr := s.buildCloudGameView(ctx, bstore, gameID)
+	views := fanOutGames(gameIDs, s.config.S3UploadConcurrency, func(id string) *CloudGameView {
+		view, verr := s.buildCloudGameView(ctx, bstore, id)
 		if verr != nil {
-			s.logger.Warn("クラウド論理ビュー復元失敗（スキップ）", "gameId", gameID, "error", verr)
-			continue
+			s.logger.Warn("クラウド論理ビュー復元失敗（スキップ）", "gameId", id, "error", verr)
+			return nil
 		}
-		if view == nil {
-			continue
-		}
-		views = append(views, *view)
-	}
+		return view
+	})
 	sort.Slice(views, func(i, j int) bool { return views[i].Title < views[j].Title })
 	return views, nil
 }
 
-// CloudGameSummary は1ゲームの軽量サマリ（ファイル一覧・サイズを含まない）を表す。
-// クラウドデータ管理の初期表示ではタイトル一覧のみが必要なため、
-// セーブツリーの解析や objects の列挙（サイズ解決）は行わない。
+// CloudGameSummary は1ゲームの軽量サマリ（ファイル一覧を含まない）を表す。
+// クラウドデータ管理の初期表示用。
+//
+// FileCount / TotalSize は MetaSnapshot に書かれたスナップショット時点の
+// キャッシュ。Push 時に書き込まれた commit からは値が入り、旧 commit からは
+// 0 が返る（表示側で「未取得」扱い）。セーブツリー解析や objects 列挙は不要。
 type CloudGameSummary struct {
 	GameID       string    `json:"gameId"`
 	Title        string    `json:"title"`
 	LastModified time.Time `json:"lastModified"`
+	FileCount    int64     `json:"fileCount"`
+	TotalSize    int64     `json:"totalSize"`
 }
 
 // buildCloudGameSummary は HEAD→commit→game.json のみを読み取り、軽量サマリを復元する。
 // buildCloudGameView と異なりセーブツリーの解析・objects の列挙は行わないため高速。
 func (s *ContentSyncService) buildCloudGameSummary(ctx context.Context, bstore *s3BlobStore, gameID string) (*CloudGameSummary, error) {
-	head, err := bstore.readHEAD(ctx, gameID)
+	meta, title, err := s.loadCloudCommit(ctx, bstore, gameID)
 	if err != nil {
 		return nil, err
 	}
-	if head == "" {
+	if meta == nil {
 		return nil, nil
 	}
-
-	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
-	if err != nil {
-		return nil, err
-	}
-	var meta domain.MetaSnapshot
-	if err := json.Unmarshal(metaBytes, &meta); err != nil {
-		s.logger.Warn("コミットブロブ解析失敗", "gameId", gameID, "error", err)
-		return nil, nil
-	}
-
-	title := gameID
-	if meta.GameJSON != "" {
-		if gameJSONBytes, gerr := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON); gerr == nil {
-			var cg cloudGame
-			if json.Unmarshal(gameJSONBytes, &cg) == nil && cg.Title != "" {
-				title = cg.Title
-			}
-		} else {
-			s.logger.Warn("game.json取得失敗（Titleをフォールバック）", "gameId", gameID, "error", gerr)
-		}
-	}
-
-	return &CloudGameSummary{GameID: gameID, Title: title, LastModified: meta.CreatedAt}, nil
+	return &CloudGameSummary{
+		GameID:       gameID,
+		Title:        title,
+		LastModified: meta.CreatedAt,
+		FileCount:    meta.FileCount,
+		TotalSize:    meta.TotalSize,
+	}, nil
 }
 
 // ListCloudGameSummaries は全ゲームの軽量サマリ（Title 昇順）を返す。
@@ -980,37 +1039,14 @@ func (s *ContentSyncService) ListCloudGameSummaries(ctx context.Context) ([]Clou
 
 	// 各ゲームは小さな GET を3回行うのみ。並列度を絞り全タイトルをまとめて取得する。
 	const maxConcurrency = 8
-	type item struct {
-		summary *CloudGameSummary
-		gameID  string
-		err     error
-	}
-	items := make([]item, len(gameIDs))
-	sem := make(chan struct{}, maxConcurrency)
-	var wg sync.WaitGroup
-	for i, gameID := range gameIDs {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(idx int, id string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			summary, verr := s.buildCloudGameSummary(ctx, bstore, id)
-			items[idx] = item{summary: summary, gameID: id, err: verr}
-		}(i, gameID)
-	}
-	wg.Wait()
-
-	summaries := make([]CloudGameSummary, 0, len(gameIDs))
-	for _, it := range items {
-		if it.err != nil {
-			s.logger.Warn("クラウドサマリ復元失敗（スキップ）", "gameId", it.gameID, "error", it.err)
-			continue
+	summaries := fanOutGames(gameIDs, maxConcurrency, func(id string) *CloudGameSummary {
+		summary, verr := s.buildCloudGameSummary(ctx, bstore, id)
+		if verr != nil {
+			s.logger.Warn("クラウドサマリ復元失敗（スキップ）", "gameId", id, "error", verr)
+			return nil
 		}
-		if it.summary == nil {
-			continue
-		}
-		summaries = append(summaries, *it.summary)
-	}
+		return summary
+	})
 	sort.Slice(summaries, func(i, j int) bool { return summaries[i].Title < summaries[j].Title })
 	return summaries, nil
 }

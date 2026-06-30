@@ -10,8 +10,7 @@ import type { CloudDirectoryNode } from "src/types/cloud";
 import {
   formatFileSize,
   formatDate,
-  countFilesRecursively,
-  sumSizesRecursively,
+  computeCloudNodeMetrics,
   latestModifiedRecursively,
 } from "@renderer/utils/cloudUtils";
 
@@ -43,13 +42,16 @@ export default function CloudTreeNode({
 }: CloudTreeNodeProps): React.JSX.Element {
   const isExpanded = expandedNodes.has(node.path);
   const hasChildren = node.children && node.children.length > 0;
-  // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
-  // 未取得（children が undefined）のあいだは数値を「—」で表示し、展開で取得を促す。
-  const isLoaded = !node.isDirectory || node.children !== undefined;
   const isLoading = loadingGameIds?.has(node.path) ?? false;
-  // 未取得のゲームでも展開ボタンを表示してファイル取得をトリガーできるようにする。
-  const isExpandable = node.isDirectory && (hasChildren || !isLoaded);
-  const displaySize = node.isDirectory ? sumSizesRecursively(node) : node.size;
+  // 表示用メトリクスとナビゲーション可否を共通ヘルパーから取り出す。
+  // childrenLoaded は未取得ゲームの展開ボタン表示／ローディング案内に使う。
+  const {
+    childrenLoaded,
+    count: displayCount,
+    size: displaySize,
+    hasMetrics,
+  } = computeCloudNodeMetrics(node);
+  const isExpandable = node.isDirectory && (hasChildren || !childrenLoaded);
   const displayLastModified = node.isDirectory
     ? latestModifiedRecursively(node)
     : node.lastModified;
@@ -94,10 +96,10 @@ export default function CloudTreeNode({
               {node.name}
             </div>
             <div className="text-xs text-base-content/60">
-              {isLoaded ? formatFileSize(displaySize) : "—"} • {formatDate(displayLastModified)}
+              {hasMetrics ? formatFileSize(displaySize) : "—"} • {formatDate(displayLastModified)}
               {node.isDirectory && (
                 <span className="ml-2">
-                  ({isLoaded ? `${countFilesRecursively(node)} ファイル` : "— ファイル"})
+                  ({hasMetrics ? `${displayCount} ファイル` : "— ファイル"})
                 </span>
               )}
             </div>
@@ -140,7 +142,7 @@ export default function CloudTreeNode({
       )}
 
       {/* 未取得ゲームを展開した直後はファイル一覧を遅延取得中 */}
-      {isExpanded && !isLoaded && (
+      {isExpanded && !childrenLoaded && (
         <div
           className="flex items-center gap-2 px-3 py-2 text-xs text-base-content/60"
           style={{ paddingLeft: `${(level + 1) * 1.5 + 0.75}rem` }}

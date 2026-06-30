@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/util"
 )
 
 func hashBytes(data []byte) domain.BlobHash {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
+	return util.Sha256Hex(data)
 }
 
 func hashFile(path string) (domain.BlobHash, []byte, error) {
@@ -43,43 +43,67 @@ func hashFileStream(filePath string) (domain.BlobHash, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// buildSaveTree はセーブディレクトリを走査し、パス→ハッシュのみの SaveSnapshot を返す
-// （ブロブ本体を RAM に保持しない）。状態確認や差分判定など、アップロード本体が不要な箇所に使う。
-func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
+// validateSaveDir は saveDir が存在する通常のディレクトリであることを確認する。
+func validateSaveDir(saveDir string) error {
 	if saveDir == "" {
-		return domain.SaveSnapshot{}, fmt.Errorf("セーブフォルダのパスが未設定です")
+		return fmt.Errorf("セーブフォルダのパスが未設定です")
 	}
 	info, err := os.Stat(saveDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return domain.SaveSnapshot{}, fmt.Errorf("セーブフォルダが見つかりません: %s", saveDir)
+			return fmt.Errorf("セーブフォルダが見つかりません: %s", saveDir)
 		}
-		return domain.SaveSnapshot{}, err
+		return err
 	}
 	if !info.IsDir() {
-		return domain.SaveSnapshot{}, fmt.Errorf("セーブフォルダのパスがディレクトリではありません: %s", saveDir)
+		return fmt.Errorf("セーブフォルダのパスがディレクトリではありません: %s", saveDir)
 	}
+	return nil
+}
 
-	files := make(map[string]domain.BlobHash)
-	err = filepath.Walk(saveDir, func(walkPath string, info os.FileInfo, err error) error {
+// walkSaveFiles は saveDir 配下の通常ファイルを走査し、各ファイルについて
+// 絶対パスとスラッシュ区切りの相対パスで fn を呼ぶ。
+// シンボリックリンクとディレクトリはスキップする（リンク先実体の漏洩・誤上書きを防ぐ）。
+//
+// saveDir 自体がディレクトリへのシンボリックリンクである場合は、filepath.Walk が
+// 内部で Lstat を使うため root がスキップされ全件無視される。これを避けるため、
+// 走査前に root だけ EvalSymlinks で解決する。配下のシンボリックリンクはスキップ対象。
+func walkSaveFiles(saveDir string, fn func(absPath, relPath string) error) error {
+	root, err := filepath.EvalSymlinks(saveDir)
+	if err != nil {
+		return err
+	}
+	return filepath.Walk(root, func(walkPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return nil // シンボリックリンクは同期対象外（リンク先実体の漏洩・誤上書きを防ぐ）
+			return nil
 		}
 		if info.IsDir() {
 			return nil
 		}
-		hash, herr := hashFileStream(walkPath)
-		if herr != nil {
-			return herr
-		}
-		rel, rerr := filepath.Rel(saveDir, walkPath)
+		rel, rerr := filepath.Rel(root, walkPath)
 		if rerr != nil {
 			return rerr
 		}
-		files[filepath.ToSlash(rel)] = hash
+		return fn(walkPath, filepath.ToSlash(rel))
+	})
+}
+
+// buildSaveTree はセーブディレクトリを走査し、パス→ハッシュのみの SaveSnapshot を返す
+// （ブロブ本体を RAM に保持しない）。状態確認や差分判定など、アップロード本体が不要な箇所に使う。
+func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
+	if err := validateSaveDir(saveDir); err != nil {
+		return domain.SaveSnapshot{}, err
+	}
+	files := make(map[string]domain.BlobHash)
+	err := walkSaveFiles(saveDir, func(absPath, relPath string) error {
+		hash, herr := hashFileStream(absPath)
+		if herr != nil {
+			return herr
+		}
+		files[relPath] = hash
 		return nil
 	})
 	if err != nil {
@@ -91,49 +115,23 @@ func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
 // buildSaveSnapshot はセーブディレクトリを走査し SaveSnapshot とブロブマップを返す。
 // saveFolderPath が未設定またはディレクトリが存在しない場合はエラー。
 func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash][]byte, error) {
-	if saveDir == "" {
-		return domain.SaveSnapshot{}, nil, fmt.Errorf("セーブフォルダのパスが未設定です")
-	}
-	info, err := os.Stat(saveDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return domain.SaveSnapshot{}, nil, fmt.Errorf("セーブフォルダが見つかりません: %s", saveDir)
-		}
+	if err := validateSaveDir(saveDir); err != nil {
 		return domain.SaveSnapshot{}, nil, err
 	}
-	if !info.IsDir() {
-		return domain.SaveSnapshot{}, nil, fmt.Errorf("セーブフォルダのパスがディレクトリではありません: %s", saveDir)
-	}
-
 	files := make(map[string]domain.BlobHash)
 	blobs := make(map[domain.BlobHash][]byte)
-
-	err = filepath.Walk(saveDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	err := walkSaveFiles(saveDir, func(absPath, relPath string) error {
+		hash, data, herr := hashFile(absPath)
+		if herr != nil {
+			return herr
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil // シンボリックリンクは同期対象外（リンク先実体の漏洩・誤上書きを防ぐ）
-		}
-		if info.IsDir() {
-			return nil
-		}
-		hash, data, err := hashFile(path)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(saveDir, path)
-		if err != nil {
-			return err
-		}
-		files[filepath.ToSlash(rel)] = hash
+		files[relPath] = hash
 		blobs[hash] = data
 		return nil
 	})
 	if err != nil {
 		return domain.SaveSnapshot{}, nil, err
 	}
-
 	return domain.SaveSnapshot{Files: files}, blobs, nil
 }
 
@@ -147,28 +145,14 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 //
 // いずれも相対パス（スラッシュ区切り）を昇順で返す。この関数はファイルを削除しない。
 func planDeletions(saveDir string, snapshot domain.SaveSnapshot, baseTree map[string]struct{}) (tracked, untracked []string, err error) {
-	walkErr := filepath.Walk(saveDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil // シンボリックリンクは同期対象外（リンク先実体の漏洩・誤上書きを防ぐ）
-		}
-		if info.IsDir() {
-			return nil
-		}
-		rel, relErr := filepath.Rel(saveDir, path)
-		if relErr != nil {
-			return relErr
-		}
-		slashRel := filepath.ToSlash(rel)
-		if _, ok := snapshot.Files[slashRel]; ok {
+	walkErr := walkSaveFiles(saveDir, func(_, relPath string) error {
+		if _, ok := snapshot.Files[relPath]; ok {
 			return nil // 新スナップショットに含まれる → 残す
 		}
-		if _, ok := baseTree[slashRel]; ok {
-			tracked = append(tracked, slashRel)
+		if _, ok := baseTree[relPath]; ok {
+			tracked = append(tracked, relPath)
 		} else {
-			untracked = append(untracked, slashRel)
+			untracked = append(untracked, relPath)
 		}
 		return nil
 	})
@@ -301,12 +285,18 @@ type metaBuildResult struct {
 }
 
 // buildMetaSnapshot はゲーム情報・セッション・セーブハッシュから MetaSnapshot を構築する。
+//
+// fileCount / totalSize はクラウド一覧での表示用キャッシュ。Push 経路では実値を、
+// Status 経路（buildLocalMeta）では 0,0 を渡して構わない（fingerprint 比較・UI 表示
+// どちらもこれらのフィールドを参照しない）。
 func buildMetaSnapshot(
 	game domain.Game,
 	sessions []domain.PlaySession,
 	imageHash domain.BlobHash,
 	savesHash domain.BlobHash,
 	deviceName string,
+	fileCount int64,
+	totalSize int64,
 ) (metaBuildResult, error) {
 	gameJSON, err := json.Marshal(cloudGame{
 		ID:             game.ID,
@@ -347,6 +337,8 @@ func buildMetaSnapshot(
 		Saves:        savesHash,
 		DeviceName:   deviceName,
 		CreatedAt:    time.Now().UTC(),
+		FileCount:    fileCount,
+		TotalSize:    totalSize,
 	}
 	metaBytes, err := json.Marshal(meta)
 	if err != nil {

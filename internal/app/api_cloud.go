@@ -78,11 +78,14 @@ func (app *App) ListCloudData() result.ApiResult[[]CloudDataItem] {
 	return result.OkResult(items)
 }
 
-// CloudGameSummaryItem はクラウドデータ一覧の軽量サマリ要素を表す（ファイル数・サイズを含まない）。
+// CloudGameSummaryItem はクラウドデータ一覧の軽量サマリ要素を表す。
+// FileCount / TotalSize は commit メタからのキャッシュで、旧 commit では 0。
 type CloudGameSummaryItem struct {
 	Name         string    `json:"name"`
 	RemotePath   string    `json:"remotePath"`
 	LastModified time.Time `json:"lastModified"`
+	FileCount    int64     `json:"fileCount"`
+	TotalSize    int64     `json:"totalSize"`
 }
 
 // ListCloudGameSummaries はクラウド上の全ゲームの軽量サマリ（タイトル一覧）を取得する。
@@ -100,6 +103,8 @@ func (app *App) ListCloudGameSummaries() result.ApiResult[[]CloudGameSummaryItem
 			Name:         s.Title,
 			RemotePath:   s.GameID,
 			LastModified: s.LastModified,
+			FileCount:    s.FileCount,
+			TotalSize:    s.TotalSize,
 		})
 	}
 	return result.OkResult(items)

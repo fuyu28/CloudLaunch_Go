@@ -111,13 +111,22 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	current.ImagePath = input.ImagePath
 	current.ExePath = strings.TrimSpace(input.ExePath)
 	current.SaveFolderPath = input.SaveFolderPath
-	current.ClearedAt = input.ClearedAt
-	current.CurrentRouteID = input.CurrentRouteID
+
+	// PlayStatus, ClearedAt, CurrentRouteID は「未指定なら現状維持」の規約。
+	// フロントの updateGame() は通常編集時にこれら3つを undefined で送ってくるため、
+	// 無条件代入だとタイトル編集だけで clearedAt と currentRouteId が消える。
 	if input.PlayStatus != "" {
 		current.PlayStatus = input.PlayStatus
 	}
 	if input.ClearedAt != nil {
+		current.ClearedAt = input.ClearedAt
 		current.PlayStatus = domain.PlayStatusPlayed
+	} else if input.PlayStatus != "" && input.PlayStatus != domain.PlayStatusPlayed {
+		// playStatus を played 以外に変更したら ClearedAt は整合性のためクリアする。
+		current.ClearedAt = nil
+	}
+	if input.CurrentRouteID != nil {
+		current.CurrentRouteID = input.CurrentRouteID
 	}
 
 	updated, error := service.repository.UpdateGame(ctx, *current)

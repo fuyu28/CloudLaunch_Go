@@ -69,6 +69,7 @@ export type WindowApi = {
   };
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateOfflineMode: (enabled: boolean) => Promise<ApiResult<void>>;
     updateUploadConcurrency: (value: number) => Promise<ApiResult<void>>;
     updateScreenshotSyncEnabled: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotUploadJpeg: (enabled: boolean) => Promise<ApiResult<void>>;

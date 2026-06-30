@@ -40,3 +40,22 @@ func serviceResult[T any](data T, err error, fallbackMessage string) result.ApiR
 	}
 	return result.OkResult(data)
 }
+
+// boolResult はエラーがあれば ServiceError を解いて ErrorResult を、無ければ OkResult(true) を返す。
+// 「サービスを呼んでエラーなら ErrorResult、成功なら true」だけの bool 系 API メソッドの定型を集約する。
+func boolResult(err error, fallbackMessage string) result.ApiResult[bool] {
+	if err != nil {
+		return serviceErrorResult[bool](err, fallbackMessage)
+	}
+	return result.OkResult(true)
+}
+
+// requireGameID は API 入力の gameID をトリムし、空なら標準形式の ErrorResult を返す。
+// ok=true のとき trimmed が有効値、ok=false のとき errResult を return すればよい。
+func requireGameID[T any](gameID string) (trimmed string, errResult result.ApiResult[T], ok bool) {
+	trimmed = strings.TrimSpace(gameID)
+	if trimmed == "" {
+		return "", result.ErrorResult[T]("ゲームIDが不正です", "gameID is empty"), false
+	}
+	return trimmed, result.ApiResult[T]{}, true
+}

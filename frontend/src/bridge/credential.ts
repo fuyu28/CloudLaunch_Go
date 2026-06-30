@@ -21,7 +21,7 @@ export function createCredentialBridge(): WindowApi["credential"] {
         AccessKeyID: creds.accessKeyId,
         SecretAccessKey: creds.secretAccessKey,
       });
-      return toApiResultVoid(result, "エラー");
+      return toApiResultVoid(result);
     },
     getCredential: async () => {
       const result = await LoadCredential("default");
@@ -47,9 +47,8 @@ export function createCredentialBridge(): WindowApi["credential"] {
         accessKeyId: creds.accessKeyId,
         secretAccessKey: creds.secretAccessKey,
       });
-      return toApiResultVoid(result, "エラー");
+      return toApiResultVoid(result);
     },
-    validateSavedCredential: async () =>
-      toApiResultVoid(await ValidateSavedCredential("default"), "エラー"),
+    validateSavedCredential: async () => toApiResultVoid(await ValidateSavedCredential("default")),
   };
 }

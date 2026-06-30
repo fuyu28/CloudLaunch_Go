@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { TabSectionHeader } from "./TabSectionHeader";
+
 type SyncAndLogsTabProps = {
   offlineMode: boolean;
   onSyncAllGames: () => Promise<void>;
@@ -27,10 +29,11 @@ export default function SyncAndLogsTab({
 }: SyncAndLogsTabProps): React.JSX.Element {
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-info pl-4">
-        <h3 className="text-lg font-semibold text-info mb-1">同期・ログ</h3>
-        <p className="text-sm text-base-content/60">クラウド同期とトラブルシューティング</p>
-      </div>
+      <TabSectionHeader
+        title="同期・ログ"
+        description="クラウド同期とトラブルシューティング"
+        color="info"
+      />
 
       <div className="bg-base-200 p-4 rounded-lg">
         <div className="mb-3">

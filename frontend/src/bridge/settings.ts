@@ -4,6 +4,7 @@
 
 import {
   UpdateAutoTracking,
+  UpdateOfflineMode,
   UpdateUploadConcurrency,
   UpdateScreenshotSyncEnabled,
   UpdateScreenshotUploadJpeg,
@@ -18,23 +19,21 @@ import type { WindowApi } from "./types";
 
 export function createSettingsBridge(): WindowApi["settings"] {
   return {
-    updateAutoTracking: async (enabled) =>
-      toApiResultVoid(await UpdateAutoTracking(enabled), "エラー"),
-    updateUploadConcurrency: async (value) =>
-      toApiResultVoid(await UpdateUploadConcurrency(value), "エラー"),
+    updateAutoTracking: async (enabled) => toApiResultVoid(await UpdateAutoTracking(enabled)),
+    updateOfflineMode: async (enabled) => toApiResultVoid(await UpdateOfflineMode(enabled)),
+    updateUploadConcurrency: async (value) => toApiResultVoid(await UpdateUploadConcurrency(value)),
     updateScreenshotSyncEnabled: async (enabled) =>
-      toApiResultVoid(await UpdateScreenshotSyncEnabled(enabled), "エラー"),
+      toApiResultVoid(await UpdateScreenshotSyncEnabled(enabled)),
     updateScreenshotUploadJpeg: async (enabled) =>
-      toApiResultVoid(await UpdateScreenshotUploadJpeg(enabled), "エラー"),
+      toApiResultVoid(await UpdateScreenshotUploadJpeg(enabled)),
     updateScreenshotJpegQuality: async (value) =>
-      toApiResultVoid(await UpdateScreenshotJpegQuality(value), "エラー"),
+      toApiResultVoid(await UpdateScreenshotJpegQuality(value)),
     updateScreenshotClientOnly: async (enabled) =>
-      toApiResultVoid(await UpdateScreenshotClientOnly(enabled), "エラー"),
+      toApiResultVoid(await UpdateScreenshotClientOnly(enabled)),
     updateScreenshotLocalJpeg: async (enabled) =>
-      toApiResultVoid(await UpdateScreenshotLocalJpeg(enabled), "エラー"),
-    updateScreenshotHotkey: async (combo) =>
-      toApiResultVoid(await UpdateScreenshotHotkey(combo), "エラー"),
+      toApiResultVoid(await UpdateScreenshotLocalJpeg(enabled)),
+    updateScreenshotHotkey: async (combo) => toApiResultVoid(await UpdateScreenshotHotkey(combo)),
     updateScreenshotHotkeyNotify: async (enabled) =>
-      toApiResultVoid(await UpdateScreenshotHotkeyNotify(enabled), "エラー"),
+      toApiResultVoid(await UpdateScreenshotHotkeyNotify(enabled)),
   };
 }

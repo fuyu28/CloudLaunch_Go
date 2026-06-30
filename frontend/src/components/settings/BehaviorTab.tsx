@@ -1,3 +1,5 @@
+import { TabSectionHeader } from "./TabSectionHeader";
+
 type BehaviorTabProps = {
   offlineMode: boolean;
   onOfflineModeChange: (enabled: boolean) => Promise<void>;
@@ -19,10 +21,11 @@ export default function BehaviorTab({
 }: BehaviorTabProps): React.JSX.Element {
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-secondary pl-4">
-        <h3 className="text-lg font-semibold text-secondary mb-1">動作設定</h3>
-        <p className="text-sm text-base-content/60">アプリケーションの動作を設定</p>
-      </div>
+      <TabSectionHeader
+        title="動作設定"
+        description="アプリケーションの動作を設定"
+        color="secondary"
+      />
       <div className="bg-base-200 p-4 rounded-lg space-y-4">
         <div>
           <h4 className="font-medium mb-3">機能設定</h4>

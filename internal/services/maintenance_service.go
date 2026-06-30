@@ -50,11 +50,6 @@ type BackupManifest struct {
 	BackupVersion         int       `json:"backupVersion"`
 }
 
-type MaintenanceRepository interface {
-	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
-	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
-}
-
 type MaintenanceRuntimeHooks struct {
 	CreateDatabaseSnapshot    func(destinationPath string) error
 	StopRuntimeServices       func()
@@ -100,14 +95,20 @@ func (service *MaintenanceService) ExportGameData(ctx context.Context, outputDir
 		return GameExportResult{}, newServiceError("ゲーム一覧の取得に失敗しました", err.Error())
 	}
 
+	gameIDs := make([]string, 0, len(games))
+	for _, game := range games {
+		gameIDs = append(gameIDs, game.ID)
+	}
+	sessionsByGame, err := service.repository.ListPlaySessionsByGames(ctx, gameIDs)
+	if err != nil {
+		service.logger.Error("セッション取得に失敗しました", "error", err, "operation", "ExportGameData.listSessions")
+		return GameExportResult{}, newServiceError("セッション取得に失敗しました", err.Error())
+	}
+
 	stats := make([]GameExportStatistic, 0, len(games))
 	sessionRows := make([]domain.PlaySession, 0, len(games)*2)
 	for _, game := range games {
-		sessions, err := service.repository.ListPlaySessionsByGame(ctx, game.ID)
-		if err != nil {
-			service.logger.Error("セッション取得に失敗しました", "error", err, "operation", "ExportGameData.listSessions", "gameId", game.ID)
-			return GameExportResult{}, newServiceError("セッション取得に失敗しました", err.Error())
-		}
+		sessions := sessionsByGame[game.ID]
 		sessionRows = append(sessionRows, sessions...)
 
 		var total int64
@@ -575,17 +576,10 @@ func (service *MaintenanceService) snapshotCurrentAppDataForRollback(appDataDir 
 	return hasCurrentData, nil
 }
 
-// applyRestoredAppData は AppData を空にして展開済みバックアップで上書きし、
-// DB再オープン・ランタイム再開フックを順に呼ぶ。
-// 失敗時は呼び出し側に登録済みのロールバック defer が発火する前提。
-func (service *MaintenanceService) applyRestoredAppData(extractedRoot string, appDataDir string) error {
-	if err := clearDirectory(appDataDir); err != nil {
-		return err
-	}
-	if err := copyDirectoryTree(extractedRoot, appDataDir); err != nil {
-		return err
-	}
-
+// reopenAndResume は DB再オープン・ランタイム再開フックを順に呼ぶ。
+// ReopenDatabaseAndServices が未設定なら異常としてエラー、
+// ResumeRuntimeServices が未設定なら正常終了とみなす。
+func (service *MaintenanceService) reopenAndResume() error {
 	if service.hooks.ReopenDatabaseAndServices == nil {
 		return errors.New("reopen hook is nil")
 	}
@@ -596,6 +590,19 @@ func (service *MaintenanceService) applyRestoredAppData(extractedRoot string, ap
 		return nil
 	}
 	return service.hooks.ResumeRuntimeServices()
+}
+
+// applyRestoredAppData は AppData を空にして展開済みバックアップで上書きし、
+// DB再オープン・ランタイム再開フックを順に呼ぶ。
+// 失敗時は呼び出し側に登録済みのロールバック defer が発火する前提。
+func (service *MaintenanceService) applyRestoredAppData(extractedRoot string, appDataDir string) error {
+	if err := clearDirectory(appDataDir); err != nil {
+		return err
+	}
+	if err := copyDirectoryTree(extractedRoot, appDataDir); err != nil {
+		return err
+	}
+	return service.reopenAndResume()
 }
 
 func directoryHasAnyEntry(path string) (bool, error) {
@@ -698,14 +705,5 @@ func (service *MaintenanceService) recoverAppDataFromRollback(rollbackDir string
 			return err
 		}
 	}
-	if service.hooks.ReopenDatabaseAndServices == nil {
-		return errors.New("reopen hook is nil")
-	}
-	if err := service.hooks.ReopenDatabaseAndServices(); err != nil {
-		return err
-	}
-	if service.hooks.ResumeRuntimeServices == nil {
-		return nil
-	}
-	return service.hooks.ResumeRuntimeServices()
+	return service.reopenAndResume()
 }

@@ -239,7 +239,7 @@ func TestBuildMetaSnapshotReturnsConsistentHashes(t *testing.T) {
 		{ID: "s1", GameID: "game-1", PlayedAt: now, Duration: 3600, UpdatedAt: now},
 	}
 
-	result, err := buildMetaSnapshot(game, sessions, "", "sha256_of_saves", "TestPC")
+	result, err := buildMetaSnapshot(game, sessions, "", "sha256_of_saves", "TestPC", 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -260,6 +260,50 @@ func TestBuildMetaSnapshotReturnsConsistentHashes(t *testing.T) {
 	want, _ := json.Marshal(result.Snapshot)
 	if string(result.SnapshotBytes) != string(want) {
 		t.Error("SnapshotBytes does not match marshaled Snapshot")
+	}
+}
+
+// TestBuildMetaSnapshotPersistsStatsCache は FileCount / TotalSize が
+// 非 0 値で渡されたとき SnapshotBytes に保存され、unmarshal で復元できることを
+// 検証する（JSON タグのタイポを検出するため）。
+func TestBuildMetaSnapshotPersistsStatsCache(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
+	game := domain.Game{
+		ID:        "game-1",
+		Title:     "Test",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	const wantFileCount int64 = 42
+	const wantTotalSize int64 = 1024 * 1024 * 7
+
+	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC", wantFileCount, wantTotalSize)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 1. Snapshot 構造体側に値が入っているか
+	if result.Snapshot.FileCount != wantFileCount {
+		t.Errorf("Snapshot.FileCount = %d, want %d", result.Snapshot.FileCount, wantFileCount)
+	}
+	if result.Snapshot.TotalSize != wantTotalSize {
+		t.Errorf("Snapshot.TotalSize = %d, want %d", result.Snapshot.TotalSize, wantTotalSize)
+	}
+
+	// 2. SnapshotBytes を unmarshal して値が読み戻せるか
+	//    （これにより JSON タグ名のタイポを検出する）
+	var roundtrip domain.MetaSnapshot
+	if err := json.Unmarshal(result.SnapshotBytes, &roundtrip); err != nil {
+		t.Fatalf("unmarshal SnapshotBytes: %v", err)
+	}
+	if roundtrip.FileCount != wantFileCount {
+		t.Errorf("roundtrip FileCount = %d, want %d", roundtrip.FileCount, wantFileCount)
+	}
+	if roundtrip.TotalSize != wantTotalSize {
+		t.Errorf("roundtrip TotalSize = %d, want %d", roundtrip.TotalSize, wantTotalSize)
 	}
 }
 
@@ -320,7 +364,7 @@ func TestBuildMetaSnapshotImageHashOmittedWhenEmpty(t *testing.T) {
 	now := time.Now().UTC()
 	game := domain.Game{ID: "g1", Title: "T", PlayStatus: domain.PlayStatusUnplayed, CreatedAt: now, UpdatedAt: now}
 
-	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC")
+	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,5 +485,55 @@ func TestBuildSaveTreeIgnoresSymlinks(t *testing.T) {
 		if string(data) == "TOP SECRET" {
 			t.Fatal("リンク先の機密内容が blob 化されている（情報漏洩）")
 		}
+	}
+}
+
+// TestBuildSaveTreeFollowsSymlinkedRoot は saveFolderPath 自体がディレクトリへの
+// シンボリックリンクである場合でも、配下の通常ファイルがちゃんとスナップショットに
+// 入ることを確認する。これが崩れると Push が空の SaveSnapshot をアップロードして
+// 他端末で Pull した時に全セーブが消える。
+func TestBuildSaveTreeFollowsSymlinkedRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink 権限の都合で Windows ではスキップ")
+	}
+	t.Parallel()
+
+	target := t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, "save.dat"), []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(target, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "sub", "deep.dat"), []byte("nested"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	linkParent := t.TempDir()
+	linkPath := filepath.Join(linkParent, "saves")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Skipf("symlink を作成できない環境: %v", err)
+	}
+
+	tree, err := buildSaveTree(linkPath)
+	if err != nil {
+		t.Fatalf("buildSaveTree: %v", err)
+	}
+	if _, ok := tree.Files["save.dat"]; !ok {
+		t.Fatal("symlink root 配下の通常ファイルがスナップショットから抜けている")
+	}
+	if _, ok := tree.Files["sub/deep.dat"]; !ok {
+		t.Fatal("symlink root 配下のサブディレクトリ内ファイルが抜けている")
+	}
+
+	snap, blobs, err := buildSaveSnapshot(linkPath)
+	if err != nil {
+		t.Fatalf("buildSaveSnapshot: %v", err)
+	}
+	if len(snap.Files) != 2 {
+		t.Fatalf("buildSaveSnapshot の Files = %d, want 2", len(snap.Files))
+	}
+	if len(blobs) != 2 {
+		t.Fatalf("buildSaveSnapshot の blobs = %d, want 2", len(blobs))
 	}
 }

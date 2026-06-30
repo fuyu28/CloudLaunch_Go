@@ -50,6 +50,9 @@ type RouteRepository interface {
 	UpdateRoute(ctx context.Context, route domain.Route) (*domain.Route, error)
 	DeleteRoute(ctx context.Context, routeID string) error
 	UpdateRouteOrder(ctx context.Context, routeID string, order int64) error
+	// UpdateRouteOrders は gameID 配下のルートのみを対象に順序を一括更新する。
+	// gameID を指定外の Route ID は無視する（更新行数 0）。
+	UpdateRouteOrders(ctx context.Context, gameID string, items []domain.RouteOrderItem) error
 	GetRouteStats(ctx context.Context, gameID string) ([]domain.RouteStat, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
@@ -69,6 +72,12 @@ type ContentSyncRepository interface {
 	ApplyPullResult(ctx context.Context, game domain.Game, sessions []domain.PlaySession, syncHead, saveTree string) error
 	GetSetting(ctx context.Context, key string) (string, error)
 	UpsertSetting(ctx context.Context, key, value string) error
+}
+
+// MaintenanceRepository は MaintenanceService が必要とする永続化境界を定義する。
+type MaintenanceRepository interface {
+	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	ListPlaySessionsByGames(ctx context.Context, gameIDs []string) (map[string][]domain.PlaySession, error)
 }
 
 // ScreenshotRepository は ScreenshotService が必要とする永続化境界を定義する。

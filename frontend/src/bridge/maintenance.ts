@@ -16,7 +16,6 @@ export function createMaintenanceBridge(): WindowApi["maintenance"] {
       ),
     createFullBackup: async (outputDir) =>
       toApiResult(await CreateFullBackup(outputDir), "エラー", (d) => d as string),
-    restoreFullBackup: async (backupPath) =>
-      toApiResultVoid(await RestoreFullBackup(backupPath), "エラー"),
+    restoreFullBackup: async (backupPath) => toApiResultVoid(await RestoreFullBackup(backupPath)),
   };
 }

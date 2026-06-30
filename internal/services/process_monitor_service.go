@@ -386,16 +386,15 @@ func (service *ProcessMonitorService) EndSession(gameID string) bool {
 	accumulated := game.AccumulatedTime
 	game.AccumulatedTime = 0
 	game.LastNotFound = &now
+	// 値コピーをロック内で確定させ、saveSession に渡す。共有 *MonitoringGame を
+	// ロック外で書き換えると checkProcesses 側との data race になる（accumulated を
+	// 一時的に書き戻してから再 Lock で 0 戻し、というかつての二重書きが原因だった）。
+	snapshot := *game
+	snapshot.AccumulatedTime = accumulated
 	service.mu.Unlock()
 
 	if accumulated > 0 {
-		game.AccumulatedTime = accumulated
-		service.saveSession(*game, now)
-		service.mu.Lock()
-		if current, ok := service.monitoredGames[gameID]; ok {
-			current.AccumulatedTime = 0
-		}
-		service.mu.Unlock()
+		service.saveSession(snapshot, now)
 	}
 	return true
 }
@@ -550,6 +549,11 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 		go func(gameID string) {
 			defer logging.Recover(service.logger, "process-monitor.afterPlayPush")
 			if err := service.cloudSync.Push(context.Background(), gameID, nil); err != nil {
+				// オフラインモードはユーザーが明示的に同期を抑止しているので warn 級にしない。
+				if errors.Is(err, ErrOffline) {
+					service.logger.Debug("オフラインモードのためクラウド同期をスキップ", "gameId", gameID)
+					return
+				}
 				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
 		}(game.GameID)
