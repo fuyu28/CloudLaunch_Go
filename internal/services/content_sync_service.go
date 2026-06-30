@@ -544,7 +544,7 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
-	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, meta, saveSnapBytes)
+	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes)
 }
 
 // pullPlanDeletions はリモートのセーブスナップショットとローカルの base tree を突き合わせ、
@@ -656,7 +656,8 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 }
 
 // pullApplyToDB はリモートのゲーム情報・セッション・同期基準・base tree を単一トランザクションで反映する。
-func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
+// localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
+func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
 	// ゲーム情報・セッション・localSyncHead・localSaveTree を単一トランザクションで反映する。
 	// 部分失敗による DB 不整合と、同期対象外 Route 参照による FK 違反を防ぐ。
 	updatedGame := domain.Game{
@@ -673,6 +674,13 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 		CurrentRouteID: cloudG.CurrentRouteID,
 		CreatedAt:      cloudG.CreatedAt,
 		UpdatedAt:      cloudG.UpdatedAt,
+	}
+	// マシン固有フィールド（process_monitor.saveSession が書き込む LocalSaveHash 等）は
+	// ApplyPullResult が ON CONFLICT DO UPDATE で excluded.* を書くため、ここで明示的に
+	// 引き継がないと毎回 NULL に潰される。UI の「最終同期」表示が壊れる原因になっていた。
+	if localGame != nil {
+		updatedGame.LocalSaveHash = localGame.LocalSaveHash
+		updatedGame.LocalSaveHashUpdatedAt = localGame.LocalSaveHashUpdatedAt
 	}
 	sessions := make([]domain.PlaySession, 0, len(cloudSessions))
 	for _, cs := range cloudSessions {
