@@ -63,7 +63,10 @@ ManifestDPIAware true
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
+!insertmacro MUI_UNPAGE_WELCOME   # アンインストール開始の案内ページ
+!insertmacro MUI_UNPAGE_CONFIRM   # 削除実行前の最終確認ページ
 !insertmacro MUI_UNPAGE_INSTFILES # Uinstalling page
+!insertmacro MUI_UNPAGE_FINISH    # アンインストール完了ページ
 
 !insertmacro MUI_LANGUAGE "Japanese" # Set the Language of the installer
 
