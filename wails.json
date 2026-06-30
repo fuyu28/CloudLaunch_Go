@@ -9,5 +9,12 @@
   "author": {
     "name": "fuyu",
     "email": "88916226+fuyu28@users.noreply.github.com"
+  },
+  "info": {
+    "companyName": "fuyu",
+    "productName": "CloudLaunch",
+    "productVersion": "0.1.0",
+    "copyright": "© 2026 fuyu",
+    "comments": "Sync PC game save data via S3-compatible cloud storage"
   }
 }
