@@ -11,6 +11,7 @@ import {
   formatFileSize,
   formatDate,
   countFilesRecursively,
+  isCloudNodeLoaded,
   sumSizesRecursively,
   latestModifiedRecursively,
 } from "@renderer/utils/cloudUtils";
@@ -45,7 +46,7 @@ export default function CloudTreeNode({
   const hasChildren = node.children && node.children.length > 0;
   // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
   // 未取得（children が undefined）のあいだは数値を「—」で表示し、展開で取得を促す。
-  const isLoaded = !node.isDirectory || node.children !== undefined;
+  const isLoaded = isCloudNodeLoaded(node);
   const isLoading = loadingGameIds?.has(node.path) ?? false;
   // 未取得のゲームでも展開ボタンを表示してファイル取得をトリガーできるようにする。
   const isExpandable = node.isDirectory && (hasChildren || !isLoaded);

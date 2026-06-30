@@ -11,6 +11,7 @@ import {
   formatFileSize,
   formatDate,
   countFilesRecursively,
+  isCloudNodeLoaded,
   sumSizesRecursively,
 } from "@renderer/utils/cloudUtils";
 
@@ -125,7 +126,7 @@ export function DirectoryNodeCard({
   // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
   // 未取得（children が undefined）のあいだはファイル数・サイズ行を出さない。
   // 取得済みになったゲーム配下のディレクトリ／ファイルでは従来どおり表示する。
-  const isLoaded = !node.isDirectory || node.children !== undefined;
+  const isLoaded = isCloudNodeLoaded(node);
   const totalSize = node.isDirectory ? sumSizesRecursively(node) : node.size;
 
   return (
