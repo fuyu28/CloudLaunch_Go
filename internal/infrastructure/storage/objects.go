@@ -3,7 +3,9 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -75,16 +77,50 @@ func DeleteObjectsByPrefix(ctx context.Context, client *s3.Client, bucket string
 		for _, obj := range objects[start:end] {
 			batch = append(batch, s3types.ObjectIdentifier{Key: &obj.Key})
 		}
-		_, error := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+		output, error := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 			Bucket: &bucket,
 			Delete: &s3types.Delete{Objects: batch},
 		})
 		if error != nil {
 			return error
 		}
+		// DeleteObjects は HTTP 200 でも個別キーの失敗（AccessDenied / MFA delete /
+		// バージョニング有効バケットでの NoSuchKey 等）が output.Errors に入る。
+		// これを無視するとクラウド削除を「成功」と扱って LocalSyncHead をクリアしつつ
+		// 孤児 blob がバケットに残ってしまうので、集約してエラー化する。
+		if perKeyErr := deleteErrorsToError(output.Errors); perKeyErr != nil {
+			return perKeyErr
+		}
 	}
 
 	return nil
+}
+
+// deleteErrorsToError は DeleteObjects の per-key 失敗一覧を集約エラーへ変換する。
+func deleteErrorsToError(errs []s3types.Error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	const sampleLimit = 5
+	parts := make([]string, 0, sampleLimit+1)
+	for i, e := range errs {
+		if i >= sampleLimit {
+			parts = append(parts, fmt.Sprintf("... (+%d more)", len(errs)-sampleLimit))
+			break
+		}
+		key, code, msg := "?", "?", "?"
+		if e.Key != nil {
+			key = *e.Key
+		}
+		if e.Code != nil {
+			code = *e.Code
+		}
+		if e.Message != nil {
+			msg = *e.Message
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s (%s)", key, code, msg))
+	}
+	return fmt.Errorf("DeleteObjects に %d 件の個別失敗: %s", len(errs), strings.Join(parts, "; "))
 }
 
 // DeleteObject は単一オブジェクトを削除する。
