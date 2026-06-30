@@ -37,18 +37,8 @@ export function formatDate(date: Date | string | null | undefined): string {
   }).format(normalized);
 }
 
-/**
- * クラウドディレクトリツリーノードの型定義
- */
-export type CloudDirectoryNode = {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size: number;
-  lastModified: Date;
-  children?: CloudDirectoryNode[];
-  objectKey?: string;
-};
+import type { CloudDirectoryNode } from "src/types/cloud";
+export type { CloudDirectoryNode } from "src/types/cloud";
 
 /**
  * ディレクトリノードから再帰的にファイル数を計算

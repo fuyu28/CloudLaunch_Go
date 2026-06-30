@@ -8,7 +8,7 @@ import { IoIosHome, IoIosSettings } from "react-icons/io";
 import { VscChromeClose, VscChromeMaximize, VscChromeMinimize } from "react-icons/vsc";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import PlayStatusBar from "@renderer/components/PlayStatusBar";
+import PlayStatusBar from "@renderer/components/game/PlayStatusBar";
 
 export default function MainLayout(): React.JSX.Element {
   const location = useLocation();

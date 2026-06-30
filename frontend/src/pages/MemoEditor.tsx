@@ -7,7 +7,7 @@
 
 import { useParams } from "react-router-dom";
 
-import MemoForm from "@renderer/components/MemoForm";
+import MemoForm from "@renderer/components/memo/MemoForm";
 
 import { useMemoNavigation } from "@renderer/hooks/useMemoNavigation";
 

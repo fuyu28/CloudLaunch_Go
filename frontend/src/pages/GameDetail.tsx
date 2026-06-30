@@ -4,19 +4,20 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 
-import CloudDataCard from "@renderer/components/CloudDataCard";
-import ConfirmModal from "@renderer/components/ConfirmModal";
-import SyncConflictModal from "@renderer/components/SyncConflictModal";
-import UntrackedDeleteModal from "@renderer/components/UntrackedDeleteModal";
-import GameInfo from "@renderer/components/GameInfo";
-import GameFormModal from "@renderer/components/GameModal";
-import MemoCard from "@renderer/components/MemoCard";
-import PlaySessionManagementModal from "@renderer/components/PlaySessionManagementModal";
-import PlaySessionModal from "@renderer/components/PlaySessionModal";
-import PlayStatistics from "@renderer/components/PlayStatistics";
+import CloudDataCard from "@renderer/components/cloud/CloudDataCard";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import SyncConflictModal from "@renderer/components/cloud/SyncConflictModal";
+import UntrackedDeleteModal from "@renderer/components/cloud/UntrackedDeleteModal";
+import GameInfo from "@renderer/components/game/GameInfo";
+import GameFormModal from "@renderer/components/game/GameModal";
+import MemoCard from "@renderer/components/memo/MemoCard";
+import PlaySessionManagementModal from "@renderer/components/game/PlaySessionManagementModal";
+import PlaySessionModal from "@renderer/components/game/PlaySessionModal";
+import PlayStatistics from "@renderer/components/game/PlayStatistics";
 
 import { useGameEdit } from "@renderer/hooks/useGameEdit";
 import { useGameSaveData } from "@renderer/hooks/useGameSaveData";
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
@@ -59,6 +60,7 @@ export default function GameDetail(): React.JSX.Element {
   const [isDeletingUntracked, setIsDeletingUntracked] = useState(false);
   const { showToast } = useToastHandler();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
+  const { getStatus, push, pull, resolveConflict } = useCloudSync(isOfflineMode);
   const { formatDateWithTime } = useTimeFormat();
 
   // ゲームデータを取得
@@ -246,10 +248,13 @@ export default function GameDetail(): React.JSX.Element {
         return false;
       }
       try {
-        const statusResult = await window.api.cloudSync.status(game.id);
+        const statusResult = await getStatus(game.id);
         if (!statusResult.success || !statusResult.data) {
           if (showResult)
-            showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
+            showToast(
+              (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
+              "error",
+            );
           return false;
         }
         const { status } = statusResult.data;
@@ -262,24 +267,24 @@ export default function GameDetail(): React.JSX.Element {
           return false;
         }
         if (status === "push_needed") {
-          const pushResult = await window.api.cloudSync.push(game.id);
-          if (!pushResult.success) {
-            if (showResult) showToast(pushResult.message || "アップロードに失敗しました", "error");
+          const op = await push(game.id);
+          if (!op.ok) {
+            if (showResult) showToast(op.message || "アップロードに失敗しました", "error");
             return false;
           }
           if (showResult) showToast("クラウドにアップロードしました", "success");
           return true;
         }
         if (status === "pull_needed") {
-          const pullResult = await window.api.cloudSync.pull(game.id);
-          if (!pullResult.success) {
-            if (showResult) showToast(pullResult.message || "ダウンロードに失敗しました", "error");
+          const op = await pull(game.id);
+          if (!op.ok) {
+            if (showResult) showToast(op.message || "ダウンロードに失敗しました", "error");
             return false;
           }
-          if (pullResult.data && !pullResult.data.applied) {
+          if (op.ok && op.applied === false) {
             // 同期管理外ファイルの削除確認が必要（ここまでローカル無変更）
             if (showResult) {
-              setUntrackedDeletes(pullResult.data.untrackedDeletes ?? []);
+              setUntrackedDeletes(op.untrackedDeletes ?? []);
               setUntrackedConfirmKind("pull");
             }
             return false;
@@ -308,7 +313,7 @@ export default function GameDetail(): React.JSX.Element {
         return false;
       }
     },
-    [game, isOfflineMode, showToast],
+    [game, isOfflineMode, showToast, getStatus, push, pull],
   );
 
   const launchGameDirect = useCallback(async (): Promise<void> => {
@@ -325,7 +330,7 @@ export default function GameDetail(): React.JSX.Element {
       await launchGameDirect();
       return;
     }
-    const statusResult = await window.api.cloudSync.status(game.id);
+    const statusResult = await getStatus(game.id);
     if (!statusResult.success || !statusResult.data) {
       await launchGameDirect();
       return;
@@ -343,7 +348,7 @@ export default function GameDetail(): React.JSX.Element {
       return;
     }
     await launchGameDirect();
-  }, [game, isOfflineMode, isValidCreds, launchGameDirect]);
+  }, [game, isOfflineMode, isValidCreds, launchGameDirect, getStatus, buildSaveSyncMessage]);
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
@@ -363,13 +368,13 @@ export default function GameDetail(): React.JSX.Element {
       if (!game) return;
       setIsResolvingConflict(true);
       try {
-        const result = await window.api.cloudSync.resolveConflict(game.id, useLocal);
-        if (result.success) {
-          if (!useLocal && result.data && !result.data.applied) {
+        const op = await resolveConflict(game.id, useLocal);
+        if (op.ok) {
+          if (!useLocal && op.applied === false) {
             // リモート採用だが、同期管理外ファイルの削除確認が必要（ローカル無変更）
             setIsConflictModalOpen(false);
             setConflictMeta(null);
-            setUntrackedDeletes(result.data.untrackedDeletes ?? []);
+            setUntrackedDeletes(op.untrackedDeletes ?? []);
             setUntrackedConfirmKind("resolveRemote");
             return;
           }
@@ -382,7 +387,7 @@ export default function GameDetail(): React.JSX.Element {
           setIsConflictModalOpen(false);
           setConflictMeta(null);
         } else {
-          showToast(result.message || "コンフリクト解決に失敗しました", "error");
+          showToast(op.message || "コンフリクト解決に失敗しました", "error");
         }
       } catch {
         showToast("コンフリクト解決に失敗しました", "error");
@@ -390,7 +395,7 @@ export default function GameDetail(): React.JSX.Element {
         setIsResolvingConflict(false);
       }
     },
-    [game, showToast],
+    [game, showToast, resolveConflict],
   );
 
   // untracked 削除の確認後、deleteUntracked=true で再実行する。
@@ -398,24 +403,24 @@ export default function GameDetail(): React.JSX.Element {
     if (!game || !untrackedConfirmKind) return;
     setIsDeletingUntracked(true);
     try {
-      const result =
+      const op =
         untrackedConfirmKind === "pull"
-          ? await window.api.cloudSync.pull(game.id, true)
-          : await window.api.cloudSync.resolveConflict(game.id, false, true);
-      if (result.success && result.data?.applied) {
+          ? await pull(game.id, true)
+          : await resolveConflict(game.id, false, true);
+      if (op.ok && op.applied) {
         showToast("クラウドからダウンロードしました", "success");
         setUntrackedDeletes(null);
         setUntrackedConfirmKind(null);
         setRefreshKey((k) => k + 1);
       } else {
-        showToast(result.message || "ダウンロードに失敗しました", "error");
+        showToast((!op.ok && op.message) || "ダウンロードに失敗しました", "error");
       }
     } catch {
       showToast("ダウンロードに失敗しました", "error");
     } finally {
       setIsDeletingUntracked(false);
     }
-  }, [game, untrackedConfirmKind, showToast]);
+  }, [game, untrackedConfirmKind, showToast, pull, resolveConflict]);
 
   const handleCancelUntrackedDelete = useCallback((): void => {
     setUntrackedDeletes(null);

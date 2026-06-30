@@ -8,8 +8,6 @@
  * - ファイル選択ロジックの再利用
  */
 
-/// <reference types="../../../preload/index.d.ts" />
-
 import { useState, useCallback } from "react";
 
 import { handleApiError } from "../utils/errorHandler";

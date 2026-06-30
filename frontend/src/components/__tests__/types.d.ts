@@ -1,7 +1,7 @@
-import type { API } from "../../../../preload/preload";
+import type { WindowApi } from "src/wailsBridge";
 
 declare global {
   interface Window {
-    api: API;
+    api: WindowApi;
   }
 }

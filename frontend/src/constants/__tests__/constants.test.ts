@@ -8,8 +8,6 @@
  * - エクスポートの整合性チェック
  */
 
-/// <reference types="jest" />
-
 import { CONFIG } from "../config";
 import * as constantsIndex from "../index";
 import { MESSAGES } from "../messages";
@@ -127,7 +125,7 @@ describe("constants", () => {
               expect(typeof result).toBe("string");
               expect(result).not.toBe("");
             } catch (e) {
-              fail(`Function at ${currentPath} threw an error: ${e}`);
+              throw new Error(`Function at ${currentPath} threw an error: ${e}`);
             }
           } else {
             expect(typeof value).toBe("string");

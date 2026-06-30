@@ -1,0 +1,186 @@
+/**
+ * @fileoverview クラウドコンテンツ表示コンポーネント
+ *
+ * このコンポーネントは、クラウドデータの表示部分を担当し、
+ * カードビューとツリービューの切り替えを提供します。
+ *
+ * 主な機能：
+ * - カードビューの表示
+ * - ツリービューの表示
+ * - 空状態の表示
+ * - ローディング状態の表示
+ */
+
+import { FiCloud, FiFolder } from "react-icons/fi";
+
+import type { ViewMode } from "./CloudHeader";
+import { DirectoryNodeCard } from "./CloudItemCard";
+import CloudTreeNode from "./CloudTreeNode";
+import type { CloudDirectoryNode } from "src/types/cloud";
+
+/**
+ * クラウドコンテンツのプロパティ
+ */
+type CloudContentProps = {
+  /** ビューモード */
+  viewMode: ViewMode;
+  /** ローディング状態（初期タイトル一覧の取得中） */
+  loading: boolean;
+  /** カードビューで開いているゲームのファイル一覧を取得中かどうか */
+  gameLoading?: boolean;
+  /** ファイル一覧を遅延取得中のゲームID集合（ツリービュー用） */
+  loadingGameIds?: Set<string>;
+  /** クラウドデータ */
+  /** ディレクトリツリー */
+  directoryTree: CloudDirectoryNode[];
+  /** 現在のパス */
+  currentPath: string[];
+  /** 現在のディレクトリノード */
+  currentDirectoryNodes: CloudDirectoryNode[];
+  /** 展開されたノード */
+  expandedNodes: Set<string>;
+  /** ノード展開切り替えコールバック */
+  onToggleExpand: (path: string) => void;
+  /** ノード選択コールバック */
+  onSelectNode: (node: CloudDirectoryNode) => void;
+  /** 削除コールバック */
+  onDelete: (item: CloudDirectoryNode) => void;
+  /** ディレクトリ移動コールバック（対象ノードを渡す） */
+  onNavigateToDirectory: (node: CloudDirectoryNode) => void;
+  /** 詳細表示コールバック */
+  onViewDetails: (item: CloudDirectoryNode) => void;
+};
+
+/**
+ * 空状態コンポーネント
+ */
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+}): React.JSX.Element {
+  return (
+    <div className="text-center py-12">
+      <Icon className="text-6xl text-base-content/30 mx-auto mb-4" />
+      <h3 className="text-xl font-medium text-base-content/70 mb-2">{title}</h3>
+      <p className="text-base-content/50">{description}</p>
+    </div>
+  );
+}
+
+/**
+ * クラウドコンテンツ表示コンポーネント
+ *
+ * @param props コンテンツのプロパティ
+ * @returns JSX要素
+ */
+export function CloudContent({
+  viewMode,
+  loading,
+  gameLoading = false,
+  loadingGameIds,
+  directoryTree,
+  currentPath,
+  currentDirectoryNodes,
+  expandedNodes,
+  onToggleExpand,
+  onSelectNode,
+  onDelete,
+  onNavigateToDirectory,
+  onViewDetails,
+}: CloudContentProps): React.JSX.Element {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="loading loading-spinner loading-lg"></div>
+      </div>
+    );
+  }
+
+  if (viewMode === "cards") {
+    return (
+      <div>
+        {/* カード表示 */}
+        {currentPath.length === 0 ? (
+          // ルートレベル（ゲーム単位）- onDelete を渡して削除ボタンを表示
+          directoryTree.length === 0 ? (
+            <EmptyState
+              icon={FiCloud}
+              title="クラウドデータがありません"
+              description="ゲームのセーブデータをアップロードすると、ここに表示されます"
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {directoryTree.map((node, index) => (
+                <DirectoryNodeCard
+                  key={`${node.path}-${index}`}
+                  node={node}
+                  onDelete={() => onDelete(node)}
+                  onViewDetails={onViewDetails}
+                  onNavigate={node.isDirectory ? () => onNavigateToDirectory(node) : undefined}
+                />
+              ))}
+            </div>
+          )
+        ) : gameLoading ? (
+          // ゲームのファイル一覧を遅延取得中
+          <div className="flex justify-center py-12">
+            <div className="loading loading-spinner loading-lg"></div>
+          </div>
+        ) : // サブディレクトリ（セーブファイル階層）- onDelete を渡さず削除ボタンを非表示
+        currentDirectoryNodes.length === 0 ? (
+          <EmptyState
+            icon={FiFolder}
+            title="このディレクトリは空です"
+            description="ファイルやサブディレクトリがありません"
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {currentDirectoryNodes.map((node, index) => (
+              <DirectoryNodeCard
+                key={`${node.path}-${index}`}
+                node={node}
+                onNavigate={node.isDirectory ? () => onNavigateToDirectory(node) : undefined}
+                onViewDetails={onViewDetails}
+                // onDelete は渡さない：サブノードの個別削除は履歴破壊になるため不可
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ツリービュー
+  return (
+    <div className="bg-base-100 rounded-lg border border-base-300 p-4">
+      {directoryTree.length === 0 ? (
+        <EmptyState
+          icon={FiCloud}
+          title="クラウドデータがありません"
+          description="ゲームのセーブデータをアップロードすると、ここに表示されます"
+        />
+      ) : (
+        <div className="space-y-1">
+          {directoryTree.map((node, index) => (
+            <div key={`${node.path}-${index}`} className="group">
+              <CloudTreeNode
+                node={node}
+                level={0}
+                expandedNodes={expandedNodes}
+                loadingGameIds={loadingGameIds}
+                onToggleExpand={onToggleExpand}
+                onDelete={onDelete}
+                onSelect={onSelectNode}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

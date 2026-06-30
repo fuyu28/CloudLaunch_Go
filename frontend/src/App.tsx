@@ -1,7 +1,7 @@
 // src/App.tsx
 import { Routes, Route } from "react-router-dom";
 
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import MainLayout from "./layouts/MainLayout";
 import Cloud from "./pages/Cloud";
 import GameDetail from "./pages/GameDetail";

@@ -7,7 +7,7 @@
 
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import MemoForm from "@renderer/components/MemoForm";
+import MemoForm from "@renderer/components/memo/MemoForm";
 
 export default function MemoCreate(): React.JSX.Element {
   const navigate = useNavigate();

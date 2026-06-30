@@ -15,21 +15,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAtomValue } from "jotai";
 
-import { CloudBreadcrumb } from "@renderer/components/CloudBreadcrumb";
-import { CloudContent } from "@renderer/components/CloudContent";
-import { CloudDeleteModal } from "@renderer/components/CloudDeleteModal";
-import { CloudFileDetailsModal } from "@renderer/components/CloudFileDetailsModal";
-import { CloudHeader, type ViewMode } from "@renderer/components/CloudHeader";
-import ConfirmModal from "@renderer/components/ConfirmModal";
+import { CloudBreadcrumb } from "@renderer/components/cloud/CloudBreadcrumb";
+import { CloudContent } from "@renderer/components/cloud/CloudContent";
+import { CloudDeleteModal } from "@renderer/components/cloud/CloudDeleteModal";
+import { CloudFileDetailsModal } from "@renderer/components/cloud/CloudFileDetailsModal";
+import { CloudHeader, type ViewMode } from "@renderer/components/cloud/CloudHeader";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import { FiAlertTriangle } from "react-icons/fi";
 
 import { isValidCredsAtom } from "@renderer/state/credentials";
 
-import {
-  useCloudData,
-  type CloudDataItem,
-  type CloudFileDetail,
-} from "@renderer/hooks/useCloudData";
+import { useCloudData } from "@renderer/hooks/useCloudData";
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
@@ -37,7 +34,7 @@ import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { logger } from "@renderer/utils/logger";
 
 import { countFilesRecursively, sumSizesRecursively } from "@renderer/utils/cloudUtils";
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
+import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 import type { GameType } from "src/types/game";
 
 /**
@@ -73,6 +70,7 @@ export default function Cloud(): React.JSX.Element {
   const validateCreds = useValidateCreds();
   const { showToast } = useToastHandler();
   const { isOfflineMode } = useOfflineMode();
+  const { getStatus, push, pull } = useCloudSync(isOfflineMode);
 
   // クラウドデータ管理フック
   const {
@@ -81,12 +79,37 @@ export default function Cloud(): React.JSX.Element {
     loading,
     currentPath,
     currentDirectoryNodes,
+    loadingGameIds,
     fetchCloudData,
+    ensureGameLoaded,
     navigateToDirectory,
     navigateBack,
     navigateToPath,
-    deleteCloudData,
+    deleteGameFromCloud,
+    deleteAllGamesFromCloud,
   } = useCloudData();
+
+  /**
+   * ディレクトリ（ゲームまたはサブフォルダ）を開く。
+   * ルートレベル（=ゲーム）を開くときは、そのゲームのファイル一覧を遅延取得する。
+   * currentPath は表示名ベースで管理するため、ナビゲーションには node.name を使う。
+   */
+  const handleNavigateToDirectory = useCallback(
+    (node: CloudDirectoryNode): void => {
+      if (currentPath.length === 0) {
+        // node.path はルートではゲームID（remotePath）
+        void ensureGameLoaded(node.path);
+      }
+      navigateToDirectory(node.name);
+    },
+    [currentPath.length, ensureGameLoaded, navigateToDirectory],
+  );
+
+  // ルートで開いているゲームノード（カードビューのサブ階層表示用）
+  const openGameNode =
+    currentPath.length > 0 ? directoryTree.find((node) => node.name === currentPath[0]) : undefined;
+  // 開いているゲームのファイル一覧をまだ取得中かどうか
+  const isOpenGameLoading = openGameNode ? loadingGameIds.has(openGameNode.path) : false;
 
   const fetchGames = useCallback(async (): Promise<void> => {
     setIsLoadingGames(true);
@@ -125,9 +148,12 @@ export default function Cloud(): React.JSX.Element {
     }
     setIsSyncingGame(true);
     try {
-      const statusResult = await window.api.cloudSync.status(selectedGameId);
+      const statusResult = await getStatus(selectedGameId);
       if (!statusResult.success || !statusResult.data) {
-        showToast(statusResult.message || "同期状態の取得に失敗しました", "error");
+        showToast(
+          (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
+          "error",
+        );
         return;
       }
       const { status } = statusResult.data;
@@ -140,19 +166,19 @@ export default function Cloud(): React.JSX.Element {
         return;
       }
       if (status === "push_needed") {
-        const pushResult = await window.api.cloudSync.push(selectedGameId);
-        if (!pushResult.success) {
-          showToast(pushResult.message || "アップロードに失敗しました", "error");
+        const op = await push(selectedGameId);
+        if (!op.ok) {
+          showToast(op.message || "アップロードに失敗しました", "error");
           return;
         }
         showToast("クラウドにアップロードしました", "success");
       } else if (status === "pull_needed") {
-        const pullResult = await window.api.cloudSync.pull(selectedGameId);
-        if (!pullResult.success) {
-          showToast(pullResult.message || "ダウンロードに失敗しました", "error");
+        const op = await pull(selectedGameId);
+        if (!op.ok) {
+          showToast(op.message || "ダウンロードに失敗しました", "error");
           return;
         }
-        if (pullResult.data && !pullResult.data.applied) {
+        if (op.ok && op.applied === false) {
           showToast(
             "同期対象外のローカルファイルがあります。詳細画面の「同期」から確認してください",
             "error",
@@ -173,7 +199,7 @@ export default function Cloud(): React.JSX.Element {
     } finally {
       setIsSyncingGame(false);
     }
-  }, [selectedGameId, isOfflineMode, showToast]);
+  }, [selectedGameId, isOfflineMode, showToast, getStatus, push, pull]);
 
   const handleDeleteSelectedGame = useCallback(async (): Promise<void> => {
     if (!selectedGameId) {
@@ -192,7 +218,7 @@ export default function Cloud(): React.JSX.Element {
         return;
       }
       showToast("クラウドデータを削除しました", "success");
-      fetchCloudData(viewMode);
+      fetchCloudData();
     } catch (error) {
       logger.error("クラウド削除エラー:", {
         component: "Cloud",
@@ -204,7 +230,7 @@ export default function Cloud(): React.JSX.Element {
       setIsDeletingGame(false);
       setDeleteGameTarget(null);
     }
-  }, [fetchCloudData, isOfflineMode, selectedGameId, showToast, viewMode]);
+  }, [fetchCloudData, isOfflineMode, selectedGameId, showToast]);
 
   /**
    * ツリーノードの展開・折りたたみ
@@ -215,6 +241,11 @@ export default function Cloud(): React.JSX.Element {
       newExpanded.delete(path);
     } else {
       newExpanded.add(path);
+      // トップレベル（=ゲーム）を展開するときにファイル一覧を遅延取得する。
+      // ゲームノードの path は remotePath（ゲームID）と一致する。
+      if (directoryTree.some((node) => node.path === path)) {
+        void ensureGameLoaded(path);
+      }
     }
     setExpandedNodes(newExpanded);
   };
@@ -235,7 +266,7 @@ export default function Cloud(): React.JSX.Element {
   };
 
   /**
-   * 全削除処理
+   * 全削除処理 - 全ゲームの削除確認モーダルを表示するためのセンチネルをセット
    */
   const handleDeleteAll = (): void => {
     const allDeleteItem = {
@@ -250,11 +281,19 @@ export default function Cloud(): React.JSX.Element {
   };
 
   /**
-   * クラウドデータを削除
+   * ゲーム単位のクラウドデータ削除（確認モーダルからコールバック）
    */
   const handleDelete = async (item: CloudDataItem | CloudDirectoryNode): Promise<void> => {
     try {
-      await deleteCloudData(item);
+      // 全削除センチネル（path === "*"）
+      if ("path" in item && (item as CloudDirectoryNode).path === "*") {
+        await deleteAllGamesFromCloud();
+        return;
+      }
+
+      // ゲーム単位削除：remotePath（CloudDataItem）または path（CloudDirectoryNode）をゲームIDとして使用
+      const gameId = "remotePath" in item ? item.remotePath : (item as CloudDirectoryNode).path;
+      await deleteGameFromCloud(gameId);
     } finally {
       setDeleteConfirm(null);
     }
@@ -301,10 +340,10 @@ export default function Cloud(): React.JSX.Element {
     }
   };
 
-  // コンポーネントマウント時にデータを取得
+  // コンポーネントマウント時にタイトル一覧を取得（カード/ツリーで共通）
   useEffect(() => {
-    fetchCloudData(viewMode);
-  }, [fetchCloudData, viewMode]);
+    fetchCloudData();
+  }, [fetchCloudData]);
 
   useEffect(() => {
     if (!isOfflineMode) {
@@ -325,7 +364,7 @@ export default function Cloud(): React.JSX.Element {
         cloudData={cloudData}
         directoryTree={directoryTree}
         loading={loading}
-        onRefresh={() => fetchCloudData(viewMode)}
+        onRefresh={() => fetchCloudData()}
         onDeleteAll={handleDeleteAll}
       />
 
@@ -403,6 +442,8 @@ export default function Cloud(): React.JSX.Element {
       <CloudContent
         viewMode={viewMode}
         loading={loading}
+        gameLoading={isOpenGameLoading}
+        loadingGameIds={loadingGameIds}
         directoryTree={directoryTree}
         currentPath={currentPath}
         currentDirectoryNodes={currentDirectoryNodes}
@@ -410,7 +451,7 @@ export default function Cloud(): React.JSX.Element {
         onToggleExpand={handleToggleExpand}
         onSelectNode={handleSelectNode}
         onDelete={(item) => setDeleteConfirm(item)}
-        onNavigateToDirectory={navigateToDirectory}
+        onNavigateToDirectory={handleNavigateToDirectory}
         onViewDetails={handleViewDetails}
       />
 

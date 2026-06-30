@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/domain"
+	"CloudLaunch_Go/internal/logging"
 
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/encoding/unicode"
@@ -52,6 +53,23 @@ type normalizedProcess struct {
 	info          ProcessInfo
 	normalized    string
 	normalizedCmd string
+}
+
+// normalizeProcessList は名前が空のプロセスを除外し、正規化済みプロセス一覧を構築する。
+// ロックは保持しない（純粋関数）。
+func normalizeProcessList(processes []ProcessInfo) []normalizedProcess {
+	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
+	for _, proc := range processes {
+		if proc.Name == "" {
+			continue
+		}
+		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
+			info:          proc,
+			normalized:    normalizeProcessToken(proc.Name),
+			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
+		})
+	}
+	return normalizedProcesses
 }
 
 // afterPlaySyncer はプレイ終了後の自動 Push を抽象化するインターフェース。
@@ -103,12 +121,18 @@ func (service *ProcessMonitorService) StartMonitoring() {
 	service.logger.Info("プロセス監視を開始しました")
 
 	go func() {
+		// 1反復ごとに panic を回収する。1回のチェックで panic しても監視ループ自体は
+		// 継続させ、エラーをログ（error.log）に残す。
+		tick := func() {
+			defer logging.Recover(service.logger, "process-monitor.checkProcesses")
+			service.checkProcesses()
+		}
 		// 起動時に即時チェック
-		service.checkProcesses()
+		tick()
 		for {
 			select {
 			case <-service.monitoringInterval.C:
-				service.checkProcesses()
+				tick()
 			case <-service.monitoringStop:
 				return
 			}
@@ -319,17 +343,7 @@ func (service *ProcessMonitorService) PauseSession(gameID string) bool {
 // ResumeSession は中断状態のセッションを再開する。
 func (service *ProcessMonitorService) ResumeSession(gameID string) bool {
 	processes, _ := service.getProcesses()
-	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
-	for _, proc := range processes {
-		if proc.Name == "" {
-			continue
-		}
-		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
-			info:          proc,
-			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
-		})
-	}
+	normalizedProcesses := normalizeProcessList(processes)
 
 	service.mu.Lock()
 	defer service.mu.Unlock()
@@ -389,17 +403,7 @@ func (service *ProcessMonitorService) EndSession(gameID string) bool {
 func (service *ProcessMonitorService) checkProcesses() {
 	processes, _ := service.getProcesses()
 
-	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
-	for _, proc := range processes {
-		if proc.Name == "" {
-			continue
-		}
-		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
-			info:          proc,
-			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
-		})
-	}
+	normalizedProcesses := normalizeProcessList(processes)
 
 	service.autoAddGamesFromDatabase(processes, normalizedProcesses)
 
@@ -418,60 +422,9 @@ func (service *ProcessMonitorService) checkProcesses() {
 
 	service.mu.Lock()
 	for _, game := range service.monitoredGames {
-		normalizedExeName := normalizeProcessToken(game.ExeName)
-		matching := processMap[normalizedExeName]
-		isRunning := false
-		if len(matching) > 0 {
-			isRunning = service.isGameProcessRunning(game.ExeName, game.ExePath, matching)
-		}
-
-		if isRunning {
-			if game.IsPaused {
-				if !game.SuppressResume {
-					game.PendingResume = true
-				}
-				game.LastDetected = &now
-				game.LastNotFound = nil
-				continue
-			}
-			game.LastDetected = &now
-			game.LastNotFound = nil
-			if game.PlayStartTime == nil && !game.IsPaused && !game.PendingEnd {
-				game.PlayStartTime = &now
-				game.AccumulatedTime = 0
-				service.logger.Info("ゲーム開始を検知", "title", game.GameTitle, "exeName", game.ExeName)
-			}
-		} else {
-			if game.PendingResume {
-				game.PendingResume = false
-			}
-			if game.SuppressResume {
-				game.SuppressResume = false
-			}
-			if game.LastNotFound == nil {
-				game.LastNotFound = &now
-			}
-			if game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd {
-				if now.Sub(*game.LastDetected) > service.sessionTimeout {
-					duration := int64(now.Sub(*game.PlayStartTime).Seconds())
-					if duration > 0 {
-						game.AccumulatedTime += duration
-					}
-					game.PlayStartTime = nil
-					game.PendingEnd = true
-					game.LastDetected = nil
-					service.logger.Info("ゲーム終了確認待ち", "title", game.GameTitle, "exeName", game.ExeName)
-				}
-			}
-		}
+		service.updateMonitoredGameState(game, processMap, now)
 	}
-	for gameID, game := range service.monitoredGames {
-		if game.PlayStartTime == nil && game.LastNotFound != nil && !game.IsPaused && !game.PendingEnd {
-			if now.Sub(*game.LastNotFound) > service.gameCleanupTimeout {
-				gameIDsToCleanup = append(gameIDsToCleanup, gameID)
-			}
-		}
-	}
+	gameIDsToCleanup = service.collectGameIDsToCleanup(now, gameIDsToCleanup)
 	service.mu.Unlock()
 
 	for _, session := range sessionsToSave {
@@ -482,6 +435,75 @@ func (service *ProcessMonitorService) checkProcesses() {
 		service.removeMonitoredGame(gameID)
 		service.mu.Unlock()
 	}
+}
+
+// updateMonitoredGameState は 1 ゲーム分の検知状態を更新する。
+// service.mu を保持した状態で呼ばれる前提（ロックの取得/解放は呼び出し側）。
+// 元コードの paused-running 分岐における continue は、本メソッドでは早期 return に対応する。
+func (service *ProcessMonitorService) updateMonitoredGameState(
+	game *MonitoringGame,
+	processMap map[string][]normalizedProcess,
+	now time.Time,
+) {
+	normalizedExeName := normalizeProcessToken(game.ExeName)
+	matching := processMap[normalizedExeName]
+	isRunning := false
+	if len(matching) > 0 {
+		isRunning = service.isGameProcessRunning(game.ExeName, game.ExePath, matching)
+	}
+
+	if isRunning {
+		if game.IsPaused {
+			if !game.SuppressResume {
+				game.PendingResume = true
+			}
+			game.LastDetected = &now
+			game.LastNotFound = nil
+			return
+		}
+		game.LastDetected = &now
+		game.LastNotFound = nil
+		if game.PlayStartTime == nil && !game.IsPaused && !game.PendingEnd {
+			game.PlayStartTime = &now
+			game.AccumulatedTime = 0
+			service.logger.Info("ゲーム開始を検知", "title", game.GameTitle, "exeName", game.ExeName)
+		}
+	} else {
+		if game.PendingResume {
+			game.PendingResume = false
+		}
+		if game.SuppressResume {
+			game.SuppressResume = false
+		}
+		if game.LastNotFound == nil {
+			game.LastNotFound = &now
+		}
+		if game.PlayStartTime != nil && !game.IsPaused && !game.PendingEnd {
+			if now.Sub(*game.LastDetected) > service.sessionTimeout {
+				duration := int64(now.Sub(*game.PlayStartTime).Seconds())
+				if duration > 0 {
+					game.AccumulatedTime += duration
+				}
+				game.PlayStartTime = nil
+				game.PendingEnd = true
+				game.LastDetected = nil
+				service.logger.Info("ゲーム終了確認待ち", "title", game.GameTitle, "exeName", game.ExeName)
+			}
+		}
+	}
+}
+
+// collectGameIDsToCleanup はクリーンアップ対象（一定時間未検出のゲーム）の ID を抽出して append する。
+// service.mu を保持した状態で呼ばれる前提（ロックの取得/解放は呼び出し側）。
+func (service *ProcessMonitorService) collectGameIDsToCleanup(now time.Time, gameIDsToCleanup []string) []string {
+	for gameID, game := range service.monitoredGames {
+		if game.PlayStartTime == nil && game.LastNotFound != nil && !game.IsPaused && !game.PendingEnd {
+			if now.Sub(*game.LastNotFound) > service.gameCleanupTimeout {
+				gameIDsToCleanup = append(gameIDsToCleanup, gameID)
+			}
+		}
+	}
+	return gameIDsToCleanup
 }
 
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
@@ -526,6 +548,7 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
 	if service.cloudSync != nil {
 		go func(gameID string) {
+			defer logging.Recover(service.logger, "process-monitor.afterPlayPush")
 			if err := service.cloudSync.Push(context.Background(), gameID, nil); err != nil {
 				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)
 			}
@@ -663,17 +686,7 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 		exeName += ".exe"
 	}
 
-	normalizedProcesses := make([]normalizedProcess, 0, len(processes))
-	for _, proc := range processes {
-		if proc.Name == "" {
-			continue
-		}
-		normalizedProcesses = append(normalizedProcesses, normalizedProcess{
-			info:          proc,
-			normalized:    normalizeProcessToken(proc.Name),
-			normalizedCmd: normalizeProcessPathToken(proc.Cmd),
-		})
-	}
+	normalizedProcesses := normalizeProcessList(processes)
 
 	ids := make([]int, 0, 2)
 	for _, proc := range normalizedProcesses {

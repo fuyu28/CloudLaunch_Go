@@ -2,19 +2,20 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState, useCallback } from "react";
 import { IoIosAdd } from "react-icons/io";
 
-import ConfirmModal from "@renderer/components/ConfirmModal";
-import FloatingButton from "@renderer/components/FloatingButton";
-import CloudGameImportModal from "@renderer/components/CloudGameImportModal";
-import ErogameScapeImportModal from "@renderer/components/ErogameScapeImportModal";
-import GameGrid from "@renderer/components/GameGrid";
-import GameFormModal from "@renderer/components/GameModal";
-import GameSearchFilter from "@renderer/components/GameSearchFilter";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import FloatingButton from "@renderer/components/common/FloatingButton";
+import CloudGameImportModal from "@renderer/components/cloud/CloudGameImportModal";
+import ErogameScapeImportModal from "@renderer/components/game/ErogameScapeImportModal";
+import GameGrid from "@renderer/components/game/GameGrid";
+import GameFormModal from "@renderer/components/game/GameModal";
+import GameSearchFilter from "@renderer/components/game/GameSearchFilter";
 
 import { CONFIG, MESSAGES } from "@renderer/constants";
 import { UNCONFIGURED_EXE_PATH } from "@renderer/constants/game";
 import { useDebounce } from "@renderer/hooks/useDebounce";
 import { useGameActions } from "@renderer/hooks/useGameActions";
 import { useGameSaveData } from "@renderer/hooks/useGameSaveData";
+import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useLoadingState } from "@renderer/hooks/useLoadingState";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
@@ -48,6 +49,7 @@ export default function Home(): React.ReactElement {
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
   const { isOfflineMode } = useOfflineMode();
+  const { getStatus } = useCloudSync(isOfflineMode);
   const { downloadSaveData } = useGameSaveData();
   const { formatDateWithTime } = useTimeFormat();
 
@@ -226,7 +228,7 @@ export default function Home(): React.ReactElement {
         return;
       }
 
-      const statusResult = await window.api.cloudSync.status(game.id);
+      const statusResult = await getStatus(game.id);
       if (!statusResult.success || !statusResult.data) {
         await launchGameDirect(game);
         return;
@@ -248,7 +250,14 @@ export default function Home(): React.ReactElement {
 
       await launchGameDirect(game);
     },
-    [gameActionLoading, isOfflineMode, isValidCreds, launchGameDirect],
+    [
+      gameActionLoading,
+      isOfflineMode,
+      isValidCreds,
+      launchGameDirect,
+      getStatus,
+      buildSaveSyncMessage,
+    ],
   );
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {

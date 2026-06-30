@@ -17,8 +17,6 @@ import type { InputGameData, GameType } from "src/types/game";
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu";
 import type { ApiResult } from "src/types/result";
 
-/// <reference types="../../../preload/index.d.ts" />
-
 /**
  * ゲーム操作フックのprops
  */

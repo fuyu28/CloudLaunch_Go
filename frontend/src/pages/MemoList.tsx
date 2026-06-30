@@ -15,9 +15,9 @@ import { TbSortAscending, TbSortDescending } from "react-icons/tb";
 import { VscChromeClose } from "react-icons/vsc";
 import { Link, useNavigate } from "react-router-dom";
 
-import ConfirmModal from "@renderer/components/ConfirmModal";
-import FloatingButton from "@renderer/components/FloatingButton";
-import MemoCardBase from "@renderer/components/MemoCardBase";
+import ConfirmModal from "@renderer/components/common/ConfirmModal";
+import FloatingButton from "@renderer/components/common/FloatingButton";
+import MemoCardBase from "@renderer/components/memo/MemoCardBase";
 
 import { useDebounce } from "@renderer/hooks/useDebounce";
 import { useDropdownMenu } from "@renderer/hooks/useDropdownMenu";

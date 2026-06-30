@@ -4,26 +4,25 @@
  * このフックは、クラウドデータの削除確認に関するロジックを
  * カプセル化し、再利用可能な形で提供します。
  *
- * 主な機能：
- * - 削除確認メッセージの生成
- * - ファイル数メッセージの生成
- * - サブテキストの生成
- * - 容量メッセージの生成
- * - 追加警告の生成
+ * 削除はゲーム単位のみ。content-addressed ストレージ（git スタイル）では
+ * ブロブ単位削除は履歴破壊になるため、個別ファイル削除 UI は廃止。
  */
 
 import { useMemo } from "react";
 
-import type { CloudDataItem } from "./useCloudData";
-import type { CloudDirectoryNode } from "@renderer/utils/cloudUtils";
-import { formatFileSize, countFilesRecursively } from "@renderer/utils/cloudUtils";
-import type { WarningItem } from "@renderer/components/ConfirmModal";
+import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
+import {
+  formatFileSize,
+  countFilesRecursively,
+  sumSizesRecursively,
+} from "@renderer/utils/cloudUtils";
+import type { WarningItem } from "@renderer/components/common/ConfirmModal";
 
 /**
  * 削除確認ロジックのフック
  *
- * @param item 削除対象のアイテム
- * @param cloudData 全クラウドデータ（全削除時の計算用）
+ * @param item 削除対象のアイテム（ゲーム単位の CloudDataItem or CloudDirectoryNode）
+ * @param cloudData 全クラウドデータ（全削除時の合計計算用）
  * @returns 削除確認に必要な情報
  */
 export function useCloudDeleteConfirm(
@@ -41,20 +40,12 @@ export function useCloudDeleteConfirm(
       return "";
     }
 
-    const itemName = item.name;
-
-    // CloudDirectoryNode（ツリービューからの削除）の場合
-    if ("path" in item) {
-      const directoryNode = item as CloudDirectoryNode;
-      if (directoryNode.isDirectory) {
-        return `${itemName}以下のディレクトリ・ファイルを完全に削除しますか？`;
-      } else {
-        return `${itemName}ファイルを完全に削除しますか？`;
-      }
+    // 全削除センチネル（path === "*"）
+    if ("path" in item && (item as CloudDirectoryNode).path === "*") {
+      return "全てのゲームのクラウドデータを完全に削除しますか？";
     }
 
-    // CloudDataItem（カードビューからの削除）の場合
-    return `${itemName}のクラウドデータを完全に削除しますか？`;
+    return `「${item.name}」のクラウドデータをすべて削除しますか？`;
   }, [item]);
 
   const fileCountMessage = useMemo((): string => {
@@ -62,44 +53,39 @@ export function useCloudDeleteConfirm(
       return "0 個のファイルが削除されます";
     }
 
-    // CloudDataItem（カードビューからの削除）の場合
+    // 全削除センチネル
+    if ("path" in item && (item as CloudDirectoryNode).path === "*") {
+      const totalFiles = cloudData.reduce((sum, cloudItem) => sum + cloudItem.fileCount, 0);
+      return `全ての ${totalFiles} 個のファイルが削除されます`;
+    }
+
     if ("fileCount" in item) {
       return `${item.fileCount} 個のファイルが削除されます`;
     }
 
-    // CloudDirectoryNode（ツリービューからの削除）の場合
-    if ("path" in item) {
-      const directoryNode = item as CloudDirectoryNode;
-
-      // 全削除の場合
-      if (directoryNode.path === "*") {
-        const totalFiles = cloudData.reduce((sum, cloudItem) => sum + cloudItem.fileCount, 0);
-        return `全ての ${totalFiles} 個のファイルが削除されます`;
-      }
-
-      // 単一ファイルの場合
-      if (!directoryNode.isDirectory) {
-        return "1 個のファイルが削除されます";
-      }
-
-      // ディレクトリの場合（再帰的にカウント）
-      const fileCount = countFilesRecursively(directoryNode);
+    // CloudDirectoryNode（ツリービューからゲームノードを選択した場合）
+    const node = item as CloudDirectoryNode;
+    if (node.isDirectory) {
+      const fileCount = countFilesRecursively(node);
       return `${fileCount} 個のファイルが削除されます`;
     }
 
-    return "0 個のファイルが削除されます";
+    return "1 個のファイルが削除されます";
   }, [item, cloudData]);
 
   const subText = useMemo((): string | undefined => {
-    if (!item || !("path" in item)) {
+    if (!item) {
       return undefined;
     }
 
-    const directoryNode = item as CloudDirectoryNode;
-    const pathInfo = directoryNode.path;
-    const fileLabel = !directoryNode.isDirectory ? " (ファイル)" : "";
+    // 全削除センチネルにはサブテキスト不要
+    if ("path" in item && (item as CloudDirectoryNode).path === "*") {
+      return undefined;
+    }
 
-    return `パス: ${pathInfo}${fileLabel}`;
+    // remotePath（CloudDataItem）またはpath（CloudDirectoryNode）を表示
+    const path = "remotePath" in item ? item.remotePath : (item as CloudDirectoryNode).path;
+    return `GameID: ${path}`;
   }, [item]);
 
   const sizeMessage = useMemo((): string => {
@@ -111,24 +97,16 @@ export function useCloudDeleteConfirm(
     if ("totalSize" in item) {
       size = item.totalSize;
     } else {
-      size = item.size;
+      const node = item as CloudDirectoryNode;
+      size = node.isDirectory ? sumSizesRecursively(node) : node.size;
     }
 
     return `総容量: ${formatFileSize(size)}`;
   }, [item]);
 
   const additionalWarnings = useMemo((): WarningItem[] => {
-    if (!item || !("path" in item)) {
-      return [];
-    }
-
-    const directoryNode = item as CloudDirectoryNode;
-    if (directoryNode.isDirectory) {
-      return [{ text: "サブディレクトリも含めて完全に削除されます" }];
-    }
-
     return [];
-  }, [item]);
+  }, []);
 
   return {
     deleteMessage,

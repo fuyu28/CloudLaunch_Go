@@ -1,0 +1,199 @@
+/**
+ * @fileoverview ゲーム登録・編集モーダルコンポーネント
+ *
+ * このコンポーネントは、新規ゲーム登録と既存ゲーム編集の両方に対応したモーダルフォームです。
+ * 主な機能：
+ * - ゲーム基本情報の入力（タイトル、発行元、実行ファイルパス等）
+ * - ファイル・フォルダ選択のためのネイティブダイアログ連携
+ * - リアルタイムバリデーション（必須フィールドチェック）
+ * - エラーハンドリングとユーザー向けトースト通知
+ *
+ * 使用技術：
+ * - React Hooks（useState, useEffect, useCallback, useMemo）
+ * - DaisyUI モーダルコンポーネント
+ * - react-hot-toast エラー通知
+ */
+
+import { useState, useEffect, useRef } from "react";
+
+import { BaseModal } from "../common/BaseModal";
+import { GameFormFields } from "./GameFormFields";
+import type { InputGameData } from "src/types/game";
+import type { ApiResult } from "src/types/result";
+import { useGameFormHandlers } from "../../hooks/useGameFormHandlers";
+import { useGameFormValidationZod } from "../../hooks/useGameFormValidationZod";
+import { handleApiError, handleUnexpectedError } from "../../utils/errorHandler";
+
+type GameFormModalProps = {
+  mode: "add" | "edit";
+  initialData?: InputGameData | undefined;
+  isOpen: boolean;
+  onClose: () => void;
+  onClosed?: () => void;
+  onSubmit: (gameData: InputGameData) => Promise<ApiResult>;
+  onOpenCloudImport?: () => void;
+  onOpenErogameScapeImport?: () => void;
+};
+
+const initialValues: InputGameData = {
+  title: "",
+  publisher: "",
+  saveFolderPath: "",
+  exePath: "",
+  imagePath: "",
+};
+
+const modeMap: Record<string, string> = {
+  add: "追加",
+  edit: "更新",
+};
+
+export default function GameFormModal({
+  mode,
+  initialData,
+  isOpen,
+  onClose,
+  onClosed,
+  onSubmit,
+  onOpenCloudImport,
+  onOpenErogameScapeImport,
+}: GameFormModalProps): React.JSX.Element {
+  const [gameData, setGameData] = useState<InputGameData>(
+    mode === "edit" && initialData ? initialData : initialValues,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const validation = useGameFormValidationZod(gameData);
+  const { isBrowsing, browseImage, browseExe, browseSaveFolder, handleChange } =
+    useGameFormHandlers({
+      setGameData,
+      validation,
+    });
+  const prevIsOpenRef = useRef(isOpen);
+
+  useEffect(() => {
+    if (mode === "edit" && initialData) {
+      setGameData(initialData);
+    } else {
+      setGameData(initialValues);
+    }
+  }, [initialData, isOpen, mode]);
+
+  // モーダルが開かれるたびにtouchedFieldsをリセット
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current) {
+      validation.resetTouchedFields();
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, validation]);
+
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+
+    // 送信前にすべてのフィールドをタッチ済みにしてエラーを表示
+    validation.markAllFieldsAsTouched();
+
+    setSubmitting(true);
+    try {
+      // ファイル存在チェックを含む非同期バリデーションを実行
+      const validationResult = await validation.validateAllFieldsWithFileCheck();
+      if (!validationResult.isValid) {
+        // バリデーションエラーがある場合は送信を停止
+        return;
+      }
+
+      const result = await onSubmit(gameData);
+      if (result.success) {
+        resetForm();
+        onClose();
+      } else {
+        handleApiError(result, "エラーが発生しました");
+      }
+    } catch (error) {
+      handleUnexpectedError(error, "ゲーム情報の送信");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetForm = (): void => {
+    setGameData(initialValues);
+    setSubmitting(false);
+    validation.resetTouchedFields();
+  };
+
+  const handleCancel = (): void => {
+    resetForm();
+    onClose();
+  };
+
+  const footer = (
+    <div className="flex justify-end space-x-2">
+      <button type="button" className="btn" onClick={handleCancel} disabled={submitting}>
+        キャンセル
+      </button>
+      <button
+        type="submit"
+        className="btn btn-primary"
+        onClick={handleSubmit}
+        disabled={submitting || !validation.canSubmit}
+      >
+        {`${modeMap[mode]}${submitting ? "中…" : ""}`}
+      </button>
+    </div>
+  );
+
+  return (
+    <BaseModal
+      id="game-form-modal"
+      isOpen={isOpen}
+      onClose={onClose}
+      onClosed={onClosed}
+      title={mode === "add" ? "ゲームの登録" : "ゲーム情報を編集"}
+      size="lg"
+      footer={footer}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {mode === "add" && (onOpenCloudImport || onOpenErogameScapeImport) && (
+          <div className="rounded-lg border border-base-300 bg-base-100 p-4">
+            <div className="text-sm font-semibold mb-3">他の登録方法</div>
+            <div className="flex flex-wrap gap-2">
+              {onOpenCloudImport && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    onClose();
+                    onOpenCloudImport();
+                  }}
+                >
+                  既存ゲームを登録
+                </button>
+              )}
+              {onOpenErogameScapeImport && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    onClose();
+                    onOpenErogameScapeImport();
+                  }}
+                >
+                  批評空間から登録
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        <GameFormFields
+          gameData={gameData}
+          onChange={handleChange}
+          onBrowseImage={browseImage}
+          onBrowseExe={browseExe}
+          onBrowseSaveFolder={browseSaveFolder}
+          disabled={submitting || isBrowsing}
+          validation={validation}
+        />
+      </form>
+    </BaseModal>
+  );
+}

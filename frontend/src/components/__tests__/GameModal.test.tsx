@@ -9,24 +9,22 @@
  * - 送信処理
  */
 
-/// <reference types="jest" />
-/// <reference types="@testing-library/jest-dom" />
-
+import { vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "react-hot-toast";
 
 import type { InputGameData } from "src/types/game";
 import type { ApiResult } from "src/types/result";
-import GameModal from "../GameModal";
+import GameModal from "../game/GameModal";
 
 // React Hot Toastのモック
-jest.mock("react-hot-toast", () => {
+vi.mock("react-hot-toast", () => {
   const mockToast = {
-    error: jest.fn(),
-    success: jest.fn(),
-    loading: jest.fn(),
-    dismiss: jest.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    loading: vi.fn(),
+    dismiss: vi.fn(),
   };
   return {
     __esModule: true,
@@ -36,28 +34,31 @@ jest.mock("react-hot-toast", () => {
 });
 
 // ファイル検証のモック - テスト環境では常にtrueを返す
-jest.mock("../../utils/fileValidation", () => ({
-  checkFileExists: jest.fn().mockResolvedValue(true),
-  checkDirectoryExists: jest.fn().mockResolvedValue(true),
-  isUrl: jest.fn().mockReturnValue(false),
+vi.mock("src/utils/fileValidation", () => ({
+  checkFileExists: vi.fn().mockResolvedValue(true),
+  checkDirectoryExists: vi.fn().mockResolvedValue(true),
+  isUrl: vi.fn().mockReturnValue(false),
+  validateExecutablePath: vi.fn().mockResolvedValue(true),
+  validateImagePath: vi.fn().mockResolvedValue(true),
+  validateSaveFolderPath: vi.fn().mockResolvedValue(true),
 }));
 
 // WindowのAPIモック
 Object.defineProperty(window, "api", {
   value: {
     file: {
-      selectFile: jest.fn().mockResolvedValue("selected/file/path"),
-      selectDirectory: jest.fn().mockResolvedValue("selected/directory/path"),
-      checkFileExists: jest.fn().mockResolvedValue(true),
-      checkDirectoryExists: jest.fn().mockResolvedValue(true),
+      selectFile: vi.fn().mockResolvedValue("selected/file/path"),
+      selectDirectory: vi.fn().mockResolvedValue("selected/directory/path"),
+      checkFileExists: vi.fn().mockResolvedValue(true),
+      checkDirectoryExists: vi.fn().mockResolvedValue(true),
     },
   },
   writable: true,
 });
 
 describe("GameModal", () => {
-  const mockOnClose = jest.fn();
-  const mockOnSubmit = jest.fn();
+  const mockOnClose = vi.fn();
+  const mockOnSubmit = vi.fn();
   const user = userEvent.setup();
 
   const defaultProps = {
@@ -78,15 +79,15 @@ describe("GameModal", () => {
 
   // Window APIのモック
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Window APIをモック
     Object.assign(global.window, {
       api: {
         file: {
-          selectFile: jest.fn(),
-          selectFolder: jest.fn(),
-          validatePath: jest.fn(),
+          selectFile: vi.fn(),
+          selectFolder: vi.fn(),
+          validatePath: vi.fn(),
         },
       },
     });
@@ -165,7 +166,7 @@ describe("GameModal", () => {
 
   describe("ファイル選択", () => {
     it("画像ファイル選択が正常に動作する", async () => {
-      const mockSelectFile = jest.fn().mockResolvedValue({
+      const mockSelectFile = vi.fn().mockResolvedValue({
         success: true,
         data: "/selected/image.jpg",
       });
@@ -173,8 +174,8 @@ describe("GameModal", () => {
         api: {
           file: {
             selectFile: mockSelectFile,
-            selectFolder: jest.fn(),
-            validatePath: jest.fn(),
+            selectFolder: vi.fn(),
+            validatePath: vi.fn(),
           },
         },
       });
@@ -192,7 +193,7 @@ describe("GameModal", () => {
     });
 
     it("実行ファイル選択が正常に動作する", async () => {
-      const mockSelectFile = jest.fn().mockResolvedValue({
+      const mockSelectFile = vi.fn().mockResolvedValue({
         success: true,
         data: "/selected/game.exe",
       });
@@ -200,8 +201,8 @@ describe("GameModal", () => {
         api: {
           file: {
             selectFile: mockSelectFile,
-            selectFolder: jest.fn(),
-            validatePath: jest.fn(),
+            selectFolder: vi.fn(),
+            validatePath: vi.fn(),
           },
         },
       });
@@ -219,16 +220,16 @@ describe("GameModal", () => {
     });
 
     it("セーブフォルダ選択が正常に動作する", async () => {
-      const mockSelectFolder = jest.fn().mockResolvedValue({
+      const mockSelectFolder = vi.fn().mockResolvedValue({
         success: true,
         data: "/selected/saves",
       });
       Object.assign(global.window, {
         api: {
           file: {
-            selectFile: jest.fn(),
+            selectFile: vi.fn(),
             selectFolder: mockSelectFolder,
-            validatePath: jest.fn(),
+            validatePath: vi.fn(),
           },
         },
       });
@@ -293,7 +294,6 @@ describe("GameModal", () => {
           exePath: "/path/to/game.exe",
           saveFolderPath: "",
           imagePath: "",
-          playStatus: "unplayed",
         });
       });
 

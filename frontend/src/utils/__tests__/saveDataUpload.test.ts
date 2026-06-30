@@ -11,7 +11,7 @@ describe("saveDataUpload", () => {
           pull: vi.fn(),
         },
       },
-    } as typeof window;
+    } as unknown as typeof window;
   });
 
   it("アップロードで cloudSync.push を呼ぶ", async () => {
@@ -19,7 +19,6 @@ describe("saveDataUpload", () => {
 
     const result = await uploadSaveDataAndSyncHash({
       gameId: "game-1",
-      saveFolderPath: "/tmp/save",
     });
 
     expect(result).toEqual({ success: true });
@@ -31,10 +30,9 @@ describe("saveDataUpload", () => {
 
     const result = await downloadSaveDataAndSyncMetadata({
       gameId: "game-2",
-      saveFolderPath: "/tmp/save",
     });
 
     expect(result).toEqual({ success: true });
-    expect(window.api.cloudSync.pull).toHaveBeenCalledWith("game-2");
+    expect(window.api.cloudSync.pull).toHaveBeenCalledWith("game-2", false);
   });
 });
