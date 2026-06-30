@@ -49,11 +49,15 @@ export type UseCloudDataReturn = {
 function buildCloudDataFromTree(tree: CloudDirectoryNode[]): CloudDataItem[] {
   return tree.map((node) => {
     if (node.isDirectory) {
+      // children が取得済みなら配下から集計。未取得（=トップレベルのゲームで遅延中）は
+      // commit メタ由来の node.size / node.fileCount を使い、全削除モーダル等の集計が
+      // 「未取得だから 0」にならないようにする。
+      const childrenLoaded = node.children !== undefined;
       return {
         name: node.name,
-        totalSize: sumSizesRecursively(node),
-        fileCount: countFilesRecursively(node),
-        lastModified: latestModifiedRecursively(node),
+        totalSize: childrenLoaded ? sumSizesRecursively(node) : node.size,
+        fileCount: childrenLoaded ? countFilesRecursively(node) : (node.fileCount ?? 0),
+        lastModified: childrenLoaded ? latestModifiedRecursively(node) : node.lastModified,
         remotePath: node.path,
       };
     }
