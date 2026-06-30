@@ -121,13 +121,16 @@ export function useCloudData(): UseCloudDataReturn {
 
       const summaries = result.data ?? [];
       // 各ゲームを「未取得（children: undefined）」のトップノードとして表示する。
+      // commit メタにファイル数 / 総サイズが保存されていればここで持ち回し、
+      // ナビゲートしなくてもカード／ツリーに表示できるようにする。
       const topNodes: CloudDirectoryNode[] = summaries.map((summary) => ({
         name: summary.name,
         path: summary.remotePath,
         isDirectory: true,
-        size: 0,
+        size: summary.totalSize,
         lastModified: summary.lastModified,
         children: undefined,
+        fileCount: summary.fileCount,
       }));
 
       loadedGamesRef.current.clear();

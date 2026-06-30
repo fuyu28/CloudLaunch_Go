@@ -59,13 +59,14 @@ export function normalizeCloudDirectoryNode(
 
 /**
  * 軽量サマリ（CloudGameSummaryItem）を CloudDataItem に正規化する。
- * ファイル数・サイズはこの段階では不明なため 0 とし、ゲームを開いたときに遅延取得する。
+ * ファイル数・サイズは commit メタにキャッシュされていれば反映される。
+ * 旧 commit にはフィールドが無く 0 が入る（表示側で「未取得」扱い）。
  */
 export function normalizeCloudGameSummaryItem(item: modelsApp.CloudGameSummaryItem): CloudDataItem {
   return {
     name: item.name,
-    totalSize: 0,
-    fileCount: 0,
+    totalSize: item.totalSize ?? 0,
+    fileCount: item.fileCount ?? 0,
     lastModified: normalizeApiDate(item.lastModified),
     remotePath: item.remotePath,
   };

@@ -45,12 +45,15 @@ export default function CloudTreeNode({
   const isExpanded = expandedNodes.has(node.path);
   const hasChildren = node.children && node.children.length > 0;
   // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
-  // 未取得（children が undefined）のあいだは数値を「—」で表示し、展開で取得を促す。
-  const isLoaded = isCloudNodeLoaded(node);
+  // 未取得（children が undefined）でも展開ボタンを残して取得を促す。
+  const childrenLoaded = isCloudNodeLoaded(node);
   const isLoading = loadingGameIds?.has(node.path) ?? false;
-  // 未取得のゲームでも展開ボタンを表示してファイル取得をトリガーできるようにする。
-  const isExpandable = node.isDirectory && (hasChildren || !isLoaded);
-  const displaySize = node.isDirectory ? sumSizesRecursively(node) : node.size;
+  const isExpandable = node.isDirectory && (hasChildren || !childrenLoaded);
+  // 表示用の集計：取得済みなら配下から、未取得なら commit メタ由来のサマリ値を使う。
+  // 旧 commit など値が無いものは hasMetrics=false で「—」を出す。
+  const displayCount = childrenLoaded ? countFilesRecursively(node) : (node.fileCount ?? 0);
+  const displaySize = node.isDirectory && childrenLoaded ? sumSizesRecursively(node) : node.size;
+  const hasMetrics = !node.isDirectory || displayCount > 0;
   const displayLastModified = node.isDirectory
     ? latestModifiedRecursively(node)
     : node.lastModified;
@@ -95,10 +98,10 @@ export default function CloudTreeNode({
               {node.name}
             </div>
             <div className="text-xs text-base-content/60">
-              {isLoaded ? formatFileSize(displaySize) : "—"} • {formatDate(displayLastModified)}
+              {hasMetrics ? formatFileSize(displaySize) : "—"} • {formatDate(displayLastModified)}
               {node.isDirectory && (
                 <span className="ml-2">
-                  ({isLoaded ? `${countFilesRecursively(node)} ファイル` : "— ファイル"})
+                  ({hasMetrics ? `${displayCount} ファイル` : "— ファイル"})
                 </span>
               )}
             </div>
@@ -141,7 +144,7 @@ export default function CloudTreeNode({
       )}
 
       {/* 未取得ゲームを展開した直後はファイル一覧を遅延取得中 */}
-      {isExpanded && !isLoaded && (
+      {isExpanded && !childrenLoaded && (
         <div
           className="flex items-center gap-2 px-3 py-2 text-xs text-base-content/60"
           style={{ paddingLeft: `${(level + 1) * 1.5 + 0.75}rem` }}

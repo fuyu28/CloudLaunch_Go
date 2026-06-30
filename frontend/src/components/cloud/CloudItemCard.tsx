@@ -123,11 +123,13 @@ export function DirectoryNodeCard({
     }
   };
 
-  // ゲーム（トップレベルのディレクトリ）はファイル一覧を遅延取得するため、
-  // 未取得（children が undefined）のあいだはファイル数・サイズ行を出さない。
-  // 取得済みになったゲーム配下のディレクトリ／ファイルでは従来どおり表示する。
-  const isLoaded = isCloudNodeLoaded(node);
-  const totalSize = node.isDirectory ? sumSizesRecursively(node) : node.size;
+  // children を取得済みなら配下を集計、未取得なら commit メタ由来の
+  // node.fileCount / node.size（=サマリの fileCount / totalSize）を使う。
+  // どちらも取れない旧 commit ではゼロになり hasMetrics=false で行を隠す。
+  const childrenLoaded = isCloudNodeLoaded(node);
+  const displayCount = childrenLoaded ? countFilesRecursively(node) : (node.fileCount ?? 0);
+  const displaySize = node.isDirectory && childrenLoaded ? sumSizesRecursively(node) : node.size;
+  const hasMetrics = !node.isDirectory || displayCount > 0;
 
   return (
     <div
@@ -147,15 +149,15 @@ export function DirectoryNodeCard({
             <h3 className="font-medium text-base-content truncate" title={node.name}>
               {node.name}
             </h3>
-            {isLoaded && (
+            {hasMetrics && (
               <div className="text-sm text-base-content/70 space-y-1">
                 {node.isDirectory && (
                   <div className="flex items-center gap-2">
                     <FiFile className="text-xs" />
-                    <span>{countFilesRecursively(node)} ファイル</span>
+                    <span>{displayCount} ファイル</span>
                   </div>
                 )}
-                <div>{formatFileSize(totalSize)}</div>
+                <div>{formatFileSize(displaySize)}</div>
               </div>
             )}
           </div>
