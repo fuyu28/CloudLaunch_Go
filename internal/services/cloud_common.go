@@ -11,12 +11,15 @@ import (
 )
 
 // resolveS3Config はアプリ設定と認証情報から S3Config を構築する。
+// ForcePathStyle は ValidateCredential（app 層）と揃えないと、接続テストは通るが
+// Push/Pull だけ MinIO 等で失敗する経路分裂になる。
 func resolveS3Config(base config.Config, credential *credentials.Credential) storage.S3Config {
 	return storage.S3Config{
-		Endpoint: util.FirstNonEmpty(credential.Endpoint, base.S3Endpoint),
-		Region:   util.FirstNonEmpty(credential.Region, base.S3Region),
-		Bucket:   util.FirstNonEmpty(credential.BucketName, base.S3Bucket),
-		UseTLS:   base.S3UseTLS,
+		Endpoint:       util.FirstNonEmpty(credential.Endpoint, base.S3Endpoint),
+		Region:         util.FirstNonEmpty(credential.Region, base.S3Region),
+		Bucket:         util.FirstNonEmpty(credential.BucketName, base.S3Bucket),
+		ForcePathStyle: base.S3ForcePathStyle,
+		UseTLS:         base.S3UseTLS,
 	}
 }
 

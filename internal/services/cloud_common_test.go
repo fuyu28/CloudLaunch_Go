@@ -1,6 +1,11 @@
 package services
 
-import "testing"
+import (
+	"testing"
+
+	"CloudLaunch_Go/internal/config"
+	"CloudLaunch_Go/internal/infrastructure/credentials"
+)
 
 func TestNormalizeImageExt(t *testing.T) {
 	t.Parallel()
@@ -32,5 +37,31 @@ func TestNormalizeImageExt(t *testing.T) {
 				t.Fatalf("normalizeImageExt(%q, %q) = %q, want %q", c.ext, c.contentType, got, c.want)
 			}
 		})
+	}
+}
+
+func TestResolveS3ConfigPropagatesForcePathStyle(t *testing.T) {
+	t.Parallel()
+
+	cfg := resolveS3Config(config.Config{
+		S3Endpoint:       "https://example.invalid",
+		S3Region:         "auto",
+		S3Bucket:         "fallback-bucket",
+		S3ForcePathStyle: true,
+		S3UseTLS:         true,
+	}, &credentials.Credential{
+		Endpoint:   "https://minio.local",
+		Region:     "us-east-1",
+		BucketName: "games",
+	})
+
+	if !cfg.ForcePathStyle {
+		t.Fatal("expected ForcePathStyle to follow app config (MinIO path-style)")
+	}
+	if cfg.Endpoint != "https://minio.local" || cfg.Bucket != "games" || cfg.Region != "us-east-1" {
+		t.Fatalf("unexpected s3 config: %+v", cfg)
+	}
+	if !cfg.UseTLS {
+		t.Fatal("expected UseTLS from base config")
 	}
 }
