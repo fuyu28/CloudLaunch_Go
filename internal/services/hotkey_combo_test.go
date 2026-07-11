@@ -16,10 +16,8 @@ func TestParseHotkeyCombo(t *testing.T) {
 		wantErrSub string
 	}{
 		{name: "default", combo: "Ctrl+Alt+S", wantKey: 'S', wantMod: modControl | modAlt},
-		{name: "aliases", combo: "control+windows+f12", wantKey: vkF1 + 11, wantMod: modControl | modWin},
+		{name: "aliases", combo: "control+windows+f8", wantKey: vkF1 + 7, wantMod: modControl | modWin},
 		{name: "bare F8", combo: "F8", wantKey: vkF1 + 7, wantMod: 0},
-		{name: "printscreen", combo: "PrintScreen", wantKey: vkSnapshot, wantMod: 0},
-		{name: "prtsc alias", combo: "Ctrl+PrtSc", wantKey: vkSnapshot, wantMod: modControl},
 		{name: "shift insert", combo: "Shift+Insert", wantKey: vkInsert, wantMod: modShift},
 		{name: "page aliases", combo: "Alt+PgDn", wantKey: vkNext, wantMod: modAlt},
 		{name: "space", combo: "Ctrl+Space", wantKey: vkSpace, wantMod: modControl},
@@ -27,6 +25,9 @@ func TestParseHotkeyCombo(t *testing.T) {
 		{name: "unknown", combo: "Ctrl+Foo", wantErrSub: "unknown key"},
 		{name: "modifier only", combo: "Ctrl+Alt", wantErrSub: "key is missing"},
 		{name: "multiple keys", combo: "Ctrl+A+B", wantErrSub: "multiple keys"},
+		{name: "f12 rejected", combo: "F12", wantErrSub: "unknown key"},
+		{name: "ctrl f12 rejected", combo: "Ctrl+F12", wantErrSub: "unknown key"},
+		{name: "printscreen rejected", combo: "PrintScreen", wantErrSub: "unknown key"},
 		{name: "f13 rejected", combo: "F13", wantErrSub: "unknown key"},
 	}
 
@@ -64,13 +65,12 @@ func TestParseHotkeyCombo(t *testing.T) {
 func TestHotkeyKeyName(t *testing.T) {
 	t.Parallel()
 	cases := map[uint32]string{
-		'S':        "S",
-		vkF1 + 7:   "F8",
-		vkSnapshot: "PrintScreen",
-		vkInsert:   "Insert",
-		vkSpace:    "Space",
-		vkPrior:    "PageUp",
-		vkScroll:   "ScrollLock",
+		'S':      "S",
+		vkF1 + 7: "F8",
+		vkInsert: "Insert",
+		vkSpace:  "Space",
+		vkPrior:  "PageUp",
+		vkScroll: "ScrollLock",
 	}
 	for key, want := range cases {
 		if got := hotkeyKeyName(key); got != want {
@@ -81,8 +81,14 @@ func TestHotkeyKeyName(t *testing.T) {
 
 func TestValidateHotkeyCombo(t *testing.T) {
 	t.Parallel()
-	if err := ValidateHotkeyCombo("PrintScreen"); err != nil {
-		t.Fatalf("ValidateHotkeyCombo(PrintScreen): %v", err)
+	if err := ValidateHotkeyCombo("F8"); err != nil {
+		t.Fatalf("ValidateHotkeyCombo(F8): %v", err)
+	}
+	if err := ValidateHotkeyCombo("PrintScreen"); err == nil {
+		t.Fatal("expected error for PrintScreen")
+	}
+	if err := ValidateHotkeyCombo("F12"); err == nil {
+		t.Fatal("expected error for F12")
 	}
 	if err := ValidateHotkeyCombo("Nope"); err == nil {
 		t.Fatal("expected error for Nope")

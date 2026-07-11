@@ -8,37 +8,33 @@ import (
 )
 
 const (
-	vkF1       = 0x70
-	vkSnapshot = 0x2C // PrintScreen
-	vkInsert   = 0x2D
-	vkDelete   = 0x2E
-	vkHome     = 0x24
-	vkEnd      = 0x23
-	vkPrior    = 0x21 // PageUp
-	vkNext     = 0x22 // PageDown
-	vkScroll   = 0x91
-	vkPause    = 0x13
-	vkSpace    = 0x20
+	vkF1     = 0x70
+	vkInsert = 0x2D
+	vkDelete = 0x2E
+	vkHome   = 0x24
+	vkEnd    = 0x23
+	vkPrior  = 0x21 // PageUp
+	vkNext   = 0x22 // PageDown
+	vkScroll = 0x91
+	vkPause  = 0x13
+	vkSpace  = 0x20
 )
 
 // namedHotkeyKeys は表示名 → VK。エイリアスは parse 側で正規化する。
+// PrintScreen / F12 は OS・WebView 都合で安定しないため非対応。
 var namedHotkeyKeys = map[string]uint32{
-	"PRINTSCREEN": vkSnapshot,
-	"INSERT":      vkInsert,
-	"DELETE":      vkDelete,
-	"HOME":        vkHome,
-	"END":         vkEnd,
-	"PAGEUP":      vkPrior,
-	"PAGEDOWN":    vkNext,
-	"SCROLLLOCK":  vkScroll,
-	"PAUSE":       vkPause,
-	"SPACE":       vkSpace,
+	"INSERT":     vkInsert,
+	"DELETE":     vkDelete,
+	"HOME":       vkHome,
+	"END":        vkEnd,
+	"PAGEUP":     vkPrior,
+	"PAGEDOWN":   vkNext,
+	"SCROLLLOCK": vkScroll,
+	"PAUSE":      vkPause,
+	"SPACE":      vkSpace,
 }
 
 var namedHotkeyAliases = map[string]string{
-	"PRTSC":  "PRINTSCREEN",
-	"PRTSCR": "PRINTSCREEN",
-	"PRINT":  "PRINTSCREEN",
 	"INS":    "INSERT",
 	"DEL":    "DELETE",
 	"PGUP":   "PAGEUP",
@@ -105,7 +101,8 @@ func parseHotkeyKey(token string) (uint32, bool) {
 	}
 	if strings.HasPrefix(token, "F") && len(token) > 1 {
 		value, err := strconv.Atoi(token[1:])
-		if err == nil && value >= 1 && value <= 12 {
+		// F12 は DevTools / ホスト側に取られやすいため非対応（F1–F11 のみ）
+		if err == nil && value >= 1 && value <= 11 {
 			return uint32(vkF1 + value - 1), true
 		}
 	}
@@ -125,14 +122,12 @@ func hotkeyKeyName(key uint32) string {
 	if key >= '0' && key <= '9' {
 		return string(rune(key))
 	}
-	if key >= vkF1 && key <= vkF1+11 {
+	if key >= vkF1 && key <= vkF1+10 {
 		return "F" + strconv.Itoa(int(key-vkF1+1))
 	}
 	for name, vk := range namedHotkeyKeys {
 		if vk == key {
 			switch name {
-			case "PRINTSCREEN":
-				return "PrintScreen"
 			case "SCROLLLOCK":
 				return "ScrollLock"
 			case "PAGEUP":

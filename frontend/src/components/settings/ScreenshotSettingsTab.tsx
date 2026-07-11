@@ -56,8 +56,8 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
           <div className="mb-2">
             <h4 className="font-medium">ホットキー</h4>
             <p className="text-sm text-base-content/70">
-              例: Ctrl+Alt+S / PrintScreen / F8。英数字と Space には修飾キーが必要。F12
-              は環境によって DevTools に取られることがある（手入力可）
+              例: Ctrl+Alt+S / F8 / Insert。英数字と Space には修飾キーが必要。PrintScreen と F12
+              は非対応
             </p>
           </div>
           <div className="flex items-center gap-2">

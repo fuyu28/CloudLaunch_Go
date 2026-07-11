@@ -9,7 +9,6 @@ export type NormalizeHotkeyResult =
   | { ok: false; reason: NormalizeHotkeyFailureReason };
 
 const NAMED_CODE_KEYS: Record<string, string> = {
-  PrintScreen: "PrintScreen",
   Insert: "Insert",
   Delete: "Delete",
   Home: "Home",
@@ -22,7 +21,6 @@ const NAMED_CODE_KEYS: Record<string, string> = {
 };
 
 const NAMED_KEY_KEYS: Record<string, string> = {
-  PrintScreen: "PrintScreen",
   Insert: "Insert",
   Delete: "Delete",
   Home: "Home",
@@ -36,7 +34,6 @@ const NAMED_KEY_KEYS: Record<string, string> = {
 };
 
 const BARE_ALLOWED = new Set([
-  "PrintScreen",
   "Insert",
   "Delete",
   "Home",
@@ -45,13 +42,18 @@ const BARE_ALLOWED = new Set([
   "PageDown",
   "ScrollLock",
   "Pause",
-  ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
+  ...Array.from({ length: 11 }, (_, i) => `F${i + 1}`),
 ]);
 
 function resolveMainKey(event: Pick<KeyboardEvent, "key" | "code">): string | null {
   const { code, key } = event;
 
-  const fCode = /^F([1-9]|1[0-2])$/.exec(code);
+  // PrintScreen / F12 は非対応
+  if (code === "PrintScreen" || code === "F12" || key === "PrintScreen" || key === "F12") {
+    return null;
+  }
+
+  const fCode = /^F([1-9]|1[01])$/.exec(code);
   if (fCode) {
     return `F${fCode[1]}`;
   }
@@ -67,7 +69,7 @@ function resolveMainKey(event: Pick<KeyboardEvent, "key" | "code">): string | nu
     return digitMatch[1];
   }
 
-  if (/^F([1-9]|1[0-2])$/.test(key)) {
+  if (/^F([1-9]|1[01])$/.test(key)) {
     return key.toUpperCase();
   }
   if (NAMED_KEY_KEYS[key]) {
@@ -81,7 +83,8 @@ function resolveMainKey(event: Pick<KeyboardEvent, "key" | "code">): string | nu
 
 /**
  * キーダウンイベントからホットキー文字列を組み立てる。
- * Escape はキャンセル。英数字・Space は修飾必須、Fキーと名前付きキーは単体可。
+ * Escape はキャンセル。英数字・Space は修飾必須、F1–F11 と名前付きキーは単体可。
+ * PrintScreen / F12 は非対応。
  */
 export function normalizeHotkeyFromEvent(
   event: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "shiftKey" | "metaKey">,
@@ -122,7 +125,7 @@ export function normalizeHotkeyFailureMessage(reason: NormalizeHotkeyFailureReas
     case "need-modifier":
       return "英数字や Space には Ctrl / Alt / Shift / Win のいずれかを付けてください";
     case "unsupported":
-      return "このキーはホットキーに使えません";
+      return "このキーはホットキーに使えません（PrintScreen / F12 は非対応）";
     default:
       return null;
   }

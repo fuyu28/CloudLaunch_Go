@@ -28,14 +28,25 @@ describe("normalizeHotkeyFromEvent", () => {
     });
   });
 
-  it("allows bare PrintScreen and F8", () => {
-    expect(normalizeHotkeyFromEvent(evt({ key: "PrintScreen", code: "PrintScreen" }))).toEqual({
-      ok: true,
-      combo: "PrintScreen",
-    });
+  it("allows bare F8 and Insert", () => {
     expect(normalizeHotkeyFromEvent(evt({ key: "F8", code: "F8" }))).toEqual({
       ok: true,
       combo: "F8",
+    });
+    expect(normalizeHotkeyFromEvent(evt({ key: "Insert", code: "Insert" }))).toEqual({
+      ok: true,
+      combo: "Insert",
+    });
+  });
+
+  it("rejects PrintScreen and F12", () => {
+    expect(normalizeHotkeyFromEvent(evt({ key: "PrintScreen", code: "PrintScreen" }))).toEqual({
+      ok: false,
+      reason: "unsupported",
+    });
+    expect(normalizeHotkeyFromEvent(evt({ key: "F12", code: "F12", ctrlKey: true }))).toEqual({
+      ok: false,
+      reason: "unsupported",
     });
   });
 
