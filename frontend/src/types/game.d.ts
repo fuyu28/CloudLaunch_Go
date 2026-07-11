@@ -10,9 +10,9 @@ export type GameType = {
   id: string;
   title: string;
   publisher: string;
-  saveFolderPath?: string; // undefined - オプショナル設定
+  saveFolderPath?: string;
   exePath: string;
-  imagePath?: string; // undefined - オプショナル設定
+  imagePath?: string;
   createdAt: Date;
   localSaveHash?: string;
   localSaveHashUpdatedAt?: Date | null;
@@ -39,9 +39,6 @@ export type GameImport = {
   imageUrl?: string;
 };
 
-/**
- * 監視中のゲーム情報
- */
 export type MonitoringGameStatus = {
   gameId: string;
   gameTitle: string;
@@ -49,15 +46,13 @@ export type MonitoringGameStatus = {
   isPlaying: boolean;
   playTime: number;
   isPaused: boolean;
-  /** 終了確認が必要かどうか */
   needsConfirmation: boolean;
-  /** 再開確認が必要かどうか */
   needsResume: boolean;
 };
 
 export type PlaySessionType = {
   id: string;
-  sessionName?: string; // undefined - オプショナル情報
+  sessionName?: string;
   playedAt: Date;
   duration: number;
   gameId: string;

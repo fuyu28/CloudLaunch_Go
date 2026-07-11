@@ -6,10 +6,6 @@
 
 import { z } from "zod";
 
-/**
- * R2/S3認証情報のバリデーションスキーマ
- * クラウドストレージ接続情報の検証に使用
- */
 export const credsSchema = z.object({
   bucketName: z
     .string()

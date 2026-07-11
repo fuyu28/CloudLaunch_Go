@@ -5,9 +5,6 @@
  * 一貫した型安全性を提供します。
  */
 
-/**
- * メモのデータ型
- */
 export type MemoType = {
   id: string;
   title: string;
@@ -18,44 +15,29 @@ export type MemoType = {
   updatedAt: Date;
 };
 
-/**
- * メモ作成時のデータ型
- */
 export type CreateMemoData = {
   title: string;
   content: string;
   gameId: string;
 };
 
-/**
- * メモ更新時のデータ型
- */
 export type UpdateMemoData = {
   title: string;
   content: string;
 };
 
-/**
- * メモファイル操作の結果型
- */
 export type MemoFileOperationResult = {
   success: boolean;
   filePath?: string;
   error?: string;
 };
 
-/**
- * メモディレクトリ情報型
- */
 export type MemoDirectoryInfo = {
   baseDir: string;
   gameDir: string;
   fileCount: number;
 };
 
-/**
- * クラウドメモ情報型
- */
 export type CloudMemoInfo = {
   key: string;
   fileName: string;
@@ -66,9 +48,6 @@ export type CloudMemoInfo = {
   size: number;
 };
 
-/**
- * メモ同期結果型
- */
 export type MemoSyncResult = {
   success: boolean;
   uploaded: number;

@@ -6,10 +6,6 @@
 
 import { z } from "zod";
 
-/**
- * ゲーム登録・編集用のバリデーションスキーマ
- * フォーム入力値の検証に使用
- */
 export const gameSchema = z.object({
   title: z.string().min(1, "タイトルは必須です").max(100, "100文字以内で入力してください"),
   publisher: z.string().min(1, "ブランド名は必須です").max(50, "50文字以内で入力してください"),
@@ -18,10 +14,6 @@ export const gameSchema = z.object({
   saveFolderPath: z.string().optional().or(z.literal("")),
 });
 
-/**
- * ゲームフォーム入力データの追加バリデーション
- * ファイルパスの存在チェックや拡張子チェックなど
- */
 export const gameFormSchema = gameSchema
   .refine(
     (data) => {
@@ -62,10 +54,6 @@ export const gameFormSchema = gameSchema
     },
   );
 
-/**
- * ゲームプロセス監視状態のスキーマ
- * ゲーム起動中の状態管理に使用
- */
 export const monitoringGameStatusSchema = z.object({
   gameId: z.uuid("有効なUUIDを指定してください"),
   gameTitle: z.string().min(1, "ゲームタイトルは必須です"),
