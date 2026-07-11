@@ -728,8 +728,8 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 // pullApplyToDB はリモートのゲーム情報・セッション・同期基準・base tree を単一トランザクションで反映する。
 // localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
 func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
-	// ゲーム情報・セッション・localSyncHead・localSaveTree を単一トランザクションで反映する。
-	// 部分失敗による DB 不整合と、同期対象外 Route 参照による FK 違反を防ぐ。
+	// 単一トランザクションにまとめる理由: 部分失敗による DB 不整合と、
+	// 同期対象外 Route 参照による FK 違反を防ぐため。
 	updatedGame := domain.Game{
 		ID:             cloudG.ID,
 		Title:          cloudG.Title,

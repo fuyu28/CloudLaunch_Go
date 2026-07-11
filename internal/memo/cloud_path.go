@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// memoID は DB 側で hex(randomblob) 生成のため下線を含まない。タイトルの下線と
+// 衝突しても最後の `_` 区切りを ID とみなせるので、この前提を崩す ID 生成に変えない。
 var memoPathRegex = regexp.MustCompile(`^games/([^/]+)/memo/(.+)_([^_]+)\.md$`)
 
 // SanitizeForCloudPath はクラウド用に文字列を整形する。

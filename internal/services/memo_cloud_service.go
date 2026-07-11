@@ -65,12 +65,10 @@ func NewMemoCloudService(
 	}
 }
 
-// SetS3ForcePathStyle は path-style アドレス指定の有効/無効を更新する。
 func (service *MemoCloudService) SetS3ForcePathStyle(enabled bool) {
 	service.config.S3ForcePathStyle = enabled
 }
 
-// SetS3UseTLS は S3 通信の TLS 有効/無効を更新する。
 func (service *MemoCloudService) SetS3UseTLS(enabled bool) {
 	service.config.S3UseTLS = enabled
 }

@@ -76,17 +76,14 @@ func (service *ScreenshotService) resolvePID(exePath string) (int, error) {
 	return pids[0], nil
 }
 
-// SetClientOnly はキャプチャ対象をクライアント領域のみにするか更新する。
 func (service *ScreenshotService) SetClientOnly(enabled bool) {
 	service.clientOnly = enabled
 }
 
-// SetLocalJpeg はローカル保存をJPEG形式にするか更新する。
 func (service *ScreenshotService) SetLocalJpeg(enabled bool) {
 	service.localJpeg = enabled
 }
 
-// SetJpegQuality はスクリーンショットJPEG品質を更新する。
 func (service *ScreenshotService) SetJpegQuality(value int) {
 	service.jpegQuality = value
 }

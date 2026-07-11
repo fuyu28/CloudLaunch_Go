@@ -11,8 +11,6 @@ import (
 )
 
 // buildScreencapArgs は screencap-cli.exe の cap サブコマンド引数を組み立てる。
-// pid が 0 のときはフォアグラウンドウィンドウを対象にする。
-// clientOnly が true のときは --crop client でタイトルバー等を除いたクライアント領域のみ撮る。
 func buildScreencapArgs(pid int, outPath string, localJpeg bool, jpegQuality int, clientOnly bool) []string {
 	args := []string{"cap", "--method", "wgc-window"}
 	if pid > 0 {
@@ -30,7 +28,6 @@ func buildScreencapArgs(pid int, outPath string, localJpeg bool, jpegQuality int
 	return args
 }
 
-// normalizeJpegQuality はJPEG品質を1-100に丸める。域外は既定値85。
 func normalizeJpegQuality(value int) int {
 	if value < 1 || value > 100 {
 		return 85

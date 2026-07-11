@@ -28,7 +28,6 @@ func UploadBytes(ctx context.Context, client *s3.Client, bucket string, key stri
 	return error
 }
 
-// stringPtr は文字列のポインタを返す。
 func stringPtr(value string) *string {
 	return &value
 }
