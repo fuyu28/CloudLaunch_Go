@@ -152,11 +152,6 @@ export function useTimeFormat(): TimeFormatHook {
 }
 
 export const timeUtils = {
-  /**
-   * 秒数を時、分、秒に分解
-   * @param seconds 総秒数
-   * @returns 時、分、秒のオブジェクト
-   */
   parseSeconds: (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -164,22 +159,10 @@ export const timeUtils = {
     return { hours, minutes, seconds: remainingSeconds };
   },
 
-  /**
-   * 時、分、秒を秒数に変換
-   * @param hours 時間
-   * @param minutes 分
-   * @param seconds 秒
-   * @returns 総秒数
-   */
   toSeconds: (hours: number, minutes: number, seconds: number): number => {
     return hours * 3600 + minutes * 60 + seconds;
   },
 
-  /**
-   * 詳細フォーマット（非hooks版）
-   * @param seconds 秒数
-   * @returns フォーマット済み文字列
-   */
   formatDuration: (seconds: number): string => {
     if (seconds <= 0) return "0秒";
 
@@ -202,11 +185,6 @@ export const timeUtils = {
     return parts.join("");
   },
 
-  /**
-   * スマートフォーマット（非hooks版）
-   * @param seconds 秒数
-   * @returns フォーマット済み文字列
-   */
   formatSmart: (seconds: number): string => {
     if (seconds <= 0) return "未プレイ";
 
@@ -226,11 +204,6 @@ export const timeUtils = {
     }
   },
 
-  /**
-   * 日付フォーマット（非hooks版）
-   * @param date 日付
-   * @returns フォーマット済み文字列（例: "2025年7月7日(月)"）
-   */
   formatDate: (date: Date): string => {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;

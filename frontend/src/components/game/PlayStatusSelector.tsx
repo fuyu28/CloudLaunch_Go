@@ -35,14 +35,6 @@ const STATUS_CONFIG = {
   },
 } as const;
 
-/**
- * プレイステータス選択コンポーネント
- *
- * ゲームのプレイステータスを選択・変更するためのドロップダウンコンポーネントです。
- *
- * @param props コンポーネントのprops
- * @returns プレイステータス選択要素
- */
 export function PlayStatusSelector({
   currentStatus,
   onStatusChange,

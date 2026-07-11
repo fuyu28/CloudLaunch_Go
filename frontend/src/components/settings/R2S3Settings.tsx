@@ -17,13 +17,6 @@ import { s3ForcePathStyleAtom, s3UseTLSAtom } from "../../state/settings";
 import { getOfflineDisabledClasses } from "../../utils/offlineUtils";
 import { logger } from "../../utils/logger";
 
-/**
- * R2/S3設定コンポーネント
- *
- * クラウドストレージの接続設定を管理します。
- *
- * @returns R2/S3設定コンポーネント要素
- */
 export default function R2S3Settings(): React.JSX.Element {
   const {
     formData,

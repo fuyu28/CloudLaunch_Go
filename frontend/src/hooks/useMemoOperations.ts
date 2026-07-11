@@ -28,15 +28,10 @@ type UseMemoOperationsReturn = {
 };
 
 /**
- * メモ操作フック
- *
  * 以前はハンドラを useCallback でメモ化していたが、以下の理由により生の関数に戻した:
  *   - MemoCardBase の memo 比較関数がハンドラを比較対象外にしているためメモ化の意味がない
  *   - 呼び出し元の MemoList/MemoCard が結局インライン矢印関数を渡すので参照は毎回変わる
  * 依存配列の管理コストに対してリターンがないため撤去している。
- *
- * @param props - フックの設定オプション
- * @returns メモ操作用の関数群
  */
 export function useMemoOperations({
   gameId,

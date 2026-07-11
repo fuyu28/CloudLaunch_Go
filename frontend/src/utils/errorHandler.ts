@@ -9,12 +9,7 @@ import toast from "react-hot-toast";
 import { logger } from "./logger";
 import type { ApiResult } from "src/types/result";
 
-/**
- * ApiResultのエラーハンドリングとトースト表示
- * @param result - API結果
- * @param fallbackMessage - result.messageが空の場合のフォールバックメッセージ
- * @param toastId - 既存のトーストIDを指定する場合（ローディング表示の更新など）
- */
+/** ApiResult 失敗時にトースト表示。toastId 指定時は既存トーストを差し替える。 */
 export function handleApiError<T = void>(
   result: ApiResult<T>,
   fallbackMessage: string = "エラーが発生しました",
@@ -35,12 +30,7 @@ export function handleApiError<T = void>(
   }
 }
 
-/**
- * 予期しないエラーのハンドリング
- * @param error - キャッチされたエラー
- * @param context - エラーが発生したコンテキスト
- * @param toastId - 既存のトーストIDを指定する場合
- */
+/** 予期しない例外をログ＋トースト。toastId 指定時は既存トーストを差し替える。 */
 export function handleUnexpectedError(error: unknown, context: string, toastId?: string): void {
   const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
   if (isDev) {

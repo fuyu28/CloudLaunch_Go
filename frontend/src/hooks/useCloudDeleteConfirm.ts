@@ -1,8 +1,5 @@
 /**
- * @fileoverview クラウドデータ削除確認ロジック
- *
- * このフックは、クラウドデータの削除確認に関するロジックを
- * カプセル化し、再利用可能な形で提供します。
+ * @fileoverview クラウドデータ削除確認の表示文言・警告を組み立てる。
  */
 
 import { useMemo } from "react";
@@ -15,13 +12,6 @@ import {
 } from "@renderer/utils/cloudUtils";
 import type { WarningItem } from "@renderer/components/common/ConfirmModal";
 
-/**
- * 削除確認ロジックのフック
- *
- * @param item 削除対象のアイテム（ゲーム単位の CloudDataItem or CloudDirectoryNode）
- * @param cloudData 全クラウドデータ（全削除時の合計計算用）
- * @returns 削除確認に必要な情報
- */
 export function useCloudDeleteConfirm(
   item: CloudDataItem | CloudDirectoryNode | null,
   cloudData: CloudDataItem[],

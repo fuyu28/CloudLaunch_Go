@@ -17,12 +17,6 @@ type MemoDropdownMenuProps = {
   className?: string;
 };
 
-/**
- * メモ三点リーダーメニューコンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns メモドロップダウンメニューJSX要素
- */
 export default function MemoDropdownMenu({
   memoId,
   isOpen,

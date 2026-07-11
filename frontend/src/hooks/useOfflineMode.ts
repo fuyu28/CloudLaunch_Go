@@ -17,26 +17,6 @@ type OfflineModeHook = {
   checkNetworkFeature: (feature?: string) => boolean;
 };
 
-/**
- * オフラインモード判定用のカスタムフック
- *
- * オフラインモードの状態を取得し、ネットワーク機能の利用可否を判定します。
- *
- * @returns オフラインモード関連の状態と関数
- *
- * @example
- * ```typescript
- * const { isOfflineMode, checkNetworkFeature, showOfflineError } = useOfflineMode()
- *
- * // ネットワーク機能実行前のチェック
- * if (!checkNetworkFeature("クラウド同期")) {
- *   return // オフラインモード時は自動でエラー表示
- * }
- *
- * // ネットワーク機能を実行
- * await uploadToCloud()
- * ```
- */
 export function useOfflineMode(): OfflineModeHook {
   const [isOfflineMode] = useAtom(offlineModeAtom);
 

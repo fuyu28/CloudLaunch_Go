@@ -105,11 +105,6 @@ export function sumSizesRecursively(node: CloudDirectoryNode): number {
   return totalSize;
 }
 
-/**
- * ディレクトリノードから最新の更新日時を取得
- * @param node ディレクトリノード
- * @returns 最新の更新日時
- */
 export function latestModifiedRecursively(node: CloudDirectoryNode): Date {
   const baseDate =
     node.lastModified instanceof Date ? node.lastModified : new Date(node.lastModified);
@@ -140,12 +135,8 @@ export type CloudPathSegment = {
 };
 
 /**
- * 指定したパスの子ディレクトリ・ファイルを取得。
- * 表示名ではなく `node.path`（一意）で解決するため、
- * 同名のゲームが2件あっても混同されない。
- * @param tree ディレクトリツリー
- * @param path パスセグメント配列
- * @returns 子ノード配列
+ * 指定パスの子ノードを返す。
+ * 表示名ではなく `node.path`（一意）で解決し、同名ゲームの混同を避ける。
  */
 export function getNodesByPath(
   tree: CloudDirectoryNode[],
