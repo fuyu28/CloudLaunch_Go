@@ -74,6 +74,10 @@ export type WindowApi = {
     /** 実行プラットフォーム（"windows" / "darwin" / "linux"）を返す */
     getPlatform: () => Promise<string>;
   };
+  browser: {
+    /** URL を既定のブラウザ（外部ブラウザ）で開く。http/https のみ受け付ける。 */
+    openExternalUrl: (url: string) => void;
+  };
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;
     updateOfflineMode: (enabled: boolean) => Promise<ApiResult<void>>;
@@ -123,9 +127,11 @@ export type WindowApi = {
   };
   memo: {
     getAllMemos: () => Promise<ApiResult<MemoType[]>>;
-    getMemoById: (memoId: string) => Promise<ApiResult<MemoType>>;
+    // Go 側は該当なしで nil を返しうるため、undefined 込みで表現する。呼び出し側は既に data の
+    // 存在チェック（`result.data?` / `if (result.data)`) をしているので破壊はない。
+    getMemoById: (memoId: string) => Promise<ApiResult<MemoType | undefined>>;
     getMemosByGameId: (gameId: string) => Promise<ApiResult<MemoType[]>>;
-    createMemo: (data: CreateMemoData) => Promise<ApiResult<MemoType>>;
+    createMemo: (data: CreateMemoData) => Promise<ApiResult<MemoType | undefined>>;
     updateMemo: (memoId: string, data: UpdateMemoData) => Promise<ApiResult<void>>;
     deleteMemo: (memoId: string) => Promise<ApiResult<void>>;
     getMemoRootDir: () => Promise<ApiResult<string>>;

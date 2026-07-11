@@ -180,6 +180,23 @@ export function toApiResult<T>(
 }
 
 /**
+ * data がオプショナル（nil を返しうる）な Go API レスポンスを `ApiResult<T | undefined>` に変換する。
+ *
+ * `toApiResult` の `undefined-as-unknown-as-T` フォールバックを避けるための派生ヘルパ。
+ * mapper は data が非 null のときのみ呼ばれ、null/undefined はそのまま undefined として通す。
+ */
+export function toApiResultOptional<TIn, TOut>(
+  result: { success: boolean; data?: TIn | null; error?: { message?: string } },
+  mapper: (data: TIn) => TOut,
+  fallbackMessage: string = DEFAULT_ERROR_MESSAGE,
+): ApiResult<TOut | undefined> {
+  if (result.success) {
+    return { success: true, data: result.data ? mapper(result.data) : undefined };
+  }
+  return { success: false, message: result.error?.message ?? fallbackMessage };
+}
+
+/**
  * 配列を返す Go API レスポンスを `ApiResult<T[]>` に変換する。
  * `data ?? []` を `mapItem` で要素ごとに変換する。
  */

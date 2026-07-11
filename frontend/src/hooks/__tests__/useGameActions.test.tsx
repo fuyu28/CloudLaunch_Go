@@ -105,10 +105,6 @@ describe("useGameActions", () => {
 
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
-        error: undefined,
-        setLoading: vi.fn(),
-        setError: vi.fn(),
-        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -147,10 +143,6 @@ describe("useGameActions", () => {
 
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
-        error: undefined,
-        setLoading: vi.fn(),
-        setError: vi.fn(),
-        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -186,10 +178,6 @@ describe("useGameActions", () => {
 
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
-        error: undefined,
-        setLoading: vi.fn(),
-        setError: vi.fn(),
-        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -228,10 +216,6 @@ describe("useGameActions", () => {
 
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
-        error: undefined,
-        setLoading: vi.fn(),
-        setError: vi.fn(),
-        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 
@@ -314,10 +298,6 @@ describe("useGameActions", () => {
 
       mockUseLoadingState.mockReturnValue({
         isLoading: false,
-        error: undefined,
-        setLoading: vi.fn(),
-        setError: vi.fn(),
-        reset: vi.fn(),
         executeWithLoading: mockExecuteWithLoading,
       });
 

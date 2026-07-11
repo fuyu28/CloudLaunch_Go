@@ -12,7 +12,7 @@
  * - ナビゲーション機能
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAtomValue } from "jotai";
 
 import { CloudBreadcrumb } from "@renderer/components/cloud/CloudBreadcrumb";
@@ -24,6 +24,7 @@ import { CloudHeader, type ViewMode } from "@renderer/components/cloud/CloudHead
 import { isValidCredsAtom } from "@renderer/state/credentials";
 
 import { useCloudData } from "@renderer/hooks/useCloudData";
+import { useLatestRequestId } from "@renderer/hooks/useLatestRequestId";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
@@ -189,7 +190,7 @@ export default function Cloud(): React.JSX.Element {
 
   // 詳細モーダルの最新リクエストID。連続クリック時に古い resolve が
   // 新しく開いた対象のファイル一覧を上書きしないようガードするため使う。
-  const latestDetailsRequestRef = useRef<number>(0);
+  const detailsRequest = useLatestRequestId();
 
   /**
    * ファイル詳細を表示
@@ -204,12 +205,12 @@ export default function Cloud(): React.JSX.Element {
     };
 
     // このリクエストを最新として記録し、resolve 時に自分が最新か検証する。
-    const reqId = ++latestDetailsRequestRef.current;
+    const reqId = detailsRequest.next();
     setDetailsModal({ item: detailItem, files: [], loading: true });
 
     try {
       const result = await window.api.cloudData.getCloudFileDetails(detailItem.remotePath);
-      if (reqId !== latestDetailsRequestRef.current) {
+      if (!detailsRequest.isLatest(reqId)) {
         // 別のノードのクリックで置き換わっているので何もしない
         return;
       }
@@ -226,7 +227,7 @@ export default function Cloud(): React.JSX.Element {
         setDetailsModal((prev) => ({ ...prev, loading: false }));
       }
     } catch (error) {
-      if (reqId !== latestDetailsRequestRef.current) {
+      if (!detailsRequest.isLatest(reqId)) {
         return;
       }
       logger.error("ファイル詳細取得エラー:", {

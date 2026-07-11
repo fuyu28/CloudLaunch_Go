@@ -11,6 +11,7 @@ import { FaUpload, FaDownload, FaCloud, FaCloudDownloadAlt, FaFile, FaSync } fro
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
+import { formatFileSize } from "@renderer/utils/cloudUtils";
 import { logger } from "@renderer/utils/logger";
 import { getOfflineDisabledClasses } from "@renderer/utils/offlineUtils";
 
@@ -171,22 +172,8 @@ function CloudDataCard({
     await onDownload();
   }, [onDownload, checkNetworkFeature]);
 
-  // ファイルサイズをフォーマット
-  const formatFileSize = (bytes?: number): string => {
-    // 0 バイトも有効な値として扱い、null/undefined/NaN のみ「不明」表示にする。
-    if (bytes == null || Number.isNaN(bytes)) return "不明";
-
-    const units = ["B", "KB", "MB", "GB"];
-    let size = bytes;
-    let unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
-  };
+  // ファイルサイズのフォーマットは共通ユーティリティ（cloudUtils.formatFileSize）に統一している。
+  // 以前はここにローカル実装があり、他の Cloud 系コンポーネントと表記が食い違っていた。
 
   const disabledClasses = getOfflineDisabledClasses(isOfflineMode);
 
