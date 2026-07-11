@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ゲーム Zod スキーマ
+ *
+ * ゲーム登録・編集フォームのバリデーション定義。
+ */
+
 import { z } from "zod";
 
 /**

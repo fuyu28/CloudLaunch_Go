@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ホーム画面関連 atoms
+ *
+ * 検索語・表示中ゲーム・ソート／フィルタ状態など一覧 UI の状態。
+ */
+
 import { atom } from "jotai";
 
 import { defaultSortOptionAtom, defaultFilterStateAtom } from "./settings";

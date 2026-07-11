@@ -1,3 +1,4 @@
+// コンテンツアドレッシングによるゲームデータの Push/Pull/競合解決を提供する。
 package services
 
 import (

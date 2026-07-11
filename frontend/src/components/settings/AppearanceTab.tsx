@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 設定: 外観タブ
+ *
+ * DaisyUI テーマの選択と適用を行う。
+ */
+
 import { useAtom } from "jotai";
 
 import { DAISYUI_THEMES } from "@renderer/constants/themes";

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview メインレイアウト
+ *
+ * サイドバー・タイトルバー・Toaster を含むアプリ共通シェル。
+ */
+
 import { themeAtom } from "@renderer/state/settings";
 import { useAtom } from "jotai";
 import { useRef, useEffect, useState } from "react";

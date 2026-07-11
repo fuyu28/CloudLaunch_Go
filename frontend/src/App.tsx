@@ -1,4 +1,9 @@
-// src/App.tsx
+/**
+ * @fileoverview アプリケーションのルート定義
+ *
+ * MainLayout 配下のページルート（Home / GameDetail / Cloud / Memo / Settings 等）を構成する。
+ */
+
 import { Routes, Route } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/common/ErrorBoundary";

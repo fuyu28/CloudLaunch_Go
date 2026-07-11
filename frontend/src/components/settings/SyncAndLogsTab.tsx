@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 設定: クラウド・データ・ログタブ
+ *
+ * 同期まわりの操作とログレベル設定を提供する。
+ */
+
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import toast from "react-hot-toast";

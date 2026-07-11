@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 認証情報 Zod スキーマ
+ *
+ * R2/S3 接続情報のフォームバリデーション定義。
+ */
+
 import { z } from "zod";
 
 /**

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 認証情報型定義
+ *
+ * S3/R2 クレデンシャルの TypeScript 型。
+ */
+
 export type Schema = {
   bucketName: string;
   region: string;

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ホットキー入力の正規化
+ *
+ * キーイベントからコンボ文字列を組み立て、非対応キーを拒否する。
+ */
+
 export type NormalizeHotkeyFailureReason =
   | "cancel"
   | "modifier-only"

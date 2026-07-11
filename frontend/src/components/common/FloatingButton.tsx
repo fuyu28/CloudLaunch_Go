@@ -1,3 +1,9 @@
+/**
+ * @fileoverview フローティングアクションボタン
+ *
+ * 画面端に固定表示する共通のアクションボタン。
+ */
+
 import type { ReactNode } from "react";
 
 export type FloatingButtonProps = {

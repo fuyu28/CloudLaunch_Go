@@ -1,3 +1,4 @@
+// クラウド接続に共通する S3 設定解決とヘルパを提供する。
 package services
 
 import (

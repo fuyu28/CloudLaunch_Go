@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 同期コンフリクト解決モーダル
+ *
+ * ローカルとリモートのメタを比較表示し、どちらを採用するか選ばせる。
+ */
+
 import { FaDesktop, FaCloud } from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";

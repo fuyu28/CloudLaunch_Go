@@ -1,3 +1,4 @@
+// メモのクラウドアップロード／ダウンロード同期を提供する。
 package services
 
 import (

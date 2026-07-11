@@ -1,3 +1,9 @@
+/**
+ * @fileoverview スクリーンショット設定フック
+ *
+ * atom とバックエンド同期、ホットキー登録の状態管理を担う。
+ */
+
 import { useAtom } from "jotai";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";

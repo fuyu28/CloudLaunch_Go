@@ -1,5 +1,6 @@
 //go:build windows
 
+// Windows向け screencap-cli によるスクリーンショット撮影を実装する。
 package services
 
 import (

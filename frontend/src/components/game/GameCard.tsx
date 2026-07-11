@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ゲーム一覧カード
+ *
+ * ホーム画面の各ゲームをサムネイル付きカードとして表示し、詳細へ誘導する。
+ */
+
 import { memo, useCallback } from "react";
 import { IoIosPlay } from "react-icons/io";
 import { Link } from "react-router-dom";

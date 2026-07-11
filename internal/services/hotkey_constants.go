@@ -1,3 +1,4 @@
+// Windows RegisterHotKey 用の修飾キー定数を定義する。
 package services
 
 const (

@@ -1,3 +1,4 @@
+// goroutine 等での panic 回収とエラーログ記録を提供する。
 package logging
 
 import (

@@ -1,5 +1,6 @@
 //go:build !windows
 
+// 非Windows向けのプロセス起動ヘルパ（隠しウィンドウ無し）。
 package services
 
 import (

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 設定: 動作タブ
+ *
+ * オフラインモードや自動トラッキングなどアプリ動作の設定を行う。
+ */
+
 import { useBehaviorSettings } from "@renderer/hooks/useBehaviorSettings";
 
 import { TabSectionHeader } from "./TabSectionHeader";

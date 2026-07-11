@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ゲームフォームのファイル選択ハンドラ
+ *
+ * 画像・実行ファイル・セーブフォルダ選択とバリデーション連携をまとめる。
+ */
+
 import { useCallback } from "react";
 
 import { useFileSelection } from "@renderer/hooks/useFileSelection";

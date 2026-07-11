@@ -1,5 +1,6 @@
 //go:build windows
 
+// Windows向けのグローバルホットキー起動・停止を App に接続する。
 package app
 
 import (

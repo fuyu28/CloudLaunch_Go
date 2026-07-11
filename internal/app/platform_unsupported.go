@@ -1,5 +1,6 @@
 //go:build !windows
 
+// 非Windows向けのホットキー／認証情報まわりのスタブ実装。
 package app
 
 import (

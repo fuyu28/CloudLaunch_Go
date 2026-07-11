@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ゲーム詳細ページ
+ *
+ * 個別ゲームの情報表示、起動、同期、メモ、セッション管理のハブ。
+ */
+
 import { isValidCredsAtom } from "@renderer/state/credentials";
 import { visibleGamesAtom, currentGameIdAtom } from "@renderer/state/home";
 import { useAtomValue, useSetAtom } from "jotai";

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ホーム（ゲーム一覧）ページ
+ *
+ * 検索・フィルタ・ソート付きのゲーム一覧と追加／インポート操作を提供する。
+ */
+
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState, useCallback } from "react";
 import { IoIosAdd } from "react-icons/io";

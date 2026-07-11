@@ -1,3 +1,9 @@
+/**
+ * @fileoverview フロントエンドエントリポイント
+ *
+ * Wails ブリッジ初期化、ルーティング、グローバルエラーハンドラを起動する。
+ */
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";

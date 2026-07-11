@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ゲーム関連型定義
+ *
+ * GameType・PlayStatus・セッションなどゲームドメインの TypeScript 型。
+ */
+
 export type PlayStatus = "unplayed" | "playing" | "played";
 
 export type GameType = {

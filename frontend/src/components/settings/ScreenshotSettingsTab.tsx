@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 設定: スクリーンショットタブ
+ *
+ * ホットキー・JPEG・クラウド連携などスクショ関連設定の UI。
+ */
+
 import { useEffect, useState } from "react";
 
 import { useScreenshotSettings } from "@renderer/hooks/useScreenshotSettings";

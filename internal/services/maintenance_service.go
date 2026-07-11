@@ -1,3 +1,4 @@
+// ゲームデータのエクスポートとフルバックアップ／復元を提供する。
 package services
 
 import (

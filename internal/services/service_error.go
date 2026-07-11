@@ -1,3 +1,4 @@
+// サービス層のユースケースエラー型を定義する。
 package services
 
 import "strings"

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ファイル／パス関連型
+ *
+ * パス種別（Directory / Executable 等）の列挙を定義する。
+ */
+
 export enum PathType {
   Directory = "Directory",
   Executable = "Executable",

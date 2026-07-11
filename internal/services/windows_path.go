@@ -1,3 +1,4 @@
+// Windows パス区切りの正規化ヘルパを提供する。
 package services
 
 import (

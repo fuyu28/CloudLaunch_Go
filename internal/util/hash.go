@@ -1,3 +1,4 @@
+// SHA-256 hex など層をまたいで共有するハッシュユーティリティ。
 package util
 
 import (

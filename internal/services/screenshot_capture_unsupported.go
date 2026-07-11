@@ -1,5 +1,6 @@
 //go:build !windows
 
+// 非Windows向けスクリーンショット撮影のスタブ実装。
 package services
 
 import (
