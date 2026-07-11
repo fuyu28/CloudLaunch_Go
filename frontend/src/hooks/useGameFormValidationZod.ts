@@ -165,7 +165,7 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     [gameData],
   );
 
-  // gameDataの変更を監視してファイル存在チェックを自動実行
+  // 入力のたびに即チェックすると IPC が連打されるので effect 経由。
   useEffect(() => {
     const fileFields = ["exePath", "imagePath", "saveFolderPath"] as const;
     const timeoutIds: NodeJS.Timeout[] = [];
@@ -174,7 +174,7 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     fileFields.forEach((fieldName) => {
       const fieldValue = gameData[fieldName] as string;
       if (fieldValue && fieldValue.trim() !== "") {
-        // デバウンスされたファイル存在チェック（500ms後に実行）
+        // 500ms debounce。確定前のキー入力ごとに存在確認しない。
         scheduledCount += 1;
         const timeoutId = setTimeout(async () => {
           try {
@@ -194,14 +194,14 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
       }
     });
 
-    // 予約したデバウンス数だけ pending を増やす。
+    // debounce 予約分だけ pending++。完了前に submit を止められるようにする。
     if (scheduledCount > 0) {
       setPendingFileCheckCount((prev) => prev + scheduledCount);
     }
 
     return () => {
       timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
-      // 未実行分の pending は取り消し扱いにする（新しい effect が改めて予約する）。
+      // effect cleanup で未発火分の pending を戻す（新しい予約と二重計上しない）。
       if (scheduledCount > 0) {
         setPendingFileCheckCount((prev) => Math.max(0, prev - scheduledCount));
       }
@@ -333,7 +333,7 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
         const zodErrorMessage = validateField(fieldName);
         const fileCheckError = fileCheckErrors[fieldName];
 
-        // Zodエラーまたはファイル存在チェックエラーのいずれかを使用
+        // スキーマエラーと存在チェックの両方を同じ UI に載せる。
         const errorMessage = zodErrorMessage || fileCheckError;
         const isValid = !errorMessage;
         const shouldShowError = touchedFields.has(fieldName) && !!errorMessage;

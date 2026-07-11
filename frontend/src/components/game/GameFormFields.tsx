@@ -65,7 +65,6 @@ export function GameFormFields({
 }: GameFormFieldsProps): React.JSX.Element {
   return (
     <div className="space-y-4">
-      {/* タイトル */}
       <div>
         <label className="label" htmlFor="title">
           <span className="label-text">タイトル</span>
@@ -88,7 +87,6 @@ export function GameFormFields({
         )}
       </div>
 
-      {/* ブランド */}
       <div>
         <label className="label" htmlFor="publisher">
           <span className="label-text">ブランド</span>
@@ -111,7 +109,6 @@ export function GameFormFields({
         )}
       </div>
 
-      {/* サムネイル画像 */}
       <FileSelectButton
         label="サムネイル画像の場所"
         name="imagePath"
@@ -124,7 +121,6 @@ export function GameFormFields({
         errorMessage={validation.errors.imagePath}
       />
 
-      {/* 実行ファイル */}
       <FileSelectButton
         label="実行ファイルの場所"
         name="exePath"
@@ -138,7 +134,6 @@ export function GameFormFields({
         errorMessage={validation.errors.exePath}
       />
 
-      {/* セーブデータフォルダ */}
       <FileSelectButton
         label="セーブデータフォルダの場所"
         name="saveFolderPath"

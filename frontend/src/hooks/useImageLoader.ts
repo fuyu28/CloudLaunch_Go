@@ -67,7 +67,7 @@ export const useImageLoader = (src: string): ImageLoadState => {
 
       setState((prev) => ({ ...prev, isLoading: true, error: undefined }));
 
-      // 空文字列または未定義の場合はNoImageを表示（トーストなし）
+      // 未設定画像はエラーにせず NoImage（トーストも出さない）。
       if (!src || src.trim() === "") {
         if (mounted) {
           setState({
@@ -90,7 +90,7 @@ export const useImageLoader = (src: string): ImageLoadState => {
               error: undefined,
             });
           } else {
-            // 画像読み込み失敗時はNoImageを表示し、エラートーストも表示
+            // 読み込み失敗は NoImage + トースト（サイレント失敗にしない）。
             const errorMessage = result.success ? "データが取得できませんでした" : result.message;
             logger.warn("画像読み込み失敗:", {
               component: "useImageLoader",
@@ -119,7 +119,7 @@ export const useImageLoader = (src: string): ImageLoadState => {
             error: error instanceof Error ? error : new Error(String(error)),
           });
           const errorMsg = error instanceof Error ? error.message : "不明なエラー";
-          // 同一画像に対する例外由来トーストも同じ IDで dedup する。
+          // 同一画像の失敗トーストを ID で dedup（連打しない）。
           toast.error(`画像読み込みエラー: ${errorMsg}`, {
             id: `image-load-failed:${src.trim()}`,
           });

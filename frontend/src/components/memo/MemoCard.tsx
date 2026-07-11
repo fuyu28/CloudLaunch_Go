@@ -92,7 +92,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   return (
     <div className="card bg-base-100 border border-base-300/60 shadow-md h-full">
       <div className="card-body">
-        {/* ヘッダー */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="card-title text-lg">
             <FaBookOpen className="text-primary" />
@@ -150,7 +149,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
           </div>
         )}
 
-        {/* アクションボタン */}
         <div className="card-actions justify-center mt-4 space-y-2 flex-shrink-0">
           {displayData.totalCount > 0 && (
             <Link
@@ -171,7 +169,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
         </div>
       </div>
 
-      {/* 削除確認モーダル */}
       <ConfirmModal
         id="delete-memo-modal"
         isOpen={!!deleteConfirmId}

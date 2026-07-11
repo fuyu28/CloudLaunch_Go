@@ -90,7 +90,7 @@ export function useToastHandler(): ToastHandler {
     }
   }, []);
 
-  // 戻り値を安定させないと useLoadingState の executeWithLoading が毎レンダー再生成される
+  // 参照が毎レンダー変わると executeWithLoading が再生成され無限ループの温床になる。
   return useMemo(
     () => ({
       showLoading,

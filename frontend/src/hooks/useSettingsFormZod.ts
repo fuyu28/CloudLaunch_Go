@@ -113,7 +113,6 @@ export function useSettingsFormZod(): SettingsFormResult {
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
 
-  // 接続テスト成功状態と最後にテストしたデータ
   const [isConnectionSuccessful, setIsConnectionSuccessful] = useState<boolean | null>(null);
   const [lastTestedData, setLastTestedData] = useState<SettingsFormData | null>(null);
 
@@ -189,7 +188,7 @@ export function useSettingsFormZod(): SettingsFormResult {
           [field]: value,
         };
 
-        // データが変更されたら接続テスト状態をリセット
+        // 入力が変わったあとの古い「接続成功」を無効化する。
         if (lastTestedData && isDataChanged(newData, lastTestedData)) {
           setIsConnectionSuccessful(null);
         }
@@ -211,7 +210,7 @@ export function useSettingsFormZod(): SettingsFormResult {
           ...data,
         };
 
-        // データが変更されたら接続テスト状態をリセット
+        // 入力が変わったあとの古い「接続成功」を無効化する。
         if (lastTestedData && isDataChanged(newData, lastTestedData)) {
           setIsConnectionSuccessful(null);
         }
@@ -315,7 +314,7 @@ export function useSettingsFormZod(): SettingsFormResult {
 
     setIsSaving(true);
     try {
-      // データが変更されている場合、または接続テストが未実行の場合は接続テストを実行
+      // 未テストや入力変更後は保存前に接続テストを必須にする。
       const needsConnectionTest =
         isDataChanged(formData, lastTestedData) || isConnectionSuccessful !== true;
 

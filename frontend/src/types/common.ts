@@ -8,13 +8,10 @@
  * - 型の統一的なアクセス
  */
 
-// バリデーション関連の型
 export * from "./validation";
 
-// パス関連の型
 export * from "./path";
 
-// 既存の型も再エクスポート
 export * from "./result";
 export * from "./error";
 

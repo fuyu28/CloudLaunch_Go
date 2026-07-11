@@ -68,7 +68,6 @@ export function CloudHeader({
       </div>
 
       <div className="flex items-center gap-3">
-        {/* ビュー切り替えボタン */}
         <div className="join">
           <button
             className={`btn join-item btn-sm ${viewMode === "cards" ? "btn-active" : ""}`}
@@ -86,7 +85,6 @@ export function CloudHeader({
           </button>
         </div>
 
-        {/* 全削除ボタン */}
         {hasData && (
           <button onClick={onDeleteAll} className="btn btn-error btn-sm gap-2" disabled={loading}>
             <FiTrash2 />
@@ -94,7 +92,6 @@ export function CloudHeader({
           </button>
         )}
 
-        {/* 更新ボタン */}
         <button onClick={onRefresh} disabled={loading} className="btn btn-primary gap-2">
           <FiRefreshCw className={loading ? "animate-spin" : ""} />
           更新

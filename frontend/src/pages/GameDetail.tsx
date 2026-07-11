@@ -60,7 +60,7 @@ export default function GameDetail(): React.JSX.Element {
   } | null>(null);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  // null のあいだは同期確認モーダルを出さない。
+  // syncStatusDetail が null のあいだは確認モーダルを出さない。
   const [syncStatusDetail, setSyncStatusDetail] = useState<SyncStatusDetail | null>(null);
   const [isSyncActionRunning, setIsSyncActionRunning] = useState(false);
   // Pull が Applied=false を返したときの削除候補。確認前はローカル無変更。
@@ -90,7 +90,7 @@ export default function GameDetail(): React.JSX.Element {
           return;
         }
 
-        // 詳細直リンクやフィルタ外のゲームはキャッシュに無い。
+        // 直リンクやフィルタ外は visibleGames に無いので DB から取る。
         const fetchedGame = await window.api.database.getGameById(id);
         if (fetchedGame) {
           const transformedGame = fetchedGame as GameType;
@@ -119,7 +119,7 @@ export default function GameDetail(): React.JSX.Element {
     fetchGame();
   }, [id, visibleGames, setCurrentGameId, setVisibleGames]);
 
-  // 詳細を離れたあとに PlayStatusBar 等が古い currentGameId を見ないようクリア。
+  // 詳細離脱後に PlayStatusBar が古い currentGameId を見ないようクリア。
   useEffect(() => {
     return () => {
       setCurrentGameId(null);
@@ -196,7 +196,7 @@ export default function GameDetail(): React.JSX.Element {
         setGame(transformedGame);
         setVisibleGames((prev) => prev.map((g) => (g.id === game.id ? transformedGame : g)));
       }
-      // 子カードが props 同一でも再取得するよう key を進める。
+      // 子が props 同一でも再マウント／再取得するよう refreshKey を進める。
       setRefreshKey((prev) => prev + 1);
     } catch (error) {
       logger.error("ゲームデータの更新に失敗", {
@@ -555,7 +555,6 @@ export default function GameDetail(): React.JSX.Element {
   return (
     <div className="px-6 py-6">
       <div className="mx-auto max-w-6xl space-y-5">
-        {/* 上段：ゲーム情報カード */}
         <div>
           <GameInfo
             game={game}
@@ -570,7 +569,6 @@ export default function GameDetail(): React.JSX.Element {
           />
         </div>
 
-        {/* 中段：プレイ統計 */}
         <div>
           <PlayStatistics
             game={game}
@@ -580,9 +578,7 @@ export default function GameDetail(): React.JSX.Element {
           />
         </div>
 
-        {/* 下段：その他の管理機能 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* クラウドデータ管理カード */}
           <CloudDataCard
             gameId={game.id}
             gameTitle={game.title}
@@ -596,12 +592,9 @@ export default function GameDetail(): React.JSX.Element {
             onSync={handleSyncCheck}
           />
 
-          {/* メモ管理カード */}
           <MemoCard gameId={game.id} />
         </div>
       </div>
-
-      {/* モーダル */}
 
       {/* 起動前セーブデータ同期 */}
       <ConfirmModal
@@ -618,7 +611,6 @@ export default function GameDetail(): React.JSX.Element {
         onCancel={handleSkipDownloadAndLaunch}
       />
 
-      {/* 削除 */}
       <ConfirmModal
         id="delete-game-modal"
         isOpen={isDeleteModalOpen}
@@ -629,7 +621,6 @@ export default function GameDetail(): React.JSX.Element {
         onCancel={closeDelete}
       />
 
-      {/* 編集 */}
       <GameFormModal
         mode="edit"
         initialData={editData}
@@ -639,7 +630,6 @@ export default function GameDetail(): React.JSX.Element {
         onClosed={onEditClosed}
       />
 
-      {/* プレイセッション追加 */}
       <PlaySessionModal
         isOpen={isPlaySessionModalOpen}
         onClose={handleClosePlaySessionModal}
@@ -689,7 +679,6 @@ export default function GameDetail(): React.JSX.Element {
         isProcessing={isDeletingUntracked}
       />
 
-      {/* プロセス管理 */}
       <PlaySessionManagementModal
         isOpen={isProcessModalOpen}
         gameId={game.id}

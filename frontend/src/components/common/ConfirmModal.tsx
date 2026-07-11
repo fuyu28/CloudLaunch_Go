@@ -88,7 +88,6 @@ export default function ConfirmModal({
       showCloseButton={false}
       footer={footer}
     >
-      {/* メインメッセージ */}
       <div className="mb-4">
         {details?.icon ? (
           <div className="flex items-center gap-3">
@@ -103,10 +102,8 @@ export default function ConfirmModal({
         )}
       </div>
 
-      {/* カスタムコンテンツ */}
       {details?.customContent && <div className="mb-4">{details.customContent}</div>}
 
-      {/* 注意事項 */}
       {details?.warnings && details.warnings.length > 0 && (
         <div className="bg-error/10 border border-error/20 rounded-lg p-3 text-sm">
           <div className="flex items-start gap-2">

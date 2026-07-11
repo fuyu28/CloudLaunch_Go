@@ -50,7 +50,7 @@ export function isUrl(path: string): boolean {
     }
   }
 
-  // Windows形式のファイルパス（D:\...）はURLではない
+  // D:\... を URL と誤判定すると存在チェックをスキップしてしまう。
   if (/^[A-Za-z]:[\\/]/.test(path)) {
     return false;
   }

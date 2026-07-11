@@ -61,7 +61,7 @@ export function useLoadingState(initialLoading = false): UseLoadingStateReturn {
       try {
         return await executeWithToast(asyncFn, options || {}, toastHandler);
       } catch {
-        // executeWithToast 側でトースト表示済み。ここでは undefined を返して呼び出し側に伝播する。
+        // トーストは executeWithToast 側済み。ここでは undefined を返して二重表示しない。
         return undefined;
       } finally {
         setRunningCount((prev) => Math.max(0, prev - 1));

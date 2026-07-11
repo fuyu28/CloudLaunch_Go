@@ -174,5 +174,4 @@ class LogLevelManager {
   }
 }
 
-// シングルトンインスタンス
 export const logLevelManager = new LogLevelManager();

@@ -46,7 +46,6 @@ export function CloudBreadcrumb({
 
   return (
     <div className="flex items-center gap-2 mb-4 p-3 bg-base-200 rounded-lg">
-      {/* ルートに戻るボタン */}
       <button
         onClick={() => onNavigateToPath([])}
         className="btn btn-sm btn-ghost"
@@ -57,7 +56,6 @@ export function CloudBreadcrumb({
 
       <FiChevronRight className="text-base-content/50" />
 
-      {/* パス階層 */}
       {currentPath.map((segment, index) => (
         <React.Fragment key={`${segment.id}-${index}`}>
           <button
@@ -73,7 +71,6 @@ export function CloudBreadcrumb({
         </React.Fragment>
       ))}
 
-      {/* 戻るボタン */}
       <div className="ml-auto">
         <button
           onClick={onNavigateBack}

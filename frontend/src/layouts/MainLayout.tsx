@@ -45,12 +45,11 @@ export default function MainLayout(): React.JSX.Element {
     if (drawerRef.current) drawerRef.current.checked = false;
   };
 
-  // テーマ初期化：アプリケーション起動時にHTMLのdata-theme属性を設定
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", currentTheme);
   }, [currentTheme]);
 
-  // 実行プラットフォームを判定（独自ウィンドウ操作ボタンの出し分け用）
+  // Windows だけ独自タイトルボタン。他OSはネイティブ枠を使う。
   useEffect(() => {
     let active = true;
     void window.api.window.getPlatform().then((platform) => {
@@ -65,7 +64,6 @@ export default function MainLayout(): React.JSX.Element {
     <div className="drawer drawer-mobile min-h-screen bg-base-200 wails-no-drag">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" ref={drawerRef} />
 
-      {/* サイドバー */}
       <div className="drawer-side">
         <label htmlFor="main-drawer" className="drawer-overlay bg-black/15 z-40" />
 
@@ -82,13 +80,11 @@ export default function MainLayout(): React.JSX.Element {
         "
         >
           <div className="flex flex-col h-full">
-            {/* ブランド */}
             <div className="flex items-center gap-2 px-2 pb-4 mb-2 border-b border-base-200">
               <FiCloud className="text-xl text-primary" />
               <span className="font-semibold tracking-tight">CloudLaunch</span>
             </div>
 
-            {/* 上部メニュー */}
             <ul className="space-y-1">
               <li>
                 <NavLink
@@ -155,7 +151,6 @@ export default function MainLayout(): React.JSX.Element {
         </aside>
       </div>
 
-      {/* メイン */}
       <div className="drawer-content flex flex-col h-screen">
         {/* ↓ ここをカスタムタイトルバーに */}
         <header
@@ -234,12 +229,10 @@ export default function MainLayout(): React.JSX.Element {
           )}
         </header>
 
-        {/* ページ固有部分 */}
         <main className="flex-1 pt-6 overflow-y-auto scrollbar-thin scrollbar-thumb-base-content/30 scrollbar-track-transparent min-h-0">
           <Outlet />
         </main>
 
-        {/* プレイ状況バー */}
         <PlayStatusBar />
       </div>
 

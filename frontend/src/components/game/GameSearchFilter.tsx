@@ -78,7 +78,6 @@ const GameSearchFilter = memo(function GameSearchFilter({
 
   return (
     <div className="bg-base-100 p-4 rounded-xl mb-5 mx-6 border border-base-300/70 shadow-sm">
-      {/* 検索バー */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-4">
         <div className="flex-1">
           <label htmlFor="game-search" className="input input-bordered flex items-center gap-2">
@@ -94,9 +93,7 @@ const GameSearchFilter = memo(function GameSearchFilter({
           </label>
         </div>
 
-        {/* コントロール群 */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* ソート設定 */}
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-base-content/80">並び順</label>
             <select
@@ -126,7 +123,6 @@ const GameSearchFilter = memo(function GameSearchFilter({
             </button>
           </div>
 
-          {/* フィルター設定 */}
           <div className="flex items-center gap-2">
             <IoFilterOutline className="w-4 h-4 opacity-70" />
             <select

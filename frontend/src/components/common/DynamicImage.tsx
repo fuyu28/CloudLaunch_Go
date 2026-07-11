@@ -23,7 +23,6 @@ import { useImageLoader } from "@renderer/hooks/useImageLoader";
 
 import type { ImgHTMLAttributes } from "react";
 
-// ① ImgHTMLAttributes で <img> の全属性を継承
 type DynamicImgProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   src: string; // 普通のURL or ローカルファイルパス（空文字列の場合はNoImage）
 };

@@ -53,7 +53,6 @@ export function useMemoOperations({
   const navigate = useNavigate();
   const { showToast } = useToastHandler();
 
-  // メモ削除処理。
   const handleDeleteMemo = async (memoId: string): Promise<void> => {
     try {
       const result = await window.api.memo.deleteMemo(memoId);
@@ -78,20 +77,20 @@ export function useMemoOperations({
     closeDropdown();
 
     if (gameId) {
-      // MemoCardから来た場合はクエリパラメータを付与
+      // ゲーム詳細起点なら from=game を付け、戻り先を失わないようにする。
       navigate(`/memo/edit/${memoId}?from=game&gameId=${gameId}`);
     } else {
-      // メモ一覧から来た場合は通常遷移
+      // 一覧起点では from を付けない（詳細文脈を捏造しない）。
       navigate(`/memo/edit/${memoId}`);
     }
   };
 
   const handleViewMemo = (memoId: string): void => {
     if (gameId) {
-      // MemoCardから来た場合はクエリパラメータを付与
+      // ゲーム詳細起点なら from=game を付け、戻り先を失わないようにする。
       navigate(`/memo/view/${memoId}?from=game&gameId=${gameId}`);
     } else {
-      // メモ一覧から来た場合は通常遷移
+      // 一覧起点では from を付けない（詳細文脈を捏造しない）。
       navigate(`/memo/view/${memoId}`);
     }
   };

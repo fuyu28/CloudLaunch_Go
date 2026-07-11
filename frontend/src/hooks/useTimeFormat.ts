@@ -100,17 +100,14 @@ export function useTimeFormat(): TimeFormatHook {
       const minutes = Math.floor((seconds % 3600) / 60);
 
       if (hours > 0) {
-        // 1時間以上の場合
         if (minutes > 0) {
           return `${hours}時間${minutes}分`;
         } else {
           return `${hours}時間`;
         }
       } else if (minutes > 0) {
-        // 1分以上1時間未満の場合
         return `${minutes}分`;
       } else {
-        // 1分未満の場合
         return `${seconds}秒`;
       }
     };

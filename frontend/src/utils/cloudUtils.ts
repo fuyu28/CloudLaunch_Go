@@ -16,7 +16,7 @@ export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
-  // 巨大値で sizes を超えないよう最大インデックスをクランプする。
+  // 巨大バイト数で sizes 配列をはみ出さないようインデックスをクランプする。
   const i = Math.min(sizes.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }

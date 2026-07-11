@@ -44,7 +44,6 @@ const PlayStatistics = memo(function PlayStatistics({
             <div className="w-1 h-6 bg-primary rounded-full"></div>
             <h2 className="card-title text-xl">プレイ統計</h2>
           </div>
-          {/* セッション管理ボタン */}
           <div className="flex gap-2">
             <button
               className="btn btn-outline btn-sm gap-2 hover:bg-base-300 transition-colors"
@@ -64,7 +63,6 @@ const PlayStatistics = memo(function PlayStatistics({
         </div>
 
         <div className="space-y-4">
-          {/* プレイセッション管理 */}
           <PlaySessionCardSimple
             key={`play-session-${refreshKey}`}
             gameId={game.id}

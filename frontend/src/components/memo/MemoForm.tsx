@@ -83,7 +83,7 @@ export default function MemoForm({
               const sortedGames = typedGames.sort((a, b) => a.title.localeCompare(b.title));
               setGames(sortedGames);
 
-              // ゲームが1つしかない場合は自動選択
+              // 選択肢が1件だけのとき未選択のまま送れないよう自動選択する。
               if (sortedGames.length === 1 && !selectedGameId) {
                 setSelectedGameId(sortedGames[0].id);
               }
@@ -238,7 +238,7 @@ export default function MemoForm({
           result = await window.api.memo.createMemo(createData);
           if (result.success) {
             showToast("メモを作成しました", "success");
-            // 作成されたメモの ID をバックエンドから取得し、そのメモをクラウドへアップロードする
+            // 作成レスポンスの ID でクラウドへ上げる（ローカル採番と食い違わないように）。
             const createdMemoId = result.data?.id;
             void uploadMemoToCloud(createdMemoId);
             if (closeAfterSave) {
@@ -289,7 +289,7 @@ export default function MemoForm({
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.ctrlKey && e.key === "s") {
         e.preventDefault();
-        // Ctrl+Sでは編集モードを閉じずに保存のみ実行
+        // Ctrl+S は保存だけ。閉じると入力中の続きができない。
         handleSave(false);
       }
     };
@@ -306,7 +306,7 @@ export default function MemoForm({
     );
   }
 
-  // ゲーム選択が有効でゲームが登録されていない場合
+  // ゲーム未登録だとセレクトが空になるので作成を止めて案内する。
   if (showGameSelector && games.length === 0) {
     return (
       <div className="bg-base-200 px-6 py-4 min-h-screen">
@@ -333,7 +333,6 @@ export default function MemoForm({
 
   return (
     <div className="bg-base-200 px-4 sm:px-6 py-4">
-      {/* ヘッダー */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-4 min-w-0 flex-1">
           <button onClick={handleBack} className="btn btn-ghost btn-sm sm:btn-md">
@@ -369,10 +368,8 @@ export default function MemoForm({
         </button>
       </div>
 
-      {/* メモ入力フォーム */}
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
-          {/* ゲーム選択 */}
           {showGameSelector && (
             <div className="form-control mb-4">
               <label className="label">
@@ -405,7 +402,6 @@ export default function MemoForm({
             </div>
           )}
 
-          {/* タイトル入力 */}
           <div className="form-control mb-6">
             <label className="label">
               <span className="label-text text-lg font-semibold">タイトル</span>
@@ -443,7 +439,6 @@ export default function MemoForm({
             )}
           </div>
 
-          {/* 内容入力 */}
           <div className="form-control">
             <div className="flex justify-between items-center mb-2">
               <label className="label-text text-lg font-semibold">内容</label>

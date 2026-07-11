@@ -8,8 +8,6 @@
  * - 機能の統一的なアクセス
  */
 
-// 文字列操作ユーティリティ
 export * from "./stringUtils";
 
-// パス操作ユーティリティ
 export * from "./pathUtils";

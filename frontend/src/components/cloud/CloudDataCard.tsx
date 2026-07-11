@@ -146,7 +146,7 @@ function CloudDataCard({
   }, [gameId, lastFetchedGameId]);
 
   useEffect(() => {
-    // gameIdまたはisValidCredsが変わった場合のみ実行（オフライン時は除く）
+    // 認証や対象ゲームが変わったときだけ再取得（オフラインでは走らせない）。
     if (gameId && isValidCreds && !isOfflineMode) {
       fetchFileDetails();
     }
@@ -182,7 +182,6 @@ function CloudDataCard({
             <FaCloud className="text-info" />
             クラウドデータ管理
           </h3>
-          {/* アクションボタン */}
           <div className="card-actions justify-end gap-2">
             {onSync && (
               <button
@@ -257,7 +256,6 @@ function CloudDataCard({
           </div>
         </div>
 
-        {/* クラウドデータ情報 */}
         <div className="mb-4 flex-1">
           {isOfflineMode ? (
             <div className="flex items-center justify-center p-4">
@@ -270,7 +268,6 @@ function CloudDataCard({
             </div>
           ) : cloudData.exists && fileDetails ? (
             <div className="space-y-4">
-              {/* 基本情報 */}
               <div className="bg-base-200 p-3 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <FaCloudDownloadAlt className="text-success" />
@@ -286,7 +283,6 @@ function CloudDataCard({
                 </div>
               </div>
 
-              {/* ファイル一覧 */}
               {fileDetails.files.length > 0 && (
                 <div className="bg-base-200 p-3 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
@@ -323,7 +319,6 @@ function CloudDataCard({
           )}
         </div>
 
-        {/* 警告メッセージ */}
         {isOfflineMode && (
           <div className="alert alert-warning mt-2">
             <span className="text-xs">オフラインモードではクラウド機能を使用できません</span>
@@ -348,5 +343,5 @@ function CloudDataCard({
   );
 }
 
-// propsが変わった場合のみ再レンダリング
+// 親の再レンダーでカード全体を動かさない（props 比較）。
 export default memo(CloudDataCard);

@@ -57,7 +57,6 @@ export function GameActionButtons({
 }: GameActionButtonsProps): React.JSX.Element {
   return (
     <div className="space-y-3">
-      {/* 基本操作ボタン */}
       <div className="flex gap-3">
         <button
           onClick={onLaunchGame}

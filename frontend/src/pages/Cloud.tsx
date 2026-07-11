@@ -102,7 +102,7 @@ export default function Cloud(): React.JSX.Element {
   const handleNavigateToDirectory = useCallback(
     (node: CloudDirectoryNode): void => {
       if (currentPath.length === 0) {
-        // node.path はルートではゲームID（remotePath）
+        // ルート node.path はゲームID。配下パスと混同しない。
         void ensureGameLoaded(node.path);
       }
       navigateToDirectory(node);
@@ -116,7 +116,7 @@ export default function Cloud(): React.JSX.Element {
     currentPath.length > 0
       ? directoryTree.find((node) => node.path === currentPath[0].id)
       : undefined;
-  // 開いているゲームのファイル一覧をまだ取得中かどうか
+  // 遅延取得中は空一覧を「0ファイル」と誤表示しないためのフラグ。
   const isOpenGameLoading = openGameNode ? loadingGameIds.has(openGameNode.path) : false;
 
   /**
@@ -172,13 +172,13 @@ export default function Cloud(): React.JSX.Element {
    */
   const handleDelete = async (item: CloudDataItem | CloudDirectoryNode): Promise<void> => {
     try {
-      // 全削除センチネル（path === "*"）
+      // path==="*" は全削除センチネル。通常パスと分岐を分ける。
       if ("path" in item && (item as CloudDirectoryNode).path === "*") {
         await deleteAllGamesFromCloud();
         return;
       }
 
-      // ゲーム単位削除：remotePath（CloudDataItem）または path（CloudDirectoryNode）をゲームIDとして使用
+      // カード/ツリーでキー名が違うので remotePath と path の両方を見る。
       const gameId = "remotePath" in item ? item.remotePath : (item as CloudDirectoryNode).path;
       await deleteGameFromCloud(gameId);
     } finally {
@@ -202,7 +202,7 @@ export default function Cloud(): React.JSX.Element {
       remotePath: node.path,
     };
 
-    // このリクエストを最新として記録し、resolve 時に自分が最新か検証する。
+    // 古い応答で state を上書きしないよう最新リクエスト ID を検証する。
     const reqId = detailsRequest.next();
     setDetailsModal({ item: detailItem, files: [], loading: true });
 
@@ -252,7 +252,6 @@ export default function Cloud(): React.JSX.Element {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      {/* ヘッダー */}
       <CloudHeader
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
@@ -274,14 +273,12 @@ export default function Cloud(): React.JSX.Element {
         </div>
       ) : null}
 
-      {/* パンくずリスト */}
       <CloudBreadcrumb
         currentPath={currentPath}
         onNavigateToPath={navigateToPath}
         onNavigateBack={navigateBack}
       />
 
-      {/* コンテンツ */}
       <CloudContent
         viewMode={viewMode}
         loading={loading}
@@ -298,7 +295,6 @@ export default function Cloud(): React.JSX.Element {
         onViewDetails={handleViewDetails}
       />
 
-      {/* 削除確認ダイアログ */}
       <CloudDeleteModal
         deleteConfirm={deleteConfirm}
         onCancel={() => setDeleteConfirm(null)}
@@ -306,7 +302,6 @@ export default function Cloud(): React.JSX.Element {
         cloudData={cloudData}
       />
 
-      {/* ファイル詳細モーダル */}
       <CloudFileDetailsModal
         isOpen={!!detailsModal.item}
         onClose={() => setDetailsModal({ item: null, files: [], loading: false })}

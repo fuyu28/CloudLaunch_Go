@@ -64,7 +64,6 @@ export default function CloudTreeNode({
         }`}
         style={{ paddingLeft: `${level * 1.5 + 0.75}rem` }}
       >
-        {/* 展開/折りたたみボタン */}
         <button
           onClick={() => isExpandable && onToggleExpand(node.path)}
           className={`w-4 h-4 flex items-center justify-center ${!isExpandable ? "invisible" : ""}`}
@@ -77,7 +76,6 @@ export default function CloudTreeNode({
             ))}
         </button>
 
-        {/* アイコン */}
         <div className="flex-shrink-0">
           {node.isDirectory ? (
             <FiFolder className="text-primary" />
@@ -86,7 +84,6 @@ export default function CloudTreeNode({
           )}
         </div>
 
-        {/* ファイル/フォルダ名 */}
         <div
           className="flex-1 min-w-0 flex items-center justify-between group"
           onClick={() => onSelect(node)}
@@ -123,7 +120,6 @@ export default function CloudTreeNode({
         </div>
       </div>
 
-      {/* 子ノード */}
       {isExpanded && hasChildren && (
         <div>
           {node.children!.map((child, index) => (

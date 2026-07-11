@@ -105,9 +105,8 @@ export function CloudContent({
   if (viewMode === "cards") {
     return (
       <div>
-        {/* カード表示 */}
         {currentPath.length === 0 ? (
-          // ルートレベル（ゲーム単位）- onDelete を渡して削除ボタンを表示
+          // ルート（ゲーム単位）だけ削除可。配下ファイルには onDelete を渡さない。
           directoryTree.length === 0 ? (
             <EmptyState
               icon={FiCloud}
@@ -128,7 +127,6 @@ export function CloudContent({
             </div>
           )
         ) : gameLoading ? (
-          // ゲームのファイル一覧を遅延取得中
           <div className="flex justify-center py-12">
             <div className="loading loading-spinner loading-lg"></div>
           </div>
@@ -156,7 +154,6 @@ export function CloudContent({
     );
   }
 
-  // ツリービュー
   return (
     <div className="bg-base-100 rounded-lg border border-base-300 p-4">
       {directoryTree.length === 0 ? (

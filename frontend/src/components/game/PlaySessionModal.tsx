@@ -138,7 +138,6 @@ export function PlaySessionModal({
       return false;
     }
     if (totalSeconds > 86400) {
-      // 24時間制限
       setError("プレイ時間は24時間以内で入力してください");
       return false;
     }
@@ -199,7 +198,7 @@ export function PlaySessionModal({
         const seconds = parseInputValue(secondsInput);
         duration = timeUtils.toSeconds(hours, minutes, seconds);
       } else {
-        // タイマーモードでも24時間上限の検証を行う（手動追加と同じ制限）
+        // タイマーも手動追加と同じ24時間上限にする（モードで制限が割れないように）。
         if (!validateDurationSeconds(timerSeconds, "timer")) {
           setIsSubmitting(false);
           return;
@@ -231,7 +230,6 @@ export function PlaySessionModal({
       <div className="modal-box max-w-lg">
         <h3 className="font-bold text-lg mb-4">プレイセッション追加 - {gameTitle}</h3>
 
-        {/* モード選択タブ */}
         <div className="tabs tabs-boxed mb-6">
           <button
             className={`tab tab-lg flex-1 ${mode === "manual" ? "tab-active" : ""}`}
@@ -249,7 +247,6 @@ export function PlaySessionModal({
           </button>
         </div>
 
-        {/* セッション名入力欄（共通） */}
         <div className="form-control mb-4">
           <label className="label">
             <span className="label-text">セッション名（任意）</span>
@@ -268,7 +265,6 @@ export function PlaySessionModal({
           </label>
         </div>
 
-        {/* 手動追加モード */}
         {mode === "manual" && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
@@ -349,7 +345,6 @@ export function PlaySessionModal({
           </div>
         )}
 
-        {/* タイマーモード */}
         {mode === "timer" && (
           <div className="space-y-6">
             <div className="text-center">
@@ -393,7 +388,6 @@ export function PlaySessionModal({
           </div>
         )}
 
-        {/* エラーメッセージ */}
         {error && (
           <div className="alert alert-error mt-4">
             <FaTimes className="mr-2" />
@@ -401,7 +395,6 @@ export function PlaySessionModal({
           </div>
         )}
 
-        {/* アクションボタン */}
         <div className="modal-action">
           <button className="btn btn-ghost" onClick={handleClose} disabled={isSubmitting}>
             キャンセル

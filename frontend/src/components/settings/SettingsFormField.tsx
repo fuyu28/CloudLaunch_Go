@@ -85,10 +85,8 @@ export function SettingsFormField({
         />
       </div>
 
-      {/* エラーメッセージ */}
       {error && <div className="text-error text-sm ml-36">{error}</div>}
 
-      {/* ヘルプテキスト */}
       {helpText && !error && <div className="text-base-content text-xs ml-36">{helpText}</div>}
     </div>
   );

@@ -40,7 +40,7 @@ export function useCloudDeleteConfirm(
       return "";
     }
 
-    // 全削除センチネル（path === "*"）
+    // path==="*" は全削除センチネル。通常パスと分岐を分ける。
     if ("path" in item && (item as CloudDirectoryNode).path === "*") {
       return "全てのゲームのクラウドデータを完全に削除しますか？";
     }
@@ -53,7 +53,7 @@ export function useCloudDeleteConfirm(
       return "0 個のファイルが削除されます";
     }
 
-    // 全削除センチネル
+    // path==="*" は全削除センチネル。
     if ("path" in item && (item as CloudDirectoryNode).path === "*") {
       const totalFiles = cloudData.reduce((sum, cloudItem) => sum + cloudItem.fileCount, 0);
       return `全ての ${totalFiles} 個のファイルが削除されます`;
@@ -63,7 +63,7 @@ export function useCloudDeleteConfirm(
       return `${item.fileCount} 個のファイルが削除されます`;
     }
 
-    // CloudDirectoryNode（ツリービューからゲームノードを選択した場合）
+    // ツリーから選んだゲームノードは CloudDirectoryNode 形。
     const node = item as CloudDirectoryNode;
     if (node.isDirectory) {
       const fileCount = countFilesRecursively(node);
@@ -78,12 +78,12 @@ export function useCloudDeleteConfirm(
       return undefined;
     }
 
-    // 全削除センチネルにはサブテキスト不要
+    // 全削除では個別パス一覧を出さない（ノイズになる）。
     if ("path" in item && (item as CloudDirectoryNode).path === "*") {
       return undefined;
     }
 
-    // remotePath（CloudDataItem）またはpath（CloudDirectoryNode）を表示
+    // カードとツリーでキー名が違うので remotePath / path のどちらも見る。
     const path = "remotePath" in item ? item.remotePath : (item as CloudDirectoryNode).path;
     return `GameID: ${path}`;
   }, [item]);

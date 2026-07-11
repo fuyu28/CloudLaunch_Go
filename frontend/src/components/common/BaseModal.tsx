@@ -142,7 +142,6 @@ export function BaseModal({
           className={`modal-box relative ${sizeClasses[size]} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* ヘッダー部分 */}
           {title && (
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold">{title}</h3>
@@ -171,10 +170,8 @@ export function BaseModal({
             </button>
           )}
 
-          {/* メインコンテンツ */}
           <div className="modal-content">{children}</div>
 
-          {/* フッター部分 */}
           {footer && <div className="modal-action">{footer}</div>}
         </div>
       </div>

@@ -92,7 +92,6 @@ function MemoCardBase({
     <div className={cardClassName} onClick={handleCardClick}>
       <h3 className="font-semibold text-sm truncate mb-1 pr-8">{truncatedTexts.truncatedTitle}</h3>
 
-      {/* ゲーム名表示 */}
       {showGameTitle && memo.gameTitle && (
         <div className="flex items-center gap-2 text-xs text-base-content/60 mb-2">
           <FaGamepad className="text-xs flex-shrink-0" />
@@ -100,19 +99,15 @@ function MemoCardBase({
         </div>
       )}
 
-      {/* 内容のプレビュー */}
       <p className="text-xs text-base-content/60 line-clamp-3 mb-2 leading-relaxed">
         {truncatedTexts.truncatedContent}
       </p>
 
-      {/* メタ情報 */}
       <div className="flex justify-between items-center mt-auto">
         <span className="text-xs text-base-content/50 font-medium">{formattedDate}</span>
-        {/* 文字数インジケーター */}
         <span className="text-xs text-base-content/40">{memo.content.length}文字</span>
       </div>
 
-      {/* 三点リーダーメニュー */}
       <MemoDropdownMenu
         memoId={memo.id}
         isOpen={isDropdownOpen}
@@ -126,9 +121,8 @@ function MemoCardBase({
   );
 }
 
-// React.memoでコンポーネントをメモ化
+// ハンドラ参照は親が毎レンダー新規矢印を渡すので比較しない（入れると memo が常に無効）。
 export default memo(MemoCardBase, (prevProps, nextProps) => {
-  // 浅い比較では不十分な場合のカスタム比較関数
   return (
     prevProps.memo.id === nextProps.memo.id &&
     prevProps.memo.title === nextProps.memo.title &&

@@ -155,7 +155,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </button>
               </div>
 
-              {/* エラー詳細の表示/非表示ボタン */}
               <div className="border-t border-base-300 pt-4">
                 <button className="btn btn-ghost btn-sm" onClick={this.toggleDetails}>
                   エラー詳細
@@ -167,7 +166,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </button>
               </div>
 
-              {/* エラー詳細 */}
               {showDetails && error && (
                 <div className="mt-4 text-left">
                   <div className="collapse collapse-open bg-base-300">

@@ -323,7 +323,6 @@ export default function Home(): React.ReactElement {
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
-      {/* 検索・フィルタ領域 */}
       <GameSearchFilter
         searchWord={searchWord}
         sort={sort}
@@ -335,14 +334,12 @@ export default function Home(): React.ReactElement {
         onFilterChange={setFilter}
       />
 
-      {/* ゲーム一覧 */}
       <GameGrid
         games={visibleGames}
         onLaunchGame={handleLaunchGame}
         warningGameIds={warningGameIds}
       />
 
-      {/* ゲーム追加ボタン */}
       <FloatingButton
         onClick={() => setIsGameFormOpen(true)}
         ariaLabel="ゲームを追加"
@@ -351,7 +348,6 @@ export default function Home(): React.ReactElement {
         <IoIosAdd size={28} />
       </FloatingButton>
 
-      {/* ゲーム登録モーダル */}
       <GameFormModal
         mode="add"
         isOpen={isGameFormOpen}

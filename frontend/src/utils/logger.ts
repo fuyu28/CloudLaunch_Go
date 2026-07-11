@@ -51,7 +51,7 @@ class RendererLogger {
     if (this.isDevelopment) {
       this.logToConsole("debug", message, metadata);
     }
-    // 本番環境でもログレベル設定次第で出力
+    // 本番でも level 次第で出す（完全黙りにしない）。
     this.logToMain("debug", message, metadata);
   }
 
@@ -90,7 +90,7 @@ class RendererLogger {
     this.logToConsole("error", message, metadata);
     this.logToMain("error", message, metadata);
 
-    // エラーバウンダリシステムにも報告
+    // コンソールだけでなくエラーバウンダリ経路にも載せる。
     if (metadata?.error && window.api?.errorReport?.reportError) {
       window.api.errorReport.reportError({
         message: metadata.error.message,
@@ -140,7 +140,7 @@ class RendererLogger {
     message: string,
     metadata?: LogMetadata,
   ): void {
-    // メインプロセスのログAPIが利用可能な場合のみ送信
+    // bridge 未準備時は送らない（起動直後の例外を落とさないため握りつぶしではなくスキップ）。
     if (window.api?.errorReport?.reportLog) {
       window.api.errorReport.reportLog({
         level,
@@ -179,11 +179,8 @@ class RendererLogger {
   }
 }
 
-// シングルトンインスタンスを作成
 export const logger = new RendererLogger();
 
-// 開発者向けのデバッグ用（本番では削除される）
 if (process.env.NODE_ENV === "development") {
-  // グローバルに公開してブラウザのデベロッパーツールから使用可能にする
   (window as unknown as Window & { logger: typeof logger }).logger = logger;
 }

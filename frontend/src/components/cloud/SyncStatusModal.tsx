@@ -72,7 +72,7 @@ export default function SyncStatusModal({
     },
   };
 
-  // 競合はこのモーダルでは扱わない（呼び出し側で SyncConflictModal に振り分け済み）
+  // 競合は SyncConflictModal 側。ここに載せると上書き操作と混ざる。
   const view = status === "conflict" ? views.in_sync : views[status];
 
   const showUpload = status === "push_needed" || (status === "never_synced" && hasSaveFolder);
@@ -107,7 +107,6 @@ export default function SyncStatusModal({
       }
     >
       <div className="space-y-4">
-        {/* 状態サマリ */}
         <div className="flex items-start gap-3 rounded-lg border border-base-300 bg-base-200 p-3">
           <span className="text-2xl">{view.icon}</span>
           <div>
@@ -116,7 +115,6 @@ export default function SyncStatusModal({
           </div>
         </div>
 
-        {/* ローカル / クラウドの情報 */}
         <SyncMetaCardPair localMeta={localMeta} remoteMeta={remoteMeta} />
 
         <p className="text-xs text-base-content/60">対象: {gameTitle}</p>

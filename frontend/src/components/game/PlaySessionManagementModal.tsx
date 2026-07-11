@@ -258,7 +258,6 @@ export default function PlaySessionManagementModal({
 
   return (
     <>
-      {/* セッション管理モーダル */}
       <div className={`modal ${isOpen ? "modal-open" : ""}`}>
         <div className="modal-box max-w-4xl max-h-[80vh] flex flex-col">
           <div className="flex justify-between items-center mb-4 flex-shrink-0">
@@ -333,7 +332,6 @@ export default function PlaySessionManagementModal({
         </div>
       </div>
 
-      {/* 削除確認モーダル */}
       <ConfirmModal
         id="delete-session-modal"
         isOpen={isDeleteModalOpen}
@@ -344,13 +342,11 @@ export default function PlaySessionManagementModal({
         onCancel={closeDeleteModal}
       />
 
-      {/* 編集モーダル */}
       <div className={`modal ${isEditModalOpen ? "modal-open" : ""}`}>
         <div className="modal-box">
           <h3 className="font-bold text-lg mb-4">セッション編集</h3>
 
           <div className="space-y-4">
-            {/* セッション名 */}
             <div>
               <label className="label">
                 <span className="label-text">セッション名</span>

@@ -137,7 +137,6 @@ export default function MemoView(): React.JSX.Element {
 
   return (
     <div className="bg-base-200 px-6 py-4 min-h-screen">
-      {/* ヘッダー */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button onClick={handleBack} className="btn btn-ghost">
@@ -166,10 +165,8 @@ export default function MemoView(): React.JSX.Element {
         </div>
       </div>
 
-      {/* メモ本体 */}
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
-          {/* メタ情報 */}
           <div className="flex justify-between text-sm text-base-content/60 mb-6 border-b border-base-300 pb-4">
             <div>作成日時: {formatDateWithTime(memo.createdAt)}</div>
             {new Date(memo.updatedAt).getTime() !== new Date(memo.createdAt).getTime() && (
@@ -177,7 +174,6 @@ export default function MemoView(): React.JSX.Element {
             )}
           </div>
 
-          {/* マークダウンコンテンツ */}
           <div className="prose max-w-none">
             <ReactMarkdown
               components={{
@@ -251,7 +247,6 @@ export default function MemoView(): React.JSX.Element {
         </div>
       </div>
 
-      {/* 削除確認モーダル */}
       <ConfirmModal
         id="delete-memo-modal"
         isOpen={showDeleteModal}

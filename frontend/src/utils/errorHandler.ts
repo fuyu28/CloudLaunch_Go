@@ -29,7 +29,6 @@ export function handleApiError<T = void>(
   if (result.success) {
     message = fallbackMessage;
   } else {
-    // result.success === false の場合、result.message が存在する
     message = (result as { success: false; message: string }).message || fallbackMessage;
   }
 

@@ -174,7 +174,7 @@ export function useCloudData(): UseCloudDataReturn {
           return;
         }
 
-        // children が undefined（=ファイルなし）でも「取得済み」と区別できるよう空配列にする。
+        // undefined=未取得、[]=取得済み空。区別しないと再取得が走る／走らないが壊れる。
         const loadedNode: CloudDirectoryNode = {
           ...result.data,
           children: result.data.children ?? [],
@@ -256,7 +256,7 @@ export function useCloudData(): UseCloudDataReturn {
           return;
         }
 
-        // 削除後はキャッシュをクリアして最新データを取得
+        // 削除後にキャッシュを残すと消したノードが残って見える。
         navigationCacheRef.current.clear();
         await fetchCloudData();
       } catch (error) {
@@ -290,7 +290,7 @@ export function useCloudData(): UseCloudDataReturn {
       }, 0);
 
       if (settled.length === 0) {
-        // 対象なしでもユーザーに操作の結果が伝わるよう、info トーストで明示する。
+        // 0件削除を無反応にしない（info トーストで結果を返す）。
         toast("削除対象がありませんでした", { icon: "ℹ️" });
       } else if (failedCount === 0) {
         toast.success("全てのクラウドデータを削除しました");

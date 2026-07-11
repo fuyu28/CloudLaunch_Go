@@ -18,7 +18,6 @@ import type {
   time as modelsTime,
 } from "../../wailsjs/go/models";
 
-// Re-export model types used across bridge modules
 export type { modelsApp, modelsDomain, modelsServices, modelsTime };
 
 // ---------------------------------------------------------------------------
@@ -34,7 +33,7 @@ export function normalizeApiDate(
   if (typeof value === "string" && value.startsWith("0001-01-01T00:00:00")) {
     return new Date(Number.NaN);
   }
-  // time.Time arrives as ISO string at runtime; coerce to string for Date constructor
+  // Go time.Time は実行時 ISO 文字列で来る。Date 用に string へ寄せる。
   const coerced = value as Date | string | number | null | undefined;
   return new Date(coerced ?? Number.NaN);
 }

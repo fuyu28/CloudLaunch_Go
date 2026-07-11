@@ -27,7 +27,6 @@ export default function App(): React.JSX.Element {
           <Route path="/game/:id" element={<GameDetail />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/cloud" element={<Cloud />} />
-          {/* メモ関連ルート */}
           <Route path="/memo" element={<MemoList />} />
           <Route path="/memo/create" element={<MemoCreate />} />
           <Route path="/memo/list/:gameId" element={<MemoList />} />

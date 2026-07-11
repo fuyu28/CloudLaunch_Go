@@ -89,7 +89,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
   return (
     <div className="card bg-base-200 rounded-lg shadow-sm">
       <div className="card-body p-4">
-        {/* アクションボタン */}
         {!hiddenButtons && (
           <div className="flex gap-3 justify-end mb-4">
             <button
@@ -111,7 +110,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
 
         {!isLoading && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* 総セッション */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -122,7 +120,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
               </div>
             </div>
 
-            {/* 総時間 */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -135,7 +132,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
               </div>
             </div>
 
-            {/* 平均時間 */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -148,7 +144,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
               </div>
             </div>
 
-            {/* 今週 */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
