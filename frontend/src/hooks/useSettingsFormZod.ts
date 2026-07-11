@@ -138,13 +138,18 @@ export function useSettingsFormZod(): SettingsFormResult {
 
   /**
    * 初期データの読み込み
+   *
+   * StrictMode の二重発火や、素早い unmount → remount のときに、
+   * 遅い resolve が新しい入力を上書きしないよう cancelled フラグでガードする。
    */
   useEffect(() => {
+    let cancelled = false;
     const loadInitialData = async (): Promise<void> => {
       try {
         setIsLoading(true);
         const result: ApiResult<Creds> = await window.api.credential.getCredential();
 
+        if (cancelled) return;
         if (result.success && result.data) {
           setFormData({
             bucketName: result.data.bucketName || "",
@@ -155,6 +160,7 @@ export function useSettingsFormZod(): SettingsFormResult {
           });
         }
       } catch (error) {
+        if (cancelled) return;
         logger.error("初期データの読み込みに失敗しました:", {
           component: "useSettingsFormZod",
           function: "unknown",
@@ -162,11 +168,16 @@ export function useSettingsFormZod(): SettingsFormResult {
         });
         toast.error("設定の読み込みに失敗しました");
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadInitialData();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**

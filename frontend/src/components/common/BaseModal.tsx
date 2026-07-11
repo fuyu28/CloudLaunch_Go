@@ -110,8 +110,15 @@ export function BaseModal({
   }, [isOpen, onClose, closeOnEscape]);
 
   // モーダルが閉じられた後の処理
+  // 初期マウント時（一度も開いていない状態）に onClosed が発火しないよう、
+  // 一度でも isOpen=true になったかどうかを ref で保持しガードする。
+  const hasBeenOpenedRef = React.useRef<boolean>(false);
   React.useEffect(() => {
-    if (!isOpen && onClosed) {
+    if (isOpen) {
+      hasBeenOpenedRef.current = true;
+      return undefined;
+    }
+    if (onClosed && hasBeenOpenedRef.current) {
       // DaisyUIのアニメーション時間を考慮してコールバックを実行
       const timer = setTimeout(() => {
         onClosed();
