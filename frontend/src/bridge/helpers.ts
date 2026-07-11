@@ -1,6 +1,7 @@
 /**
- * @fileoverview wailsBridge 共有ヘルパ関数。
+ * @fileoverview wailsBridge 共有ヘルパ。
  *
+ * Go モデル → フロント型の変換と ApiResult 定型化。複雑な分岐は各ブリッジ側に残す。
  */
 
 import type { ApiResult } from "src/types/result";
@@ -16,27 +17,20 @@ import type {
 
 export type { modelsApp, modelsDomain, modelsServices, modelsTime };
 
-// ---------------------------------------------------------------------------
-// 日時正規化
-// ---------------------------------------------------------------------------
-
 export function normalizeApiDate(
   value: Date | string | number | null | undefined | modelsTime.Time,
 ): Date {
   if (value instanceof Date) {
     return value;
   }
+  // Go のゼロ値 time が来ると Epoch 近傍の Date になり「未設定」と区別できない。
   if (typeof value === "string" && value.startsWith("0001-01-01T00:00:00")) {
     return new Date(Number.NaN);
   }
-  // Go time.Time は実行時 ISO 文字列で来る。Date 用に string へ寄せる。
+  // 実行時の time.Time は ISO 文字列。Date コンストラクタへ渡せる形に寄せる。
   const coerced = value as Date | string | number | null | undefined;
   return new Date(coerced ?? Number.NaN);
 }
-
-// ---------------------------------------------------------------------------
-// クラウドデータ正規化
-// ---------------------------------------------------------------------------
 
 export function normalizeCloudDirectoryNode(
   node: modelsApp.CloudDirectoryNode,
@@ -52,11 +46,7 @@ export function normalizeCloudDirectoryNode(
   };
 }
 
-/**
- * 軽量サマリ（CloudGameSummaryItem）を CloudDataItem に正規化する。
- * ファイル数・サイズは commit メタにキャッシュされていれば反映される。
- * 旧 commit にはフィールドが無く 0 が入る（表示側で「未取得」扱い）。
- */
+// 旧 commit には fileCount/totalSize が無く 0 になる。表示側は 0 を「未取得」扱いにする。
 export function normalizeCloudGameSummaryItem(item: modelsApp.CloudGameSummaryItem): CloudDataItem {
   return {
     name: item.name,
@@ -86,10 +76,6 @@ export function normalizeCloudFileDetail(file: modelsApp.CloudFileDetail): Cloud
     relativePath: file.relativePath,
   };
 }
-
-// ---------------------------------------------------------------------------
-// ドメインモデルマッパ
-// ---------------------------------------------------------------------------
 
 export function toGameType(g: modelsDomain.Game): GameType {
   return {
@@ -145,22 +131,11 @@ export function toCloudMemoInfo(c: modelsServices.CloudMemoInfo): CloudMemoInfo 
   };
 }
 
-// ---------------------------------------------------------------------------
-// 定型変換ヘルパ
-// ---------------------------------------------------------------------------
-
-/** 各ブリッジ呼び出しが共通で使う既定のフォールバックメッセージ。 */
 export const DEFAULT_ERROR_MESSAGE = "エラー";
 
 /**
- * Go API レスポンスを `ApiResult<T>` に変換する定型ヘルパ。
- *
- * - success=true: `{ success: true, data: mapData(result.data) }` を返す。
- *   `mapData` を省略した場合は `result.data` をそのまま使う。
- * - success=false: `{ success: false, message: result.error?.message ?? fallbackMessage }` を返す。
- *
- * **元の戻り値と完全等価**であることが自明なケース(data 変換なし or 単純キャスト)にのみ使う。
- * 複雑なネスト構築や特殊分岐は各ブリッジモジュールで元の形を維持する。
+ * Go の ApiResult をフロントの ApiResult に寄せる。
+ * ネスト構築や特殊分岐がある呼び出しでは使わず、ブリッジ側で組み立てる。
  */
 export function toApiResult<T>(
   result: { success: boolean; data?: unknown; error?: { message?: string } },
@@ -175,10 +150,8 @@ export function toApiResult<T>(
 }
 
 /**
- * data がオプショナル（nil を返しうる）な Go API レスポンスを `ApiResult<T | undefined>` に変換する。
- *
- * `toApiResult` の `undefined-as-unknown-as-T` フォールバックを避けるための派生ヘルパ。
- * mapper は data が非 null のときのみ呼ばれ、null/undefined はそのまま undefined として通す。
+ * Go が nil data を返しうる API 用。
+ * toApiResult の `as T` だと「無い」を有値に見せるので、undefined を明示する。
  */
 export function toApiResultOptional<TIn, TOut>(
   result: { success: boolean; data?: TIn | null; error?: { message?: string } },
@@ -191,10 +164,7 @@ export function toApiResultOptional<TIn, TOut>(
   return { success: false, message: result.error?.message ?? fallbackMessage };
 }
 
-/**
- * 配列を返す Go API レスポンスを `ApiResult<T[]>` に変換する。
- * `data ?? []` を `mapItem` で要素ごとに変換する。
- */
+/** data 欠落を空配列に潰し、呼び出し側の null 分岐を不要にする。 */
 export function toApiResultArray<TItem, TOut>(
   result: { success: boolean; data?: TItem[] | null; error?: { message?: string } },
   mapItem: (item: TItem) => TOut,
@@ -206,9 +176,6 @@ export function toApiResultArray<TItem, TOut>(
   return { success: false, message: result.error?.message ?? fallbackMessage };
 }
 
-/**
- * data なし(void)の Go API レスポンスを `ApiResult<void>` に変換する定型ヘルパ。
- */
 export function toApiResultVoid(
   result: { success: boolean; error?: { message?: string } },
   fallbackMessage: string = DEFAULT_ERROR_MESSAGE,
@@ -218,13 +185,7 @@ export function toApiResultVoid(
     : { success: false, message: result.error?.message ?? fallbackMessage };
 }
 
-/**
- * 例外オブジェクトから人間向けメッセージを抽出する。
- * - `Error` インスタンス → `.message`
- * - 文字列 → そのまま
- * - その他で truthy → `JSON.stringify`
- * - falsy → `fallback`
- */
+/** 未知の throw 値でも UI に出せる文字列へ落とす（オブジェクトはそのまま出さない）。 */
 export function getErrorMessage(error: unknown, fallback: string = DEFAULT_ERROR_MESSAGE): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;

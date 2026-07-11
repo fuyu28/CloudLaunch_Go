@@ -1,6 +1,7 @@
 /**
- * @fileoverview ゲーム起動・スクリーンショットブリッジ。
+ * @fileoverview ゲーム起動・スクリーンショット取得ブリッジ。
  *
+ * captureWindow は Wails 例外を ApiResult 失敗に落とす（他 API は result 型で返る）。
  */
 
 import { LaunchGame, CaptureGameScreenshot } from "../../wailsjs/go/app/App";

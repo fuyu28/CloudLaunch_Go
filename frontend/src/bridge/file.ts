@@ -1,6 +1,5 @@
 /**
- * @fileoverview ファイル操作ブリッジ。
- *
+ * @fileoverview ファイル選択・存在確認・ログフォルダ表示ブリッジ。
  */
 
 import {

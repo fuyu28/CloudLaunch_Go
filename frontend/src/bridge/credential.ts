@@ -1,6 +1,7 @@
 /**
- * @fileoverview 認証情報ブリッジ。
+ * @fileoverview S3 認証情報ブリッジ。
  *
+ * OS 資格情報ストア経由の保存・検証。読み出し時に Secret は返さない。
  */
 
 import {
@@ -33,6 +34,7 @@ export function createCredentialBridge(): WindowApi["credential"] {
         success: true,
         data: {
           accessKeyId: result.data.AccessKeyID,
+          // Secret は再表示しない。空のまま返し、未変更保存時はバックエンドが既存値を維持する。
           secretAccessKey: "",
           bucketName: result.data.BucketName ?? "",
           region: result.data.Region ?? "",

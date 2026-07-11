@@ -1,6 +1,7 @@
 /**
- * @fileoverview ウィンドウ操作ブリッジ。
+ * @fileoverview ウィンドウ操作・プラットフォーム取得ブリッジ。
  *
+ * Wails runtime の minimise / maximise / quit とフォルダ表示をまとめる。
  */
 
 import {

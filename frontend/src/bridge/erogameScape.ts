@@ -1,6 +1,7 @@
 /**
- * @fileoverview 批評空間連携ブリッジ。
+ * @fileoverview 批評空間（ErogameScape）連携ブリッジ。
  *
+ * ID / タイトル検索の入力検証と URL 組み立てをフロント側で行い、Go に委譲する。
  */
 
 import { FetchFromErogameScape, SearchErogameScape } from "../../wailsjs/go/app/App";

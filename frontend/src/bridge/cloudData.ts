@@ -1,6 +1,7 @@
 /**
- * @fileoverview クラウドデータ操作ブリッジ。
+ * @fileoverview クラウド上のセーブ一覧・ディレクトリ操作ブリッジ。
  *
+ * Go モデルを normalize してから返す。一覧と詳細ツリーは別 API で遅延取得する。
  */
 
 import {
@@ -30,6 +31,7 @@ export function createCloudDataBridge(): WindowApi["cloudData"] {
     getDirectoryTree: async () =>
       toApiResultArray(await GetDirectoryTree(), normalizeCloudDirectoryNode),
     getGameDirectoryNode: async (gameId) => {
+      // toApiResult だと data 欠落時に undefined を CloudDirectoryNode 扱いになるため手組みする。
       const result = await GetGameDirectoryNode(gameId);
       return result.success && result.data
         ? { success: true, data: normalizeCloudDirectoryNode(result.data) }

@@ -1,6 +1,7 @@
 /**
- * @fileoverview データベース操作ブリッジ (ゲーム・セッション)。
+ * @fileoverview ローカル DB（ゲーム・プレイセッション）ブリッジ。
  *
+ * UpdateGame の playStatus 空文字セマンティクスや再取得失敗の扱いが非自明。
  */
 
 import {
@@ -50,8 +51,7 @@ export function createDatabaseBridge(): WindowApi["database"] {
         ImagePath: game.imagePath ?? undefined,
         ExePath: game.exePath,
         SaveFolderPath: game.saveFolderPath ?? undefined,
-        // 空文字を渡すとバックエンド側 (UpdateGame) は playStatus を上書きしない。
-        // 一般的なゲーム編集では playStatus を変更しないため空文字を維持する。
+        // 空文字だと UpdateGame は playStatus を触らない。一般編集ではステータス変更しない。
         PlayStatus: "" as string,
         ClearedAt: undefined,
         CurrentRouteID: undefined,
@@ -88,8 +88,7 @@ export function createDatabaseBridge(): WindowApi["database"] {
       if (!updated.success) {
         return { success: false, message: updated.error?.message ?? "エラー" };
       }
-      // updated.data が欠落しているケースを undefined を GameType にキャストして誤魔化さず、
-      // 明示的に失敗として返す。呼び出し側は message を見てエラー処理する。
+      // data 欠落を GameType にキャストせず失敗にする。呼び出し側は message で処理する。
       if (!updated.data) {
         return {
           success: false,

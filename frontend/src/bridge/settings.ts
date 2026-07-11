@@ -1,6 +1,7 @@
 /**
- * @fileoverview 設定ブリッジ。
+ * @fileoverview アプリ設定更新ブリッジ。
  *
+ * 各 Update* API を toApiResultVoid で薄いラップするだけ。
  */
 
 import {
