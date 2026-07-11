@@ -17,7 +17,6 @@ import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
 import { logger } from "@renderer/utils/logger";
-import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 import type { MemoType } from "src/types/memo";
 
@@ -26,7 +25,17 @@ export default function MemoView(): React.JSX.Element {
   const navigate = useNavigate();
   const { showToast } = useToastHandler();
   const { formatDateWithTime } = useTimeFormat();
-  const { handleBack, searchParams } = useMemoNavigation();
+  const { handleBack, searchParams, isFromGame, gameIdParam } = useMemoNavigation();
+
+  // 取得失敗時の戻り先を、来訪元コンテキストに応じて出し分けるためのヘルパー。
+  // useMemoNavigation の handleBack と同じ考え方（?from=game&gameId=X ならゲーム詳細へ）。
+  const navigateBackOnFailure = useCallback((): void => {
+    if (isFromGame && gameIdParam) {
+      navigate(`/game/${gameIdParam}`, { replace: true });
+    } else {
+      navigate("/memo", { replace: true });
+    }
+  }, [navigate, isFromGame, gameIdParam]);
 
   const [memo, setMemo] = useState<MemoType | null>(null);
   const [gameTitle, setGameTitle] = useState("");
@@ -50,16 +59,16 @@ export default function MemoView(): React.JSX.Element {
         }
       } else {
         showToast("メモが見つかりません", "error");
-        navigate("/memo", { replace: true });
+        navigateBackOnFailure();
       }
     } catch (error) {
       logger.error("メモ取得エラー:", { component: "MemoView", function: "unknown", data: error });
       showToast("メモの取得に失敗しました", "error");
-      navigate("/memo", { replace: true });
+      navigateBackOnFailure();
     } finally {
       setIsLoading(false);
     }
-  }, [memoId, showToast, navigate]);
+  }, [memoId, showToast, navigateBackOnFailure]);
 
   useEffect(() => {
     fetchMemo();
@@ -222,11 +231,13 @@ export default function MemoView(): React.JSX.Element {
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
                     onClick={(e) => {
-                      // Wails の webview 内で通常リンクを踏むと webview 自体が遷移して
-                      // アプリを離脱してしまうため、外部ブラウザで開くように差し替える。
-                      e.preventDefault();
-                      if (href) {
-                        BrowserOpenURL(href);
+                      // http/https のみ外部ブラウザで開く。fragment (#...) や相対リンク・mailto: 等は
+                      // 既定動作（同一ページ内スクロールやレンダラ既定）に任せて何もしない。
+                      // Wails webview 内で通常リンクを踏むと webview 自体が遷移してしまうため、
+                      // 外部 URL の場合のみ差し替える。
+                      if (href && /^https?:\/\//i.test(href)) {
+                        e.preventDefault();
+                        window.api.browser.openExternalUrl(href);
                       }
                     }}
                   >

@@ -23,6 +23,7 @@ export type {
 
 // ---- ドメインブリッジ合成 -----------------------------------------------
 import { createWindowBridge } from "./bridge/window";
+import { createBrowserBridge } from "./bridge/browser";
 import { createSettingsBridge } from "./bridge/settings";
 import { createMaintenanceBridge } from "./bridge/maintenance";
 import { createFileBridge } from "./bridge/file";
@@ -42,6 +43,7 @@ import type { WindowApi } from "./bridge/types";
 
 export const createWailsBridge = (): WindowApi => ({
   window: createWindowBridge(),
+  browser: createBrowserBridge(),
   settings: createSettingsBridge(),
   maintenance: createMaintenanceBridge(),
   file: createFileBridge(),

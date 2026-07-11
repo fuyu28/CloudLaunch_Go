@@ -19,8 +19,11 @@ export default function MemoEditor(): React.JSX.Element {
   const mode = memoId ? "edit" : "create";
   const pageTitle = mode === "edit" ? "メモを編集" : "新しいメモ";
 
+  // memoId 単位で MemoForm をリマウントすることで内部状態（title/content/isInitializedRef 等）を初期化する。
+  // これにより /memo/edit/A → /memo/edit/B の遷移でも新しい memoId のデータを確実に再フェッチできる。
   return (
     <MemoForm
+      key={memoId ?? "create"}
       mode={mode}
       memoId={memoId}
       preSelectedGameId={gameId}

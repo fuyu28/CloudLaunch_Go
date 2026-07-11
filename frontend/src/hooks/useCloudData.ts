@@ -295,7 +295,8 @@ export function useCloudData(): UseCloudDataReturn {
       }, 0);
 
       if (settled.length === 0) {
-        // 対象なし: メッセージ不要（呼び出し元で扱う）
+        // 対象なしでもユーザーに操作の結果が伝わるよう、info トーストで明示する。
+        toast("削除対象がありませんでした", { icon: "ℹ️" });
       } else if (failedCount === 0) {
         toast.success("全てのクラウドデータを削除しました");
       } else if (failedCount < settled.length) {

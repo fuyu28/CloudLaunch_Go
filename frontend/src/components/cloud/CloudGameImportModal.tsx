@@ -205,14 +205,20 @@ export default function CloudGameImportModal({
   }, [onImported]);
 
   const processQueue = useCallback(
-    async (queue: CloudGameMetadata[]): Promise<void> => {
+    async (queue: CloudGameMetadata[], excludeLocalIds?: Set<string>): Promise<void> => {
       if (queue.length === 0) {
         await finishBatch();
         return;
       }
 
       const [current, ...rest] = queue;
-      const conflicts = localTitleMap.get(normalizeTitle(current.title)) ?? [];
+      // replace 直後は localCache の setState が反映される前に processQueue を呼び出すため、
+      // localTitleMap の再計算は次のレンダリングまで走らない。呼び出し元が「今削除したローカルID」を
+      // excludeLocalIds として渡すことで、古い closure でも削除済みゲームを競合判定から除外できる。
+      const rawConflicts = localTitleMap.get(normalizeTitle(current.title)) ?? [];
+      const conflicts = excludeLocalIds
+        ? rawConflicts.filter((g) => !excludeLocalIds.has(g.id))
+        : rawConflicts;
       if (conflicts.length > 0) {
         setConflict({ cloudGame: current, localMatches: conflicts, remainingQueue: rest });
         return;
@@ -224,7 +230,7 @@ export default function CloudGameImportModal({
         return;
       }
 
-      await processQueue(rest);
+      await processQueue(rest, excludeLocalIds);
     },
     [finishBatch, importGame, localTitleMap],
   );
@@ -274,7 +280,11 @@ export default function CloudGameImportModal({
       return;
     }
 
-    await processQueue(conflict.remainingQueue);
+    // replace 時に削除したローカルIDを後続キューへ引き継ぐ。localCache の再計算前に
+    // processQueue が走る場合でも「削除済み」を競合判定から除外できる。
+    const excludeLocalIds =
+      mode === "replace" ? new Set(conflict.localMatches.map((g) => g.id)) : undefined;
+    await processQueue(conflict.remainingQueue, excludeLocalIds);
   };
 
   const handleClose = (): void => {

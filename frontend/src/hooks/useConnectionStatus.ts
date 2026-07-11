@@ -14,7 +14,7 @@
  * ```
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useValidateCreds } from "./useValidCreds";
 import type { AsyncStatus } from "src/types/common";
@@ -42,15 +42,20 @@ export function useConnectionStatus(): ConnectionStatusResult {
   const validateCreds = useValidateCreds();
   const [status, setStatus] = useState<AsyncStatus>("loading");
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // アンマウント後の setState を防ぐガード。外部から呼ばれる check() でも共通に参照する。
+  const mountedRef = useRef(true);
 
   /**
    * 接続状態を確認する関数
    *
    * 認証情報の有効性を検証し、接続状態を更新します。
+   * アンマウント後の呼び出しでは setState を行わない。
    */
   const check: () => Promise<void> = useCallback(async () => {
+    if (!mountedRef.current) return;
     setStatus("loading");
     const ok = await validateCreds();
+    if (!mountedRef.current) return;
     if (ok) {
       setStatus("success");
       setMessage(undefined);
@@ -61,27 +66,12 @@ export function useConnectionStatus(): ConnectionStatusResult {
   }, [validateCreds]);
 
   useEffect(() => {
-    // アンマウント後に setState が走らないよう cancelled フラグでガードする。
-    // check() を直接呼ぶと内部の setStatus/setMessage がアンマウント後にも実行されうるため、
-    // effect スコープの async 関数として同等処理を書き直す。
-    let cancelled = false;
-    void (async () => {
-      if (cancelled) return;
-      setStatus("loading");
-      const ok = await validateCreds();
-      if (cancelled) return;
-      if (ok) {
-        setStatus("success");
-        setMessage(undefined);
-      } else {
-        setStatus("error");
-        setMessage("クレデンシャルが有効ではありません");
-      }
-    })();
+    mountedRef.current = true;
+    void check();
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
-  }, [validateCreds]);
+  }, [check]);
 
   return { status, message, check };
 }
