@@ -319,6 +319,51 @@ func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 	return result.OkResult(true)
 }
 
+// UpdateS3ForcePathStyle は S3 path-style アドレス指定を更新する（MinIO 等向け）。
+func (app *App) UpdateS3ForcePathStyle(enabled bool) result.ApiResult[bool] {
+	app.Config.S3ForcePathStyle = enabled
+	if app.ContentSyncService != nil {
+		app.ContentSyncService.SetS3ForcePathStyle(enabled)
+	}
+	if app.MemoCloudService != nil {
+		app.MemoCloudService.SetS3ForcePathStyle(enabled)
+	}
+	return result.OkResult(true)
+}
+
+// UpdateS3UseTLS は S3 通信の TLS 有効/無効を更新する。
+func (app *App) UpdateS3UseTLS(enabled bool) result.ApiResult[bool] {
+	app.Config.S3UseTLS = enabled
+	if app.ContentSyncService != nil {
+		app.ContentSyncService.SetS3UseTLS(enabled)
+	}
+	if app.MemoCloudService != nil {
+		app.MemoCloudService.SetS3UseTLS(enabled)
+	}
+	return result.OkResult(true)
+}
+
+// UpdateLogLevel はバックエンドのログレベルを実行時に変更する。
+// 受け付ける値: debug / info / warn / error（大文字小文字・空白は無視）。
+func (app *App) UpdateLogLevel(level string) result.ApiResult[bool] {
+	normalized := strings.ToLower(strings.TrimSpace(level))
+	switch normalized {
+	case "debug", "info", "warn", "warning", "error":
+	default:
+		app.Logger.Warn("ログレベルが不正です", "operation", "UpdateLogLevel", "level", level)
+		return result.ErrorResult[bool]("ログレベルが不正です", "level must be debug|info|warn|error")
+	}
+	if normalized == "warning" {
+		normalized = "warn"
+	}
+	app.Config.LogLevel = normalized
+	if app.logLevel != nil {
+		app.logLevel.Set(logging.ParseLevel(normalized))
+	}
+	app.Logger.Info("ログレベルを更新しました", "level", normalized)
+	return result.OkResult(true)
+}
+
 // UpdateScreenshotSyncEnabled はスクリーンショット同期の有効/無効を更新する。
 func (app *App) UpdateScreenshotSyncEnabled(enabled bool) result.ApiResult[bool] {
 	app.Config.ScreenshotSyncEnabled = enabled

@@ -21,6 +21,7 @@ type App struct {
 	ctx                 context.Context
 	Config              config.Config
 	Logger              *slog.Logger
+	logLevel            *slog.LevelVar
 	GameService         *services.GameService
 	SessionService      *services.SessionService
 	RouteService        *services.RouteService
@@ -43,7 +44,7 @@ type App struct {
 // NewApp はアプリケーションを初期化する。
 func NewApp(ctx context.Context) (*App, error) {
 	cfg := config.LoadFromEnv()
-	logger := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
+	logger, logLevel := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
 
 	if error := os.MkdirAll(cfg.AppDataDir, 0o700); error != nil {
 		return nil, error
@@ -72,6 +73,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	app := &App{
 		Config:       cfg,
 		Logger:       logger,
+		logLevel:     logLevel,
 		MemoFiles:    memoFiles,
 		dbConnection: connection,
 		autoTracking: true,

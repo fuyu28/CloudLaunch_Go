@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import toast from "react-hot-toast";
 
 import { useSyncAndLogsActions } from "@renderer/hooks/useSyncAndLogsActions";
+import { logLevelManager, type LogLevel } from "@renderer/utils/logLevel";
+import { logger } from "@renderer/utils/logger";
 
 import { TabSectionHeader } from "./TabSectionHeader";
 
@@ -17,6 +21,34 @@ export default function SyncAndLogsTab(): React.JSX.Element {
     handleRestoreBackup,
     handleOpenLogsDirectory,
   } = useSyncAndLogsActions();
+
+  const [frontendLogLevel, setFrontendLogLevel] = useState<LogLevel>(() =>
+    logLevelManager.getCurrentLevel(),
+  );
+
+  const handleFrontendLogLevelChange = async (level: LogLevel): Promise<void> => {
+    try {
+      logLevelManager.setLevel(level);
+      setFrontendLogLevel(level);
+      if (level === "off") {
+        toast.success("フロントエンドのログを無効にしました");
+        return;
+      }
+      const result = await window.api.settings.updateLogLevel(level);
+      if (!result.success) {
+        toast.error("バックエンドのログレベル更新に失敗しました");
+        return;
+      }
+      toast.success(`ログレベルを ${level} に設定しました`);
+    } catch (error) {
+      logger.error("ログレベル更新エラー:", {
+        component: "SyncAndLogsTab",
+        function: "handleFrontendLogLevelChange",
+        data: error,
+      });
+      toast.error("ログレベルの更新に失敗しました");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -88,6 +120,26 @@ export default function SyncAndLogsTab(): React.JSX.Element {
             復元時は現在のローカルデータを上書きします（認証情報はOS管理のため対象外）
           </p>
         </div>
+      </div>
+
+      <div className="bg-base-200 p-4 rounded-lg">
+        <div className="mb-3">
+          <h4 className="font-medium">ログレベル</h4>
+          <p className="text-sm text-base-content/70">
+            フロントエンドの出力レベル。off 以外はバックエンドにも反映します
+          </p>
+        </div>
+        <select
+          className="select select-bordered select-sm w-full max-w-xs"
+          value={frontendLogLevel}
+          onChange={(e) => void handleFrontendLogLevelChange(e.target.value as LogLevel)}
+        >
+          {logLevelManager.getAvailableLevels().map((level) => (
+            <option key={level} value={level}>
+              {level} — {logLevelManager.getLevelDescription(level)}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="bg-base-200 p-4 rounded-lg">

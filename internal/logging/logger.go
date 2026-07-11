@@ -26,8 +26,10 @@ const (
 // NewLogger はログレベルに応じた slog.Logger を生成する。
 // 標準出力に加えて appDataDir/logs/app.log へ全レベルを、appDataDir/logs/error.log へ
 // error 以上を同時出力する。各ファイルはサイズ上限でローテーションする。
-func NewLogger(appDataDir string, level string) *slog.Logger {
-	logLevel := ParseLevel(level)
+// 戻り値の *slog.LevelVar を書き換えれば実行時にログレベルを変更できる。
+func NewLogger(appDataDir string, level string) (*slog.Logger, *slog.LevelVar) {
+	levelVar := &slog.LevelVar{}
+	levelVar.Set(ParseLevel(level))
 
 	var mainWriter io.Writer = os.Stdout
 	var errorHandler slog.Handler
@@ -48,14 +50,14 @@ func NewLogger(appDataDir string, level string) *slog.Logger {
 	}
 
 	baseHandler := slog.NewJSONHandler(mainWriter, &slog.HandlerOptions{
-		Level:     logLevel,
+		Level:     levelVar,
 		AddSource: true,
 	})
 	var handler slog.Handler = baseHandler
 	if errorHandler != nil {
 		handler = &teeErrorHandler{base: baseHandler, errorH: errorHandler}
 	}
-	return slog.New(handler).With("scope", "backend")
+	return slog.New(handler).With("scope", "backend"), levelVar
 }
 
 // ParseLevel は文字列から slog.Level を決定する。

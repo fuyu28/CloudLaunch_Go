@@ -2,26 +2,20 @@
  * @fileoverview R2/S3設定コンポーネント
  *
  * クラウドストレージ（R2/S3）の設定を管理するコンポーネントです。
- *
- * 主な機能：
- * - R2/S3接続情報の設定
- * - 接続状態の表示
- * - バリデーション機能
- * - 設定の保存
- *
- * 使用技術：
- * - useSettingsFormZod カスタムフック（Zodベース）
- * - useConnectionStatus カスタムフック
- * - SettingsFormField コンポーネント
  */
 
+import { useAtom } from "jotai";
 import { FaCheck, FaSyncAlt, FaTimes } from "react-icons/fa";
+import toast from "react-hot-toast";
 
 import SettingsFormField from "./SettingsFormField";
+import { SettingsToggle } from "./SettingsToggle";
 import { useConnectionStatus } from "../../hooks/useConnectionStatus";
 import { useOfflineMode } from "../../hooks/useOfflineMode";
 import { useSettingsFormZod } from "../../hooks/useSettingsFormZod";
+import { s3ForcePathStyleAtom, s3UseTLSAtom } from "../../state/settings";
 import { getOfflineDisabledClasses } from "../../utils/offlineUtils";
+import { logger } from "../../utils/logger";
 
 /**
  * R2/S3設定コンポーネント
@@ -48,6 +42,36 @@ export default function R2S3Settings(): React.JSX.Element {
     check: checkConnection,
   } = useConnectionStatus();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
+  const [s3ForcePathStyle, setS3ForcePathStyle] = useAtom(s3ForcePathStyleAtom);
+  const [s3UseTLS, setS3UseTLS] = useAtom(s3UseTLSAtom);
+
+  const handleForcePathStyleChange = async (enabled: boolean): Promise<void> => {
+    const result = await window.api.settings.updateS3ForcePathStyle(enabled);
+    if (!result.success) {
+      logger.error("ForcePathStyle 更新エラー:", {
+        component: "R2S3Settings",
+        function: "handleForcePathStyleChange",
+        data: result.message,
+      });
+      toast.error("path-style 設定の更新に失敗しました");
+      return;
+    }
+    setS3ForcePathStyle(enabled);
+  };
+
+  const handleUseTLSChange = async (enabled: boolean): Promise<void> => {
+    const result = await window.api.settings.updateS3UseTLS(enabled);
+    if (!result.success) {
+      logger.error("UseTLS 更新エラー:", {
+        component: "R2S3Settings",
+        function: "handleUseTLSChange",
+        data: result.message,
+      });
+      toast.error("TLS 設定の更新に失敗しました");
+      return;
+    }
+    setS3UseTLS(enabled);
+  };
 
   // 手動接続テスト実行
   const handleConnectionTest = (): void => {
@@ -92,7 +116,7 @@ export default function R2S3Settings(): React.JSX.Element {
   return (
     <div className={disabledClasses}>
       <h2 className="text-xl font-semibold mb-2 flex items-center justify-between">
-        R2/S3 設定
+        クラウド（R2/S3）
         <div className="text-sm flex items-center space-x-1">
           {isOfflineMode ? (
             <span className="text-warning">オフラインモード</span>
@@ -141,7 +165,6 @@ export default function R2S3Settings(): React.JSX.Element {
       </div>
 
       <div className="flex flex-col space-y-4 mt-4">
-        {/* フォームフィールド群 */}
         <SettingsFormField
           label="Bucket Name"
           value={formData.bucketName}
@@ -192,6 +215,24 @@ export default function R2S3Settings(): React.JSX.Element {
         />
       </div>
 
+      <div className="bg-base-200 p-4 rounded-lg space-y-4 mt-6">
+        <h4 className="font-medium">接続詳細</h4>
+        <SettingsToggle
+          label="Force path-style"
+          description="MinIO など path-style が必要なエンドポイント向け（仮想ホスト形式を使わない）"
+          checked={s3ForcePathStyle}
+          onChange={(value) => void handleForcePathStyleChange(value)}
+          disabled={isOfflineMode}
+        />
+        <SettingsToggle
+          label="TLS を使用"
+          description="オフにすると HTTP で接続します（ローカル MinIO など）"
+          checked={s3UseTLS}
+          onChange={(value) => void handleUseTLSChange(value)}
+          disabled={isOfflineMode}
+        />
+      </div>
+
       <div className="form-control mt-6 flex justify-end space-x-2">
         {!isOfflineMode && (
           <button
@@ -217,7 +258,7 @@ export default function R2S3Settings(): React.JSX.Element {
           <p className="text-sm text-warning">
             オフラインモードでは R2/S3 設定の変更や接続テストはできません。
             <br />
-            設定を変更するには、一般設定からオフラインモードを無効にしてください。
+            設定を変更するには、「動作」タブからオフラインモードを無効にしてください。
           </p>
         </div>
       )}

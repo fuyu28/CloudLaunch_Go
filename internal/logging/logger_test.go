@@ -11,7 +11,7 @@ import (
 
 func TestNewLoggerWritesAppAndErrorFiles(t *testing.T) {
 	dir := t.TempDir()
-	logger := NewLogger(dir, "info")
+	logger, _ := NewLogger(dir, "info")
 
 	logger.Info("情報ログ", "k", "v")
 	logger.Error("重大エラー", "k", "v")

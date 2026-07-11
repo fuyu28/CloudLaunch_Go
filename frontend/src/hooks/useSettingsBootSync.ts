@@ -19,7 +19,10 @@ import {
   screenshotLocalJpegAtom,
   screenshotHotkeyAtom,
   screenshotHotkeyNotifyAtom,
+  s3ForcePathStyleAtom,
+  s3UseTLSAtom,
 } from "@renderer/state/settings";
+import { logLevelManager } from "@renderer/utils/logLevel";
 
 /**
  * アプリ常駐レイアウトから呼び、Settings タブを開かなくてもスクショ設定等が効くようにする。
@@ -36,6 +39,8 @@ export function useSettingsBootSync(): void {
   const screenshotLocalJpeg = useAtomValue(screenshotLocalJpegAtom);
   const screenshotHotkey = useAtomValue(screenshotHotkeyAtom);
   const screenshotHotkeyNotify = useAtomValue(screenshotHotkeyNotifyAtom);
+  const s3ForcePathStyle = useAtomValue(s3ForcePathStyleAtom);
+  const s3UseTLS = useAtomValue(s3UseTLSAtom);
 
   // 初回マウント時のみ。atom 更新のたびに呼ぶのは各設定ハンドラの責務。
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,6 +55,12 @@ export function useSettingsBootSync(): void {
     void settings.updateScreenshotClientOnly(screenshotClientOnly);
     void settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
     void settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
+    void settings.updateS3ForcePathStyle(s3ForcePathStyle);
+    void settings.updateS3UseTLS(s3UseTLS);
+    const feLevel = logLevelManager.getCurrentLevel();
+    if (feLevel !== "off") {
+      void settings.updateLogLevel(feLevel);
+    }
     const trimmedHotkey = screenshotHotkey.trim();
     if (trimmedHotkey) {
       void settings.updateScreenshotHotkey(trimmedHotkey);
