@@ -28,6 +28,7 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
       }
       const raw = result.data as {
         status: SyncStatusType;
+        savesDiffer?: boolean;
         localMeta?: {
           "game.json": string;
           "sessions.json": string;
@@ -49,6 +50,9 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
         success: true,
         data: {
           status: raw.status,
+          // 旧クライアントとの互換や never_synced 早期 return では savesDiffer が
+          // 送られてこないため、未定義時は false（=差分なし扱い）にフォールバックする。
+          savesDiffer: raw.savesDiffer ?? false,
           localMeta: normalizeMeta(raw.localMeta),
           remoteMeta: normalizeMeta(raw.remoteMeta),
         },

@@ -37,10 +37,17 @@ const (
 )
 
 // SyncStatusDetail は同期状態の詳細を表す。
+//
+// SavesDiffer は Saves コンポーネントのみの差分を示す。fingerprint 比較の Status とは
+// 独立に、セッションメタデータ差分（sessions.json / game.json の変化）を除外して
+// セーブファイル内容だけの差分を確認するためのシグナル。
+// セッション終了後のアップロード確認プロンプトなど、「セーブ不変ならプロンプト不要」
+// を判定したい呼び出し側で status とあわせて狭窄条件に使う。
 type SyncStatusDetail struct {
-	Status     SyncStatus    `json:"status"`
-	LocalMeta  *MetaSnapshot `json:"localMeta,omitempty"`
-	RemoteMeta *MetaSnapshot `json:"remoteMeta,omitempty"`
+	Status      SyncStatus    `json:"status"`
+	SavesDiffer bool          `json:"savesDiffer"`
+	LocalMeta   *MetaSnapshot `json:"localMeta,omitempty"`
+	RemoteMeta  *MetaSnapshot `json:"remoteMeta,omitempty"`
 }
 
 // PullResult は Pull / ResolveConflict(リモート採用) の結果を表す。

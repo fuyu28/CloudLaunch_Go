@@ -65,8 +65,11 @@ export function useUploadAfterSession(
           );
           return;
         }
-        const { status } = statusResult.data;
-        if (status === "push_needed" || status === "conflict") {
+        const { status, savesDiffer } = statusResult.data;
+        // status=push_needed / conflict でも、fingerprint 差分の実体が sessions.json
+        // または game.json のメタデータだけ（=セーブファイル内容は不変）のときは
+        // ユーザーに確認するアップロード対象がない。savesDiffer でさらに狭窄する。
+        if ((status === "push_needed" || status === "conflict") && savesDiffer) {
           setPendingUpload({
             gameId,
             gameTitle: game.title,

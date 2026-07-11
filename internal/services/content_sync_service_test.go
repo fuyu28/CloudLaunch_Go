@@ -1086,6 +1086,88 @@ func TestContentSyncServiceDeleteFromCloudClearsLocalSyncState(t *testing.T) {
 	}
 }
 
+// TestContentSyncServiceStatusReportsSavesDifferFalseWhenOnlyMetadataChanged は、
+// リモート push 済みの状態からセッションだけ増やしたケース（セーブファイルは byte 同一）で
+// PushNeeded にはなるが SavesDiffer=false になることを確認する。
+// 「セッション終了後にセーブ不変でもアップロード確認プロンプトが出る」バグの再現テスト。
+func TestContentSyncServiceStatusReportsSavesDifferFalseWhenOnlyMetadataChanged(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("unchanged"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+
+	// リモートはセッション 0 件で push 済み
+	remoteMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	fp := contentFingerprint(remoteMeta)
+	game.LocalSyncHead = &fp
+
+	// ローカルにだけ新しいセッションを追加（セーブファイルは byte 同一）
+	sessions := []domain.PlaySession{
+		{
+			ID:        "s1",
+			GameID:    game.ID,
+			PlayedAt:  time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			Duration:  600,
+			UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	repo := newFakeRepo(&game, sessions)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusPushNeeded {
+		t.Fatalf("Status = %q, want %q", detail.Status, domain.SyncStatusPushNeeded)
+	}
+	if detail.SavesDiffer {
+		t.Fatal("SavesDiffer should be false when only sessions.json changed (bug repro)")
+	}
+}
+
+// TestContentSyncServiceStatusReportsSavesDifferTrueWhenSaveContentChanged は、
+// セーブファイル内容が実際に変化したときに SavesDiffer=true が返ることを確認する。
+func TestContentSyncServiceStatusReportsSavesDifferTrueWhenSaveContentChanged(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	remoteMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	fp := contentFingerprint(remoteMeta)
+	game.LocalSyncHead = &fp
+
+	// ローカルのセーブ内容を変更（新しいファイル追加）
+	if err := os.WriteFile(filepath.Join(saveDir, "save2.dat"), []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusPushNeeded {
+		t.Fatalf("Status = %q, want %q", detail.Status, domain.SyncStatusPushNeeded)
+	}
+	if !detail.SavesDiffer {
+		t.Fatal("SavesDiffer should be true when save file content changed")
+	}
+}
+
 // TestContentSyncServiceStatusReturnsPullNeededWhenLocalSyncHeadUnset は
 // LocalSyncHead が未設定（他PCで一度も同期していない）のとき conflict ではなく
 // pull_needed を返すことを確認する。

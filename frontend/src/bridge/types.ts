@@ -30,6 +30,13 @@ export type SyncStatus = "never_synced" | "in_sync" | "push_needed" | "pull_need
 
 export type SyncStatusDetail = {
   status: SyncStatus;
+  /**
+   * Saves コンポーネントのみの差分（=セーブファイル内容の差分）を示す。
+   * `status` は sessions.json / game.json のメタデータ差分も含む fingerprint 比較なので、
+   * セッション終了後のアップロード確認プロンプトのように「セーブ不変ならプロンプト不要」を
+   * 判定したい呼び出し側では `status` に加えてこのフラグでさらに狭窄する。
+   */
+  savesDiffer: boolean;
   localMeta?: SyncMetaSnapshot;
   remoteMeta?: SyncMetaSnapshot;
 };
