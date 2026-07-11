@@ -55,16 +55,25 @@ func LoadFromEnv() Config {
 	}
 }
 
-func defaultAppDataDir() string {
+// ExecutableDir は実行ファイルのあるディレクトリを返す（シンボリックリンク解決込み）。解決できない場合は空文字を返す。
+func ExecutableDir() string {
 	exePath, err := os.Executable()
-	if err == nil {
-		if resolved, resolveErr := filepath.EvalSymlinks(exePath); resolveErr == nil {
-			exePath = resolved
-		}
-		dir := filepath.Dir(exePath)
-		if strings.TrimSpace(dir) != "" {
-			return dir
-		}
+	if err != nil {
+		return ""
+	}
+	if resolved, resolveErr := filepath.EvalSymlinks(exePath); resolveErr == nil {
+		exePath = resolved
+	}
+	dir := filepath.Dir(exePath)
+	if strings.TrimSpace(dir) == "" {
+		return ""
+	}
+	return dir
+}
+
+func defaultAppDataDir() string {
+	if dir := ExecutableDir(); dir != "" {
+		return dir
 	}
 
 	base := os.Getenv("APPDATA")

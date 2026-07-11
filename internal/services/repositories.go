@@ -85,6 +85,11 @@ type ScreenshotRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 }
 
+// ProcessIDResolver は実行ファイルパスから稼働中プロセスIDを引く境界。
+type ProcessIDResolver interface {
+	FindProcessIDsByExe(exePath string) ([]int, error)
+}
+
 // ProcessMonitorRepository は ProcessMonitorService が必要とする永続化境界を定義する。
 type ProcessMonitorRepository interface {
 	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)

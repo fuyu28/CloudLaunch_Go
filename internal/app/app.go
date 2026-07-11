@@ -137,7 +137,7 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	}
 	app.ErogameScapeService = services.NewErogameScapeService(app.Config, app.Logger)
 	app.ProcessMonitor = services.NewProcessMonitorService(repository, app.Logger, app.ContentSyncService)
-	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.Logger)
+	app.ScreenshotService = services.NewScreenshotService(app.Config, repository, app.ProcessMonitor, app.Logger)
 	app.MemoCloudService = services.NewMemoCloudService(app.Config, credentialStore, app.GameService, app.MemoService, app.Logger)
 	app.MaintenanceService = services.NewMaintenanceService(
 		app.Config,

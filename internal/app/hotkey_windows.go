@@ -60,9 +60,6 @@ func (app *App) handleHotkeyCapture() bool {
 	}
 	gameID, path, err := app.ScreenshotService.CaptureHotkey(app.context(), hotkeyTargetGameID)
 	if err != nil {
-		if err == services.ErrNoNewScreenshot {
-			return false
-		}
 		app.Logger.Error("ホットキーキャプチャに失敗", "error", err)
 		return false
 	}

@@ -7,10 +7,8 @@ import (
 	"errors"
 )
 
-func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGameID string) (string, string, error) {
-	return "", "", errors.New("screenshot capture is only supported on Windows")
-}
-
-func (service *ScreenshotService) captureWithScreenClip(ctx context.Context, fullPath string, tmpPath string) error {
+// captureWithScreencap は非Windowsではサポート外。captureFunc がエラーを返すため、
+// CaptureHotkey / CaptureGameScreenshot のオーケストレーション自体は共有ファイルで検証できる。
+func (service *ScreenshotService) captureWithScreencap(ctx context.Context, pid int, outPath string) error {
 	return errors.New("screenshot capture is only supported on Windows")
 }
