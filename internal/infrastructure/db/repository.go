@@ -583,9 +583,10 @@ func (repository *Repository) UpdatePlaySessionRoute(ctx context.Context, sessio
 }
 
 // UpdatePlaySessionName はセッション名を更新する。
+// 空文字は NULL に丸めることで、フロントエンドからのクリア要求（"未設定"に戻す）を実現する。
 func (repository *Repository) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
 	_, error := repository.connection.ExecContext(ctx, `
-		UPDATE "PlaySession" SET sessionName = ? WHERE id = ?
+		UPDATE "PlaySession" SET sessionName = NULLIF(?, '') WHERE id = ?
 	`, sessionName, sessionID)
 	return error
 }

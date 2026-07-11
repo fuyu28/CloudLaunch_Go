@@ -380,7 +380,7 @@ export default function PlaySessionManagementModal({
             <button
               className="btn btn-primary"
               onClick={handleEditSession}
-              disabled={!editFormData.sessionName.trim()}
+              disabled={validation.hasError("sessionName")}
             >
               更新
             </button>

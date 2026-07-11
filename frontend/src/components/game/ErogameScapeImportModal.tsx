@@ -49,6 +49,9 @@ export default function ErogameScapeImportModal({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const lastFetchedIdRef = useRef<string | null>(null);
+  // fetchFromErogameScape の in-flight 追跡。連続実行や検索モーダルからの選択と手動取得が
+  // 交差した際に、古い応答が新しい状態を上書きしないようにする。
+  const fetchRequestIdRef = useRef(0);
   const validation = useGameFormValidationZod(gameData);
   const { isBrowsing, browseImage, browseExe, browseSaveFolder, handleChange } =
     useGameFormHandlers({
@@ -73,6 +76,7 @@ export default function ErogameScapeImportModal({
       setIsSearchOpen(false);
       setSubmitting(false);
       lastFetchedIdRef.current = null;
+      fetchRequestIdRef.current = 0;
     }
   }, [isOpen]);
 
@@ -98,10 +102,16 @@ export default function ErogameScapeImportModal({
         setFetchError("批評空間IDは数字のみで入力してください");
         return;
       }
+      // requestId で in-flight 追跡。古い応答が新しい状態を上書きしないようにする。
+      const requestId = fetchRequestIdRef.current + 1;
+      fetchRequestIdRef.current = requestId;
       setFetching(true);
       setFetchError(null);
       try {
         const result = await window.api.erogameScape.fetchById(id);
+        if (requestId !== fetchRequestIdRef.current) {
+          return;
+        }
         if (!result.success || !result.data) {
           handleApiError(result, "批評空間からの取得に失敗しました");
           setFetchError(
@@ -115,10 +125,15 @@ export default function ErogameScapeImportModal({
         applyImport(result.data);
         showSuccessToast("批評空間から情報を取得しました");
       } catch (error) {
+        if (requestId !== fetchRequestIdRef.current) {
+          return;
+        }
         handleUnexpectedError(error, "批評空間情報の取得");
         setFetchError("批評空間からの取得に失敗しました");
       } finally {
-        setFetching(false);
+        if (requestId === fetchRequestIdRef.current) {
+          setFetching(false);
+        }
       }
     },
     [applyImport],

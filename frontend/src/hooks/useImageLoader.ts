@@ -98,7 +98,11 @@ export const useImageLoader = (src: string): ImageLoadState => {
               data: { src, errorMessage },
             });
             if (errorMessage) {
-              toast.error(`画像読み込み失敗: ${errorMessage}`);
+              // Home 等で複数の壊れた画像がある場合にトーストが氾濫しないよう、
+              // 画像パス由来の toastId で dedup する。
+              toast.error(`画像読み込み失敗: ${errorMessage}`, {
+                id: `image-load-failed:${src.trim()}`,
+              });
             }
             setState({
               imageSrc: createNoImageDataUrl(),
@@ -115,7 +119,10 @@ export const useImageLoader = (src: string): ImageLoadState => {
             error: error instanceof Error ? error : new Error(String(error)),
           });
           const errorMsg = error instanceof Error ? error.message : "不明なエラー";
-          toast.error(`画像読み込みエラー: ${errorMsg}`);
+          // 同一画像に対する例外由来トーストも同じ IDで dedup する。
+          toast.error(`画像読み込みエラー: ${errorMsg}`, {
+            id: `image-load-failed:${src.trim()}`,
+          });
           setState({
             imageSrc: createNoImageDataUrl(),
             isLoading: false,

@@ -92,24 +92,29 @@ export function PlaySessionModal({
     }
   }, [isOpen]);
 
-  // タイマー処理
+  // タイマー処理。
+  // mode 依存を deps に加えることで、タイマーモード以外に切り替わったら
+  // interval を確実に止める。タイマー起動中に手動モードへ切替 → タイマー再表示、で
+  // 二重に interval が回ってしまう問題を防ぐ。
   useEffect(() => {
-    if (timerState === "running") {
+    if (timerState === "running" && mode === "timer") {
       intervalRef.current = setInterval(() => {
         setTimerSeconds((prev) => prev + 1);
       }, 1000);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = undefined;
       }
     }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = undefined;
       }
     };
-  }, [timerState]);
+  }, [timerState, mode]);
 
   /**
    * 入力値を数値に変換（空文字列の場合は0）

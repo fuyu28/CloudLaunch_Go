@@ -85,10 +85,18 @@ export default function ErogameScapeSearchModal({
     if (!nextPageUrl || loadingMore) {
       return;
     }
+    // 検索と同じ requestId ガードを追記結果側にも適用する。
+    // 追加ロード実行中にモーダルを閉じて再度開いた場合や新規検索を発火した場合、
+    // 古いレスポンスが後から届いても捨てる。
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
     setLoadingMore(true);
     setSearchError(null);
     try {
       const result = await window.api.erogameScape.searchByTitle(activeQuery, nextPageUrl);
+      if (requestId !== searchRequestIdRef.current) {
+        return;
+      }
       if (!result.success || !result.data) {
         setSearchError(
           (result as { success: false; message: string }).message || "批評空間の検索に失敗しました",
@@ -99,9 +107,13 @@ export default function ErogameScapeSearchModal({
       setSearchResults((prev) => [...prev, ...(data.items ?? [])]);
       setNextPageUrl(data.nextPageUrl ?? null);
     } catch {
-      setSearchError("批評空間の検索に失敗しました");
+      if (requestId === searchRequestIdRef.current) {
+        setSearchError("批評空間の検索に失敗しました");
+      }
     } finally {
-      setLoadingMore(false);
+      if (requestId === searchRequestIdRef.current) {
+        setLoadingMore(false);
+      }
     }
   }, [activeQuery, loadingMore, nextPageUrl]);
 

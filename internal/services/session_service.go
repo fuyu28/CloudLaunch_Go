@@ -116,17 +116,15 @@ func (service *SessionService) UpdateSessionRoute(ctx context.Context, sessionID
 }
 
 // UpdateSessionName はセッション名を更新する。
+// 空文字（または空白のみ）を渡した場合は NULL クリアとして扱う。
+// フロントエンドから「セッション名を消したい」ユースケースを許可するため。
 func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) (SessionMutationResult, error) {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
 		return SessionMutationResult{}, newServiceError("セッションIDが不正です", detail)
 	}
-	trimmedName, detail, ok := requireNonEmpty(sessionName, "sessionName")
-	if !ok {
-		service.logger.Warn("セッション名が不正です", "detail", detail, "sessionId", sessionID)
-		return SessionMutationResult{}, newServiceError("セッション名が不正です", detail)
-	}
+	trimmedName := strings.TrimSpace(sessionName)
 
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
 	if error != nil {
