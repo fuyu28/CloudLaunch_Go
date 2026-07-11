@@ -17,6 +17,7 @@ import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 
 import { logger } from "@renderer/utils/logger";
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 import type { MemoType } from "src/types/memo";
 
@@ -220,6 +221,14 @@ export default function MemoView(): React.JSX.Element {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
+                    onClick={(e) => {
+                      // Wails の webview 内で通常リンクを踏むと webview 自体が遷移して
+                      // アプリを離脱してしまうため、外部ブラウザで開くように差し替える。
+                      e.preventDefault();
+                      if (href) {
+                        BrowserOpenURL(href);
+                      }
+                    }}
                   >
                     {children}
                   </a>

@@ -429,10 +429,12 @@ export default function MemoForm({
               <span className="label-text-alt text-xs">
                 <span
                   className={
-                    title.length > 180
-                      ? "text-warning"
-                      : title.length > 190
-                        ? "text-error"
+                    // 190 超は error（赤）、180 超は warning（黄）、それ以下は通常。
+                    // より厳しい上限のチェックを先に評価する。
+                    title.length > 190
+                      ? "text-error"
+                      : title.length > 180
+                        ? "text-warning"
                         : "text-base-content/60"
                   }
                 >
