@@ -61,8 +61,27 @@ export function useConnectionStatus(): ConnectionStatusResult {
   }, [validateCreds]);
 
   useEffect(() => {
-    check();
-  }, [check]);
+    // アンマウント後に setState が走らないよう cancelled フラグでガードする。
+    // check() を直接呼ぶと内部の setStatus/setMessage がアンマウント後にも実行されうるため、
+    // effect スコープの async 関数として同等処理を書き直す。
+    let cancelled = false;
+    void (async () => {
+      if (cancelled) return;
+      setStatus("loading");
+      const ok = await validateCreds();
+      if (cancelled) return;
+      if (ok) {
+        setStatus("success");
+        setMessage(undefined);
+      } else {
+        setStatus("error");
+        setMessage("クレデンシャルが有効ではありません");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [validateCreds]);
 
   return { status, message, check };
 }
