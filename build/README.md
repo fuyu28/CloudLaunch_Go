@@ -39,12 +39,16 @@ build with `wails build`.
 The Windows installer bundles `screencap-cli.exe` — a non-interactive, WGC-based
 screenshot CLI from https://github.com/fuyu28/screencap-rs.
 
-Before running `wails build` (or `wails dev` on Windows), fetch and place the
-binary:
+On Windows, `wails build` and `wails dev` fetch and place the binary
+automatically via the `preBuildHooks` entry in `wails.json`, which runs
+`scripts/fetch-screencap-cli.ps1`. (On non-Windows hosts the hook is skipped
+with "Non native build hook: Skipping.", so it does not break macOS
+development.)
 
-```bash
-./scripts/fetch-screencap-cli.sh   # downloads build/windows/screencap-cli.exe
-wails build
+To fetch it manually:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/fetch-screencap-cli.ps1
 ```
 
 The NSIS installer (`installer/project.nsi`) picks up
@@ -56,7 +60,7 @@ fails in dev mode.
 
 The script pins the download by SHA256 and skips re-downloading when the
 existing binary already matches. To update the bundled version, change **both**
-`SCREENCAP_VERSION` and `SCREENCAP_SHA256` in `scripts/fetch-screencap-cli.sh`,
+`$ScreencapVersion` and `$ScreencapSha256` in `scripts/fetch-screencap-cli.ps1`,
 re-run it, and verify the binary reports the expected version:
 
 ```

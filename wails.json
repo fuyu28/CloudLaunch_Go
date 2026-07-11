@@ -6,6 +6,9 @@
   "frontend:build": "bun run build",
   "frontend:dev:watcher": "bun run dev",
   "frontend:dev:serverUrl": "auto",
+  "preBuildHooks": {
+    "windows/*": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/fetch-screencap-cli.ps1"
+  },
   "author": {
     "name": "fuyu",
     "email": "88916226+fuyu28@users.noreply.github.com"
