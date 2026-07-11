@@ -1,5 +1,6 @@
 /**
  * @fileoverview 設定ブリッジ。
+ *
  */
 
 import {

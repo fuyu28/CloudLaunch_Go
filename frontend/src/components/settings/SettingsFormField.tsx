@@ -2,59 +2,21 @@
  * @fileoverview 設定フォームフィールドコンポーネント
  *
  * このコンポーネントは、設定ページで使用される入力フィールドを統一的に提供します。
- *
- * 主な機能：
- * - ラベル付き入力フィールド
- * - 統一的なスタイリング
- * - プレースホルダー対応
- * - バリデーション状態の表示
- * - パスワードフィールド対応
- *
- * 使用例：
- * ```tsx
- * <SettingsFormField
- *   label="Bucket Name"
- *   value={bucketName}
- *   onChange={(value) => setBucketName(value)}
- *   placeholder="バケット名を入力"
- * />
- * ```
  */
 
-/**
- * 設定フォームフィールドコンポーネントのprops
- */
 export type SettingsFormFieldProps = {
-  /** ラベルテキスト */
   label: string;
-  /** 現在の値 */
   value: string;
-  /** 値変更時のコールバック */
   onChange: (value: string) => void;
-  /** プレースホルダーテキスト */
   placeholder?: string;
-  /** パスワードフィールドかどうか */
   type?: "text" | "password";
-  /** フィールドを無効化する場合は true */
   disabled?: boolean;
-  /** 必須フィールドかどうか */
   required?: boolean;
-  /** エラーメッセージ */
   error?: string;
-  /** ヘルプテキスト */
   helpText?: string;
-  /** ラベルの幅（Tailwind CSS クラス） */
   labelWidth?: string;
 };
 
-/**
- * 設定フォームフィールドコンポーネント
- *
- * 設定ページで使用される統一的な入力フィールドを提供します。
- *
- * @param props コンポーネントのprops
- * @returns 設定フォームフィールド要素
- */
 export function SettingsFormField({
   label,
   value,

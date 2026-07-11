@@ -1,12 +1,7 @@
 /**
- * @fileoverview ログレベル設定管理
+ * @fileoverview ログレベル管理
  *
- * このファイルは、ログレベルの動的設定と管理を提供します。
- * 主な機能：
- * - 実行時ログレベル変更
- * - 環境別デフォルト設定
- * - 設定の永続化
- * - ログレベル階層の管理
+ * ログレベルの読み書きとシングルトン管理。
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error" | "off";
@@ -22,9 +17,6 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   off: 4,
 };
 
-/**
- * ログレベル設定管理クラス
- */
 class LogLevelManager {
   private currentLevel: LogLevel;
   private defaultLevel: LogLevel;

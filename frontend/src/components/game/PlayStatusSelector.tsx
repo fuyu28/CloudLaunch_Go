@@ -2,45 +2,18 @@
  * @fileoverview プレイステータス選択コンポーネント
  *
  * このコンポーネントは、ゲームのプレイステータスを選択・変更するためのUIを提供します。
- *
- * 主な機能：
- * - プレイステータスの視覚的表示（バッジ形式）
- * - ドロップダウンメニューでのステータス変更
- * - 各ステータスに応じた色分け
- * - 変更時のコールバック処理
- *
- * 使用例：
- * ```tsx
- * <PlayStatusSelector
- *   currentStatus={game.playStatus}
- *   onStatusChange={handleStatusChange}
- *   disabled={isUpdating}
- * />
- * ```
  */
 
 import { FaChevronDown, FaGamepad, FaPlay, FaCheck } from "react-icons/fa";
 
-/**
- * プレイステータスの型定義
- */
 export type PlayStatus = "unplayed" | "playing" | "played";
 
-/**
- * プレイステータス選択コンポーネントのprops
- */
 export type PlayStatusSelectorProps = {
-  /** 現在のプレイステータス */
   currentStatus: PlayStatus;
-  /** ステータス変更時のコールバック */
   onStatusChange: (status: PlayStatus) => void;
-  /** 無効化フラグ */
   disabled?: boolean;
 };
 
-/**
- * プレイステータス情報の設定
- */
 const STATUS_CONFIG = {
   unplayed: {
     label: "未プレイ",

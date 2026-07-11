@@ -2,10 +2,6 @@
  * @fileoverview 共通エラーハンドリングユーティリティ
  *
  * このファイルは、アプリケーション全体で使用されるエラーハンドリング機能を提供します。
- * 主な機能：
- * - ApiResult型の統一的なエラーハンドリング
- * - トースト通知の表示
- * - エラーログの記録
  */
 
 import toast from "react-hot-toast";
@@ -64,11 +60,6 @@ export function handleUnexpectedError(error: unknown, context: string, toastId?:
   }
 }
 
-/**
- * 成功時のトースト表示
- * @param message - 成功メッセージ
- * @param toastId - 既存のトーストIDを指定する場合
- */
 export function showSuccessToast(message: string, toastId?: string): void {
   if (toastId) {
     toast.success(message, { id: toastId });
@@ -77,14 +68,6 @@ export function showSuccessToast(message: string, toastId?: string): void {
   }
 }
 
-/**
- * ローディング付きの非同期操作ヘルパー
- * @param asyncOperation - 実行する非同期操作
- * @param loadingMessage - ローディング中のメッセージ
- * @param successMessage - 成功時のメッセージ
- * @param errorContext - エラーコンテキスト
- * @returns 操作結果
- */
 export async function withLoadingToast<T>(
   asyncOperation: () => Promise<ApiResult<T>>,
   loadingMessage: string,

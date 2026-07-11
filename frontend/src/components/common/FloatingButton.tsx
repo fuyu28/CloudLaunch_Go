@@ -7,17 +7,11 @@
 import type { ReactNode } from "react";
 
 export type FloatingButtonProps = {
-  /** ボタン内に表示するアイコンやテキスト */
   children: ReactNode;
-  /** クリック時のハンドラ */
   onClick: () => void;
-  /** 画面内での固定位置 （例: "bottom-6 right-6"） */
   positionClass?: string;
-  /** ボタンの色*/
   btnColor?: string;
-  /** ボタンの追加クラス */
   className?: string;
-  /** aria-label */
   ariaLabel?: string;
 };
 

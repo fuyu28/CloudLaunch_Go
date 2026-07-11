@@ -2,11 +2,6 @@
  * @fileoverview ゲーム情報表示コンポーネント
  *
  * このコンポーネントは、ゲームの基本情報（タイトル、パブリッシャー、画像、説明など）を表示します。
- * 主な機能：
- * - ゲーム基本情報の表示
- * - プレイステータス表示
- * - 動的画像読み込み
- * - メモ化による最適化
  */
 
 import { memo, useCallback } from "react";
@@ -23,28 +18,15 @@ import PlayStatusSelector from "./PlayStatusSelector";
 import type { GameType } from "src/types/game";
 
 type GameInfoProps = {
-  /** ゲーム情報 */
   game: GameType;
-  /** プレイステータス更新中フラグ */
   isUpdatingStatus: boolean;
-  /** 起動中フラグ */
   isLaunching?: boolean;
-  /** プレイステータス変更ハンドラ */
   onStatusChange: (status: string) => void;
-  /** ゲーム起動ハンドラ */
   onLaunchGame: () => void;
-  /** ゲーム編集ハンドラ */
   onEditGame: () => void;
-  /** ゲーム削除ハンドラ */
   onDeleteGame: () => void;
 };
 
-/**
- * ゲーム情報表示コンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns ゲーム情報表示要素
- */
 const GameInfo = memo(function GameInfo({
   game,
   isUpdatingStatus,

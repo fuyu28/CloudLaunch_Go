@@ -3,27 +3,14 @@
  *
  * 非同期処理が並行で走ったときに、古い応答の結果で新しい応答（および新しい状態）を上書き
  * してしまわないようにするための monotonic counter。
- *
- * 使い方:
- * ```ts
- * const { next, isLatest, reset } = useLatestRequestId();
- * const doFetch = async () => {
- *   const id = next();
- *   const data = await api.fetch();
- *   if (!isLatest(id)) return; // 古い応答は捨てる
- *   setState(data);
- * };
- * ```
  */
 
 import { useCallback, useMemo, useRef } from "react";
 
 export type UseLatestRequestIdReturn = {
-  /** 新しいリクエストIDを発行してカウンタを進める。 */
   next: () => number;
   /** 指定 ID が現在の最新であれば true。 */
   isLatest: (id: number) => boolean;
-  /** カウンタを 0 にリセットする（モーダルを閉じたときなど）。 */
   reset: () => void;
 };
 

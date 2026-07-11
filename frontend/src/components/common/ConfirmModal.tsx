@@ -3,12 +3,6 @@
  *
  * このコンポーネントは、ユーザーのアクション確認を行うためのモーダルダイアログを提供します。
  * シンプルなメッセージ表示から、詳細情報・注意事項付きの高度な確認まで対応します。
- *
- * 主な機能：
- * - 基本的な確認メッセージ表示
- * - アイコン付きの詳細確認
- * - 注意事項・警告表示
- * - 柔軟なボタンスタイル（primary/error対応）
  */
 
 import { FiAlertTriangle } from "react-icons/fi";
@@ -23,17 +17,10 @@ export type WarningItem = {
   highlight?: boolean;
 };
 
-/**
- * 詳細確認情報の型定義
- */
 export type ConfirmDetails = {
-  /** メインアイコン */
   icon?: React.ReactNode;
-  /** サブテキスト（パス、サイズなど） */
   subText?: string;
-  /** 注意事項リスト */
   warnings?: WarningItem[];
-  /** カスタム詳細コンテンツ */
   customContent?: React.ReactNode;
 };
 
@@ -42,11 +29,9 @@ type ConfirmModalProps = {
   isOpen: boolean;
   title?: string;
   message: string;
-  /** 詳細確認情報（アイコン、注意事項など） */
   details?: ConfirmDetails;
   cancelText?: string;
   confirmText?: string;
-  /** 確認ボタンのスタイル */
   confirmVariant?: "primary" | "error";
   onConfirm: () => void;
   onCancel: () => void;

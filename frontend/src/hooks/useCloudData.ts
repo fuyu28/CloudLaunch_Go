@@ -20,27 +20,21 @@ import {
 export type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 export type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
-/**
- * useCloudDataフックの戻り値の型定義
- */
 export type UseCloudDataReturn = {
   cloudData: CloudDataItem[];
   directoryTree: CloudDirectoryNode[];
   loading: boolean;
   currentPath: CloudPathSegment[];
   currentDirectoryNodes: CloudDirectoryNode[];
-  /** 現在ファイル一覧を遅延取得中のゲームID（remotePath）集合 */
   loadingGameIds: Set<string>;
 
   fetchCloudData: () => Promise<void>;
-  /** 指定ゲームのファイル一覧を遅延取得し、ディレクトリツリーへマージする */
   ensureGameLoaded: (gameId: string) => Promise<void>;
   navigateToDirectory: (node: CloudDirectoryNode) => void;
   navigateBack: () => void;
   navigateToPath: (newPath: CloudPathSegment[]) => void;
   /** ゲーム単位でクラウドデータを削除する（gameId = remotePath または path） */
   deleteGameFromCloud: (gameId: string) => Promise<void>;
-  /** 全ゲームのクラウドデータを一括削除する */
   deleteAllGamesFromCloud: () => Promise<void>;
   clearNavigationCache: () => void;
 };
@@ -59,9 +53,6 @@ function buildCloudDataFromTree(tree: CloudDirectoryNode[]): CloudDataItem[] {
   });
 }
 
-/**
- * クラウドデータ管理フック
- */
 export function useCloudData(): UseCloudDataReturn {
   const [state, setState] = useState({
     cloudData: [] as CloudDataItem[],

@@ -12,7 +12,6 @@ type UntrackedDeleteModalProps = {
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
-  /** 削除候補となる、同期が管理していないローカル固有ファイルの相対パス一覧 */
   files: string[];
   onConfirm: () => void;
   isProcessing: boolean;

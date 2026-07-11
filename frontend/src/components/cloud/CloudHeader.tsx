@@ -3,49 +3,27 @@
  *
  * このコンポーネントは、クラウドデータ管理ページのヘッダー部分を
  * 担当し、ビュー切り替えや操作ボタンを提供します。
- *
- * 主な機能：
- * - ビュー切り替え（カード/ツリー）
- * - 全削除ボタン
- * - 更新ボタン
- * - ローディング状態の表示
  */
 
 import { FiTrash2, FiRefreshCw, FiCloud, FiFolder, FiFolderPlus } from "react-icons/fi";
 
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
-/**
- * ビューモードの型定義
- */
 export type ViewMode = "cards" | "tree";
 
 /**
  * クラウドヘッダーのプロパティ
  */
 type CloudHeaderProps = {
-  /** 現在のビューモード */
   viewMode: ViewMode;
-  /** ビューモード変更コールバック */
   onViewModeChange: (mode: ViewMode) => void;
-  /** クラウドデータ */
   cloudData: CloudDataItem[];
-  /** ディレクトリツリー */
   directoryTree: CloudDirectoryNode[];
-  /** ローディング状態 */
   loading: boolean;
-  /** 更新コールバック */
   onRefresh: () => void;
-  /** 全削除コールバック */
   onDeleteAll: () => void;
 };
 
-/**
- * クラウドページヘッダーコンポーネント
- *
- * @param props ヘッダーのプロパティ
- * @returns JSX要素
- */
 export function CloudHeader({
   viewMode,
   onViewModeChange,

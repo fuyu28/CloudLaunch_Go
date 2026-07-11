@@ -14,14 +14,10 @@ import {
   latestModifiedRecursively,
 } from "@renderer/utils/cloudUtils";
 
-/**
- * ツリーノードコンポーネントのプロパティ
- */
 type CloudTreeNodeProps = {
   node: CloudDirectoryNode;
   level: number;
   expandedNodes: Set<string>;
-  /** ファイル一覧を遅延取得中のゲームID集合 */
   loadingGameIds?: Set<string>;
   onToggleExpand: (path: string) => void;
   onDelete: (node: CloudDirectoryNode) => void;

@@ -1,5 +1,6 @@
 /**
  * @fileoverview 画像読み込みブリッジ。
+ *
  */
 
 import { LoadImageFromLocal } from "../../wailsjs/go/app/App";

@@ -2,15 +2,6 @@
  * @fileoverview オフラインモード判定用のカスタムフック
  *
  * オフラインモードの状態を管理し、ネットワーク機能の利用可否を判定します。
- *
- * 主な機能：
- * - オフラインモード設定の取得
- * - ネットワーク機能の利用可否判定
- * - オフラインモード時の適切なメッセージ表示
- *
- * 使用技術：
- * - Jotai atoms（状態管理）
- * - react-hot-toast（トースト表示）
  */
 
 import { useCallback } from "react";
@@ -20,13 +11,9 @@ import toast from "react-hot-toast";
 import { offlineModeAtom } from "../state/settings";
 
 type OfflineModeHook = {
-  /** オフラインモードが有効かどうか */
   isOfflineMode: boolean;
-  /** ネットワーク機能が利用可能かどうか */
   isNetworkAvailable: boolean;
-  /** オフラインモード時のエラーメッセージを表示 */
   showOfflineError: (feature?: string) => void;
-  /** ネットワーク機能実行前のチェック */
   checkNetworkFeature: (feature?: string) => boolean;
 };
 

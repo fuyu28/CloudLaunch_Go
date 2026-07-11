@@ -14,11 +14,6 @@ type UseDropdownMenuReturn = {
   isOpen: (id: string) => boolean;
 };
 
-/**
- * ドロップダウンメニューの制御フック
- *
- * @returns ドロップダウンメニュー制御用の状態と関数
- */
 export function useDropdownMenu(): UseDropdownMenuReturn {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 

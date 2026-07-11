@@ -19,9 +19,6 @@ type CloudItemCardProps = {
   onNavigate?: (directoryName: string) => void;
 };
 
-/**
- * クラウドデータアイテムカードコンポーネント
- */
 export function CloudItemCard({
   item,
   onDelete,
@@ -102,9 +99,6 @@ type DirectoryNodeCardProps = {
   onViewDetails?: (node: CloudDirectoryNode) => void;
 };
 
-/**
- * ディレクトリノードカードコンポーネント
- */
 export function DirectoryNodeCard({
   node,
   onNavigate,

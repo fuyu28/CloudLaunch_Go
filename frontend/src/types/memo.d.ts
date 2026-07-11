@@ -9,19 +9,12 @@
  * メモのデータ型
  */
 export type MemoType = {
-  /** メモID */
   id: string;
-  /** メモタイトル */
   title: string;
-  /** メモ内容（Markdown形式） */
   content: string;
-  /** 関連するゲームID */
   gameId: string;
-  /** 関連するゲームタイトル（結合クエリ用、オプション） */
   gameTitle?: string;
-  /** 作成日時 */
   createdAt: Date;
-  /** 更新日時 */
   updatedAt: Date;
 };
 
@@ -29,11 +22,8 @@ export type MemoType = {
  * メモ作成時のデータ型
  */
 export type CreateMemoData = {
-  /** メモタイトル */
   title: string;
-  /** メモ内容（Markdown形式） */
   content: string;
-  /** 関連するゲームID */
   gameId: string;
 };
 
@@ -41,9 +31,7 @@ export type CreateMemoData = {
  * メモ更新時のデータ型
  */
 export type UpdateMemoData = {
-  /** 更新するメモタイトル */
   title: string;
-  /** 更新するメモ内容（Markdown形式） */
   content: string;
 };
 
@@ -51,11 +39,8 @@ export type UpdateMemoData = {
  * メモファイル操作の結果型
  */
 export type MemoFileOperationResult = {
-  /** 操作が成功したかどうか */
   success: boolean;
-  /** 操作対象のファイルパス */
   filePath?: string;
-  /** エラーメッセージ（失敗時） */
   error?: string;
 };
 
@@ -63,11 +48,8 @@ export type MemoFileOperationResult = {
  * メモディレクトリ情報型
  */
 export type MemoDirectoryInfo = {
-  /** ベースディレクトリパス */
   baseDir: string;
-  /** ゲーム別ディレクトリパス */
   gameDir: string;
-  /** メモファイル数 */
   fileCount: number;
 };
 
@@ -75,19 +57,12 @@ export type MemoDirectoryInfo = {
  * クラウドメモ情報型
  */
 export type CloudMemoInfo = {
-  /** S3キー */
   key: string;
-  /** ファイル名 */
   fileName: string;
-  /** ゲームID */
   gameId: string;
-  /** メモタイトル（ファイル名から抽出） */
   memoTitle: string;
-  /** メモID（ファイル名から抽出） */
   memoId: string;
-  /** 最終更新日時 */
   lastModified: Date;
-  /** ファイルサイズ */
   size: number;
 };
 
@@ -95,22 +70,15 @@ export type CloudMemoInfo = {
  * メモ同期結果型
  */
 export type MemoSyncResult = {
-  /** 同期が成功したかどうか */
   success: boolean;
-  /** アップロードされたメモ数 */
   uploaded: number;
   /** ローカルで上書きされたメモ数（クラウド→ローカル） */
   localOverwritten: number;
   /** クラウドで上書きされたメモ数（ローカル→クラウド） */
   cloudOverwritten: number;
-  /** 作成されたメモ数（ダウンロード） */
   created: number;
-  /** 更新されたメモ数（ダウンロード） */
   updated: number;
-  /** スキップされたメモ数 */
   skipped: number;
-  /** エラーメッセージ（失敗時） */
   error?: string;
-  /** 詳細メッセージ */
   details: string[];
 };

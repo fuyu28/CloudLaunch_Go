@@ -3,8 +3,6 @@
  *
  * 「同期確認」押下時に、いきなりアップロード/ダウンロードするのではなく、
  * 現在の同期状態（最新 / アップロード可 / ダウンロード可 / 未同期）と
- * ローカル・クラウドの情報を表示し、ユーザーが操作を選べるようにする。
- * 競合（conflict）は専用の SyncConflictModal で扱うため、ここでは扱わない。
  */
 
 import { FaCloud, FaCloudUploadAlt, FaCloudDownloadAlt, FaCheckCircle } from "react-icons/fa";
@@ -17,13 +15,10 @@ type SyncStatusModalProps = {
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
-  /** 競合以外の同期状態 */
   status: SyncStatus;
   localMeta?: SyncMetaSnapshot;
   remoteMeta?: SyncMetaSnapshot;
-  /** セーブ保存先が設定されているか（未同期時のアップロード可否判定に使う） */
   hasSaveFolder: boolean;
-  /** アップロード/ダウンロード実行中か */
   isProcessing: boolean;
   onUpload: () => void;
   onDownload: () => void;

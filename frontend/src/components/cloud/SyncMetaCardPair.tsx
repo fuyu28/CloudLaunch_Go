@@ -13,7 +13,6 @@ import type { SyncMetaSnapshot } from "src/wailsBridge";
 type SyncMetaCardPairProps = {
   localMeta: SyncMetaSnapshot | undefined;
   remoteMeta: SyncMetaSnapshot | undefined;
-  /** ローカルアイコンの色（競合時は警告色を渡す） */
   localIconClassName?: string;
 };
 

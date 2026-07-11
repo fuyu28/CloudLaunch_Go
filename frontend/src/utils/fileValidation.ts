@@ -31,11 +31,6 @@ try {
  * ```
  */
 
-/**
- * URLかどうかを判定する関数
- * @param path 検証対象のパス
- * @returns URLの場合true、ローカルパスの場合false
- */
 export function isUrl(path: string): boolean {
   if (!path.includes("://")) {
     return false;
@@ -63,11 +58,6 @@ export function isUrl(path: string): boolean {
   }
 }
 
-/**
- * ファイルパスの存在チェック（ローカルファイルのみ）
- * @param filePath 検証対象のファイルパス
- * @returns ファイルが存在する場合true
- */
 export async function checkFileExists(filePath: string): Promise<boolean> {
   if (!filePath || filePath.trim() === "") {
     return false;
@@ -90,11 +80,6 @@ export async function checkFileExists(filePath: string): Promise<boolean> {
   }
 }
 
-/**
- * ディレクトリパスの存在チェック
- * @param dirPath 検証対象のディレクトリパス
- * @returns ディレクトリが存在する場合true
- */
 export async function checkDirectoryExists(dirPath: string): Promise<boolean> {
   if (!dirPath || dirPath.trim() === "") {
     return false;
@@ -113,11 +98,6 @@ export async function checkDirectoryExists(dirPath: string): Promise<boolean> {
   }
 }
 
-/**
- * 画像パスの検証（URLまたはローカルファイル）
- * @param imagePath 検証対象の画像パス
- * @returns 有効な画像パスの場合true
- */
 export async function validateImagePath(imagePath: string): Promise<boolean> {
   if (!imagePath || imagePath.trim() === "") {
     return true; // 画像パスは任意項目
@@ -133,11 +113,6 @@ export async function validateImagePath(imagePath: string): Promise<boolean> {
   return await checkFileExists(imagePath);
 }
 
-/**
- * 実行ファイルパスの検証
- * @param exePath 検証対象の実行ファイルパス
- * @returns 有効な実行ファイルパスの場合true
- */
 export async function validateExecutablePath(exePath: string): Promise<boolean> {
   if (!exePath || exePath.trim() === "") {
     return false; // 実行ファイルパスは必須
@@ -157,11 +132,6 @@ export async function validateExecutablePath(exePath: string): Promise<boolean> 
   return await checkFileExists(exePath);
 }
 
-/**
- * セーブフォルダパスの検証
- * @param saveFolderPath 検証対象のセーブフォルダパス
- * @returns 有効なセーブフォルダパスの場合true
- */
 export async function validateSaveFolderPath(saveFolderPath: string): Promise<boolean> {
   if (!saveFolderPath || saveFolderPath.trim() === "") {
     return true; // セーブフォルダパスは任意項目

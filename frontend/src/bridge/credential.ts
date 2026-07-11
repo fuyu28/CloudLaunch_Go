@@ -1,5 +1,6 @@
 /**
  * @fileoverview 認証情報ブリッジ。
+ *
  */
 
 import {

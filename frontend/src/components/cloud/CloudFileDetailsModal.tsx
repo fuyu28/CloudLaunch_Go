@@ -3,12 +3,6 @@
  *
  * このコンポーネントは、クラウドストレージ上のファイル詳細情報を
  * モーダル形式で表示する機能を提供します。
- *
- * 主な機能：
- * - ファイル一覧の表示
- * - ファイルサイズの表示
- * - 最終更新日時の表示
- * - ローディング状態の管理
  */
 
 import { FiFolder, FiFile } from "react-icons/fi";
@@ -20,24 +14,13 @@ import type { CloudDataItem, CloudFileDetail } from "src/types/cloud";
  * ファイル詳細モーダルのプロパティ
  */
 type CloudFileDetailsModalProps = {
-  /** モーダルが開いているかどうか */
   isOpen: boolean;
-  /** モーダルを閉じるコールバック */
   onClose: () => void;
-  /** 表示対象のアイテム */
   item: CloudDataItem | null;
-  /** ファイル詳細一覧 */
   files: CloudFileDetail[];
-  /** ローディング状態 */
   loading: boolean;
 };
 
-/**
- * クラウドファイル詳細表示モーダル
- *
- * @param props モーダルのプロパティ
- * @returns JSX要素
- */
 export function CloudFileDetailsModal({
   isOpen,
   onClose,

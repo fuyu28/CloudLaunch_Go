@@ -2,10 +2,6 @@
  * @fileoverview ファイル選択フックユーティリティ
  *
  * このファイルは、ファイル・フォルダ選択の共通ロジックを提供します。
- * 主な機能：
- * - ファイル選択のローディング状態管理
- * - エラーハンドリングの統一
- * - ファイル選択ロジックの再利用
  */
 
 import { useState, useCallback } from "react";
@@ -17,10 +13,6 @@ type FileFilter = {
   extensions: string[];
 };
 
-/**
- * ファイル選択フック
- * @returns ファイル選択に関するstate, handler
- */
 export function useFileSelection(): {
   isBrowsing: boolean;
   selectFile: (filters: FileFilter[], onSuccess: (filePath: string) => void) => Promise<void>;

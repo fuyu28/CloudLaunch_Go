@@ -15,26 +15,14 @@ import { logger } from "@renderer/utils/logger";
 import type { PlaySessionType } from "src/types/game";
 
 type PlaySessionCardSimpleProps = {
-  /** ゲームID */
   gameId: string;
-  /** ゲームタイトル */
   gameTitle: string;
-  /** プレイセッション追加のコールバック */
   onAddSession?: () => void;
-  /** セッション更新時のコールバック */
   onSessionUpdated?: () => void;
-  /** プロセス管理を開くコールバック */
   onProcessManagement?: () => void;
-  /** ボタンを非表示にするフラグ */
   hiddenButtons?: boolean;
 };
 
-/**
- * シンプルなプレイセッション管理コンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns プレイセッション管理要素
- */
 const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
   gameId,
   onAddSession,

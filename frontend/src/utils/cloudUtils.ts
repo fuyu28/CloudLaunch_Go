@@ -5,11 +5,6 @@
  * ユーティリティ関数を提供します。
  */
 
-/**
- * ファイルサイズを人間が読みやすい形式に変換
- * @param bytes バイト数
- * @returns 読みやすい形式の文字列
- */
 export function formatFileSize(bytes: number): string {
   // null / undefined / NaN / 負値 / Infinity は "0 B" にフォールバックする（NaN / undefined 対策）。
   if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "0 B";
@@ -21,11 +16,6 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-/**
- * 日時を読みやすい形式に変換
- * @param date 日時
- * @returns 読みやすい形式の文字列
- */
 export function formatDate(date: Date | string | null | undefined): string {
   const normalized = date instanceof Date ? date : new Date(date ?? Number.NaN);
   if (Number.isNaN(normalized.getTime()) || normalized.getTime() <= 0) {
@@ -87,11 +77,6 @@ export function computeCloudNodeMetrics(node: CloudDirectoryNode): CloudNodeMetr
   };
 }
 
-/**
- * ディレクトリノードから再帰的にファイル数を計算
- * @param node ディレクトリノード
- * @returns ファイル数
- */
 export function countFilesRecursively(node: CloudDirectoryNode): number {
   if (!node.isDirectory) {
     return 1;
@@ -106,11 +91,6 @@ export function countFilesRecursively(node: CloudDirectoryNode): number {
   return fileCount;
 }
 
-/**
- * ディレクトリノードから再帰的に合計サイズを計算
- * @param node ディレクトリノード
- * @returns 合計サイズ
- */
 export function sumSizesRecursively(node: CloudDirectoryNode): number {
   if (!node.isDirectory) {
     return node.size;
@@ -155,9 +135,7 @@ export function latestModifiedRecursively(node: CloudDirectoryNode): Date {
  * `name` は表示用（パンくず等）にのみ使う。
  */
 export type CloudPathSegment = {
-  /** 一意識別子（CloudDirectoryNode.path） */
   id: string;
-  /** 表示名（CloudDirectoryNode.name） */
   name: string;
 };
 

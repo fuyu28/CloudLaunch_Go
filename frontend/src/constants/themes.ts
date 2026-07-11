@@ -46,7 +46,4 @@ export const DAISYUI_THEMES = [
   "silk",
 ] as const;
 
-/**
- * テーマ名の型定義
- */
 export type ThemeName = (typeof DAISYUI_THEMES)[number];

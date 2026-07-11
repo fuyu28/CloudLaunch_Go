@@ -1,12 +1,8 @@
 /**
  * @fileoverview パス操作ユーティリティ
+ *
  */
 
-/**
- * パスの親ディレクトリを取得
- * @param filePath - ファイルパス
- * @returns 親ディレクトリのパス
- */
 export function getParentDirectory(filePath: string): string {
   const normalized = normalizeWindowsPath(filePath);
   if (normalized === "" || normalized === "/" || normalized.endsWith(":/")) {

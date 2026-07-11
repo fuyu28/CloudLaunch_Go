@@ -21,19 +21,12 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
 export type MemoFormProps = {
-  /** フォームのモード */
   mode: "create" | "edit";
-  /** 編集時のメモID */
   memoId?: string;
-  /** 事前選択されたゲームID */
   preSelectedGameId?: string;
-  /** ゲーム選択を表示するかどうか */
   showGameSelector?: boolean;
-  /** ページタイトル */
   pageTitle: string;
-  /** 戻るボタンの遷移先 */
   backTo: string | (() => void);
-  /** 保存成功時の遷移先 */
   onSaveSuccess: (gameId: string, memoId?: string) => void;
 };
 

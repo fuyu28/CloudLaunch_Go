@@ -1,5 +1,6 @@
 /**
  * @fileoverview クラウド同期ブリッジ。
+ *
  */
 
 import {

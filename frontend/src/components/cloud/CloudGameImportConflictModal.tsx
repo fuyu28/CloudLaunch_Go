@@ -1,5 +1,6 @@
 /**
  * @fileoverview クラウドゲームインポートの競合モーダル
+ *
  */
 
 import { BaseModal } from "@renderer/components/common/BaseModal";

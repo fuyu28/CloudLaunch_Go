@@ -2,9 +2,6 @@
  * @fileoverview セーブデータのクラウド同期確認メッセージ用ヘルパ。
  *
  * Home / GameDetail 双方で繰り返されていた
- *   - `toValidDate`: 任意の値を有効な Date / null に正規化
- *   - `buildSaveSyncMessage`: ローカル/クラウドの更新日時を併記したメッセージ生成
- * を集約する。`formatDateWithTime` はページ側で `useTimeFormat()` から受け取って渡す。
  */
 
 export function toValidDate(value: Date | string | number | null | undefined): Date | null {

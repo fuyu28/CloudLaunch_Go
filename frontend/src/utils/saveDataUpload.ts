@@ -1,5 +1,6 @@
 /**
  * @fileoverview セーブデータアップロードとダウンロードの共通処理
+ *
  */
 
 import type { ApiResult } from "src/types/result";

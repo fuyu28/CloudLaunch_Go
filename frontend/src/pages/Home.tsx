@@ -110,6 +110,7 @@ export default function Home(): React.ReactElement {
         },
       );
 
+      // 検索条件が変わって古い一覧応答が後から来ても、表示を巻き戻さない。
       if (!cancelled && games) {
         setVisibleGames(games as GameType[]);
       }
@@ -132,6 +133,7 @@ export default function Home(): React.ReactElement {
     let cancelled = false;
 
     const resolveWarnings = async (): Promise<void> => {
+      // 一覧の警告バッジ用。存在確認は IPC なのでカード描画と切り離してまとめて行う。
       const entries = await Promise.all(
         visibleGames.map(async (game) => {
           const hasUnconfiguredExe = !game.exePath || game.exePath === UNCONFIGURED_EXE_PATH;
@@ -237,6 +239,7 @@ export default function Home(): React.ReactElement {
 
       const { status, remoteMeta } = statusResult.data;
       if (status === "conflict") {
+        // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
         setConflictMeta({
           localMeta: statusResult.data.localMeta,
           remoteMeta: statusResult.data.remoteMeta,
@@ -278,6 +281,7 @@ export default function Home(): React.ReactElement {
     if (!pendingLaunchGame) {
       return;
     }
+    // スキップは同期せず起動。ここでは launchGameDirect を使う（裏 sync なし）。
     await launchGameDirect(pendingLaunchGame);
     setPendingLaunchGame(null);
   }, [launchGameDirect, pendingLaunchGame]);

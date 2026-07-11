@@ -3,12 +3,6 @@
  *
  * このファイルは、Reactコンポーネントツリー内で発生するJavaScriptエラーを
  * キャッチし、フォールバックUIを表示するエラーバウンダリを提供します。
- * 主な機能：
- * - レンダリングエラーのキャッチ
- * - エラーログの記録
- * - ユーザーフレンドリーなエラー表示
- * - エラー詳細の表示/非表示切り替え
- * - リトライ機能
  */
 
 import React, { Component } from "react";
@@ -21,13 +15,10 @@ import type { ReactNode } from "react";
  * エラーバウンダリのProps
  */
 interface ErrorBoundaryProps {
-  /** 子コンポーネント */
   children: ReactNode;
   /** フォールバック表示をカスタマイズする場合 */
   fallback?: (error: Error, errorInfo: React.ErrorInfo, retry: () => void) => ReactNode;
-  /** エラー発生時のコールバック */
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
-  /** リセット時のコールバック */
   onReset?: () => void;
 }
 
@@ -230,22 +221,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
-/**
- * エラーバウンダリの設定オプション
- */
 export interface ErrorBoundaryOptions {
   fallback?: ErrorBoundaryProps["fallback"];
   onError?: ErrorBoundaryProps["onError"];
   onReset?: ErrorBoundaryProps["onReset"];
 }
 
-/**
- * HOC形式のエラーバウンダリ
- *
- * @param Component - ラップするコンポーネント
- * @param options - エラーバウンダリのオプション
- * @returns エラーバウンダリでラップされたコンポーネント
- */
 export function withErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
   options: ErrorBoundaryOptions = {},

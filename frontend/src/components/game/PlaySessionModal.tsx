@@ -2,22 +2,6 @@
  * @fileoverview プレイセッション追加モーダルコンポーネント
  *
  * このコンポーネントは、ゲームのプレイセッションを追加するためのモーダルを提供します。
- *
- * 主な機能：
- * - 手動追加モード: 時間、分、秒を入力してプレイセッションを追加
- * - タイマーモード: リアルタイムでプレイ時間を計測してプレイセッションを追加
- * - タイマー操作: スタート、ストップ、再開、終了の機能
- * - 入力値の検証とエラーハンドリング
- *
- * 使用例：
- * ```tsx
- * <PlaySessionModal
- *   isOpen={isModalOpen}
- *   onClose={handleCloseModal}
- *   onSubmit={handleAddSession}
- *   gameTitle="ゲーム名"
- * />
- * ```
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -29,13 +13,9 @@ import { useTimeFormat, timeUtils } from "@renderer/hooks/useTimeFormat";
  * プレイセッション追加モーダルのprops
  */
 export type PlaySessionModalProps = {
-  /** モーダルが開いているかどうか */
   isOpen: boolean;
-  /** モーダルを閉じる時のコールバック */
   onClose: () => void;
-  /** プレイセッションを追加する時のコールバック */
   onSubmit: (duration: number, sessionName?: string) => Promise<void>;
-  /** ゲームのタイトル */
   gameTitle: string;
 };
 
@@ -49,15 +29,6 @@ type ModalMode = "manual" | "timer";
  */
 type TimerState = "stopped" | "running" | "paused";
 
-/**
- * プレイセッション追加モーダルコンポーネント
- *
- * 手動追加とタイマー追加の2つのモードを提供し、
- * ユーザーがゲームのプレイセッションを記録できます。
- *
- * @param props コンポーネントのprops
- * @returns プレイセッション追加モーダル要素
- */
 export function PlaySessionModal({
   isOpen,
   onClose,
@@ -123,11 +94,6 @@ export function PlaySessionModal({
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  /**
-   * プレイ時間（秒）のバリデーション。
-   * 手動・タイマーどちらのモードでも同じ上限（24時間 = 86400秒）を適用する。
-   * @returns バリデーション結果（false のときはエラーメッセージをセット済み）
-   */
   const validateDurationSeconds = (totalSeconds: number, mode: ModalMode): boolean => {
     if (totalSeconds <= 0) {
       setError(
@@ -144,10 +110,6 @@ export function PlaySessionModal({
     return true;
   };
 
-  /**
-   * 手動追加フォームのバリデーション
-   * @returns バリデーション結果
-   */
   const validateManualInput = (): boolean => {
     const hours = parseInputValue(hoursInput);
     const minutes = parseInputValue(minutesInput);

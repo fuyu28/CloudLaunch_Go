@@ -2,11 +2,6 @@
  * @fileoverview ゲーム操作フック
  *
  * このファイルは、ゲームの追加・編集・削除に関する共通ロジックを提供します。
- * 主な機能：
- * - ゲーム追加処理のカプセル化
- * - ゲーム一覧の再取得とUI更新
- * - エラーハンドリングの統一
- * - ローディング状態の管理
  */
 
 import { useCallback } from "react";
@@ -17,32 +12,15 @@ import type { InputGameData, GameType } from "src/types/game";
 import type { SortOption, FilterOption, SortDirection } from "src/types/menu";
 import type { ApiResult } from "src/types/result";
 
-/**
- * ゲーム操作フックのprops
- */
 export type UseGameActionsProps = {
-  /** 現在の検索ワード */
   searchWord: string;
-  /** 現在のフィルター */
   filter: FilterOption;
-  /** 現在のソート */
   sort: SortOption;
-  /** 現在のソート方向 */
   sortDirection: SortDirection;
-  /** ゲーム一覧の更新コールバック */
   onGamesUpdate: (games: GameType[]) => void;
-  /** モーダルクローズのコールバック */
   onModalClose: () => void;
 };
 
-/**
- * ゲーム操作フック
- *
- * ゲーム追加・編集・削除に関する操作と状態管理を提供します。
- *
- * @param props フックのprops
- * @returns ゲーム操作に関するstate, handler
- */
 export function useGameActions({
   searchWord,
   filter,
@@ -56,11 +34,6 @@ export function useGameActions({
 } {
   const gameActionLoading = useLoadingState();
 
-  /**
-   * ゲーム追加処理
-   * @param values ゲームデータ
-   * @returns 処理結果
-   */
   const createGameAndRefreshList = useCallback(
     async (values: InputGameData): Promise<ApiResult<void>> => {
       const result = await gameActionLoading.executeWithLoading(
@@ -96,7 +69,6 @@ export function useGameActions({
   return {
     /** ゲーム追加とリスト更新 */
     createGameAndRefreshList,
-    /** ローディング状態 */
     isLoading: gameActionLoading.isLoading,
   };
 }

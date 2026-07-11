@@ -2,63 +2,26 @@
  * @fileoverview ベースモーダルコンポーネント
  *
  * このコンポーネントは、アプリケーション内で使用されるモーダルの基本構造を提供します。
- *
- * 主な機能：
- * - DaisyUI モーダルの基本構造
- * - 閉じるボタンの統一
- * - クリックアウトサイド対応
- * - カスタマイズ可能なヘッダー・フッター
- * - サイズとスタイルのオプション
- *
- * 使用例：
- * ```tsx
- * <BaseModal
- *   isOpen={isOpen}
- *   onClose={onClose}
- *   title="モーダルタイトル"
- *   size="lg"
- *   showCloseButton
- * >
- *   <p>モーダルの内容</p>
- * </BaseModal>
- * ```
  */
 
 import React from "react";
 import { RxCross1 } from "react-icons/rx";
 
-/**
- * モーダルサイズの型定義
- */
 export type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
 
-/**
- * ベースモーダルコンポーネントのprops
- */
 export type BaseModalProps = {
-  /** モーダルが開いているかどうか */
   isOpen: boolean;
-  /** モーダルを閉じる際のコールバック */
   onClose: () => void;
-  /** モーダルが完全に閉じた後のコールバック（アニメーション完了後に実行） */
   onClosed?: () => void;
-  /** モーダルのタイトル */
   title?: string;
-  /** モーダルの内容 */
   children: React.ReactNode;
-  /** フッター部分の内容 */
   footer?: React.ReactNode;
-  /** モーダルのサイズ */
   size?: ModalSize;
-  /** 閉じるボタンを表示するかどうか */
   showCloseButton?: boolean;
   /** モーダルのID（一意である必要があります） */
   id?: string;
-  /** カスタムCSSクラス */
   className?: string;
-  /** クリックアウトサイドで閉じるかどうか */
   closeOnClickOutside?: boolean;
-  /** ESCキーで閉じるかどうか */
   closeOnEscape?: boolean;
 };
 
@@ -73,14 +36,6 @@ const sizeClasses: Record<ModalSize, string> = {
   full: "max-w-full",
 };
 
-/**
- * ベースモーダルコンポーネント
- *
- * アプリケーション内で使用されるモーダルの基本構造を提供します。
- *
- * @param props コンポーネントのprops
- * @returns ベースモーダル要素
- */
 export function BaseModal({
   isOpen,
   onClose,

@@ -1,5 +1,6 @@
 /**
  * @fileoverview エラーレポートブリッジ。
+ *
  */
 
 import { ReportError, ReportLog } from "../../wailsjs/go/app/App";

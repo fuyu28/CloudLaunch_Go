@@ -3,17 +3,6 @@
  *
  * このフックは、ゲーム登録・編集フォームのバリデーション機能を提供します。
  * Zodスキーマを使用して型安全かつ保守可能なバリデーションを実現します。
- *
- * 主な機能：
- * - Zodスキーマベースの検証
- * - リアルタイムバリデーション
- * - エラーメッセージの自動生成
- * - 送信可能状態の判定
- *
- * 使用例：
- * ```tsx
- * const { canSubmit, errors, validateField } = useGameFormValidationZod(gameData)
- * ```
  */
 
 import { useMemo, useState, useCallback, useEffect } from "react";
@@ -28,9 +17,6 @@ import {
 } from "@renderer/utils/fileValidation";
 import { logger } from "@renderer/utils/logger";
 
-/**
- * バリデーションエラーの型定義
- */
 export type ValidationErrors = {
   title?: string;
   publisher?: string;
@@ -39,49 +25,26 @@ export type ValidationErrors = {
   saveFolderPath?: string;
 };
 
-/**
- * ゲームフォームバリデーションフックの戻り値
- */
 export type GameFormValidationResult = {
-  /** 送信可能かどうか */
   canSubmit: boolean;
-  /** バリデーションエラー（タッチされたフィールドのみ表示） */
   errors: ValidationErrors;
-  /** 特定フィールドのバリデーション実行 */
   validateField: (fieldName: keyof InputGameData) => string | undefined;
-  /** 全フィールドのバリデーション実行 */
   validateAllFields: () => { isValid: boolean; errors: Record<string, string> };
-  /** ファイル存在チェックを含む非同期バリデーション */
   validateAllFieldsWithFileCheck: () => Promise<{
     isValid: boolean;
     errors: Record<string, string>;
   }>;
-  /** 必須フィールドがすべて入力されているかチェック */
   hasRequiredFields: boolean;
-  /** 各フィールドの検証状態 */
   fieldValidation: Record<
     keyof InputGameData,
     { isValid: boolean; message?: string; shouldShowError: boolean }
   >;
-  /** フィールドがタッチされたことを記録 */
   markFieldAsTouched: (fieldName: keyof InputGameData) => void;
-  /** すべてのフィールドをタッチ済みとして設定（送信時に使用） */
   markAllFieldsAsTouched: () => void;
-  /** タッチされたフィールドをリセット（モーダル開閉時に使用） */
   resetTouchedFields: () => void;
-  /** 特定フィールドのファイル存在チェックを実行 */
   validateFileField: (fieldName: keyof InputGameData) => Promise<void>;
 };
 
-/**
- * Zodベースのゲームフォームバリデーションフック
- *
- * ゲーム登録・編集フォームのバリデーション機能を提供します。
- * Zodスキーマを使用して型安全なバリデーションを実現します。
- *
- * @param gameData 検証対象のゲームデータ
- * @returns バリデーション結果とヘルパー関数
- */
 export function useGameFormValidationZod(gameData: InputGameData): GameFormValidationResult {
   const [touchedFields, setTouchedFields] = useState<Set<keyof InputGameData>>(new Set());
 

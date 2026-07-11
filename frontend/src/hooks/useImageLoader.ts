@@ -2,12 +2,6 @@
  * @fileoverview 画像読み込み管理用カスタムフック
  *
  * このフックは画像の読み込み状態を管理し、エラーハンドリングを行います。
- *
- * 主な機能：
- * - ローカル画像とWeb画像の読み込み
- * - 画像未設定時のNoImageフォールバック
- * - 読み込み失敗時のエラーハンドリング
- * - マウント状態の管理
  */
 
 import { useEffect, useState } from "react";
@@ -17,15 +11,9 @@ import { logger } from "@renderer/utils/logger";
 
 import type { ApiResult } from "src/types/result";
 
-/**
- * 画像読み込み状態の型定義
- */
 type ImageLoadState = {
-  /** 読み込み済み画像のdata URL */
   imageSrc?: string;
-  /** 読み込み中フラグ */
   isLoading: boolean;
-  /** エラー状態 */
   error?: string;
 };
 
@@ -46,12 +34,6 @@ const createNoImageDataUrl = (): string => {
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
 
-/**
- * 画像読み込み管理用カスタムフック
- *
- * @param src - 読み込む画像のパス（空文字列の場合はNoImage）
- * @returns 画像読み込み状態
- */
 export const useImageLoader = (src: string): ImageLoadState => {
   const [state, setState] = useState<ImageLoadState>(() => ({
     imageSrc: undefined,
@@ -141,12 +123,6 @@ export const useImageLoader = (src: string): ImageLoadState => {
   return state;
 };
 
-/**
- * 画像パスを検証し、適切なAPIを呼び出して画像を読み込む
- *
- * @param src - 画像パス
- * @returns 画像読み込み結果
- */
 const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => {
   const isHttpUrl = src.startsWith("http://") || src.startsWith("https://");
   const isFileUrl = src.startsWith("file://");

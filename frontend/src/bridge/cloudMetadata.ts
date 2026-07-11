@@ -1,5 +1,6 @@
 /**
  * @fileoverview クラウドメタデータブリッジ。
+ *
  */
 
 import { LoadCloudMetadata } from "../../wailsjs/go/app/App";

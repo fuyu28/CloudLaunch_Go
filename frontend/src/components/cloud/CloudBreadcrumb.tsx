@@ -3,12 +3,6 @@
  *
  * このコンポーネントは、クラウドデータ管理画面でのナビゲーション用
  * パンくずリストを提供します。
- *
- * 主な機能：
- * - 現在のパス表示
- * - パス階層のナビゲーション
- * - ルートへの戻り機能
- * - 一つ上の階層への戻り機能
  */
 
 import React from "react";
@@ -20,20 +14,11 @@ import type { CloudPathSegment } from "@renderer/utils/cloudUtils";
  * パンくずリストのプロパティ
  */
 type CloudBreadcrumbProps = {
-  /** 現在のパス */
   currentPath: CloudPathSegment[];
-  /** パス移動コールバック */
   onNavigateToPath: (path: CloudPathSegment[]) => void;
-  /** 戻るコールバック */
   onNavigateBack: () => void;
 };
 
-/**
- * クラウドパンくずリストコンポーネント
- *
- * @param props パンくずリストのプロパティ
- * @returns JSX要素
- */
 export function CloudBreadcrumb({
   currentPath,
   onNavigateToPath,

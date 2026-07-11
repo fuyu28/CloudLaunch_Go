@@ -1,10 +1,6 @@
 /**
  * @fileoverview wailsBridge 共有ヘルパ関数。
  *
- * - 日時正規化: `normalizeApiDate`
- * - クラウドデータ正規化: `normalizeCloudDirectoryNode`, `normalizeCloudDataItem`, `normalizeCloudFileDetail`
- * - ドメインモデルマッパ: `toGameType`, `toPlaySessionType`, `toMemoType`, `toCloudMemoInfo`
- * - 定型変換ヘルパ: `toApiResult`, `toApiResultVoid`
  */
 
 import type { ApiResult } from "src/types/result";

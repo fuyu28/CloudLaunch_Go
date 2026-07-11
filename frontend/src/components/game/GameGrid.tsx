@@ -2,11 +2,6 @@
  * @fileoverview ゲーム一覧グリッドコンポーネント
  *
  * このコンポーネントは、ゲームカードをグリッド形式で表示します。
- * 主な機能：
- * - レスポンシブグリッドレイアウト
- * - 仮想化による大量データ対応（将来的な拡張）
- * - ゲーム起動ハンドラーの最適化
- * - メモ化による再レンダリング防止
  */
 
 import { memo } from "react";
@@ -15,20 +10,12 @@ import GameCard from "./GameCard";
 import type { GameType } from "src/types/game";
 
 type GameGridProps = {
-  /** ゲーム一覧 */
   games: GameType[];
-  /** ゲーム起動ハンドラ */
   onLaunchGame: (game: GameType) => void;
   /** 起動警告が必要なゲームID一覧 */
   warningGameIds?: ReadonlySet<string>;
 };
 
-/**
- * ゲーム一覧グリッドコンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns ゲーム一覧グリッド要素
- */
 const GameGrid = memo(function GameGrid({
   games,
   onLaunchGame,

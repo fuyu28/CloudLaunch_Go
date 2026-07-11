@@ -2,18 +2,6 @@
  * @fileoverview セッション管理モーダルコンポーネント
  *
  * このコンポーネントは、特定のゲームに関連するプレイセッション情報を表示し、管理する機能を提供します。
- *
- * 主な機能：
- * - セッション一覧の表示（名前、実行時間）
- * - セッションの削除
- * - セッションの編集（名前）
- * - モーダルの開閉制御
- *
- * @param isOpen - モーダルの開閉状態
- * @param onClose - モーダルを閉じる関数
- * @param gameId - 対象のゲームID
- * @param gameTitle - ゲームタイトル
- * @param onProcessUpdated - セッション情報更新時のコールバック
  */
 
 import { useCallback, useEffect, useState, useMemo } from "react";
@@ -46,15 +34,10 @@ type EditFormFields = keyof Pick<EditFormData, "sessionName">;
  * セッション管理モーダルのProps
  */
 type PlaySessionManagementModalProps = {
-  /** モーダルの開閉状態 */
   isOpen: boolean;
-  /** モーダルを閉じる関数 */
   onClose: () => void;
-  /** 対象のゲームID */
   gameId: string;
-  /** ゲームタイトル */
   gameTitle: string;
-  /** セッション情報更新時のコールバック */
   onProcessUpdated?: () => void;
 };
 

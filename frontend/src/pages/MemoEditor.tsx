@@ -2,7 +2,6 @@
  * @fileoverview メモ作成・編集ページ
  *
  * 新しいメモの作成と既存メモの編集を行うページです。
- * @uiw/react-md-editorを使用してmarkdownでメモを作成・編集できます。
  */
 
 import { useParams } from "react-router-dom";

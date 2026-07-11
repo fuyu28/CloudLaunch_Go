@@ -8,19 +8,12 @@
 import { FaEdit, FaTrash, FaEllipsisV, FaSync } from "react-icons/fa";
 
 type MemoDropdownMenuProps = {
-  /** メモID */
   memoId: string;
-  /** ドロップダウンが開いているかどうか */
   isOpen: boolean;
-  /** ドロップダウンの開閉処理 */
   onToggle: (memoId: string, event: React.MouseEvent) => void;
-  /** 編集ボタンクリック処理 */
   onEdit: (memoId: string, event: React.MouseEvent) => void;
-  /** 削除ボタンクリック処理 */
   onDelete: (memoId: string, event: React.MouseEvent) => void;
-  /** 同期ボタンクリック処理（オプション、メモ一覧ページのみ） */
   onSyncFromCloud?: (event: React.MouseEvent) => void;
-  /** 絶対位置のスタイルクラス（オプション） */
   className?: string;
 };
 

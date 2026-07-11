@@ -8,23 +8,13 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 type UseMemoNavigationReturn = {
-  /** 戻るボタンの処理 */
   handleBack: () => void;
-  /** 編集保存成功時の処理 */
   handleSaveSuccess: (effectiveGameId: string, mode: "create" | "edit", memoId?: string) => void;
-  /** クエリパラメータの取得 */
   searchParams: URLSearchParams;
-  /** ゲーム詳細ページから来たかどうか */
   isFromGame: boolean;
-  /** ゲームID（クエリパラメータから） */
   gameIdParam: string | null;
 };
 
-/**
- * メモナビゲーションフック
- *
- * @returns ナビゲーション処理用の関数群と状態
- */
 export function useMemoNavigation(): UseMemoNavigationReturn {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

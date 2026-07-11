@@ -34,34 +34,19 @@ type CloudFileDetails = {
 };
 
 type CloudDataCardProps = {
-  /** ゲームID */
   gameId: string;
-  /** ゲームタイトル */
   gameTitle: string;
-  /** セーブフォルダパスが設定されているか */
   hasSaveFolder: boolean;
-  /** 認証情報が有効か */
   isValidCreds: boolean;
-  /** アップロード処理中か */
   isUploading: boolean;
-  /** ダウンロード処理中か */
   isDownloading: boolean;
-  /** アップロード処理 */
   onUpload: () => Promise<void>;
-  /** ダウンロード処理 */
   onDownload: () => Promise<void>;
   /** 同期確認処理（省略可） */
   onSync?: () => Promise<void>;
-  /** 同期確認中か */
   isSyncing?: boolean;
 };
 
-/**
- * クラウドデータ管理カードコンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns クラウドデータカードコンポーネント
- */
 function CloudDataCard({
   gameId,
   hasSaveFolder,

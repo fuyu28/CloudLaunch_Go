@@ -1,8 +1,7 @@
 /**
- * @fileoverview 設定タブ共通のトグル行コンポーネント。
+ * @fileoverview 設定トグル
  *
- * 「label + description + toggle」のお決まりレイアウトを集約する。
- * 設定タブの各トグルは値とハンドラを差し替えるだけで描画できる。
+ * 設定画面用の ON/OFF トグル UI。
  */
 
 type SettingsToggleProps = {

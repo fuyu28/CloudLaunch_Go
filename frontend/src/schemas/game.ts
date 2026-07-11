@@ -77,7 +77,4 @@ export const monitoringGameStatusSchema = z.object({
   needsResume: z.boolean(),
 });
 
-/**
- * ゲーム監視状態の型定義
- */
 export type MonitoringGameStatus = z.infer<typeof monitoringGameStatusSchema>;

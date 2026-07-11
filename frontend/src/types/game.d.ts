@@ -43,17 +43,11 @@ export type GameImport = {
  * 監視中のゲーム情報
  */
 export type MonitoringGameStatus = {
-  /** ゲームID */
   gameId: string;
-  /** ゲームタイトル */
   gameTitle: string;
-  /** 実行ファイル名 */
   exeName: string;
-  /** プレイ中かどうか */
   isPlaying: boolean;
-  /** プレイ時間（秒） */
   playTime: number;
-  /** 中断中かどうか */
   isPaused: boolean;
   /** 終了確認が必要かどうか */
   needsConfirmation: boolean;

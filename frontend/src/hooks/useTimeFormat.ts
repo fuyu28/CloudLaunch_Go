@@ -2,34 +2,14 @@
  * @fileoverview 時間フォーマットフック
  *
  * このファイルは、秒数を人間が読みやすい形式に変換するフックを提供します。
- *
- * 主な機能：
- * - 秒数から時間・分・秒への変換
- * - 短縮形式と詳細形式の提供
- * - 異なる言語・地域設定への対応
- *
- * 使用例：
- * ```tsx
- * const { formatDuration, formatShort, formatDate } = useTimeFormat()
- * const playTime = formatDuration(3661) // "1時間1分1秒"
- * const shortTime = formatShort(3661)   // "1:01:01"
- * const dateStr = formatDate(new Date()) // "2025年7月7日(月)"
- * ```
  */
 
 import { useMemo } from "react";
 
-/**
- * 時間フォーマット用のフック
- */
 export type TimeFormatHook = {
-  /** 詳細な時間フォーマット（例: "1時間30分45秒"） */
   formatDuration: (seconds: number) => string;
-  /** 短縮時間フォーマット（例: "1:30:45"） */
   formatShort: (seconds: number) => string;
-  /** 最適な時間フォーマット（短時間は分表示、長時間は時間表示） */
   formatSmart: (seconds: number) => string;
-  /** 日付フォーマット（例: "2025年7月7日(月)"） */
   formatDate: (date: Date | string | number | null | undefined) => string;
   /** 日付+時間フォーマット（例: "2025年7月7日(月) 11:11"） */
   formatDateWithTime: (date: Date | string | number | null | undefined) => string;
@@ -37,13 +17,6 @@ export type TimeFormatHook = {
   formatDateWithTimeSeconds: (date: Date | string | number | null | undefined) => string;
 };
 
-/**
- * 時間フォーマットフック
- *
- * 秒数を人間が読みやすい形式に変換する各種フォーマット関数を提供します。
- *
- * @returns 時間フォーマット関数群
- */
 export function useTimeFormat(): TimeFormatHook {
   const normalizeDate = (value: Date | string | number | null | undefined): Date | null => {
     if (!value) return null;
@@ -178,10 +151,6 @@ export function useTimeFormat(): TimeFormatHook {
   };
 }
 
-/**
- * 時間変換ユーティリティ関数（非hooks版）
- * フック外で使用する場合
- */
 export const timeUtils = {
   /**
    * 秒数を時、分、秒に分解

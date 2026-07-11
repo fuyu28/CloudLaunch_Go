@@ -1,5 +1,6 @@
 /**
  * @fileoverview クラウドデータ操作ブリッジ。
+ *
  */
 
 import {

@@ -2,10 +2,6 @@
  * @fileoverview トーストハンドリングフック
  *
  * このファイルは、非同期操作でのトースト通知を管理するフックを提供します。
- * 主な機能：
- * - ローディング、成功、エラーのトースト表示
- * - トーストの自動管理（ID管理、更新、削除）
- * - カスタマイズ可能なメッセージ
  */
 
 import { useCallback, useMemo } from "react";
@@ -15,13 +11,9 @@ import toast from "react-hot-toast";
  * トーストオプション
  */
 export type ToastOptions = {
-  /** ローディング中のメッセージ */
   loadingMessage?: string;
-  /** 成功時のメッセージ */
   successMessage?: string;
-  /** エラー時のメッセージ */
   errorMessage?: string;
-  /** トースト表示を有効にするかどうか */
   showToast?: boolean;
 };
 
@@ -29,25 +21,13 @@ export type ToastOptions = {
  * トーストハンドラーの戻り値
  */
 export type ToastHandler = {
-  /** ローディングトーストを表示 */
   showLoading: (message?: string, toastId?: string) => string | undefined;
-  /** 成功トーストを表示 */
   showSuccess: (message: string, toastId?: string) => void;
-  /** エラートーストを表示 */
   showError: (message: string, toastId?: string) => void;
-  /** トーストを削除 */
   dismiss: (toastId: string) => void;
-  /** 汎用トースト表示 */
   showToast: (message: string, type: "success" | "error" | "loading") => void;
 };
 
-/**
- * トーストハンドリングフック
- *
- * 非同期操作での一貫したトースト表示を提供します。
- *
- * @returns トーストハンドラー
- */
 export function useToastHandler(): ToastHandler {
   const showLoading = useCallback((message?: string, toastId?: string): string | undefined => {
     if (message) {
@@ -103,14 +83,6 @@ export function useToastHandler(): ToastHandler {
   );
 }
 
-/**
- * 非同期操作とトースト処理を結合するヘルパー
- *
- * @param asyncFn - 実行する非同期関数
- * @param options - トーストオプション
- * @param toastHandler - トーストハンドラー
- * @returns 非同期操作の結果
- */
 export async function executeWithToast<T>(
   asyncFn: () => Promise<T>,
   options: ToastOptions,

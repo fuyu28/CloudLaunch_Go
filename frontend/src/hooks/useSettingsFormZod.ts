@@ -3,25 +3,6 @@
  *
  * このフックは、設定ページのフォーム状態管理と操作を提供します。
  * Zodスキーマを使用して型安全なバリデーションを実現します。
- *
- * 主な機能：
- * - Zodスキーマベースのフォームデータバリデーション
- * - 初期データの読み込み
- * - リアルタイムバリデーション
- * - 保存処理
- * - 接続テスト
- *
- * 使用例：
- * ```tsx
- * const {
- *   formData,
- *   updateField,
- *   canSubmit,
- *   isSaving,
- *   handleSave,
- *   testConnection
- * } = useSettingsFormZod()
- * ```
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -34,9 +15,6 @@ import { credsSchema } from "@renderer/schemas/credentials";
 import type { Creds } from "src/types/creds";
 import type { ApiResult } from "src/types/result";
 
-/**
- * 設定フォームデータの型定義（Zodスキーマから生成）
- */
 export type SettingsFormData = {
   bucketName: string;
   endpoint: string;
@@ -45,9 +23,6 @@ export type SettingsFormData = {
   secretAccessKey: string;
 };
 
-/**
- * バリデーションエラーの型定義
- */
 export type SettingsValidationErrors = {
   bucketName?: string;
   endpoint?: string;
@@ -56,50 +31,25 @@ export type SettingsValidationErrors = {
   secretAccessKey?: string;
 };
 
-/**
- * 設定フォーム管理フックの戻り値
- */
 export type SettingsFormResult = {
-  /** フォームデータ */
   formData: SettingsFormData;
-  /** フィールド更新関数 */
   updateField: (field: keyof SettingsFormData, value: string) => void;
-  /** フォーム全体の更新関数 */
   updateFormData: (data: Partial<SettingsFormData>) => void;
-  /** 送信可能かどうか */
   canSubmit: boolean;
-  /** 保存中かどうか */
   isSaving: boolean;
-  /** データ読み込み中かどうか */
   isLoading: boolean;
-  /** 接続テスト中かどうか */
   isTesting: boolean;
-  /** バリデーションエラー */
   errors: SettingsValidationErrors;
   /** フィールドエラー（互換性のため） */
   fieldErrors: SettingsValidationErrors;
-  /** 各フィールドの検証状態 */
   fieldValidation: Record<keyof SettingsFormData, { isValid: boolean; message?: string }>;
-  /** 保存処理関数 */
   handleSave: () => Promise<void>;
-  /** 接続テスト関数 */
   testConnection: () => Promise<void>;
-  /** フォームの初期化 */
   resetForm: () => void;
-  /** 特定フィールドのバリデーション */
   validateField: (fieldName: keyof SettingsFormData) => string | undefined;
-  /** 接続テスト成功状態 */
   isConnectionSuccessful: boolean | null;
 };
 
-/**
- * Zodベースの設定フォーム管理フック
- *
- * 設定ページのフォーム状態管理とバリデーションを提供します。
- * Zodスキーマを使用して型安全な検証を実現します。
- *
- * @returns 設定フォーム管理の結果とヘルパー関数
- */
 export function useSettingsFormZod(): SettingsFormResult {
   const [formData, setFormData] = useState<SettingsFormData>({
     bucketName: "",
@@ -303,9 +253,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     return validationResult.isValid && !isSaving && !isTesting;
   }, [validateAllFields, isSaving, isTesting]);
 
-  /**
-   * 設定保存処理（接続テスト込み）
-   */
   const handleSave = useCallback(async () => {
     if (!canSubmit) {
       toast.error("入力内容に問題があります");

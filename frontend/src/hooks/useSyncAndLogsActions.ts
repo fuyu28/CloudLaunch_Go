@@ -1,5 +1,7 @@
 /**
  * @fileoverview データ・ログタブの同期 / バックアップ / エクスポート操作。
+ *
+ * 全ゲーム一括同期は詳細画面の確認 UI を持たないため、破壊的な分岐はスキップする。
  */
 
 import { useAtomValue } from "jotai";
@@ -71,6 +73,7 @@ export function useSyncAndLogsActions() {
           else if (op.ok) downloaded++;
           else failed++;
         } else if (status === "conflict") {
+          // 一括同期ではコンフリクト解決 UI が無いので触らずスキップする。
           skipped++;
         }
       }

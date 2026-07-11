@@ -14,38 +14,20 @@ import MemoDropdownMenu from "./MemoDropdownMenu";
 import type { MemoType } from "src/types/memo";
 
 type MemoCardBaseProps = {
-  /** メモデータ */
   memo: MemoType;
-  /** カードクリック時の処理 */
   onClick: (memoId: string) => void;
-  /** ドロップダウンが開いているかどうか */
   isDropdownOpen: boolean;
-  /** ドロップダウンの開閉処理 */
   onDropdownToggle: (memoId: string, event: React.MouseEvent) => void;
-  /** 編集ボタンクリック処理 */
   onEdit: (memoId: string, event: React.MouseEvent) => void;
-  /** 削除ボタンクリック処理 */
   onDelete: (memoId: string, event: React.MouseEvent) => void;
-  /** 同期ボタンクリック処理（オプション、メモ一覧ページのみ） */
   onSyncFromCloud?: (event: React.MouseEvent) => void;
-  /** カードのスタイルクラス（オプション） */
   className?: string;
-  /** タイトルの最大文字数（オプション、デフォルト: 制限なし） */
   titleMaxLength?: number;
-  /** 内容プレビューの最大文字数（オプション、デフォルト: 80） */
   contentMaxLength?: number;
-  /** ゲーム名を表示するかどうか（オプション、デフォルト: true） */
   showGameTitle?: boolean;
-  /** ドロップダウンメニューの位置クラス（オプション） */
   dropdownPosition?: string;
 };
 
-/**
- * メモカード基本コンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns メモカードJSX要素
- */
 function MemoCardBase({
   memo,
   onClick,

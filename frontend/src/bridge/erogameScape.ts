@@ -1,5 +1,6 @@
 /**
  * @fileoverview 批評空間連携ブリッジ。
+ *
  */
 
 import { FetchFromErogameScape, SearchErogameScape } from "../../wailsjs/go/app/App";

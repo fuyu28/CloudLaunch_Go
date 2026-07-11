@@ -12,15 +12,10 @@ import { logger } from "@renderer/utils/logger";
 import { useToastHandler } from "./useToastHandler";
 
 type UseMemoOperationsProps = {
-  /** ゲームID（MemoCardコンポーネント用、オプション） */
   gameId?: string;
-  /** メモ削除後のコールバック（メモ一覧更新用、オプション） */
   onDeleteSuccess?: (deletedMemoId: string) => void;
-  /** ドロップダウンを閉じる関数 */
   closeDropdown: () => void;
-  /** 削除確認モーダルを開く関数 */
   openDeleteModal: (memoId: string) => void;
-  /** 同期後のコールバック（メモ一覧更新用、オプション） */
   onSyncSuccess?: () => void;
 };
 

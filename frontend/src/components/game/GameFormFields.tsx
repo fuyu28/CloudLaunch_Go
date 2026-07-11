@@ -2,58 +2,22 @@
  * @fileoverview ゲームフォームフィールドコンポーネント
  *
  * このコンポーネントは、ゲーム登録・編集フォームの入力フィールドを提供します。
- *
- * 主な機能：
- * - ゲーム基本情報の入力フィールド（タイトル、発行元等）
- * - ファイル選択フィールド（画像、実行ファイル、セーブフォルダ）
- * - 統一的なスタイリング
- * - バリデーション対応
- *
- * 使用例：
- * ```tsx
- * <GameFormFields
- *   gameData={gameData}
- *   onChange={handleChange}
- *   onBrowseImage={browseImage}
- *   onBrowseExe={browseExe}
- *   onBrowseSaveFolder={browseSaveFolder}
- *   disabled={submitting}
- * />
- * ```
  */
 
 import { FileSelectButton } from "../common/FileSelectButton";
 import type { InputGameData } from "src/types/game";
 import type { GameFormValidationResult } from "../../hooks/useGameFormValidationZod";
 
-/**
- * ゲームフォームフィールドコンポーネントのprops
- */
 export type GameFormFieldsProps = {
-  /** ゲームデータ */
   gameData: InputGameData;
-  /** フィールド変更時のコールバック */
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  /** 画像ファイル選択のコールバック */
   onBrowseImage: () => void;
-  /** 実行ファイル選択のコールバック */
   onBrowseExe: () => void;
-  /** セーブフォルダ選択のコールバック */
   onBrowseSaveFolder: () => void;
-  /** フィールドを無効化する場合は true */
   disabled?: boolean;
-  /** バリデーション結果 */
   validation: GameFormValidationResult;
 };
 
-/**
- * ゲームフォームフィールドコンポーネント
- *
- * ゲーム登録・編集で使用される入力フィールドを提供します。
- *
- * @param props コンポーネントのprops
- * @returns ゲームフォームフィールド要素
- */
 export function GameFormFields({
   gameData,
   onChange,

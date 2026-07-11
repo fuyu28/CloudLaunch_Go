@@ -2,27 +2,15 @@
  * @fileoverview ローディング状態管理フック
  *
  * このフックは、非同期処理のローディング状態を管理します。
- * 主な機能：
- * - 並行実行対応（参照カウント）のローディング状態管理
- * - トースト通知と統合された実行ヘルパー
- *
- * 使用例：
- * ```tsx
- * const { isLoading, executeWithLoading } = useLoadingState()
- * ```
  */
 
 import { useCallback, useMemo, useState } from "react";
 
 import { useToastHandler, executeWithToast, type ToastOptions } from "./useToastHandler";
 
-/**
- * ローディング状態管理フックの返り値
- */
 type UseLoadingStateReturn = {
   /** ローディング中かどうか（走っている非同期処理が1つ以上あるとき true） */
   isLoading: boolean;
-  /** トースト付きで非同期処理を実行する */
   executeWithLoading: <T>(
     asyncFn: () => Promise<T>,
     options?: ToastOptions,

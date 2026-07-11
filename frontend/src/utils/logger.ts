@@ -2,10 +2,6 @@
  * @fileoverview レンダラープロセス用ログユーティリティ
  *
  * このファイルは、レンダラープロセスで使用するログ機能を提供します。
- * 主な機能：
- * - メインプロセスのログシステムとの連携
- * - 開発/本番環境での自動切り替え
- * - console.*の代替として使用
  */
 
 import { logLevelManager, type LogLevel } from "./logLevel";
@@ -14,15 +10,10 @@ import { logLevelManager, type LogLevel } from "./logLevel";
  * ログメタデータ
  */
 export interface LogMetadata {
-  /** ログが発生したコンポーネント名 */
   component?: string;
-  /** ログが発生した関数名 */
   function?: string;
-  /** 追加のコンテキスト情報 */
   context?: string;
-  /** エラーオブジェクト */
   error?: Error;
-  /** 任意の追加データ */
   data?: unknown;
 }
 

@@ -1,5 +1,6 @@
 /**
  * @fileoverview ゲーム起動・スクリーンショットブリッジ。
+ *
  */
 
 import { LaunchGame, CaptureGameScreenshot } from "../../wailsjs/go/app/App";
