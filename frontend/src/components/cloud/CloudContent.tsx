@@ -13,15 +13,11 @@ import CloudTreeNode from "./CloudTreeNode";
 import type { CloudDirectoryNode } from "src/types/cloud";
 import type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
-/**
- * クラウドコンテンツのプロパティ
- */
 type CloudContentProps = {
   viewMode: ViewMode;
   loading: boolean;
   gameLoading?: boolean;
   loadingGameIds?: Set<string>;
-  /** クラウドデータ */
   directoryTree: CloudDirectoryNode[];
   currentPath: CloudPathSegment[];
   currentDirectoryNodes: CloudDirectoryNode[];

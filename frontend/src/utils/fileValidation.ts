@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ファイルパス検証ユーティリティ
+ *
+ * フォーム入力のローカルパス存在確認と URL / 拡張子チェックを提供する。
+ */
+
 // テスト環境でloggerが利用できない場合のフォールバック
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let logger: any;
@@ -5,7 +11,7 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   logger = require("@renderer/utils/logger").logger;
 } catch {
-  // テスト環境でloggerが使用できない場合のモック
+  // テストでは logger 実体が無いので黙るモックに差し替える。
   logger = {
     error: () => {},
     warn: () => {},
@@ -13,23 +19,6 @@ try {
     debug: () => {},
   };
 }
-
-/**
- * @fileoverview ファイルパス検証ユーティリティ
- *
- * このファイルは、フォームで入力されたファイルパスの検証機能を提供します。
- *
- * 主な機能：
- * - ローカルファイルパスの存在チェック
- * - URLの有効性チェック
- * - ファイル拡張子の検証
- *
- * 使用例：
- * ```typescript
- * const isValid = await validateFilePath('/path/to/file.exe')
- * const isValidImage = await validateImagePath('https://example.com/image.jpg')
- * ```
- */
 
 export function isUrl(path: string): boolean {
   if (!path.includes("://")) {
