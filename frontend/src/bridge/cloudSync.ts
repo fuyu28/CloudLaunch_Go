@@ -9,7 +9,7 @@ import {
   ResolveConflict,
   DeleteGameFromCloud,
 } from "../../wailsjs/go/app/App";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { toApiResultVoid } from "./helpers";
 import type {
   SyncStatus as SyncStatusType,
@@ -69,8 +69,9 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
     },
     deleteFromCloud: async (gameId) => toApiResultVoid(await DeleteGameFromCloud(gameId)),
     onProgress: (callback: (event: SyncProgressEvent) => void) => {
-      EventsOn("sync:progress", callback);
-      return () => EventsOff("sync:progress");
+      // Wails v2 の EventsOn は登録解除用の関数を返すので、そのまま返して
+      // このリスナーだけを解除する（EventsOff は同名の全リスナーを消してしまう）
+      return EventsOn("sync:progress", callback);
     },
   };
 }

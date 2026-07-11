@@ -146,19 +146,37 @@ export function latestModifiedRecursively(node: CloudDirectoryNode): Date {
 }
 
 /**
- * 指定したパスの子ディレクトリ・ファイルを取得
+ * ナビゲーション用のパスセグメント。
+ * 同じ表示名のゲームが複数存在するケースを区別するため、
+ * `id`（CloudDirectoryNode.path。ルートではゲームID）で識別し、
+ * `name` は表示用（パンくず等）にのみ使う。
+ */
+export type CloudPathSegment = {
+  /** 一意識別子（CloudDirectoryNode.path） */
+  id: string;
+  /** 表示名（CloudDirectoryNode.name） */
+  name: string;
+};
+
+/**
+ * 指定したパスの子ディレクトリ・ファイルを取得。
+ * 表示名ではなく `node.path`（一意）で解決するため、
+ * 同名のゲームが2件あっても混同されない。
  * @param tree ディレクトリツリー
- * @param path パス配列
+ * @param path パスセグメント配列
  * @returns 子ノード配列
  */
-export function getNodesByPath(tree: CloudDirectoryNode[], path: string[]): CloudDirectoryNode[] {
+export function getNodesByPath(
+  tree: CloudDirectoryNode[],
+  path: CloudPathSegment[],
+): CloudDirectoryNode[] {
   if (path.length === 0) {
     return tree;
   }
 
   let currentNodes = tree;
-  for (const pathSegment of path) {
-    const targetNode = currentNodes.find((node) => node.name === pathSegment && node.isDirectory);
+  for (const segment of path) {
+    const targetNode = currentNodes.find((node) => node.path === segment.id && node.isDirectory);
     if (!targetNode || !targetNode.children) {
       return [];
     }

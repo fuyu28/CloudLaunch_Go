@@ -14,9 +14,11 @@ import {
   computeCloudNodeMetrics,
   getNodesByPath,
   latestModifiedRecursively,
+  type CloudPathSegment,
 } from "@renderer/utils/cloudUtils";
 
 export type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
+export type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
 /**
  * useCloudDataフックの戻り値の型定義
@@ -26,7 +28,7 @@ export type UseCloudDataReturn = {
   cloudData: CloudDataItem[];
   directoryTree: CloudDirectoryNode[];
   loading: boolean;
-  currentPath: string[];
+  currentPath: CloudPathSegment[];
   currentDirectoryNodes: CloudDirectoryNode[];
   /** 現在ファイル一覧を遅延取得中のゲームID（remotePath）集合 */
   loadingGameIds: Set<string>;
@@ -35,9 +37,9 @@ export type UseCloudDataReturn = {
   fetchCloudData: () => Promise<void>;
   /** 指定ゲームのファイル一覧を遅延取得し、ディレクトリツリーへマージする */
   ensureGameLoaded: (gameId: string) => Promise<void>;
-  navigateToDirectory: (directoryName: string) => void;
+  navigateToDirectory: (node: CloudDirectoryNode) => void;
   navigateBack: () => void;
-  navigateToPath: (newPath: string[]) => void;
+  navigateToPath: (newPath: CloudPathSegment[]) => void;
   /** ゲーム単位でクラウドデータを削除する（gameId = remotePath または path） */
   deleteGameFromCloud: (gameId: string) => Promise<void>;
   /** 全ゲームのクラウドデータを一括削除する */
@@ -68,7 +70,7 @@ export function useCloudData(): UseCloudDataReturn {
     cloudData: [] as CloudDataItem[],
     directoryTree: [] as CloudDirectoryNode[],
     loading: true,
-    currentPath: [] as string[],
+    currentPath: [] as CloudPathSegment[],
     loadingGameIds: new Set<string>(),
   });
 
@@ -215,15 +217,17 @@ export function useCloudData(): UseCloudDataReturn {
 
   /**
    * カードビューでディレクトリに移動。
-   * directoryName はノード名そのものを受け取り、"/" による分割は行わない
-   * （ゲーム名に "/" を含む場合に誤分解されないようにする）。
+   * 対象ノードを丸ごと受け取り、一意識別子（node.path）と表示名（node.name）を
+   * セグメントとして記録する。同名ゲームが 2 件あってもツリー解決で混同されない。
    */
-  const navigateToDirectory = useCallback((directoryName: string): void => {
-    const trimmed = directoryName.trim();
-    if (trimmed === "") {
+  const navigateToDirectory = useCallback((node: CloudDirectoryNode): void => {
+    if (!node.path || !node.isDirectory) {
       return;
     }
-    setState((prev) => ({ ...prev, currentPath: [...prev.currentPath, trimmed] }));
+    setState((prev) => ({
+      ...prev,
+      currentPath: [...prev.currentPath, { id: node.path, name: node.name }],
+    }));
   }, []);
 
   /**
@@ -237,7 +241,7 @@ export function useCloudData(): UseCloudDataReturn {
   /**
    * 指定パスに直接移動
    */
-  const navigateToPath = useCallback((newPath: string[]): void => {
+  const navigateToPath = useCallback((newPath: CloudPathSegment[]): void => {
     setState((prev) => ({ ...prev, currentPath: newPath }));
   }, []);
 
@@ -279,22 +283,26 @@ export function useCloudData(): UseCloudDataReturn {
   const deleteAllGamesFromCloud = useCallback(async (): Promise<void> => {
     try {
       const gameIds = state.cloudData.map((item) => item.remotePath);
-      const results = await Promise.all(
+      // Promise.all は 1 件が reject するとその場でエラーへ落ちてしまい、
+      // 残りの結果を集約できない上に refresh も走らない。
+      // Promise.allSettled で各件の結果を集約する。
+      const settled = await Promise.allSettled(
         gameIds.map((gameId) => window.api.cloudSync.deleteFromCloud(gameId)),
       );
-      const failedCount = results.filter((r) => !r.success).length;
+      const failedCount = settled.reduce((acc, r) => {
+        if (r.status === "rejected") return acc + 1;
+        return r.value.success ? acc : acc + 1;
+      }, 0);
 
-      if (failedCount === 0) {
+      if (settled.length === 0) {
+        // 対象なし: メッセージ不要（呼び出し元で扱う）
+      } else if (failedCount === 0) {
         toast.success("全てのクラウドデータを削除しました");
-      } else if (failedCount < results.length) {
+      } else if (failedCount < settled.length) {
         toast.success(`一部のデータを削除しました（失敗: ${failedCount}件）`);
       } else {
         toast.error("削除に失敗しました");
       }
-
-      // 削除後はキャッシュをクリアして最新データを取得
-      navigationCacheRef.current.clear();
-      await fetchCloudData();
     } catch (error) {
       logger.error("一括削除エラー:", {
         component: "useCloudData",
@@ -302,6 +310,11 @@ export function useCloudData(): UseCloudDataReturn {
         data: error,
       });
       toast.error("削除に失敗しました");
+    } finally {
+      // 削除の成否に関わらず、キャッシュをクリアして最新データを取得する。
+      // ここで確実に refresh を走らせないと、一部だけ削除された画面と実サーバの状態がずれる。
+      navigationCacheRef.current.clear();
+      await fetchCloudData();
     }
   }, [state.cloudData, fetchCloudData]);
 

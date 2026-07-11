@@ -17,6 +17,7 @@ import type { ViewMode } from "./CloudHeader";
 import { DirectoryNodeCard } from "./CloudItemCard";
 import CloudTreeNode from "./CloudTreeNode";
 import type { CloudDirectoryNode } from "src/types/cloud";
+import type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
 /**
  * クラウドコンテンツのプロパティ
@@ -34,7 +35,7 @@ type CloudContentProps = {
   /** ディレクトリツリー */
   directoryTree: CloudDirectoryNode[];
   /** 現在のパス */
-  currentPath: string[];
+  currentPath: CloudPathSegment[];
   /** 現在のディレクトリノード */
   currentDirectoryNodes: CloudDirectoryNode[];
   /** 展開されたノード */

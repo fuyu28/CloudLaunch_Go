@@ -12,7 +12,7 @@
  * - ナビゲーション機能
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAtomValue } from "jotai";
 
 import { CloudBreadcrumb } from "@renderer/components/cloud/CloudBreadcrumb";
@@ -97,7 +97,8 @@ export default function Cloud(): React.JSX.Element {
   /**
    * ディレクトリ（ゲームまたはサブフォルダ）を開く。
    * ルートレベル（=ゲーム）を開くときは、そのゲームのファイル一覧を遅延取得する。
-   * currentPath は表示名ベースで管理するため、ナビゲーションには node.name を使う。
+   * ナビゲーションは表示名ではなく node（実体）で辿るため、同名ゲームが 2 件あっても
+   * 1 件に集約されない。
    */
   const handleNavigateToDirectory = useCallback(
     (node: CloudDirectoryNode): void => {
@@ -105,14 +106,17 @@ export default function Cloud(): React.JSX.Element {
         // node.path はルートではゲームID（remotePath）
         void ensureGameLoaded(node.path);
       }
-      navigateToDirectory(node.name);
+      navigateToDirectory(node);
     },
     [currentPath.length, ensureGameLoaded, navigateToDirectory],
   );
 
-  // ルートで開いているゲームノード（カードビューのサブ階層表示用）
+  // ルートで開いているゲームノード（カードビューのサブ階層表示用）。
+  // 表示名ではなくパス（一意）で解決する。
   const openGameNode =
-    currentPath.length > 0 ? directoryTree.find((node) => node.name === currentPath[0]) : undefined;
+    currentPath.length > 0
+      ? directoryTree.find((node) => node.path === currentPath[0].id)
+      : undefined;
   // 開いているゲームのファイル一覧をまだ取得中かどうか
   const isOpenGameLoading = openGameNode ? loadingGameIds.has(openGameNode.path) : false;
 
@@ -183,6 +187,10 @@ export default function Cloud(): React.JSX.Element {
     }
   };
 
+  // 詳細モーダルの最新リクエストID。連続クリック時に古い resolve が
+  // 新しく開いた対象のファイル一覧を上書きしないようガードするため使う。
+  const latestDetailsRequestRef = useRef<number>(0);
+
   /**
    * ファイル詳細を表示
    */
@@ -195,10 +203,16 @@ export default function Cloud(): React.JSX.Element {
       remotePath: node.path,
     };
 
+    // このリクエストを最新として記録し、resolve 時に自分が最新か検証する。
+    const reqId = ++latestDetailsRequestRef.current;
     setDetailsModal({ item: detailItem, files: [], loading: true });
 
     try {
       const result = await window.api.cloudData.getCloudFileDetails(detailItem.remotePath);
+      if (reqId !== latestDetailsRequestRef.current) {
+        // 別のノードのクリックで置き換わっているので何もしない
+        return;
+      }
       if (result.success && result.data) {
         setDetailsModal((prev) => ({
           ...prev,
@@ -212,6 +226,9 @@ export default function Cloud(): React.JSX.Element {
         setDetailsModal((prev) => ({ ...prev, loading: false }));
       }
     } catch (error) {
+      if (reqId !== latestDetailsRequestRef.current) {
+        return;
+      }
       logger.error("ファイル詳細取得エラー:", {
         component: "Cloud",
         function: "unknown",
