@@ -47,6 +47,7 @@ export default function GameDetail(): React.JSX.Element {
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const [saveSyncMessage, setSaveSyncMessage] = useState("");
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [pendingLaunchAfterConflict, setPendingLaunchAfterConflict] = useState(false);
   const [conflictMeta, setConflictMeta] = useState<{
     localMeta?: SyncMetaSnapshot;
     remoteMeta?: SyncMetaSnapshot;
@@ -156,13 +157,14 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [game, uploadSaveData, checkNetworkFeature]);
 
-  const handleDownloadSaveData = useCallback(async (): Promise<void> => {
+  const handleDownloadSaveData = useCallback(async (): Promise<boolean> => {
     if (!checkNetworkFeature("セーブデータダウンロード")) {
-      return;
+      return false;
     }
-    if (game) {
-      await downloadSaveData(game);
+    if (!game) {
+      return false;
     }
+    return downloadSaveData(game);
   }, [game, downloadSaveData, checkNetworkFeature]);
 
   const buildSyncMessage = useCallback(
@@ -328,7 +330,17 @@ export default function GameDetail(): React.JSX.Element {
       return;
     }
     const { status, remoteMeta } = statusResult.data;
-    if (status === "pull_needed" || status === "conflict") {
+    if (status === "conflict") {
+      // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
+      setConflictMeta({
+        localMeta: statusResult.data.localMeta,
+        remoteMeta: statusResult.data.remoteMeta,
+      });
+      setPendingLaunchAfterConflict(true);
+      setIsConflictModalOpen(true);
+      return;
+    }
+    if (status === "pull_needed") {
       setSaveSyncMessage(
         buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
       );
@@ -341,15 +353,19 @@ export default function GameDetail(): React.JSX.Element {
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
     setSaveSyncMessage("");
-    await handleDownloadSaveData();
-    await launchGameDirect();
-  }, [handleDownloadSaveData, launchGameDirect]);
+    const downloaded = await handleDownloadSaveData();
+    if (!downloaded) {
+      return;
+    }
+    await handleLaunchGame();
+  }, [handleDownloadSaveData, handleLaunchGame]);
 
   const handleSkipDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
     setSaveSyncMessage("");
-    await launchGameDirect();
-  }, [launchGameDirect]);
+    // スキップ時は同期せず起動する（GameDetail の launchGameDirect は裏で sync するため使わない）
+    await handleLaunchGame();
+  }, [handleLaunchGame]);
 
   const handleResolveConflict = useCallback(
     async (useLocal: boolean): Promise<void> => {
@@ -374,6 +390,10 @@ export default function GameDetail(): React.JSX.Element {
           );
           setIsConflictModalOpen(false);
           setConflictMeta(null);
+          if (pendingLaunchAfterConflict) {
+            setPendingLaunchAfterConflict(false);
+            await handleLaunchGame();
+          }
         } else {
           showToast(op.message || "コンフリクト解決に失敗しました", "error");
         }
@@ -383,7 +403,7 @@ export default function GameDetail(): React.JSX.Element {
         setIsResolvingConflict(false);
       }
     },
-    [game, showToast, resolveConflict],
+    [game, showToast, resolveConflict, pendingLaunchAfterConflict, handleLaunchGame],
   );
 
   // untracked 削除の確認後、deleteUntracked=true で再実行する。
@@ -659,6 +679,7 @@ export default function GameDetail(): React.JSX.Element {
         onClose={() => {
           setIsConflictModalOpen(false);
           setConflictMeta(null);
+          setPendingLaunchAfterConflict(false);
         }}
         gameTitle={game.title}
         localMeta={conflictMeta?.localMeta}

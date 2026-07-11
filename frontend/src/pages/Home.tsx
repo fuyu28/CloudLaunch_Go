@@ -5,6 +5,7 @@ import { IoIosAdd } from "react-icons/io";
 import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import FloatingButton from "@renderer/components/common/FloatingButton";
 import CloudGameImportModal from "@renderer/components/cloud/CloudGameImportModal";
+import SyncConflictModal from "@renderer/components/cloud/SyncConflictModal";
 import ErogameScapeImportModal from "@renderer/components/game/ErogameScapeImportModal";
 import GameGrid from "@renderer/components/game/GameGrid";
 import GameFormModal from "@renderer/components/game/GameModal";
@@ -19,6 +20,7 @@ import { useCloudSync } from "@renderer/hooks/useCloudSync";
 import { useLoadingState } from "@renderer/hooks/useLoadingState";
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
+import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { isValidCredsAtom } from "@renderer/state/credentials";
 import { buildSaveSyncMessage } from "@renderer/utils/saveSyncMessage";
@@ -32,6 +34,7 @@ import {
 } from "@renderer/state/home";
 import { autoTrackingAtom } from "@renderer/state/settings";
 import type { GameType } from "src/types/game";
+import type { SyncMetaSnapshot } from "src/wailsBridge";
 
 export default function Home(): React.ReactElement {
   const [searchWord, setSearchWord] = useAtom(searchWordAtom);
@@ -46,13 +49,20 @@ export default function Home(): React.ReactElement {
   const [isDownloadConfirmOpen, setIsDownloadConfirmOpen] = useState(false);
   const [pendingLaunchGame, setPendingLaunchGame] = useState<GameType | null>(null);
   const [saveSyncMessage, setSaveSyncMessage] = useState("");
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [isResolvingConflict, setIsResolvingConflict] = useState(false);
+  const [conflictMeta, setConflictMeta] = useState<{
+    localMeta?: SyncMetaSnapshot;
+    remoteMeta?: SyncMetaSnapshot;
+  } | null>(null);
   const [warningGameIds, setWarningGameIds] = useState<Set<string>>(new Set());
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
   const { isOfflineMode } = useOfflineMode();
-  const { getStatus } = useCloudSync(isOfflineMode);
+  const { getStatus, resolveConflict } = useCloudSync(isOfflineMode);
   const { downloadSaveData } = useGameSaveData();
   const { formatDateWithTime } = useTimeFormat();
+  const { showToast } = useToastHandler();
 
   // 検索語をデバウンス
   const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
@@ -223,7 +233,16 @@ export default function Home(): React.ReactElement {
       }
 
       const { status, remoteMeta } = statusResult.data;
-      if (status === "pull_needed" || status === "conflict") {
+      if (status === "conflict") {
+        setConflictMeta({
+          localMeta: statusResult.data.localMeta,
+          remoteMeta: statusResult.data.remoteMeta,
+        });
+        setPendingLaunchGame(game);
+        setIsConflictModalOpen(true);
+        return;
+      }
+      if (status === "pull_needed") {
         setSaveSyncMessage(
           buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
         );
@@ -243,8 +262,10 @@ export default function Home(): React.ReactElement {
     if (!pendingLaunchGame) {
       return;
     }
-    await downloadSaveData(pendingLaunchGame);
-    await launchGameDirect(pendingLaunchGame);
+    const downloaded = await downloadSaveData(pendingLaunchGame);
+    if (downloaded) {
+      await launchGameDirect(pendingLaunchGame);
+    }
     setPendingLaunchGame(null);
   }, [downloadSaveData, launchGameDirect, pendingLaunchGame]);
 
@@ -257,6 +278,45 @@ export default function Home(): React.ReactElement {
     await launchGameDirect(pendingLaunchGame);
     setPendingLaunchGame(null);
   }, [launchGameDirect, pendingLaunchGame]);
+
+  const handleResolveConflict = useCallback(
+    async (useLocal: boolean): Promise<void> => {
+      if (!pendingLaunchGame) return;
+      setIsResolvingConflict(true);
+      try {
+        const op = await resolveConflict(pendingLaunchGame.id, useLocal);
+        if (op.ok && !(op.applied === false)) {
+          showToast(
+            useLocal
+              ? "ローカルデータをクラウドに反映しました"
+              : "クラウドデータをローカルに適用しました",
+            "success",
+          );
+          setIsConflictModalOpen(false);
+          setConflictMeta(null);
+          await launchGameDirect(pendingLaunchGame);
+          setPendingLaunchGame(null);
+          return;
+        }
+        if (op.ok && op.applied === false) {
+          showToast(
+            "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
+            "error",
+          );
+          setIsConflictModalOpen(false);
+          setConflictMeta(null);
+          setPendingLaunchGame(null);
+          return;
+        }
+        showToast(op.message || "コンフリクト解決に失敗しました", "error");
+      } catch {
+        showToast("コンフリクト解決に失敗しました", "error");
+      } finally {
+        setIsResolvingConflict(false);
+      }
+    },
+    [pendingLaunchGame, resolveConflict, showToast, launchGameDirect],
+  );
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
@@ -323,6 +383,21 @@ export default function Home(): React.ReactElement {
         confirmText="ダウンロードする"
         onConfirm={handleDownloadAndLaunch}
         onCancel={handleSkipDownloadAndLaunch}
+      />
+
+      <SyncConflictModal
+        isOpen={isConflictModalOpen}
+        onClose={() => {
+          setIsConflictModalOpen(false);
+          setConflictMeta(null);
+          setPendingLaunchGame(null);
+        }}
+        gameTitle={pendingLaunchGame?.title ?? ""}
+        localMeta={conflictMeta?.localMeta}
+        remoteMeta={conflictMeta?.remoteMeta}
+        onUseLocal={() => void handleResolveConflict(true)}
+        onUseRemote={() => void handleResolveConflict(false)}
+        isResolving={isResolvingConflict}
       />
     </div>
   );
