@@ -1,5 +1,7 @@
 /**
- * @fileoverview 画像読み込みブリッジ。
+ * @fileoverview 画像 URL 解決ブリッジ。
+ *
+ * ローカルは Go 経由で data URL 化。Web はパスをそのまま返す（追加 fetch しない）。
  */
 
 import { LoadImageFromLocal } from "../../wailsjs/go/app/App";
@@ -13,6 +15,7 @@ export function createLoadImageBridge(): WindowApi["loadImage"] {
         ? { success: true, data: result.data as string }
         : { success: false, message: result.error?.message ?? "エラー" };
     },
+    // http(s) / data URL はそのまま <img src> に渡せるので Go を経由しない。
     loadImageFromWeb: async (src) => ({ success: true, data: src }),
   };
 }

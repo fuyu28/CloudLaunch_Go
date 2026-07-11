@@ -1,5 +1,6 @@
 //go:build !windows
 
+// 非Windows向けの認証情報ストアのスタブ実装。
 package credentials
 
 import (

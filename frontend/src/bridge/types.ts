@@ -1,8 +1,7 @@
 /**
- * @fileoverview wailsBridge の公開型定義。
+ * @fileoverview wailsBridge の公開型。
  *
- * `WindowApi` およびクラウド同期関連の型をここで一元管理する。
- * 後方互換のため `src/wailsBridge` から re-export される。
+ * WindowApi と同期関連型をここに集約し、src/wailsBridge から re-export する。
  */
 
 import type { ApiResult } from "src/types/result";
@@ -31,10 +30,9 @@ export type SyncStatus = "never_synced" | "in_sync" | "push_needed" | "pull_need
 export type SyncStatusDetail = {
   status: SyncStatus;
   /**
-   * Saves コンポーネントのみの差分（=セーブファイル内容の差分）を示す。
-   * `status` は sessions.json / game.json のメタデータ差分も含む fingerprint 比較なので、
-   * セッション終了後のアップロード確認プロンプトのように「セーブ不変ならプロンプト不要」を
-   * 判定したい呼び出し側では `status` に加えてこのフラグでさらに狭窄する。
+   * セーブファイル内容だけの差分。
+   * status は sessions/game メタも含む fingerprint 比較なので、
+   * 「セーブ不変ならアップロード確認不要」の判定ではこのフラグで狭窄する。
    */
   savesDiffer: boolean;
   localMeta?: SyncMetaSnapshot;
@@ -56,9 +54,9 @@ export type SyncProgressEvent = {
 };
 
 /**
- * Pull / ResolveConflict(リモート採用) の結果。
- * applied=false かつ untrackedDeletes が非空のときは「未追跡ファイルの削除確認待ち」で、
- * この時点ではローカルに変更が加わっていない。確認後 deleteUntracked=true で再実行する。
+ * Pull / リモート採用の結果。
+ * applied=false かつ untrackedDeletes 非空は削除確認待ち（この時点でローカル無変更）。
+ * 確認後に deleteUntracked=true で再実行する。
  */
 export type PullResult = {
   applied: boolean;
@@ -71,11 +69,10 @@ export type WindowApi = {
     toggleMaximize: () => Promise<void>;
     close: () => Promise<void>;
     openFolder: (path: string) => Promise<void>;
-    /** 実行プラットフォーム（"windows" / "darwin" / "linux"）を返す */
     getPlatform: () => Promise<string>;
   };
   browser: {
-    /** URL を既定のブラウザ（外部ブラウザ）で開く。http/https のみ受け付ける。 */
+    /** http/https のみ。fragment 等は webview 内既定動作に任せる。 */
     openExternalUrl: (url: string) => void;
   };
   settings: {
@@ -130,8 +127,7 @@ export type WindowApi = {
   };
   memo: {
     getAllMemos: () => Promise<ApiResult<MemoType[]>>;
-    // Go 側は該当なしで nil を返しうるため、undefined 込みで表現する。呼び出し側は既に data の
-    // 存在チェック（`result.data?` / `if (result.data)`) をしているので破壊はない。
+    // Go は該当なしで nil。undefined 込みにし、無いデータを有値キャストしない。
     getMemoById: (memoId: string) => Promise<ApiResult<MemoType | undefined>>;
     getMemosByGameId: (gameId: string) => Promise<ApiResult<MemoType[]>>;
     createMemo: (data: CreateMemoData) => Promise<ApiResult<MemoType | undefined>>;
@@ -153,10 +149,10 @@ export type WindowApi = {
   };
   cloudData: {
     listCloudData: () => Promise<ApiResult<CloudDataItem[]>>;
-    /** 全ゲームの軽量サマリ（タイトル一覧のみ。ファイル数・サイズを含まない）を取得する */
+    /** タイトル一覧用。ファイル数・サイズは含めず軽量に取る。 */
     getCloudGameSummaries: () => Promise<ApiResult<CloudDataItem[]>>;
     getDirectoryTree: () => Promise<ApiResult<CloudDirectoryNode[]>>;
-    /** 1ゲームの論理ディレクトリツリー（ファイル一覧・サイズ付き）を遅延取得する */
+    /** 開いたゲームだけファイル一覧を遅延取得する。 */
     getGameDirectoryNode: (gameId: string) => Promise<ApiResult<CloudDirectoryNode>>;
     deleteCloudData: (path: string) => Promise<ApiResult<void>>;
     deleteFile: (path: string) => Promise<ApiResult<void>>;

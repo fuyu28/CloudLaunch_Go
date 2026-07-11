@@ -1,6 +1,4 @@
-/**
- * @fileoverview セーブデータアップロードとダウンロードの共通処理
- */
+/** @fileoverview セーブデータアップロードとダウンロードの共通処理。 */
 
 import type { ApiResult } from "src/types/result";
 import type { PullResult } from "src/wailsBridge";

@@ -1,5 +1,5 @@
 /**
- * @fileoverview メンテナンス(エクスポート・バックアップ)ブリッジ。
+ * @fileoverview エクスポート・フルバックアップ / リストアブリッジ。
  */
 
 import { ExportGameData, CreateFullBackup, RestoreFullBackup } from "../../wailsjs/go/app/App";

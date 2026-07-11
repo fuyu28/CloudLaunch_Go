@@ -2,23 +2,6 @@
  * @fileoverview ゲームセーブデータ操作フック
  *
  * このフックは、ゲームのセーブデータのアップロード・ダウンロード機能を提供します。
- *
- * 主な機能：
- * - セーブデータのクラウドアップロード
- * - セーブデータのクラウドダウンロード
- * - ローディング状態の管理
- * - エラーハンドリング
- * - バリデーション
- *
- * 使用例：
- * ```tsx
- * const {
- *   uploadSaveData,
- *   downloadSaveData,
- *   isUploading,
- *   isDownloading
- * } = useGameSaveData()
- * ```
  */
 
 import { useState, useCallback } from "react";
@@ -34,27 +17,13 @@ import {
   uploadSaveDataAndSyncHash,
 } from "@renderer/utils/saveDataUpload";
 
-/**
- * ゲームセーブデータ操作フックの戻り値
- */
 export type GameSaveDataResult = {
-  /** セーブデータアップロード関数 */
   uploadSaveData: (game: GameType) => Promise<boolean>;
-  /** セーブデータダウンロード関数（適用成功時 true） */
   downloadSaveData: (game: GameType) => Promise<boolean>;
-  /** アップロード中かどうか */
   isUploading: boolean;
-  /** ダウンロード中かどうか */
   isDownloading: boolean;
 };
 
-/**
- * ゲームセーブデータ操作フック
- *
- * ゲームのセーブデータのアップロード・ダウンロード機能を提供します。
- *
- * @returns セーブデータ操作機能とローディング状態
- */
 export function useGameSaveData(): GameSaveDataResult {
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);

@@ -1,51 +1,23 @@
 /**
- * @fileoverview クラウドページヘッダーコンポーネント
- *
- * このコンポーネントは、クラウドデータ管理ページのヘッダー部分を
- * 担当し、ビュー切り替えや操作ボタンを提供します。
- *
- * 主な機能：
- * - ビュー切り替え（カード/ツリー）
- * - 全削除ボタン
- * - 更新ボタン
- * - ローディング状態の表示
+ * @fileoverview クラウドデータ管理ページのヘッダー。ビュー切り替えと更新・全削除の操作ボタンを提供する。
  */
 
 import { FiTrash2, FiRefreshCw, FiCloud, FiFolder, FiFolderPlus } from "react-icons/fi";
 
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
-/**
- * ビューモードの型定義
- */
 export type ViewMode = "cards" | "tree";
 
-/**
- * クラウドヘッダーのプロパティ
- */
 type CloudHeaderProps = {
-  /** 現在のビューモード */
   viewMode: ViewMode;
-  /** ビューモード変更コールバック */
   onViewModeChange: (mode: ViewMode) => void;
-  /** クラウドデータ */
   cloudData: CloudDataItem[];
-  /** ディレクトリツリー */
   directoryTree: CloudDirectoryNode[];
-  /** ローディング状態 */
   loading: boolean;
-  /** 更新コールバック */
   onRefresh: () => void;
-  /** 全削除コールバック */
   onDeleteAll: () => void;
 };
 
-/**
- * クラウドページヘッダーコンポーネント
- *
- * @param props ヘッダーのプロパティ
- * @returns JSX要素
- */
 export function CloudHeader({
   viewMode,
   onViewModeChange,
@@ -68,7 +40,6 @@ export function CloudHeader({
       </div>
 
       <div className="flex items-center gap-3">
-        {/* ビュー切り替えボタン */}
         <div className="join">
           <button
             className={`btn join-item btn-sm ${viewMode === "cards" ? "btn-active" : ""}`}
@@ -86,7 +57,6 @@ export function CloudHeader({
           </button>
         </div>
 
-        {/* 全削除ボタン */}
         {hasData && (
           <button onClick={onDeleteAll} className="btn btn-error btn-sm gap-2" disabled={loading}>
             <FiTrash2 />
@@ -94,7 +64,6 @@ export function CloudHeader({
           </button>
         )}
 
-        {/* 更新ボタン */}
         <button onClick={onRefresh} disabled={loading} className="btn btn-primary gap-2">
           <FiRefreshCw className={loading ? "animate-spin" : ""} />
           更新

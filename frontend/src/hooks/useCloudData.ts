@@ -20,29 +20,21 @@ import {
 export type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 export type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
-/**
- * useCloudDataフックの戻り値の型定義
- */
 export type UseCloudDataReturn = {
-  // State
   cloudData: CloudDataItem[];
   directoryTree: CloudDirectoryNode[];
   loading: boolean;
   currentPath: CloudPathSegment[];
   currentDirectoryNodes: CloudDirectoryNode[];
-  /** 現在ファイル一覧を遅延取得中のゲームID（remotePath）集合 */
   loadingGameIds: Set<string>;
 
-  // Actions
   fetchCloudData: () => Promise<void>;
-  /** 指定ゲームのファイル一覧を遅延取得し、ディレクトリツリーへマージする */
   ensureGameLoaded: (gameId: string) => Promise<void>;
   navigateToDirectory: (node: CloudDirectoryNode) => void;
   navigateBack: () => void;
   navigateToPath: (newPath: CloudPathSegment[]) => void;
   /** ゲーム単位でクラウドデータを削除する（gameId = remotePath または path） */
   deleteGameFromCloud: (gameId: string) => Promise<void>;
-  /** 全ゲームのクラウドデータを一括削除する */
   deleteAllGamesFromCloud: () => Promise<void>;
   clearNavigationCache: () => void;
 };
@@ -61,11 +53,7 @@ function buildCloudDataFromTree(tree: CloudDirectoryNode[]): CloudDataItem[] {
   });
 }
 
-/**
- * クラウドデータ管理フック
- */
 export function useCloudData(): UseCloudDataReturn {
-  // 状態を統合管理
   const [state, setState] = useState({
     cloudData: [] as CloudDataItem[],
     directoryTree: [] as CloudDirectoryNode[],
@@ -74,22 +62,17 @@ export function useCloudData(): UseCloudDataReturn {
     loadingGameIds: new Set<string>(),
   });
 
-  // ナビゲーションキャッシュ
   const navigationCacheRef = useRef<Map<string, CloudDirectoryNode[]>>(new Map());
   // 詳細を取得済みのゲームID（再ナビゲーション時の二重取得を防ぐ）
   const loadedGamesRef = useRef<Set<string>>(new Set());
   // 取得中のゲームID（同時呼び出しによる二重取得を防ぐ）
   const loadingGamesRef = useRef<Set<string>>(new Set());
 
-  // 現在のディレクトリノードをメモ化
   const currentDirectoryNodes = useMemo(() => {
     if (state.directoryTree.length === 0) return [];
     return getNodesByPath(state.directoryTree, state.currentPath);
   }, [state.directoryTree, state.currentPath]);
 
-  /**
-   * ナビゲーションキャッシュをクリア
-   */
   const clearNavigationCache = useCallback((): void => {
     navigationCacheRef.current.clear();
   }, []);
@@ -179,7 +162,7 @@ export function useCloudData(): UseCloudDataReturn {
           return;
         }
 
-        // children が undefined（=ファイルなし）でも「取得済み」と区別できるよう空配列にする。
+        // undefined=未取得、[]=取得済み空。区別しないと再取得が走る／走らないが壊れる。
         const loadedNode: CloudDirectoryNode = {
           ...result.data,
           children: result.data.children ?? [],
@@ -230,17 +213,11 @@ export function useCloudData(): UseCloudDataReturn {
     }));
   }, []);
 
-  /**
-   * カードビューで親ディレクトリに戻る
-   */
   const navigateBack = useCallback((): void => {
     const newPath = state.currentPath.slice(0, -1);
     setState((prev) => ({ ...prev, currentPath: newPath }));
   }, [state.currentPath]);
 
-  /**
-   * 指定パスに直接移動
-   */
   const navigateToPath = useCallback((newPath: CloudPathSegment[]): void => {
     setState((prev) => ({ ...prev, currentPath: newPath }));
   }, []);
@@ -261,7 +238,7 @@ export function useCloudData(): UseCloudDataReturn {
           return;
         }
 
-        // 削除後はキャッシュをクリアして最新データを取得
+        // 削除後にキャッシュを残すと消したノードが残って見える。
         navigationCacheRef.current.clear();
         await fetchCloudData();
       } catch (error) {
@@ -295,7 +272,7 @@ export function useCloudData(): UseCloudDataReturn {
       }, 0);
 
       if (settled.length === 0) {
-        // 対象なしでもユーザーに操作の結果が伝わるよう、info トーストで明示する。
+        // 0件削除を無反応にしない（info トーストで結果を返す）。
         toast("削除対象がありませんでした", { icon: "ℹ️" });
       } else if (failedCount === 0) {
         toast.success("全てのクラウドデータを削除しました");
@@ -320,7 +297,6 @@ export function useCloudData(): UseCloudDataReturn {
   }, [state.cloudData, fetchCloudData]);
 
   return {
-    // State
     cloudData: state.cloudData,
     directoryTree: state.directoryTree,
     loading: state.loading,
@@ -328,7 +304,6 @@ export function useCloudData(): UseCloudDataReturn {
     currentDirectoryNodes,
     loadingGameIds: state.loadingGameIds,
 
-    // Actions
     fetchCloudData,
     ensureGameLoaded,
     navigateToDirectory,

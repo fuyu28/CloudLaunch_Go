@@ -3,12 +3,6 @@
  *
  * このコンポーネントは、クラウドデータの削除確認ダイアログを
  * 表示し、削除に関する詳細情報を提供します。
- *
- * 主な機能：
- * - 削除確認メッセージの表示
- * - ファイル数、容量などの詳細情報表示
- * - 警告メッセージの表示
- * - 削除/キャンセルの操作
  */
 
 import { FiAlertTriangle } from "react-icons/fi";
@@ -19,26 +13,13 @@ import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import type { ConfirmDetails, WarningItem } from "@renderer/components/common/ConfirmModal";
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
-/**
- * 削除確認モーダルのプロパティ
- */
 type CloudDeleteModalProps = {
-  /** 削除対象のアイテム */
   deleteConfirm: CloudDataItem | CloudDirectoryNode | null;
-  /** キャンセルコールバック */
   onCancel: () => void;
-  /** 削除実行コールバック */
   onConfirm: (item: CloudDataItem | CloudDirectoryNode) => void;
-  /** 全クラウドデータ（全削除時の計算用） */
   cloudData: CloudDataItem[];
 };
 
-/**
- * クラウドデータ削除確認モーダル
- *
- * @param props モーダルのプロパティ
- * @returns JSX要素
- */
 export function CloudDeleteModal({
   deleteConfirm,
   onCancel,

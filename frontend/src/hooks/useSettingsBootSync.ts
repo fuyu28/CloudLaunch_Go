@@ -46,7 +46,7 @@ export function useSettingsBootSync(): void {
   const s3ForcePathStyle = useAtomValue(s3ForcePathStyleAtom);
   const s3UseTLS = useAtomValue(s3UseTLSAtom);
 
-  // 初回マウント時のみ。atom 更新のたびに呼ぶのは各設定ハンドラの責務。
+  // boot sync は初回のみ。以降の atom→backend は各設定ハンドラの責務。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (bootSyncCompleted) {

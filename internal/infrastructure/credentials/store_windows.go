@@ -15,12 +15,10 @@ type WindowsStore struct {
 	Namespace string
 }
 
-// NewWindowsStore は WindowsStore を生成する。
 func NewWindowsStore(namespace string) *WindowsStore {
 	return &WindowsStore{Namespace: namespace}
 }
 
-// Save は認証情報を保存する。
 func (store *WindowsStore) Save(_ context.Context, key string, credential Credential) error {
 	blob, error := json.Marshal(credential)
 	if error != nil {
@@ -33,7 +31,7 @@ func (store *WindowsStore) Save(_ context.Context, key string, credential Creden
 	return cred.Write()
 }
 
-// Load は認証情報を取得する。
+// Load は未登録キーをエラーにせず (nil, nil) を返す（呼び出し側で「未設定」と区別できるようにする）。
 func (store *WindowsStore) Load(_ context.Context, key string) (*Credential, error) {
 	cred, error := wincred.GetGenericCredential(store.qualifiedKey(key))
 	if error != nil {
@@ -50,7 +48,7 @@ func (store *WindowsStore) Load(_ context.Context, key string) (*Credential, err
 	return &data, nil
 }
 
-// Delete は認証情報を削除する。
+// Delete は未登録キーもエラーにしない（べき等な削除として扱う）。
 func (store *WindowsStore) Delete(_ context.Context, key string) error {
 	cred, error := wincred.GetGenericCredential(store.qualifiedKey(key))
 	if error != nil {

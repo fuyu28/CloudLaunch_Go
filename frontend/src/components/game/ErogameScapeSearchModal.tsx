@@ -1,5 +1,5 @@
 /**
- * @fileoverview 批評空間タイトル検索モーダル
+ * @fileoverview 批評空間のタイトル検索モーダル。検索・追加ロード・結果一覧からの選択を行う。
  */
 
 import { useCallback, useEffect, useState } from "react";

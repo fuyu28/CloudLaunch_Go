@@ -1,5 +1,6 @@
 //go:build windows
 
+// Windows RegisterHotKey によるグローバルホットキー監視を実装する。
 package services
 
 import (

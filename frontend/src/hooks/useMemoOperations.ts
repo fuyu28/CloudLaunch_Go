@@ -12,15 +12,10 @@ import { logger } from "@renderer/utils/logger";
 import { useToastHandler } from "./useToastHandler";
 
 type UseMemoOperationsProps = {
-  /** ゲームID（MemoCardコンポーネント用、オプション） */
   gameId?: string;
-  /** メモ削除後のコールバック（メモ一覧更新用、オプション） */
   onDeleteSuccess?: (deletedMemoId: string) => void;
-  /** ドロップダウンを閉じる関数 */
   closeDropdown: () => void;
-  /** 削除確認モーダルを開く関数 */
   openDeleteModal: (memoId: string) => void;
-  /** 同期後のコールバック（メモ一覧更新用、オプション） */
   onSyncSuccess?: () => void;
 };
 
@@ -33,15 +28,10 @@ type UseMemoOperationsReturn = {
 };
 
 /**
- * メモ操作フック
- *
  * 以前はハンドラを useCallback でメモ化していたが、以下の理由により生の関数に戻した:
  *   - MemoCardBase の memo 比較関数がハンドラを比較対象外にしているためメモ化の意味がない
  *   - 呼び出し元の MemoList/MemoCard が結局インライン矢印関数を渡すので参照は毎回変わる
  * 依存配列の管理コストに対してリターンがないため撤去している。
- *
- * @param props - フックの設定オプション
- * @returns メモ操作用の関数群
  */
 export function useMemoOperations({
   gameId,
@@ -53,7 +43,6 @@ export function useMemoOperations({
   const navigate = useNavigate();
   const { showToast } = useToastHandler();
 
-  // メモ削除処理。
   const handleDeleteMemo = async (memoId: string): Promise<void> => {
     try {
       const result = await window.api.memo.deleteMemo(memoId);
@@ -73,39 +62,35 @@ export function useMemoOperations({
     }
   };
 
-  // 編集ページへの遷移
   const handleEditMemo = (memoId: string, event: React.MouseEvent): void => {
     event.stopPropagation();
     closeDropdown();
 
     if (gameId) {
-      // MemoCardから来た場合はクエリパラメータを付与
+      // ゲーム詳細起点なら from=game を付け、戻り先を失わないようにする。
       navigate(`/memo/edit/${memoId}?from=game&gameId=${gameId}`);
     } else {
-      // メモ一覧から来た場合は通常遷移
+      // 一覧起点では from を付けない（詳細文脈を捏造しない）。
       navigate(`/memo/edit/${memoId}`);
     }
   };
 
-  // メモ詳細ページへの遷移
   const handleViewMemo = (memoId: string): void => {
     if (gameId) {
-      // MemoCardから来た場合はクエリパラメータを付与
+      // ゲーム詳細起点なら from=game を付け、戻り先を失わないようにする。
       navigate(`/memo/view/${memoId}?from=game&gameId=${gameId}`);
     } else {
-      // メモ一覧から来た場合は通常遷移
+      // 一覧起点では from を付けない（詳細文脈を捏造しない）。
       navigate(`/memo/view/${memoId}`);
     }
   };
 
-  // 削除確認処理
   const handleDeleteConfirm = (memoId: string, event: React.MouseEvent): void => {
     event.stopPropagation();
     closeDropdown();
     openDeleteModal(memoId);
   };
 
-  // 同期処理
   const handleSyncFromCloud = async (event: React.MouseEvent): Promise<void> => {
     event.stopPropagation();
     closeDropdown();
@@ -117,7 +102,7 @@ export function useMemoOperations({
           component: "useMemoOperations",
           function: "unknown",
           data: result.data,
-        }); // デバッグ用ログ
+        });
         const { uploaded, created, localOverwritten, cloudOverwritten, skipped } = result.data;
         showToast(
           `同期完了: 新規アップロード${uploaded ?? 0}件、作成${created}件、ローカル更新${localOverwritten}件、クラウド更新${cloudOverwritten}件、スキップ${skipped}件`,

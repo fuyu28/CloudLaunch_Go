@@ -1,3 +1,4 @@
+// ホットキー文字列のパース・検証とキー名解決を提供する。
 package services
 
 import (

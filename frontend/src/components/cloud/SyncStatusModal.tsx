@@ -2,9 +2,8 @@
  * @fileoverview 同期状態の確認モーダル
  *
  * 「同期確認」押下時に、いきなりアップロード/ダウンロードするのではなく、
- * 現在の同期状態（最新 / アップロード可 / ダウンロード可 / 未同期）と
- * ローカル・クラウドの情報を表示し、ユーザーが操作を選べるようにする。
- * 競合（conflict）は専用の SyncConflictModal で扱うため、ここでは扱わない。
+ * 現在の同期状態（最新 / アップロード可 / ダウンロード可 / 未同期）とローカル・リモートの
+ * メタ情報を表示し、必要な操作だけをユーザーに選ばせる。
  */
 
 import { FaCloud, FaCloudUploadAlt, FaCloudDownloadAlt, FaCheckCircle } from "react-icons/fa";
@@ -17,13 +16,10 @@ type SyncStatusModalProps = {
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
-  /** 競合以外の同期状態 */
   status: SyncStatus;
   localMeta?: SyncMetaSnapshot;
   remoteMeta?: SyncMetaSnapshot;
-  /** セーブ保存先が設定されているか（未同期時のアップロード可否判定に使う） */
   hasSaveFolder: boolean;
-  /** アップロード/ダウンロード実行中か */
   isProcessing: boolean;
   onUpload: () => void;
   onDownload: () => void;
@@ -72,7 +68,7 @@ export default function SyncStatusModal({
     },
   };
 
-  // 競合はこのモーダルでは扱わない（呼び出し側で SyncConflictModal に振り分け済み）
+  // 競合は SyncConflictModal 側。ここに載せると上書き操作と混ざる。
   const view = status === "conflict" ? views.in_sync : views[status];
 
   const showUpload = status === "push_needed" || (status === "never_synced" && hasSaveFolder);
@@ -107,7 +103,6 @@ export default function SyncStatusModal({
       }
     >
       <div className="space-y-4">
-        {/* 状態サマリ */}
         <div className="flex items-start gap-3 rounded-lg border border-base-300 bg-base-200 p-3">
           <span className="text-2xl">{view.icon}</span>
           <div>
@@ -116,7 +111,6 @@ export default function SyncStatusModal({
           </div>
         </div>
 
-        {/* ローカル / クラウドの情報 */}
         <SyncMetaCardPair localMeta={localMeta} remoteMeta={remoteMeta} />
 
         <p className="text-xs text-base-content/60">対象: {gameTitle}</p>

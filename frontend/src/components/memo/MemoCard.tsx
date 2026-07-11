@@ -27,7 +27,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // 共通フックを使用
   const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu();
   const {
     handleDeleteMemo,
@@ -38,17 +37,16 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   } = useMemoOperations({
     gameId,
     onDeleteSuccess: () => {
-      fetchMemos(); // メモ削除後に一覧を再取得
+      fetchMemos();
       setDeleteConfirmId(null);
     },
     closeDropdown,
     openDeleteModal: setDeleteConfirmId,
     onSyncSuccess: () => {
-      fetchMemos(); // 同期後にメモ一覧を再取得
+      fetchMemos();
     },
   });
 
-  // メモ一覧を取得
   const fetchMemos = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -67,7 +65,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
     fetchMemos();
   }, [fetchMemos]);
 
-  // 表示するメモリストと統計をメモ化
   const displayData = useMemo(() => {
     const displayMemos = memos.slice(0, 3);
     const remainingCount = Math.max(0, memos.length - 3);
@@ -80,7 +77,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
     };
   }, [memos]);
 
-  // メモ統計情報をメモ化
   const memoStats = useMemo(() => {
     if (memos.length === 0) return null;
 
@@ -96,7 +92,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   return (
     <div className="card bg-base-100 border border-base-300/60 shadow-md h-full">
       <div className="card-body">
-        {/* ヘッダー */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="card-title text-lg">
             <FaBookOpen className="text-primary" />
@@ -116,7 +111,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
           </div>
         ) : displayData.totalCount > 0 ? (
           <div className="space-y-3 min-h-0 flex-1">
-            {/* 最新のメモを最大3件表示 */}
             <div className="space-y-2">
               {displayData.displayMemos.map((memo) => (
                 <MemoCardBase
@@ -135,7 +129,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
               ))}
             </div>
 
-            {/* もっとあることを示すインジケーター */}
             {displayData.hasMore && (
               <div className="bg-base-200 rounded-lg p-2 text-center">
                 <span className="text-xs text-base-content/70 font-medium">
@@ -154,7 +147,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
           </div>
         )}
 
-        {/* アクションボタン */}
         <div className="card-actions justify-center mt-4 space-y-2 flex-shrink-0">
           {displayData.totalCount > 0 && (
             <Link
@@ -175,7 +167,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
         </div>
       </div>
 
-      {/* 削除確認モーダル */}
       <ConfirmModal
         id="delete-memo-modal"
         isOpen={!!deleteConfirmId}

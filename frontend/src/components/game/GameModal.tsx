@@ -2,16 +2,6 @@
  * @fileoverview ゲーム登録・編集モーダルコンポーネント
  *
  * このコンポーネントは、新規ゲーム登録と既存ゲーム編集の両方に対応したモーダルフォームです。
- * 主な機能：
- * - ゲーム基本情報の入力（タイトル、発行元、実行ファイルパス等）
- * - ファイル・フォルダ選択のためのネイティブダイアログ連携
- * - リアルタイムバリデーション（必須フィールドチェック）
- * - エラーハンドリングとユーザー向けトースト通知
- *
- * 使用技術：
- * - React Hooks（useState, useEffect, useCallback, useMemo）
- * - DaisyUI モーダルコンポーネント
- * - react-hot-toast エラー通知
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -78,7 +68,6 @@ export default function GameFormModal({
     }
   }, [initialData, isOpen, mode]);
 
-  // モーダルが開かれるたびにtouchedFieldsをリセット
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       validation.resetTouchedFields();
@@ -89,15 +78,12 @@ export default function GameFormModal({
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
-    // 送信前にすべてのフィールドをタッチ済みにしてエラーを表示
     validation.markAllFieldsAsTouched();
 
     setSubmitting(true);
     try {
-      // ファイル存在チェックを含む非同期バリデーションを実行
       const validationResult = await validation.validateAllFieldsWithFileCheck();
       if (!validationResult.isValid) {
-        // バリデーションエラーがある場合は送信を停止
         return;
       }
 

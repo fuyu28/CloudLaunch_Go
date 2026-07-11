@@ -8,23 +8,13 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 type UseMemoNavigationReturn = {
-  /** 戻るボタンの処理 */
   handleBack: () => void;
-  /** 編集保存成功時の処理 */
   handleSaveSuccess: (effectiveGameId: string, mode: "create" | "edit", memoId?: string) => void;
-  /** クエリパラメータの取得 */
   searchParams: URLSearchParams;
-  /** ゲーム詳細ページから来たかどうか */
   isFromGame: boolean;
-  /** ゲームID（クエリパラメータから） */
   gameIdParam: string | null;
 };
 
-/**
- * メモナビゲーションフック
- *
- * @returns ナビゲーション処理用の関数群と状態
- */
 export function useMemoNavigation(): UseMemoNavigationReturn {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -33,18 +23,15 @@ export function useMemoNavigation(): UseMemoNavigationReturn {
   const gameIdParam = searchParams.get("gameId");
   const isFromGame = fromParam === "game" && gameIdParam !== null;
 
-  // 戻るボタン処理
   const handleBack = (): void => {
     if (isFromGame && gameIdParam) {
-      // MemoCardから来た場合は、ゲーム詳細ページに戻る
+      // history.back だとメモ一覧等に飛ばず、ゲーム詳細の文脈を失うことがあるため明示遷移する。
       navigate(`/game/${gameIdParam}`);
     } else {
-      // その他の場合は、ブラウザの戻る
       navigate(-1);
     }
   };
 
-  // 保存成功時の処理
   const handleSaveSuccess = (
     effectiveGameId: string,
     mode: "create" | "edit",
@@ -52,21 +39,16 @@ export function useMemoNavigation(): UseMemoNavigationReturn {
   ): void => {
     if (mode === "create") {
       if (isFromGame && gameIdParam) {
-        // MemoCardから新規作成の場合は、ゲーム詳細ページに戻る
+        // ゲーム詳細から新規作成したときは一覧ではなく元の詳細へ戻す。
         navigate(`/game/${gameIdParam}`);
       } else {
-        // その他の場合はメモ一覧に遷移
         navigate(`/memo/list/${effectiveGameId}`);
       }
+    } else if (isFromGame && gameIdParam && memoId) {
+      // from=game を付けないと閲覧ページの「戻る」がゲーム文脈を捨てる。
+      navigate(`/memo/view/${memoId}?from=game&gameId=${gameIdParam}`);
     } else {
-      // 編集の場合
-      if (isFromGame && gameIdParam && memoId) {
-        // MemoCardから編集の場合は、メモ閲覧ページに戻る
-        navigate(`/memo/view/${memoId}?from=game&gameId=${gameIdParam}`);
-      } else {
-        // その他の場合はブラウザの戻る
-        navigate(-1);
-      }
+      navigate(-1);
     }
   };
 

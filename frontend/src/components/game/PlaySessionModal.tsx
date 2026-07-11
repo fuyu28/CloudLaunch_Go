@@ -2,22 +2,6 @@
  * @fileoverview プレイセッション追加モーダルコンポーネント
  *
  * このコンポーネントは、ゲームのプレイセッションを追加するためのモーダルを提供します。
- *
- * 主な機能：
- * - 手動追加モード: 時間、分、秒を入力してプレイセッションを追加
- * - タイマーモード: リアルタイムでプレイ時間を計測してプレイセッションを追加
- * - タイマー操作: スタート、ストップ、再開、終了の機能
- * - 入力値の検証とエラーハンドリング
- *
- * 使用例：
- * ```tsx
- * <PlaySessionModal
- *   isOpen={isModalOpen}
- *   onClose={handleCloseModal}
- *   onSubmit={handleAddSession}
- *   gameTitle="ゲーム名"
- * />
- * ```
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -25,39 +9,17 @@ import { FaClock, FaEdit, FaPlay, FaStop, FaCheck, FaTimes } from "react-icons/f
 
 import { useTimeFormat, timeUtils } from "@renderer/hooks/useTimeFormat";
 
-/**
- * プレイセッション追加モーダルのprops
- */
 export type PlaySessionModalProps = {
-  /** モーダルが開いているかどうか */
   isOpen: boolean;
-  /** モーダルを閉じる時のコールバック */
   onClose: () => void;
-  /** プレイセッションを追加する時のコールバック */
   onSubmit: (duration: number, sessionName?: string) => Promise<void>;
-  /** ゲームのタイトル */
   gameTitle: string;
 };
 
-/**
- * モーダルのモード（手動追加 or タイマー）
- */
 type ModalMode = "manual" | "timer";
 
-/**
- * タイマーの状態
- */
 type TimerState = "stopped" | "running" | "paused";
 
-/**
- * プレイセッション追加モーダルコンポーネント
- *
- * 手動追加とタイマー追加の2つのモードを提供し、
- * ユーザーがゲームのプレイセッションを記録できます。
- *
- * @param props コンポーネントのprops
- * @returns プレイセッション追加モーダル要素
- */
 export function PlaySessionModal({
   isOpen,
   onClose,
@@ -77,7 +39,6 @@ export function PlaySessionModal({
   const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const { formatShort } = useTimeFormat();
 
-  // モーダルが開いたときの初期化
   useEffect(() => {
     if (isOpen) {
       setMode("manual");
@@ -124,11 +85,6 @@ export function PlaySessionModal({
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  /**
-   * プレイ時間（秒）のバリデーション。
-   * 手動・タイマーどちらのモードでも同じ上限（24時間 = 86400秒）を適用する。
-   * @returns バリデーション結果（false のときはエラーメッセージをセット済み）
-   */
   const validateDurationSeconds = (totalSeconds: number, mode: ModalMode): boolean => {
     if (totalSeconds <= 0) {
       setError(
@@ -139,17 +95,12 @@ export function PlaySessionModal({
       return false;
     }
     if (totalSeconds > 86400) {
-      // 24時間制限
       setError("プレイ時間は24時間以内で入力してください");
       return false;
     }
     return true;
   };
 
-  /**
-   * 手動追加フォームのバリデーション
-   * @returns バリデーション結果
-   */
   const validateManualInput = (): boolean => {
     const hours = parseInputValue(hoursInput);
     const minutes = parseInputValue(minutesInput);
@@ -158,31 +109,19 @@ export function PlaySessionModal({
     return validateDurationSeconds(totalSeconds, "manual");
   };
 
-  /**
-   * タイマー開始処理
-   */
   const handleStartTimer = (): void => {
     setTimerState("running");
     setError("");
   };
 
-  /**
-   * タイマー停止処理
-   */
   const handleStopTimer = (): void => {
     setTimerState("paused");
   };
 
-  /**
-   * タイマー再開処理
-   */
   const handleResumeTimer = (): void => {
     setTimerState("running");
   };
 
-  /**
-   * プレイセッション追加処理
-   */
   const handleSubmitSession = async (): Promise<void> => {
     setIsSubmitting(true);
     setError("");
@@ -200,7 +139,7 @@ export function PlaySessionModal({
         const seconds = parseInputValue(secondsInput);
         duration = timeUtils.toSeconds(hours, minutes, seconds);
       } else {
-        // タイマーモードでも24時間上限の検証を行う（手動追加と同じ制限）
+        // タイマーも手動追加と同じ24時間上限にする（モードで制限が割れないように）。
         if (!validateDurationSeconds(timerSeconds, "timer")) {
           setIsSubmitting(false);
           return;
@@ -217,9 +156,6 @@ export function PlaySessionModal({
     }
   };
 
-  /**
-   * モーダルを閉じる処理
-   */
   const handleClose = (): void => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -232,7 +168,6 @@ export function PlaySessionModal({
       <div className="modal-box max-w-lg">
         <h3 className="font-bold text-lg mb-4">プレイセッション追加 - {gameTitle}</h3>
 
-        {/* モード選択タブ */}
         <div className="tabs tabs-boxed mb-6">
           <button
             className={`tab tab-lg flex-1 ${mode === "manual" ? "tab-active" : ""}`}
@@ -250,7 +185,6 @@ export function PlaySessionModal({
           </button>
         </div>
 
-        {/* セッション名入力欄（共通） */}
         <div className="form-control mb-4">
           <label className="label">
             <span className="label-text">セッション名（任意）</span>
@@ -269,7 +203,6 @@ export function PlaySessionModal({
           </label>
         </div>
 
-        {/* 手動追加モード */}
         {mode === "manual" && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
@@ -350,7 +283,6 @@ export function PlaySessionModal({
           </div>
         )}
 
-        {/* タイマーモード */}
         {mode === "timer" && (
           <div className="space-y-6">
             <div className="text-center">
@@ -394,7 +326,6 @@ export function PlaySessionModal({
           </div>
         )}
 
-        {/* エラーメッセージ */}
         {error && (
           <div className="alert alert-error mt-4">
             <FaTimes className="mr-2" />
@@ -402,7 +333,6 @@ export function PlaySessionModal({
           </div>
         )}
 
-        {/* アクションボタン */}
         <div className="modal-action">
           <button className="btn btn-ghost" onClick={handleClose} disabled={isSubmitting}>
             キャンセル

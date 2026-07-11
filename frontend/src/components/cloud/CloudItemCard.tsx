@@ -9,9 +9,6 @@ import { FiFolder, FiFile, FiTrash2 } from "react-icons/fi";
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 import { formatFileSize, formatDate, computeCloudNodeMetrics } from "@renderer/utils/cloudUtils";
 
-/**
- * クラウドデータアイテムカードのプロパティ
- */
 type CloudItemCardProps = {
   item: CloudDataItem;
   onDelete: (item: CloudDataItem) => void;
@@ -19,9 +16,6 @@ type CloudItemCardProps = {
   onNavigate?: (directoryName: string) => void;
 };
 
-/**
- * クラウドデータアイテムカードコンポーネント
- */
 export function CloudItemCard({
   item,
   onDelete,
@@ -87,9 +81,6 @@ export function CloudItemCard({
   );
 }
 
-/**
- * ディレクトリノードカードのプロパティ
- */
 type DirectoryNodeCardProps = {
   node: CloudDirectoryNode;
   onNavigate?: (directoryName: string) => void;
@@ -102,9 +93,6 @@ type DirectoryNodeCardProps = {
   onViewDetails?: (node: CloudDirectoryNode) => void;
 };
 
-/**
- * ディレクトリノードカードコンポーネント
- */
 export function DirectoryNodeCard({
   node,
   onNavigate,

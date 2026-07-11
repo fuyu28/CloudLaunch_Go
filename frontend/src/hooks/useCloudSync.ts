@@ -3,7 +3,6 @@
  *
  * window.api.cloudSync の各メソッドを useCallback でラップし、
  * 正規化された CloudSyncOp 型を返す。
- * トースト表示・オフラインモードガードは呼び出し元が担う。
  */
 
 import { useCallback } from "react";

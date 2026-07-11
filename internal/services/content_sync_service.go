@@ -1,3 +1,4 @@
+// コンテンツアドレッシングによるゲームデータの Push/Pull/競合解決を提供する。
 package services
 
 import (
@@ -459,12 +460,11 @@ func (s *ContentSyncService) pushBuildLocalMeta(ctx context.Context, gameID stri
 // pushUploadBlobs はセーブブロブ・セーブスナップショット・画像・game.json・sessions.json・
 // コミットブロブを HEAD 書き換え前にアップロードする。
 func (s *ContentSyncService) pushUploadBlobs(ctx context.Context, bstore contentBlobStore, gameID string, onProgress ProgressFunc, meta metaBuildResult, saveSnapJSON []byte, savesHash domain.BlobHash, saveBlobs map[string][]byte, imageHash domain.BlobHash, imageData []byte, metaHash domain.BlobHash) error {
-	// セーブファイルをアップロード（既存ブロブ一括確認 + 差分並列アップロード）
+	// HEAD より先にブロブを置く。途中失敗しても古い HEAD のままなので、中途半端なコミットを公開しない。
 	if err := bstore.putBlobs(ctx, gameID, saveBlobs, s.config.S3UploadConcurrency, onProgress); err != nil {
 		return err
 	}
 
-	// セーブスナップショット・画像・game.json・sessions.json をアップロード
 	if err := bstore.putBlob(ctx, gameID, storage.BlobKindTree, savesHash, saveSnapJSON); err != nil {
 		return err
 	}
@@ -505,7 +505,7 @@ func (s *ContentSyncService) pushFinalizeHead(ctx context.Context, bstore conten
 	if err := s.repository.SetLocalSyncHead(ctx, gameID, contentFingerprint(meta.Snapshot)); err != nil {
 		return err
 	}
-	// 次回 Pull の base tree として、今 push したローカルのスナップショットを保存する。
+	// Push 直後のツリーを base に残さないと、次回 Pull が既存ローカルを untracked と誤判定する。
 	return s.repository.SetLocalSaveTree(ctx, gameID, string(saveSnapJSON))
 }
 
@@ -579,7 +579,7 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
-	// ローカルゲームのマシン固有フィールドを保持
+	// exe/save/image はマシン固有。クラウド game.json で上書きしないよう先に取る。
 	localGame, err := s.repository.GetGameByID(ctx, gameID)
 	if err != nil {
 		return domain.PullResult{}, err
@@ -605,13 +605,11 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{Applied: false, UntrackedDeletes: untrackedDeletes}, nil
 	}
 
-	// 画像をダウンロード（ローカルと異なる場合のみ）
 	imagePath, err = s.pullDownloadImage(ctx, bstore, gameID, cloudG, imagePath)
 	if err != nil {
 		return domain.PullResult{}, err
 	}
 
-	// セーブファイルをダウンロード（ローカルハッシュ比較で差分のみ並列ダウンロード）
 	if err := s.pullDownloadSaves(ctx, bstore, gameID, onProgress, saveFolderPath, saveSnap, trackedDeletes, untrackedDeletes); err != nil {
 		return domain.PullResult{}, err
 	}
@@ -710,7 +708,7 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 			return err
 		}
 
-		// tracked は常に削除、untracked はここに来た時点で deleteUntracked=true のときのみ含む。
+		// untracked は呼び出し側が確認済み（deleteUntracked=true）のときだけここに含まれる。
 		toDelete := append(append([]string{}, trackedDeletes...), untrackedDeletes...)
 		if err := applyDeletions(saveDir, toDelete); err != nil {
 			return err
@@ -730,8 +728,8 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 // pullApplyToDB はリモートのゲーム情報・セッション・同期基準・base tree を単一トランザクションで反映する。
 // localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
 func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
-	// ゲーム情報・セッション・localSyncHead・localSaveTree を単一トランザクションで反映する。
-	// 部分失敗による DB 不整合と、同期対象外 Route 参照による FK 違反を防ぐ。
+	// 単一トランザクションにまとめる理由: 部分失敗による DB 不整合と、
+	// 同期対象外 Route 参照による FK 違反を防ぐため。
 	updatedGame := domain.Game{
 		ID:             cloudG.ID,
 		Title:          cloudG.Title,
@@ -766,7 +764,7 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 			UpdatedAt:   cs.UpdatedAt,
 		})
 	}
-	// 次回 Pull の base tree として、今適用した（リモートの）スナップショットを保存する。
+	// ApplyPullResult に saveSnap を渡して base tree も更新する。残さないと次回 Pull が untracked 誤判定する。
 	if err := s.repository.ApplyPullResult(ctx, updatedGame, sessions, contentFingerprint(meta), string(saveSnapBytes)); err != nil {
 		return domain.PullResult{}, err
 	}
@@ -917,7 +915,7 @@ func (s *ContentSyncService) loadCloudCommit(ctx context.Context, bstore content
 		return nil, "", nil
 	}
 
-	// Title: game.json から取得。失敗時は gameID にフォールバックする。
+	// Title 欠落で一覧が空欄にならないよう、取得失敗時は gameID を表示名に使う。
 	title := gameID
 	if meta.GameJSON != "" {
 		if gameJSONBytes, gerr := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.GameJSON); gerr == nil {
@@ -943,7 +941,6 @@ func (s *ContentSyncService) buildCloudGameView(ctx context.Context, bstore *s3B
 		return nil, nil
 	}
 
-	// saves tree から relPath→hash を取得する。
 	var saveSnap domain.SaveSnapshot
 	if meta.Saves != "" {
 		saveSnapBytes, terr := bstore.getBlob(ctx, gameID, storage.BlobKindTree, meta.Saves)
@@ -956,7 +953,7 @@ func (s *ContentSyncService) buildCloudGameView(ctx context.Context, bstore *s3B
 		}
 	}
 
-	// サイズ解決: objects プレフィックスを1回列挙して hash→size マップを作る。
+	// ファイルごとの HeadObject を避け、objects を1回列挙して hash→size を作る。
 	sizeMap := make(map[string]int64)
 	if len(saveSnap.Files) > 0 {
 		prefix := fmt.Sprintf("games/%s/%s/", gameID, storage.BlobKindObject)
@@ -1064,7 +1061,7 @@ func (s *ContentSyncService) ListCloudGameSummaries(ctx context.Context) ([]Clou
 		return nil, err
 	}
 
-	// 各ゲームは小さな GET を3回行うのみ。並列度を絞り全タイトルをまとめて取得する。
+	// ゲーム数が多いと並列しすぎて接続を食い潰すため、一覧用は控えめな並列度にする。
 	const maxConcurrency = 8
 	summaries := fanOutGames(gameIDs, maxConcurrency, func(id string) *CloudGameSummary {
 		summary, verr := s.buildCloudGameSummary(ctx, bstore, id)

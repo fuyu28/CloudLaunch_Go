@@ -1,9 +1,11 @@
+/**
+ * @fileoverview ゲーム Zod スキーマ
+ *
+ * ゲーム登録・編集フォームのバリデーション定義。
+ */
+
 import { z } from "zod";
 
-/**
- * ゲーム登録・編集用のバリデーションスキーマ
- * フォーム入力値の検証に使用
- */
 export const gameSchema = z.object({
   title: z.string().min(1, "タイトルは必須です").max(100, "100文字以内で入力してください"),
   publisher: z.string().min(1, "ブランド名は必須です").max(50, "50文字以内で入力してください"),
@@ -12,14 +14,9 @@ export const gameSchema = z.object({
   saveFolderPath: z.string().optional().or(z.literal("")),
 });
 
-/**
- * ゲームフォーム入力データの追加バリデーション
- * ファイルパスの存在チェックや拡張子チェックなど
- */
 export const gameFormSchema = gameSchema
   .refine(
     (data) => {
-      // 実行ファイルの拡張子チェック
       if (
         data.exePath &&
         ![".exe", ".app"].some((ext) => data.exePath.toLowerCase().endsWith(ext))
@@ -35,18 +32,14 @@ export const gameFormSchema = gameSchema
   )
   .refine(
     (data) => {
-      // 画像ファイルの拡張子チェック（入力がある場合のみ）
       if (data.imagePath && data.imagePath.trim()) {
-        // URLの判定
         try {
           new URL(data.imagePath);
-          // URLの場合は拡張子チェック
           const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
           const url = new URL(data.imagePath);
           const pathname = url.pathname.toLowerCase();
           return imageExtensions.some((ext) => pathname.endsWith(ext));
         } catch {
-          // ローカルファイルの場合は拡張子チェック
           const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
           if (!imageExtensions.some((ext) => data.imagePath!.toLowerCase().endsWith(ext))) {
             return false;
@@ -61,10 +54,6 @@ export const gameFormSchema = gameSchema
     },
   );
 
-/**
- * ゲームプロセス監視状態のスキーマ
- * ゲーム起動中の状態管理に使用
- */
 export const monitoringGameStatusSchema = z.object({
   gameId: z.uuid("有効なUUIDを指定してください"),
   gameTitle: z.string().min(1, "ゲームタイトルは必須です"),
@@ -76,7 +65,4 @@ export const monitoringGameStatusSchema = z.object({
   needsResume: z.boolean(),
 });
 
-/**
- * ゲーム監視状態の型定義
- */
 export type MonitoringGameStatus = z.infer<typeof monitoringGameStatusSchema>;

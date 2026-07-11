@@ -1,5 +1,7 @@
 /**
- * @fileoverview クラウド同期ブリッジ。
+ * @fileoverview セーブ同期（status/push/pull/conflict）ブリッジ。
+ *
+ * savesDiffer の互換フォールバックと EventsOn の解除関数返却が非自明な箇所。
  */
 
 import {
@@ -50,8 +52,8 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
         success: true,
         data: {
           status: raw.status,
-          // 旧クライアントとの互換や never_synced 早期 return では savesDiffer が
-          // 送られてこないため、未定義時は false（=差分なし扱い）にフォールバックする。
+          // 旧クライアント / never_synced 早期 return では savesDiffer が欠ける。
+          // 未定義を「差分あり」扱いすると誤ったアップロード確認が出るため false に倒す。
           savesDiffer: raw.savesDiffer ?? false,
           localMeta: normalizeMeta(raw.localMeta),
           remoteMeta: normalizeMeta(raw.remoteMeta),
@@ -73,8 +75,8 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
     },
     deleteFromCloud: async (gameId) => toApiResultVoid(await DeleteGameFromCloud(gameId)),
     onProgress: (callback: (event: SyncProgressEvent) => void) => {
-      // Wails v2 の EventsOn は登録解除用の関数を返すので、そのまま返して
-      // このリスナーだけを解除する（EventsOff は同名の全リスナーを消してしまう）
+      // EventsOff("sync:progress") は同名リスナーを全削除する。
+      // EventsOn の戻り値で当該登録だけ解除する。
       return EventsOn("sync:progress", callback);
     },
   };

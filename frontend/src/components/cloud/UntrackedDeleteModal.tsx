@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 同期管理外ファイルの削除確認モーダル
+ *
+ * Pull 時に見つかった untracked ファイル削除の可否をユーザーに確認する。
+ */
+
 import { FaTrash, FaExclamationTriangle } from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";
@@ -6,7 +12,6 @@ type UntrackedDeleteModalProps = {
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
-  /** 削除候補となる、同期が管理していないローカル固有ファイルの相対パス一覧 */
   files: string[];
   onConfirm: () => void;
   isProcessing: boolean;

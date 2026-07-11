@@ -1,3 +1,9 @@
+/**
+ * @fileoverview フロントエンドエントリポイント
+ *
+ * Wails ブリッジ初期化、ルーティング、グローバルエラーハンドラを起動する。
+ */
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
@@ -7,7 +13,7 @@ import "./assets/tailwind.css";
 import { createWailsBridge } from "./wailsBridge";
 import { installGlobalErrorHandlers } from "./utils/globalErrorHandlers";
 
-// テーマを初期化（初期描画のちらつき防止）
+// 初期描画のテーマちらつきを防ぐため、描画前に data-theme を入れる。
 const initializeTheme = (): void => {
   // jotai の atomWithStorage は JSON 文字列（例: "light"）で保存するため、
   // クォートを除去して data-theme に渡す。未設定時は既定テーマを使う。
@@ -23,12 +29,11 @@ const initializeTheme = (): void => {
   document.documentElement.setAttribute("data-theme", savedTheme);
 };
 
-// アプリケーション起動時にテーマを復元
 initializeTheme();
 
 window.api = createWailsBridge();
 
-// window.api 初期化後に未捕捉エラーのグローバル捕捉を有効化する
+// bridge 未初期化のうちにハンドラを付けると報告先が無い。
 installGlobalErrorHandlers();
 
 createRoot(document.getElementById("root")!).render(

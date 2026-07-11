@@ -2,10 +2,6 @@
  * @fileoverview 共通エラーハンドリングユーティリティ
  *
  * このファイルは、アプリケーション全体で使用されるエラーハンドリング機能を提供します。
- * 主な機能：
- * - ApiResult型の統一的なエラーハンドリング
- * - トースト通知の表示
- * - エラーログの記録
  */
 
 import toast from "react-hot-toast";
@@ -13,12 +9,7 @@ import toast from "react-hot-toast";
 import { logger } from "./logger";
 import type { ApiResult } from "src/types/result";
 
-/**
- * ApiResultのエラーハンドリングとトースト表示
- * @param result - API結果
- * @param fallbackMessage - result.messageが空の場合のフォールバックメッセージ
- * @param toastId - 既存のトーストIDを指定する場合（ローディング表示の更新など）
- */
+/** ApiResult 失敗時にトースト表示。toastId 指定時は既存トーストを差し替える。 */
 export function handleApiError<T = void>(
   result: ApiResult<T>,
   fallbackMessage: string = "エラーが発生しました",
@@ -29,7 +20,6 @@ export function handleApiError<T = void>(
   if (result.success) {
     message = fallbackMessage;
   } else {
-    // result.success === false の場合、result.message が存在する
     message = (result as { success: false; message: string }).message || fallbackMessage;
   }
 
@@ -40,14 +30,8 @@ export function handleApiError<T = void>(
   }
 }
 
-/**
- * 予期しないエラーのハンドリング
- * @param error - キャッチされたエラー
- * @param context - エラーが発生したコンテキスト
- * @param toastId - 既存のトーストIDを指定する場合
- */
+/** 予期しない例外をログ＋トースト。toastId 指定時は既存トーストを差し替える。 */
 export function handleUnexpectedError(error: unknown, context: string, toastId?: string): void {
-  // デバッグ時のみコンソールにログ出力
   const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
   if (isDev) {
     logger.error(`予期しないエラー (${context}):`, {
@@ -66,11 +50,6 @@ export function handleUnexpectedError(error: unknown, context: string, toastId?:
   }
 }
 
-/**
- * 成功時のトースト表示
- * @param message - 成功メッセージ
- * @param toastId - 既存のトーストIDを指定する場合
- */
 export function showSuccessToast(message: string, toastId?: string): void {
   if (toastId) {
     toast.success(message, { id: toastId });
@@ -79,14 +58,6 @@ export function showSuccessToast(message: string, toastId?: string): void {
   }
 }
 
-/**
- * ローディング付きの非同期操作ヘルパー
- * @param asyncOperation - 実行する非同期操作
- * @param loadingMessage - ローディング中のメッセージ
- * @param successMessage - 成功時のメッセージ
- * @param errorContext - エラーコンテキスト
- * @returns 操作結果
- */
 export async function withLoadingToast<T>(
   asyncOperation: () => Promise<ApiResult<T>>,
   loadingMessage: string,

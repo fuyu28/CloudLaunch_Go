@@ -1,7 +1,7 @@
 /**
- * @fileoverview 設定タブ共通のセクション見出し。
+ * @fileoverview 設定タブのセクション見出し
  *
- * 各タブ冒頭で繰り返されている「border-l-4 + 色付き見出し + 説明」を集約する。
+ * 設定画面内の小見出し表示。
  */
 
 type AccentColor = "primary" | "secondary" | "accent" | "info" | "success" | "warning" | "error";

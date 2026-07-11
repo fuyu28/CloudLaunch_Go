@@ -1,4 +1,3 @@
-// SQL ファイルを使ったシンプルなマイグレーションを実行する。
 package db
 
 import (
@@ -131,7 +130,7 @@ func splitSQLStatements(sqlText string) []string {
 			continue
 		}
 
-		// Trigger内はEND;で終了させる
+		// SQLite トリガ本文にも `;` が含まれるため、END; までを1文として切り出す。
 		if strings.HasSuffix(strings.TrimSpace(strings.ToUpper(current)), "END;") {
 			statements = append(statements, current)
 			buffer.Reset()
@@ -139,7 +138,7 @@ func splitSQLStatements(sqlText string) []string {
 			continue
 		}
 
-		// 末尾が;でもtrigger内なので継続
+		// 末尾が ; でも trigger 内なら文を切らない（BEGIN...END; を壊す）。
 	}
 
 	rest := strings.TrimSpace(buffer.String())

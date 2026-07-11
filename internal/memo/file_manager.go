@@ -111,6 +111,10 @@ func GenerateCloudMemoFileContent(title string, content string, gameTitle string
 }
 
 // ExtractMemoContent はメモファイルから本文を抽出する。
+// GenerateLocalMemoFileContent / GenerateCloudMemoFileContent が付与した見出しと
+// メタコメントを取り除くため、本文が始まるまで（先頭の "#" 見出し行・空行）だけを
+// 読み飛ばす。HTML コメント行（<!-- / -->）は位置によらず常に除去するが、
+// 本文開始後の空行や "#" で始まる行はそのまま保持する。
 func ExtractMemoContent(fileContent string) string {
 	lines := strings.Split(fileContent, "\n")
 	contentLines := make([]string, 0, len(lines))

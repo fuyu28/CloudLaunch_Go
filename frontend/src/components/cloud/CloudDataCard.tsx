@@ -34,34 +34,18 @@ type CloudFileDetails = {
 };
 
 type CloudDataCardProps = {
-  /** ゲームID */
   gameId: string;
-  /** ゲームタイトル */
   gameTitle: string;
-  /** セーブフォルダパスが設定されているか */
   hasSaveFolder: boolean;
-  /** 認証情報が有効か */
   isValidCreds: boolean;
-  /** アップロード処理中か */
   isUploading: boolean;
-  /** ダウンロード処理中か */
   isDownloading: boolean;
-  /** アップロード処理 */
   onUpload: () => Promise<void>;
-  /** ダウンロード処理 */
   onDownload: () => Promise<void>;
-  /** 同期確認処理（省略可） */
   onSync?: () => Promise<void>;
-  /** 同期確認中か */
   isSyncing?: boolean;
 };
 
-/**
- * クラウドデータ管理カードコンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns クラウドデータカードコンポーネント
- */
 function CloudDataCard({
   gameId,
   hasSaveFolder,
@@ -81,7 +65,6 @@ function CloudDataCard({
   const [isFileDetailsLoading, setIsFileDetailsLoading] = useState(false);
   const [lastFetchedGameId, setLastFetchedGameId] = useState<string | undefined>(undefined);
 
-  // ファイル詳細情報を取得
   const fetchFileDetails = useCallback(
     async (forceRefresh = false) => {
       if (!isValidCreds || !gameId || isOfflineMode) return;
@@ -102,7 +85,6 @@ function CloudDataCard({
           setFileDetails(result.data);
           setLastFetchedGameId(gameId);
 
-          // ファイル詳細情報から基本情報も設定
           if (result.data.exists) {
             const latestFile = result.data.files.sort(
               (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime(),
@@ -139,7 +121,6 @@ function CloudDataCard({
     [gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
   );
 
-  // gameIdが変わった場合に状態をリセット
   useEffect(() => {
     if (lastFetchedGameId !== gameId) {
       setIsLoading(true);
@@ -149,13 +130,12 @@ function CloudDataCard({
   }, [gameId, lastFetchedGameId]);
 
   useEffect(() => {
-    // gameIdまたはisValidCredsが変わった場合のみ実行（オフライン時は除く）
+    // 認証や対象ゲームが変わったときだけ再取得（オフラインでは走らせない）。
     if (gameId && isValidCreds && !isOfflineMode) {
       fetchFileDetails();
     }
   }, [gameId, isValidCreds, isOfflineMode, fetchFileDetails]);
 
-  // アップロード完了後にデータを再取得
   const handleUpload = useCallback(async () => {
     if (!checkNetworkFeature("セーブデータアップロード")) {
       return;
@@ -164,7 +144,6 @@ function CloudDataCard({
     await fetchFileDetails(true); // 強制リフレッシュ
   }, [onUpload, fetchFileDetails, checkNetworkFeature]);
 
-  // ダウンロード実行
   const handleDownload = useCallback(async () => {
     if (!checkNetworkFeature("セーブデータダウンロード")) {
       return;
@@ -187,7 +166,6 @@ function CloudDataCard({
             <FaCloud className="text-info" />
             クラウドデータ管理
           </h3>
-          {/* アクションボタン */}
           <div className="card-actions justify-end gap-2">
             {onSync && (
               <button
@@ -262,7 +240,6 @@ function CloudDataCard({
           </div>
         </div>
 
-        {/* クラウドデータ情報 */}
         <div className="mb-4 flex-1">
           {isOfflineMode ? (
             <div className="flex items-center justify-center p-4">
@@ -275,7 +252,6 @@ function CloudDataCard({
             </div>
           ) : cloudData.exists && fileDetails ? (
             <div className="space-y-4">
-              {/* 基本情報 */}
               <div className="bg-base-200 p-3 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <FaCloudDownloadAlt className="text-success" />
@@ -291,7 +267,6 @@ function CloudDataCard({
                 </div>
               </div>
 
-              {/* ファイル一覧 */}
               {fileDetails.files.length > 0 && (
                 <div className="bg-base-200 p-3 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
@@ -328,7 +303,6 @@ function CloudDataCard({
           )}
         </div>
 
-        {/* 警告メッセージ */}
         {isOfflineMode && (
           <div className="alert alert-warning mt-2">
             <span className="text-xs">オフラインモードではクラウド機能を使用できません</span>
@@ -353,5 +327,5 @@ function CloudDataCard({
   );
 }
 
-// propsが変わった場合のみ再レンダリング
+// 親の再レンダーでカード全体を動かさない（props 比較）。
 export default memo(CloudDataCard);

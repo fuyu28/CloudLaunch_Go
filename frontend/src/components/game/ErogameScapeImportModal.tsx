@@ -1,5 +1,7 @@
 /**
- * @fileoverview 批評空間からゲーム情報を取得して登録するモーダル
+ * @fileoverview 批評空間からゲーム情報を取得して登録するモーダル。
+ *
+ * 手動 ID 入力と検索モーダルの取得が交差するため、最新リクエスト以外は破棄する。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -1,5 +1,7 @@
 /**
- * @fileoverview エラーレポートブリッジ。
+ * @fileoverview エラー / ログ報告ブリッジ。
+ *
+ * UI を止めないよう fire-and-forget。失敗は console にだけ残す。
  */
 
 import { ReportError, ReportLog } from "../../wailsjs/go/app/App";

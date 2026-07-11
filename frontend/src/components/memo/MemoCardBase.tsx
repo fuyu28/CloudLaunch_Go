@@ -14,38 +14,20 @@ import MemoDropdownMenu from "./MemoDropdownMenu";
 import type { MemoType } from "src/types/memo";
 
 type MemoCardBaseProps = {
-  /** メモデータ */
   memo: MemoType;
-  /** カードクリック時の処理 */
   onClick: (memoId: string) => void;
-  /** ドロップダウンが開いているかどうか */
   isDropdownOpen: boolean;
-  /** ドロップダウンの開閉処理 */
   onDropdownToggle: (memoId: string, event: React.MouseEvent) => void;
-  /** 編集ボタンクリック処理 */
   onEdit: (memoId: string, event: React.MouseEvent) => void;
-  /** 削除ボタンクリック処理 */
   onDelete: (memoId: string, event: React.MouseEvent) => void;
-  /** 同期ボタンクリック処理（オプション、メモ一覧ページのみ） */
   onSyncFromCloud?: (event: React.MouseEvent) => void;
-  /** カードのスタイルクラス（オプション） */
   className?: string;
-  /** タイトルの最大文字数（オプション、デフォルト: 制限なし） */
   titleMaxLength?: number;
-  /** 内容プレビューの最大文字数（オプション、デフォルト: 80） */
   contentMaxLength?: number;
-  /** ゲーム名を表示するかどうか（オプション、デフォルト: true） */
   showGameTitle?: boolean;
-  /** ドロップダウンメニューの位置クラス（オプション） */
   dropdownPosition?: string;
 };
 
-/**
- * メモカード基本コンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns メモカードJSX要素
- */
 function MemoCardBase({
   memo,
   onClick,
@@ -62,7 +44,6 @@ function MemoCardBase({
 }: MemoCardBaseProps): React.JSX.Element {
   const { formatDateWithTime } = useTimeFormat();
 
-  // テキストの切り詰め処理を最適化
   const truncatedTexts = useMemo(() => {
     const truncatedTitle =
       titleMaxLength && memo.title.length > titleMaxLength
@@ -77,17 +58,14 @@ function MemoCardBase({
     return { truncatedTitle, truncatedContent };
   }, [memo.title, memo.content, titleMaxLength, contentMaxLength]);
 
-  // フォーマット済み日時をメモ化
   const formattedDate = useMemo(() => {
     return formatDateWithTime(memo.updatedAt);
   }, [memo.updatedAt, formatDateWithTime]);
 
-  // クリックハンドラーをメモ化
   const handleCardClick = useCallback(() => {
     onClick(memo.id);
   }, [onClick, memo.id]);
 
-  // CSSクラスをメモ化
   const cardClassName = useMemo(() => {
     return `${className} cursor-pointer hover:bg-base-200 transition-colors duration-200 relative`;
   }, [className]);
@@ -96,7 +74,6 @@ function MemoCardBase({
     <div className={cardClassName} onClick={handleCardClick}>
       <h3 className="font-semibold text-sm truncate mb-1 pr-8">{truncatedTexts.truncatedTitle}</h3>
 
-      {/* ゲーム名表示 */}
       {showGameTitle && memo.gameTitle && (
         <div className="flex items-center gap-2 text-xs text-base-content/60 mb-2">
           <FaGamepad className="text-xs flex-shrink-0" />
@@ -104,19 +81,15 @@ function MemoCardBase({
         </div>
       )}
 
-      {/* 内容のプレビュー */}
       <p className="text-xs text-base-content/60 line-clamp-3 mb-2 leading-relaxed">
         {truncatedTexts.truncatedContent}
       </p>
 
-      {/* メタ情報 */}
       <div className="flex justify-between items-center mt-auto">
         <span className="text-xs text-base-content/50 font-medium">{formattedDate}</span>
-        {/* 文字数インジケーター */}
         <span className="text-xs text-base-content/40">{memo.content.length}文字</span>
       </div>
 
-      {/* 三点リーダーメニュー */}
       <MemoDropdownMenu
         memoId={memo.id}
         isOpen={isDropdownOpen}
@@ -130,9 +103,8 @@ function MemoCardBase({
   );
 }
 
-// React.memoでコンポーネントをメモ化
+// ハンドラ参照は親が毎レンダー新規矢印を渡すので比較しない（入れると memo が常に無効）。
 export default memo(MemoCardBase, (prevProps, nextProps) => {
-  // 浅い比較では不十分な場合のカスタム比較関数
   return (
     prevProps.memo.id === nextProps.memo.id &&
     prevProps.memo.title === nextProps.memo.title &&

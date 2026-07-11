@@ -2,16 +2,6 @@
  * @fileoverview プレイ状況バーコンポーネント
  *
  * このコンポーネントは、アプリケーション画面下部に現在のプレイ状況を表示します。
- *
- * 主な機能：
- * - 現在プレイ中のゲームの表示
- * - プレイ経過時間の表示
- * - プロセス監視の状態表示
- *
- * 使用例：
- * ```tsx
- * <PlayStatusBar />
- * ```
  */
 
 import { autoTrackingAtom } from "@renderer/state/settings";
@@ -31,14 +21,6 @@ import { useUploadAfterSession } from "@renderer/hooks/useUploadAfterSession";
 
 import { logger } from "@renderer/utils/logger";
 
-/**
- * プレイ状況バーコンポーネント
- *
- * アプリケーション画面下部に表示され、
- * 現在のプレイ状況を表示します。
- *
- * @returns プレイ状況バー要素
- */
 export function PlayStatusBar(): React.JSX.Element {
   const [autoTracking] = useAtom(autoTrackingAtom);
   const [, setVisibleGames] = useAtom(visibleGamesAtom);
@@ -57,7 +39,7 @@ export function PlayStatusBar(): React.JSX.Element {
   const { pendingUpload, checkUploadPrompt, handleUploadAfterEnd, handleSkipUploadAfterEnd } =
     useUploadAfterSession(isOfflineMode, isValidCreds, toastHandler);
 
-  // 自動ゲーム検出がOFFの場合は非表示
+  // 自動検出OFFならバーを出さない（誤検出UIを出さない）。
   if (!autoTracking) {
     return <></>;
   }
@@ -152,7 +134,6 @@ export function PlayStatusBar(): React.JSX.Element {
     <>
       <div className="bg-base-300 border-t border-base-content/10 px-4 py-1 h-12">
         <div className="flex items-center justify-between h-full">
-          {/* 左側：プレイ状況 */}
           <div className="flex items-center gap-3">
             {hasActiveGames ? (
               <>

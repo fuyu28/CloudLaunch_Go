@@ -1,4 +1,9 @@
-// src/App.tsx
+/**
+ * @fileoverview アプリケーションのルート定義
+ *
+ * MainLayout 配下のページルート（Home / GameDetail / Cloud / Memo / Settings 等）を構成する。
+ */
+
 import { Routes, Route } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
@@ -22,7 +27,6 @@ export default function App(): React.JSX.Element {
           <Route path="/game/:id" element={<GameDetail />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/cloud" element={<Cloud />} />
-          {/* メモ関連ルート */}
           <Route path="/memo" element={<MemoList />} />
           <Route path="/memo/create" element={<MemoCreate />} />
           <Route path="/memo/list/:gameId" element={<MemoList />} />

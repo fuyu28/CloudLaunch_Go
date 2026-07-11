@@ -15,26 +15,14 @@ import { logger } from "@renderer/utils/logger";
 import type { PlaySessionType } from "src/types/game";
 
 type PlaySessionCardSimpleProps = {
-  /** ゲームID */
   gameId: string;
-  /** ゲームタイトル */
   gameTitle: string;
-  /** プレイセッション追加のコールバック */
   onAddSession?: () => void;
-  /** セッション更新時のコールバック */
   onSessionUpdated?: () => void;
-  /** プロセス管理を開くコールバック */
   onProcessManagement?: () => void;
-  /** ボタンを非表示にするフラグ */
   hiddenButtons?: boolean;
 };
 
-/**
- * シンプルなプレイセッション管理コンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns プレイセッション管理要素
- */
 const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
   gameId,
   onAddSession,
@@ -45,7 +33,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
   const [sessions, setSessions] = useState<PlaySessionType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 統計情報をメモ化して計算
   const stats = useMemo(() => {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -65,7 +52,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
     };
   }, [sessions]);
 
-  // プレイセッションを取得
   const fetchSessions = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -91,7 +77,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
   return (
     <div className="card bg-base-200 rounded-lg shadow-sm">
       <div className="card-body p-4">
-        {/* アクションボタン */}
         {!hiddenButtons && (
           <div className="flex gap-3 justify-end mb-4">
             <button
@@ -113,7 +98,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
 
         {!isLoading && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* 総セッション */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -124,7 +108,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
               </div>
             </div>
 
-            {/* 総時間 */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -137,7 +120,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
               </div>
             </div>
 
-            {/* 平均時間 */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -150,7 +132,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
               </div>
             </div>
 
-            {/* 今週 */}
             <div className="card bg-white rounded-xl shadow-sm">
               <div className="card-body p-3">
                 <div className="flex items-center gap-2 mb-1">

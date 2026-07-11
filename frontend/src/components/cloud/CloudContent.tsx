@@ -3,12 +3,6 @@
  *
  * このコンポーネントは、クラウドデータの表示部分を担当し、
  * カードビューとツリービューの切り替えを提供します。
- *
- * 主な機能：
- * - カードビューの表示
- * - ツリービューの表示
- * - 空状態の表示
- * - ローディング状態の表示
  */
 
 import { FiCloud, FiFolder } from "react-icons/fi";
@@ -19,42 +13,22 @@ import CloudTreeNode from "./CloudTreeNode";
 import type { CloudDirectoryNode } from "src/types/cloud";
 import type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
-/**
- * クラウドコンテンツのプロパティ
- */
 type CloudContentProps = {
-  /** ビューモード */
   viewMode: ViewMode;
-  /** ローディング状態（初期タイトル一覧の取得中） */
   loading: boolean;
-  /** カードビューで開いているゲームのファイル一覧を取得中かどうか */
   gameLoading?: boolean;
-  /** ファイル一覧を遅延取得中のゲームID集合（ツリービュー用） */
   loadingGameIds?: Set<string>;
-  /** クラウドデータ */
-  /** ディレクトリツリー */
   directoryTree: CloudDirectoryNode[];
-  /** 現在のパス */
   currentPath: CloudPathSegment[];
-  /** 現在のディレクトリノード */
   currentDirectoryNodes: CloudDirectoryNode[];
-  /** 展開されたノード */
   expandedNodes: Set<string>;
-  /** ノード展開切り替えコールバック */
   onToggleExpand: (path: string) => void;
-  /** ノード選択コールバック */
   onSelectNode: (node: CloudDirectoryNode) => void;
-  /** 削除コールバック */
   onDelete: (item: CloudDirectoryNode) => void;
-  /** ディレクトリ移動コールバック（対象ノードを渡す） */
   onNavigateToDirectory: (node: CloudDirectoryNode) => void;
-  /** 詳細表示コールバック */
   onViewDetails: (item: CloudDirectoryNode) => void;
 };
 
-/**
- * 空状態コンポーネント
- */
 function EmptyState({
   icon: Icon,
   title,
@@ -73,12 +47,6 @@ function EmptyState({
   );
 }
 
-/**
- * クラウドコンテンツ表示コンポーネント
- *
- * @param props コンテンツのプロパティ
- * @returns JSX要素
- */
 export function CloudContent({
   viewMode,
   loading,
@@ -105,9 +73,8 @@ export function CloudContent({
   if (viewMode === "cards") {
     return (
       <div>
-        {/* カード表示 */}
         {currentPath.length === 0 ? (
-          // ルートレベル（ゲーム単位）- onDelete を渡して削除ボタンを表示
+          // ルート（ゲーム単位）だけ削除可。配下ファイルには onDelete を渡さない。
           directoryTree.length === 0 ? (
             <EmptyState
               icon={FiCloud}
@@ -128,7 +95,6 @@ export function CloudContent({
             </div>
           )
         ) : gameLoading ? (
-          // ゲームのファイル一覧を遅延取得中
           <div className="flex justify-center py-12">
             <div className="loading loading-spinner loading-lg"></div>
           </div>
@@ -156,7 +122,6 @@ export function CloudContent({
     );
   }
 
-  // ツリービュー
   return (
     <div className="bg-base-100 rounded-lg border border-base-300 p-4">
       {directoryTree.length === 0 ? (

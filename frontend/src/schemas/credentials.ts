@@ -1,9 +1,11 @@
+/**
+ * @fileoverview 認証情報 Zod スキーマ
+ *
+ * R2/S3 接続情報のフォームバリデーション定義。
+ */
+
 import { z } from "zod";
 
-/**
- * R2/S3認証情報のバリデーションスキーマ
- * クラウドストレージ接続情報の検証に使用
- */
 export const credsSchema = z.object({
   bucketName: z
     .string()

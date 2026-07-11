@@ -2,10 +2,6 @@
  * @fileoverview レンダラープロセス用ログユーティリティ
  *
  * このファイルは、レンダラープロセスで使用するログ機能を提供します。
- * 主な機能：
- * - メインプロセスのログシステムとの連携
- * - 開発/本番環境での自動切り替え
- * - console.*の代替として使用
  */
 
 import { logLevelManager, type LogLevel } from "./logLevel";
@@ -14,15 +10,10 @@ import { logLevelManager, type LogLevel } from "./logLevel";
  * ログメタデータ
  */
 export interface LogMetadata {
-  /** ログが発生したコンポーネント名 */
   component?: string;
-  /** ログが発生した関数名 */
   function?: string;
-  /** 追加のコンテキスト情報 */
   context?: string;
-  /** エラーオブジェクト */
   error?: Error;
-  /** 任意の追加データ */
   data?: unknown;
 }
 
@@ -39,10 +30,6 @@ class RendererLogger {
     this.isDevelopment = process.env.NODE_ENV === "development";
   }
 
-  /**
-   * デバッグログを出力
-   * ログレベル設定と開発環境をチェック
-   */
   debug(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("debug")) {
       return;
@@ -51,13 +38,10 @@ class RendererLogger {
     if (this.isDevelopment) {
       this.logToConsole("debug", message, metadata);
     }
-    // 本番環境でもログレベル設定次第で出力
+    // 本番でも level 次第で出す（完全黙りにしない）。
     this.logToMain("debug", message, metadata);
   }
 
-  /**
-   * 情報ログを出力
-   */
   info(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("info")) {
       return;
@@ -67,9 +51,6 @@ class RendererLogger {
     this.logToMain("info", message, metadata);
   }
 
-  /**
-   * 警告ログを出力
-   */
   warn(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("warn")) {
       return;
@@ -79,9 +60,6 @@ class RendererLogger {
     this.logToMain("warn", message, metadata);
   }
 
-  /**
-   * エラーログを出力
-   */
   error(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("error")) {
       return;
@@ -90,7 +68,7 @@ class RendererLogger {
     this.logToConsole("error", message, metadata);
     this.logToMain("error", message, metadata);
 
-    // エラーバウンダリシステムにも報告
+    // コンソールだけでなくエラーバウンダリ経路にも載せる。
     if (metadata?.error && window.api?.errorReport?.reportError) {
       window.api.errorReport.reportError({
         message: metadata.error.message,
@@ -105,9 +83,6 @@ class RendererLogger {
     }
   }
 
-  /**
-   * コンソールにログを出力
-   */
   private logToConsole(level: LogLevel, message: string, metadata?: LogMetadata): void {
     const timestamp = new Date().toISOString();
     const componentInfo = metadata?.component
@@ -132,15 +107,12 @@ class RendererLogger {
     }
   }
 
-  /**
-   * メインプロセスにログを送信
-   */
   private logToMain(
     level: "debug" | "info" | "warn" | "error",
     message: string,
     metadata?: LogMetadata,
   ): void {
-    // メインプロセスのログAPIが利用可能な場合のみ送信
+    // bridge 未準備時は送らない（起動直後の例外を落とさないため握りつぶしではなくスキップ）。
     if (window.api?.errorReport?.reportLog) {
       window.api.errorReport.reportLog({
         level,
@@ -154,9 +126,6 @@ class RendererLogger {
     }
   }
 
-  /**
-   * ユーザーアクションをログに記録
-   */
   logUserAction(action: string, details?: Record<string, unknown>): void {
     this.info(`ユーザーアクション: ${action}`, {
       component: "UserAction",
@@ -164,9 +133,6 @@ class RendererLogger {
     });
   }
 
-  /**
-   * パフォーマンス測定を開始
-   */
   startPerformanceTimer(label: string): () => void {
     const startTime = performance.now();
     return () => {
@@ -179,11 +145,8 @@ class RendererLogger {
   }
 }
 
-// シングルトンインスタンスを作成
 export const logger = new RendererLogger();
 
-// 開発者向けのデバッグ用（本番では削除される）
 if (process.env.NODE_ENV === "development") {
-  // グローバルに公開してブラウザのデベロッパーツールから使用可能にする
   (window as unknown as Window & { logger: typeof logger }).logger = logger;
 }

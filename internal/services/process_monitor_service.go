@@ -131,7 +131,6 @@ func (service *ProcessMonitorService) StartMonitoring() {
 			defer logging.Recover(service.logger, "process-monitor.checkProcesses")
 			service.checkProcesses()
 		}
-		// 起動時に即時チェック
 		tick()
 		for {
 			select {

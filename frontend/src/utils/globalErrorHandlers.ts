@@ -2,11 +2,7 @@
  * @fileoverview 未捕捉エラーのグローバル捕捉
  *
  * try/catch で囲まれていない同期例外（window の error イベント）と、
- * catch されない Promise の拒否（unhandledrejection）を捕捉し、
- * logger 経由でバックエンド（logs/app.log・logs/error.log）へ記録する。
- *
- * Wails でパッケージ化したアプリでは console 出力が見えないため、
- * 重大なエラーを確実にファイルへ残すことを目的とする。
+ * catch されない Promise の拒否（unhandledrejection）をログに記録する。
  */
 
 import { logger } from "./logger";

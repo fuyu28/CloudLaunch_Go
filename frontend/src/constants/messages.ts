@@ -2,16 +2,8 @@
  * @fileoverview メッセージ定数定義
  *
  * このファイルは、アプリケーション全体で使用されるメッセージ文字列を定数として定義します。
- * 主な機能：
- * - UIメッセージの一元管理
- * - 多言語対応への準備
- * - メッセージの重複防止
- * - 保守性の向上
  */
 
-/**
- * アプリケーション全体で使用されるメッセージ定数
- */
 export const MESSAGES = {
   // ゲーム操作関連
   GAME: {
@@ -151,7 +143,4 @@ export const MESSAGES = {
   },
 } as const;
 
-/**
- * メッセージ定数の型定義
- */
 export type Messages = typeof MESSAGES;

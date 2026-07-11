@@ -1,5 +1,8 @@
 /**
  * @fileoverview クラウドから既存ゲームを追加するモーダル
+ *
+ * クラウドのみに存在するゲームを一覧表示し、選択したものをローカルへ取り込む。
+ * 同名のローカルゲームがある場合は重複追加かローカル置換かを確認する。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -186,14 +189,14 @@ export default function CloudGameImportModal({
         return next;
       });
 
-      // 親への通知（一覧更新）はバッチ終了時にまとめて1回だけ行う。
+      // 1件ごとに親へ通知すると一覧再取得が連打されるのでバッチ終了時に1回。
       importedAnyRef.current = true;
       return true;
     },
     [pull],
   );
 
-  // バッチ終了処理：取り込み状態を解除し、1件でも取り込めていれば親へ1回だけ通知する。
+  // 取り込み中フラグを下ろし、成功が1件でもあれば親へ1回だけ通知する。
   const finishBatch = useCallback(async (): Promise<void> => {
     setImporting(false);
     if (importedAnyRef.current) {
@@ -256,7 +259,7 @@ export default function CloudGameImportModal({
         const result = await window.api.database.deleteGame(localGame.id);
         if (!result.success) {
           toast.error(result.message ?? "ローカルゲームの削除に失敗しました");
-          // 部分的に削除済みの場合、次回の重複判定でズレが出ないよう localCache も更新する。
+          // 部分削除後に localCache を直さないと、続く同名衝突判定がズレる。
           if (deletedIds.length > 0) {
             setLocalCache((prev) => prev.filter((g) => !deletedIds.includes(g.id)));
           }

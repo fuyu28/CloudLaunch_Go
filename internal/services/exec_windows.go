@@ -1,5 +1,6 @@
 //go:build windows
 
+// Windows向けの隠しウィンドウ付きプロセス起動ヘルパ。
 package services
 
 import (

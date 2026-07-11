@@ -1,3 +1,9 @@
+/**
+ * @fileoverview ホーム（ゲーム一覧）ページ
+ *
+ * 検索・フィルタ・ソート付きのゲーム一覧と追加／インポート操作を提供する。
+ */
+
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState, useCallback } from "react";
 import { IoIosAdd } from "react-icons/io";
@@ -64,14 +70,11 @@ export default function Home(): React.ReactElement {
   const { formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
 
-  // 検索語をデバウンス
   const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
 
-  // ローディング状態管理
   const gameListLoading = useLoadingState();
   const gameActionLoading = useLoadingState();
 
-  // ゲーム操作フック
   const { createGameAndRefreshList } = useGameActions({
     searchWord: debouncedSearchWord,
     filter,
@@ -107,6 +110,7 @@ export default function Home(): React.ReactElement {
         },
       );
 
+      // 検索条件が変わって古い一覧応答が後から来ても、表示を巻き戻さない。
       if (!cancelled && games) {
         setVisibleGames(games as GameType[]);
       }
@@ -129,6 +133,7 @@ export default function Home(): React.ReactElement {
     let cancelled = false;
 
     const resolveWarnings = async (): Promise<void> => {
+      // 一覧の警告バッジ用。存在確認は IPC なのでカード描画と切り離してまとめて行う。
       const entries = await Promise.all(
         visibleGames.map(async (game) => {
           const hasUnconfiguredExe = !game.exePath || game.exePath === UNCONFIGURED_EXE_PATH;
@@ -234,6 +239,7 @@ export default function Home(): React.ReactElement {
 
       const { status, remoteMeta } = statusResult.data;
       if (status === "conflict") {
+        // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
         setConflictMeta({
           localMeta: statusResult.data.localMeta,
           remoteMeta: statusResult.data.remoteMeta,
@@ -275,6 +281,7 @@ export default function Home(): React.ReactElement {
     if (!pendingLaunchGame) {
       return;
     }
+    // スキップは同期せず起動。ここでは launchGameDirect を使う（裏 sync なし）。
     await launchGameDirect(pendingLaunchGame);
     setPendingLaunchGame(null);
   }, [launchGameDirect, pendingLaunchGame]);
@@ -320,7 +327,6 @@ export default function Home(): React.ReactElement {
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
-      {/* 検索・フィルタ領域 */}
       <GameSearchFilter
         searchWord={searchWord}
         sort={sort}
@@ -332,14 +338,12 @@ export default function Home(): React.ReactElement {
         onFilterChange={setFilter}
       />
 
-      {/* ゲーム一覧 */}
       <GameGrid
         games={visibleGames}
         onLaunchGame={handleLaunchGame}
         warningGameIds={warningGameIds}
       />
 
-      {/* ゲーム追加ボタン */}
       <FloatingButton
         onClick={() => setIsGameFormOpen(true)}
         ariaLabel="ゲームを追加"
@@ -348,7 +352,6 @@ export default function Home(): React.ReactElement {
         <IoIosAdd size={28} />
       </FloatingButton>
 
-      {/* ゲーム登録モーダル */}
       <GameFormModal
         mode="add"
         isOpen={isGameFormOpen}

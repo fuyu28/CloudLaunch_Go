@@ -123,7 +123,7 @@ func (app *App) GetGameDirectoryNode(gameID string) result.ApiResult[CloudDirect
 		return errorResultWithLog[CloudDirectoryNode](app, "ディレクトリツリー取得に失敗しました", err, "operation", "GetGameDirectoryNode.GetCloudGameView", "gameId", trimmed)
 	}
 	if view == nil {
-		// クラウドにデータが無い（HEAD 未設定）。空の子を持つゲームノードを返す。
+		// HEAD 未設定でも UI が空ツリーを描けるよう、子なしゲームノードを返す。
 		return result.OkResult(CloudDirectoryNode{Name: trimmed, Path: trimmed, IsDirectory: true, Children: []CloudDirectoryNode{}})
 	}
 	node := buildGameDirectoryNode(*view)

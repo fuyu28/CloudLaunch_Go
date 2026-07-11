@@ -1,3 +1,9 @@
+/**
+ * @fileoverview 設定: 初期表示タブ
+ *
+ * ゲーム一覧の既定ソート・フィルタを設定する。
+ */
+
 import { useAtom } from "jotai";
 import toast from "react-hot-toast";
 

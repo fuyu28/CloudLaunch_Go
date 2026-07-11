@@ -4,9 +4,6 @@
  * DaisyUIで利用可能なテーマの一覧を定義します。
  */
 
-/**
- * DaisyUIの標準テーマ一覧
- */
 export const DAISYUI_THEMES = [
   "cloudlaunch",
   "light",
@@ -46,7 +43,4 @@ export const DAISYUI_THEMES = [
   "silk",
 ] as const;
 
-/**
- * テーマ名の型定義
- */
 export type ThemeName = (typeof DAISYUI_THEMES)[number];

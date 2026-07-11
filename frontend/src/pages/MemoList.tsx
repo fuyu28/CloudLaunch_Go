@@ -47,10 +47,8 @@ export default function MemoList(): React.JSX.Element {
 
   const autoTracking = useAtomValue(autoTrackingAtom);
 
-  // 検索クエリのデバウンス処理
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  // 共通フックを使用
   const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu();
   const {
     handleDeleteMemo,
@@ -66,20 +64,17 @@ export default function MemoList(): React.JSX.Element {
     closeDropdown,
     openDeleteModal: setDeleteConfirmId,
     onSyncSuccess: () => {
-      fetchData(); // 同期後にメモ一覧を再取得
+      fetchData();
     },
   });
 
-  // フィルタリング・ソート処理
   const filteredAndSortedMemos = useMemo(() => {
     let filtered = [...memos];
 
-    // ゲームフィルター
     if (selectedGameId !== "all") {
       filtered = filtered.filter((memo) => memo.gameId === selectedGameId);
     }
 
-    // タイトル検索フィルター
     if (debouncedSearchQuery) {
       const query = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -90,7 +85,6 @@ export default function MemoList(): React.JSX.Element {
       );
     }
 
-    // ソート処理
     filtered.sort((a, b) => {
       let comparison = 0;
 
@@ -113,11 +107,9 @@ export default function MemoList(): React.JSX.Element {
     return filtered;
   }, [memos, selectedGameId, debouncedSearchQuery, sortBy, sortDirection]);
 
-  // 全メモ一覧とゲーム一覧を取得する関数
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 全メモ一覧を取得
       const memoResult = await window.api.memo.getAllMemos();
       if (memoResult.success && memoResult.data) {
         setMemos(memoResult.data);
@@ -125,10 +117,8 @@ export default function MemoList(): React.JSX.Element {
         showToast("メモの取得に失敗しました", "error");
       }
 
-      // ゲーム一覧を取得（フィルター用）
       const gameResult = await window.api.database.listGames("", "all", "title");
       if (gameResult && Array.isArray(gameResult)) {
-        // データベースの型をGameType型に変換
         const transformedGames: GameType[] = gameResult.map((game) => ({
           ...game,
           saveFolderPath: game.saveFolderPath ?? undefined,
@@ -152,17 +142,14 @@ export default function MemoList(): React.JSX.Element {
     fetchData();
   }, [fetchData]);
 
-  // ソート方向を切り替える関数
   const toggleSortDirection = useCallback(() => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
   }, []);
 
-  // 検索をクリアする関数
   const clearSearch = useCallback(() => {
     setSearchQuery("");
   }, []);
 
-  // メモフォルダを開く処理
   const handleOpenMemoFolder = useCallback(async () => {
     try {
       const result = await window.api.memo.getMemoRootDir();
@@ -192,7 +179,6 @@ export default function MemoList(): React.JSX.Element {
 
   return (
     <div className="bg-base-200 px-6 py-4 min-h-screen">
-      {/* ヘッダー */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold">すべてのメモ</h1>
@@ -210,10 +196,8 @@ export default function MemoList(): React.JSX.Element {
         </div>
       </div>
 
-      {/* 検索・フィルター・ソート */}
       <div className="bg-base-100 p-4 rounded-lg mb-6 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-          {/* 検索バー */}
           <div className="flex-1">
             <label htmlFor="memo-search" className="input input-bordered flex items-center gap-2">
               <CiSearch className="w-4 h-4 opacity-70" />
@@ -237,9 +221,7 @@ export default function MemoList(): React.JSX.Element {
             </label>
           </div>
 
-          {/* コントロール群 */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* ソート設定 */}
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium opacity-70">並び順</label>
               <select
@@ -267,7 +249,6 @@ export default function MemoList(): React.JSX.Element {
               </button>
             </div>
 
-            {/* ゲームフィルター */}
             <div className="flex items-center gap-2">
               <IoFilterOutline className="w-4 h-4 opacity-70" />
               <select
@@ -288,7 +269,6 @@ export default function MemoList(): React.JSX.Element {
         </div>
       </div>
 
-      {/* メモ件数とクイックアクション */}
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <span className="text-sm text-base-content/70 font-medium">
@@ -320,7 +300,6 @@ export default function MemoList(): React.JSX.Element {
         </div>
       </div>
 
-      {/* メモ一覧 */}
       {filteredAndSortedMemos.length === 0 ? (
         <div className="card bg-base-100 shadow-xl">
           <div className="card-body text-center">
@@ -375,7 +354,6 @@ export default function MemoList(): React.JSX.Element {
         </div>
       )}
 
-      {/* フローティング追加ボタン */}
       <FloatingButton
         positionClass={autoTracking ? "bottom-16 right-6" : "bottom-6 right-6"}
         onClick={() => navigate("/memo/create")}
@@ -384,7 +362,6 @@ export default function MemoList(): React.JSX.Element {
         <FaPlus className="text-lg" />
       </FloatingButton>
 
-      {/* 削除確認モーダル */}
       <ConfirmModal
         id="delete-memo-modal"
         isOpen={!!deleteConfirmId}

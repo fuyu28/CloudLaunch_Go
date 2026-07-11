@@ -2,12 +2,6 @@
  * @fileoverview 画像読み込み管理用カスタムフック
  *
  * このフックは画像の読み込み状態を管理し、エラーハンドリングを行います。
- *
- * 主な機能：
- * - ローカル画像とWeb画像の読み込み
- * - 画像未設定時のNoImageフォールバック
- * - 読み込み失敗時のエラーハンドリング
- * - マウント状態の管理
  */
 
 import { useEffect, useState } from "react";
@@ -17,22 +11,12 @@ import { logger } from "@renderer/utils/logger";
 
 import type { ApiResult } from "src/types/result";
 
-/**
- * 画像読み込み状態の型定義
- */
 type ImageLoadState = {
-  /** 読み込み済み画像のdata URL */
   imageSrc?: string;
-  /** 読み込み中フラグ */
   isLoading: boolean;
-  /** エラー状態 */
   error?: string;
 };
 
-/**
- * NoImage SVGをbase64エンコードしたdata URL
- * 灰色の背景に "No Image" テキストが表示される
- */
 const createNoImageDataUrl = (): string => {
   const svg = `
     <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
@@ -46,12 +30,6 @@ const createNoImageDataUrl = (): string => {
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
 
-/**
- * 画像読み込み管理用カスタムフック
- *
- * @param src - 読み込む画像のパス（空文字列の場合はNoImage）
- * @returns 画像読み込み状態
- */
 export const useImageLoader = (src: string): ImageLoadState => {
   const [state, setState] = useState<ImageLoadState>(() => ({
     imageSrc: undefined,
@@ -67,7 +45,7 @@ export const useImageLoader = (src: string): ImageLoadState => {
 
       setState((prev) => ({ ...prev, isLoading: true, error: undefined }));
 
-      // 空文字列または未定義の場合はNoImageを表示（トーストなし）
+      // 未設定画像はエラーにせず NoImage（トーストも出さない）。
       if (!src || src.trim() === "") {
         if (mounted) {
           setState({
@@ -90,7 +68,7 @@ export const useImageLoader = (src: string): ImageLoadState => {
               error: undefined,
             });
           } else {
-            // 画像読み込み失敗時はNoImageを表示し、エラートーストも表示
+            // 読み込み失敗は NoImage + トースト（サイレント失敗にしない）。
             const errorMessage = result.success ? "データが取得できませんでした" : result.message;
             logger.warn("画像読み込み失敗:", {
               component: "useImageLoader",
@@ -119,7 +97,7 @@ export const useImageLoader = (src: string): ImageLoadState => {
             error: error instanceof Error ? error : new Error(String(error)),
           });
           const errorMsg = error instanceof Error ? error.message : "不明なエラー";
-          // 同一画像に対する例外由来トーストも同じ IDで dedup する。
+          // 同一画像の失敗トーストを ID で dedup（連打しない）。
           toast.error(`画像読み込みエラー: ${errorMsg}`, {
             id: `image-load-failed:${src.trim()}`,
           });
@@ -141,19 +119,11 @@ export const useImageLoader = (src: string): ImageLoadState => {
   return state;
 };
 
-/**
- * 画像パスを検証し、適切なAPIを呼び出して画像を読み込む
- *
- * @param src - 画像パス
- * @returns 画像読み込み結果
- */
 const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => {
-  // URLの形式を事前に検証
   const isHttpUrl = src.startsWith("http://") || src.startsWith("https://");
   const isFileUrl = src.startsWith("file://");
   const isAbsolutePath = /^[A-Za-z]:\\/.test(src) || src.startsWith("/");
 
-  // 有効なパス形式かチェック
   if (!isHttpUrl && !isFileUrl && !isAbsolutePath) {
     return {
       success: false,
@@ -161,7 +131,6 @@ const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => 
     };
   }
 
-  // HTTP(S) URLの場合は追加の検証
   if (isHttpUrl) {
     try {
       new URL(src); // URL形式の検証
@@ -173,7 +142,6 @@ const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => 
     }
   }
 
-  // file:// か絶対パスならローカル読み込み
   const isLocal = isFileUrl || isAbsolutePath;
 
   try {

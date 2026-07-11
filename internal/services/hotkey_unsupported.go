@@ -1,5 +1,6 @@
 //go:build !windows
 
+// 非Windows向けのホットキーサービスのスタブ実装。
 package services
 
 import (

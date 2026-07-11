@@ -1,3 +1,4 @@
+// 文字列の共通ヘルパ（FirstNonEmpty など）を提供する。
 package util
 
 import "strings"

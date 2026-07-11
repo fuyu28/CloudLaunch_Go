@@ -1,5 +1,7 @@
 /**
- * @fileoverview クラウドメタデータブリッジ。
+ * @fileoverview クラウド側ゲームメタデータ読み込みブリッジ。
+ *
+ * LoadCloudMetadata の updatedAt を Date に正規化し、games 配列は型だけ寄せる。
  */
 
 import { LoadCloudMetadata } from "../../wailsjs/go/app/App";

@@ -1,5 +1,7 @@
 /**
- * @fileoverview メモブリッジ。
+ * @fileoverview メモ CRUD・クラウド同期ブリッジ。
+ *
+ * 単体取得 / 作成は Go の nil を undefined に落とすため toApiResultOptional を使う。
  */
 
 import {

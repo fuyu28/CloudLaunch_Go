@@ -1,12 +1,7 @@
 /**
- * @fileoverview パス操作ユーティリティ
+ * @fileoverview パス操作ユーティリティ。Windows のバックスラッシュ区切りを正規化した上で親ディレクトリを求める。
  */
 
-/**
- * パスの親ディレクトリを取得
- * @param filePath - ファイルパス
- * @returns 親ディレクトリのパス
- */
 export function getParentDirectory(filePath: string): string {
   const normalized = normalizeWindowsPath(filePath);
   if (normalized === "" || normalized === "/" || normalized.endsWith(":/")) {

@@ -3,37 +3,21 @@
  *
  * このコンポーネントは、ユーザーのアクション確認を行うためのモーダルダイアログを提供します。
  * シンプルなメッセージ表示から、詳細情報・注意事項付きの高度な確認まで対応します。
- *
- * 主な機能：
- * - 基本的な確認メッセージ表示
- * - アイコン付きの詳細確認
- * - 注意事項・警告表示
- * - 柔軟なボタンスタイル（primary/error対応）
  */
 
 import { FiAlertTriangle } from "react-icons/fi";
 
 import { BaseModal } from "./BaseModal";
 
-/**
- * 注意事項アイテムの型定義
- */
 export type WarningItem = {
   text: string;
   highlight?: boolean;
 };
 
-/**
- * 詳細確認情報の型定義
- */
 export type ConfirmDetails = {
-  /** メインアイコン */
   icon?: React.ReactNode;
-  /** サブテキスト（パス、サイズなど） */
   subText?: string;
-  /** 注意事項リスト */
   warnings?: WarningItem[];
-  /** カスタム詳細コンテンツ */
   customContent?: React.ReactNode;
 };
 
@@ -42,11 +26,9 @@ type ConfirmModalProps = {
   isOpen: boolean;
   title?: string;
   message: string;
-  /** 詳細確認情報（アイコン、注意事項など） */
   details?: ConfirmDetails;
   cancelText?: string;
   confirmText?: string;
-  /** 確認ボタンのスタイル */
   confirmVariant?: "primary" | "error";
   onConfirm: () => void;
   onCancel: () => void;
@@ -88,7 +70,6 @@ export default function ConfirmModal({
       showCloseButton={false}
       footer={footer}
     >
-      {/* メインメッセージ */}
       <div className="mb-4">
         {details?.icon ? (
           <div className="flex items-center gap-3">
@@ -103,10 +84,8 @@ export default function ConfirmModal({
         )}
       </div>
 
-      {/* カスタムコンテンツ */}
       {details?.customContent && <div className="mb-4">{details.customContent}</div>}
 
-      {/* 注意事項 */}
       {details?.warnings && details.warnings.length > 0 && (
         <div className="bg-error/10 border border-error/20 rounded-lg p-3 text-sm">
           <div className="flex items-start gap-2">

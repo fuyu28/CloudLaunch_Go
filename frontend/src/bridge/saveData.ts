@@ -1,5 +1,5 @@
 /**
- * @fileoverview セーブデータブリッジ。
+ * @fileoverview ゲーム単位のクラウドセーブ詳細取得ブリッジ。
  */
 
 import { GetCloudFileDetailsByGame } from "../../wailsjs/go/app/App";

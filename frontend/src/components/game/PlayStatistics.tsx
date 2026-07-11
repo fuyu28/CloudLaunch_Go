@@ -2,9 +2,6 @@
  * @fileoverview プレイ統計コンポーネント
  *
  * このコンポーネントは、プレイセッション管理を統合したセクションを提供します。
- * 主な機能：
- * - プレイセッション履歴表示
- * - プレイセッション追加・管理
  */
 
 import { memo } from "react";
@@ -14,22 +11,12 @@ import PlaySessionCardSimple from "./PlaySessionCardSimple";
 import type { GameType } from "src/types/game";
 
 type PlayStatisticsProps = {
-  /** ゲーム情報 */
   game: GameType;
-  /** 更新キー（データ再取得トリガー） */
   refreshKey: number;
-  /** プレイセッション追加ハンドラ */
   onAddPlaySession: () => void;
-  /** プロセス管理モーダル開く */
   onOpenProcessManagement: () => void;
 };
 
-/**
- * プレイ統計コンポーネント
- *
- * @param props - コンポーネントのプロパティ
- * @returns プレイ統計要素
- */
 const PlayStatistics = memo(function PlayStatistics({
   game,
   refreshKey,
@@ -44,7 +31,6 @@ const PlayStatistics = memo(function PlayStatistics({
             <div className="w-1 h-6 bg-primary rounded-full"></div>
             <h2 className="card-title text-xl">プレイ統計</h2>
           </div>
-          {/* セッション管理ボタン */}
           <div className="flex gap-2">
             <button
               className="btn btn-outline btn-sm gap-2 hover:bg-base-300 transition-colors"
@@ -64,7 +50,6 @@ const PlayStatistics = memo(function PlayStatistics({
         </div>
 
         <div className="space-y-4">
-          {/* プレイセッション管理 */}
           <PlaySessionCardSimple
             key={`play-session-${refreshKey}`}
             gameId={game.id}

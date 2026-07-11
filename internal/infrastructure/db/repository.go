@@ -1,4 +1,3 @@
-// データベース操作の基本CRUDを提供する。
 package db
 
 import (

@@ -3,12 +3,6 @@
  *
  * このファイルは、Reactコンポーネントツリー内で発生するJavaScriptエラーを
  * キャッチし、フォールバックUIを表示するエラーバウンダリを提供します。
- * 主な機能：
- * - レンダリングエラーのキャッチ
- * - エラーログの記録
- * - ユーザーフレンドリーなエラー表示
- * - エラー詳細の表示/非表示切り替え
- * - リトライ機能
  */
 
 import React, { Component } from "react";
@@ -17,23 +11,13 @@ import { FiAlertTriangle, FiRefreshCw, FiChevronDown, FiChevronUp } from "react-
 import { logger } from "../../utils/logger";
 import type { ReactNode } from "react";
 
-/**
- * エラーバウンダリのProps
- */
 interface ErrorBoundaryProps {
-  /** 子コンポーネント */
   children: ReactNode;
-  /** フォールバック表示をカスタマイズする場合 */
   fallback?: (error: Error, errorInfo: React.ErrorInfo, retry: () => void) => ReactNode;
-  /** エラー発生時のコールバック */
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
-  /** リセット時のコールバック */
   onReset?: () => void;
 }
 
-/**
- * エラーバウンダリのState
- */
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
@@ -41,12 +25,6 @@ interface ErrorBoundaryState {
   showDetails: boolean;
 }
 
-/**
- * Reactエラーバウンダリコンポーネント
- *
- * React コンポーネントツリー内のJavaScriptエラーをキャッチし、
- * エラーログを記録してフォールバックUIを表示します。
- */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -58,9 +36,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     };
   }
 
-  /**
-   * エラーキャッチ時に呼ばれる
-   */
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return {
       hasError: true,
@@ -68,9 +43,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     };
   }
 
-  /**
-   * エラー詳細をキャッチ
-   */
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     logger.error("ErrorBoundary caught an error", {
       component: "ErrorBoundary",
@@ -83,12 +55,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       errorInfo,
     });
 
-    // カスタムエラーハンドラーがあれば実行
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }
 
-    // メインプロセスにエラーを報告
     window.api.errorReport.reportError({
       message: error.message,
       stack: error.stack || "",
@@ -97,9 +67,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     });
   }
 
-  /**
-   * エラー状態をリセット
-   */
   handleReset = (): void => {
     this.setState({
       hasError: false,
@@ -113,18 +80,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
   };
 
-  /**
-   * エラー詳細の表示/非表示を切り替え
-   */
   toggleDetails = (): void => {
     this.setState((prevState) => ({
       showDetails: !prevState.showDetails,
     }));
   };
 
-  /**
-   * デフォルトのフォールバックUI
-   */
   renderDefaultFallback(): React.JSX.Element {
     const { error, errorInfo, showDetails } = this.state;
 
@@ -157,7 +118,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </button>
               </div>
 
-              {/* エラー詳細の表示/非表示ボタン */}
               <div className="border-t border-base-300 pt-4">
                 <button className="btn btn-ghost btn-sm" onClick={this.toggleDetails}>
                   エラー詳細
@@ -169,7 +129,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </button>
               </div>
 
-              {/* エラー詳細 */}
               {showDetails && error && (
                 <div className="mt-4 text-left">
                   <div className="collapse collapse-open bg-base-300">
@@ -221,12 +180,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { children, fallback } = this.props;
 
     if (hasError && error) {
-      // カスタムフォールバックがある場合はそれを使用
       if (fallback) {
         return fallback(error, errorInfo!, this.handleReset);
       }
 
-      // デフォルトフォールバックを使用
       return this.renderDefaultFallback();
     }
 
@@ -234,22 +191,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
-/**
- * エラーバウンダリの設定オプション
- */
 export interface ErrorBoundaryOptions {
   fallback?: ErrorBoundaryProps["fallback"];
   onError?: ErrorBoundaryProps["onError"];
   onReset?: ErrorBoundaryProps["onReset"];
 }
 
-/**
- * HOC形式のエラーバウンダリ
- *
- * @param Component - ラップするコンポーネント
- * @param options - エラーバウンダリのオプション
- * @returns エラーバウンダリでラップされたコンポーネント
- */
 export function withErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
   options: ErrorBoundaryOptions = {},
@@ -280,7 +227,6 @@ export function useErrorHandler(): { handleError: (error: Error, context?: strin
       context,
     });
 
-    // メインプロセスにエラーを報告
     window.api.errorReport.reportError({
       message: error.message,
       stack: error.stack || "",

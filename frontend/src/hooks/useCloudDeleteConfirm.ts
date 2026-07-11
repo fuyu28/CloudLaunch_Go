@@ -1,11 +1,5 @@
 /**
- * @fileoverview クラウドデータ削除確認ロジック
- *
- * このフックは、クラウドデータの削除確認に関するロジックを
- * カプセル化し、再利用可能な形で提供します。
- *
- * 削除はゲーム単位のみ。content-addressed ストレージ（git スタイル）では
- * ブロブ単位削除は履歴破壊になるため、個別ファイル削除 UI は廃止。
+ * @fileoverview クラウドデータ削除確認の表示文言・警告を組み立てる。
  */
 
 import { useMemo } from "react";
@@ -18,13 +12,6 @@ import {
 } from "@renderer/utils/cloudUtils";
 import type { WarningItem } from "@renderer/components/common/ConfirmModal";
 
-/**
- * 削除確認ロジックのフック
- *
- * @param item 削除対象のアイテム（ゲーム単位の CloudDataItem or CloudDirectoryNode）
- * @param cloudData 全クラウドデータ（全削除時の合計計算用）
- * @returns 削除確認に必要な情報
- */
 export function useCloudDeleteConfirm(
   item: CloudDataItem | CloudDirectoryNode | null,
   cloudData: CloudDataItem[],
@@ -40,7 +27,7 @@ export function useCloudDeleteConfirm(
       return "";
     }
 
-    // 全削除センチネル（path === "*"）
+    // path==="*" は全削除センチネル。通常パスと分岐を分ける。
     if ("path" in item && (item as CloudDirectoryNode).path === "*") {
       return "全てのゲームのクラウドデータを完全に削除しますか？";
     }
@@ -53,7 +40,7 @@ export function useCloudDeleteConfirm(
       return "0 個のファイルが削除されます";
     }
 
-    // 全削除センチネル
+    // path==="*" は全削除センチネル。
     if ("path" in item && (item as CloudDirectoryNode).path === "*") {
       const totalFiles = cloudData.reduce((sum, cloudItem) => sum + cloudItem.fileCount, 0);
       return `全ての ${totalFiles} 個のファイルが削除されます`;
@@ -63,7 +50,7 @@ export function useCloudDeleteConfirm(
       return `${item.fileCount} 個のファイルが削除されます`;
     }
 
-    // CloudDirectoryNode（ツリービューからゲームノードを選択した場合）
+    // ツリーから選んだゲームノードは CloudDirectoryNode 形。
     const node = item as CloudDirectoryNode;
     if (node.isDirectory) {
       const fileCount = countFilesRecursively(node);
@@ -78,12 +65,12 @@ export function useCloudDeleteConfirm(
       return undefined;
     }
 
-    // 全削除センチネルにはサブテキスト不要
+    // 全削除では個別パス一覧を出さない（ノイズになる）。
     if ("path" in item && (item as CloudDirectoryNode).path === "*") {
       return undefined;
     }
 
-    // remotePath（CloudDataItem）またはpath（CloudDirectoryNode）を表示
+    // カードとツリーでキー名が違うので remotePath / path のどちらも見る。
     const path = "remotePath" in item ? item.remotePath : (item as CloudDirectoryNode).path;
     return `GameID: ${path}`;
   }, [item]);

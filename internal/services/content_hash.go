@@ -1,3 +1,4 @@
+// セーブフォルダのハッシュ・スナップショット構築と削除計画を提供する。
 package services
 
 import (
@@ -171,7 +172,7 @@ func applyDeletions(saveDir string, relPaths []string) error {
 	if len(relPaths) == 0 {
 		return nil
 	}
-	// 削除したファイルの祖先ディレクトリを空チェック対象として収集する。
+	// saveDir 全体を Walk せず、削除したパスの祖先だけ空チェックする（無関係な空 dir を消さない）。
 	dirsToCheck := make(map[string]struct{})
 	for _, rel := range relPaths {
 		// relPaths は planDeletions が saveDir 配下を走査して得たスラッシュ区切りパスなので安全。
