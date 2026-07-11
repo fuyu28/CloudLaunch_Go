@@ -79,7 +79,7 @@ export default function ErogameScapeImportModal({
       lastFetchedIdRef.current = null;
       fetchRequest.reset();
     }
-  }, [isOpen, fetchRequest]);
+  }, [isOpen, fetchRequest.reset]);
 
   const applyImport = useCallback(
     (info: GameImport) => {

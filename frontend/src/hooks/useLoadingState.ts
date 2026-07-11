@@ -12,7 +12,7 @@
  * ```
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useToastHandler, executeWithToast, type ToastOptions } from "./useToastHandler";
 
@@ -70,8 +70,11 @@ export function useLoadingState(initialLoading = false): UseLoadingStateReturn {
     [toastHandler],
   );
 
-  return {
-    isLoading,
-    executeWithLoading,
-  };
+  return useMemo(
+    () => ({
+      isLoading,
+      executeWithLoading,
+    }),
+    [isLoading, executeWithLoading],
+  );
 }
