@@ -42,7 +42,6 @@ export default function MemoView(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // メモデータを取得
   const fetchMemo = useCallback(async () => {
     if (!memoId) return;
 
@@ -52,7 +51,6 @@ export default function MemoView(): React.JSX.Element {
       if (memoResult.success && memoResult.data) {
         setMemo(memoResult.data);
 
-        // ゲーム情報も取得
         const gameResult = await window.api.database.getGameById(memoResult.data.gameId);
         if (gameResult) {
           setGameTitle(gameResult.title);
@@ -74,7 +72,6 @@ export default function MemoView(): React.JSX.Element {
     fetchMemo();
   }, [fetchMemo]);
 
-  // メモ削除処理
   const handleDeleteMemo = useCallback(async () => {
     if (!memo) return;
 
@@ -93,7 +90,6 @@ export default function MemoView(): React.JSX.Element {
     setShowDeleteModal(false);
   }, [memo, showToast, navigate]);
 
-  // メモファイルを開く処理
   const handleOpenMemoFile = useCallback(async () => {
     if (!memo) return;
 
@@ -185,7 +181,6 @@ export default function MemoView(): React.JSX.Element {
           <div className="prose max-w-none">
             <ReactMarkdown
               components={{
-                // カスタムスタイリング
                 h1: ({ children }) => (
                   <h1 className="text-3xl font-bold mt-6 mb-4 text-base-content">{children}</h1>
                 ),

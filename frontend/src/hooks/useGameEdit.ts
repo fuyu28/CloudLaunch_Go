@@ -88,7 +88,6 @@ export function useGameEdit(
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
 
-  // 編集データをメモ化
   const editData = useMemo(() => {
     if (!game) return undefined;
     const { title, publisher, imagePath, exePath, saveFolderPath } = game;
@@ -154,7 +153,6 @@ export function useGameEdit(
       if (result.success) {
         showSuccessToast("ゲーム情報を更新しました。");
 
-        // ゲーム一覧を更新
         setFilteredGames((list) => list.map((g) => (g.id === game.id ? { ...g, ...values } : g)));
       } else {
         handleApiError(result);
@@ -176,10 +174,8 @@ export function useGameEdit(
     if (result.success) {
       showSuccessToast("ゲームを削除しました。");
 
-      // ゲーム一覧からを削除
       setFilteredGames((g) => g.filter((x) => x.id !== game.id));
 
-      // ホームページに戻る
       navigate("/", { replace: true });
     } else {
       handleApiError(result);

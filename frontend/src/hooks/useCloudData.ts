@@ -24,7 +24,6 @@ export type { CloudPathSegment } from "@renderer/utils/cloudUtils";
  * useCloudDataフックの戻り値の型定義
  */
 export type UseCloudDataReturn = {
-  // State
   cloudData: CloudDataItem[];
   directoryTree: CloudDirectoryNode[];
   loading: boolean;
@@ -33,7 +32,6 @@ export type UseCloudDataReturn = {
   /** 現在ファイル一覧を遅延取得中のゲームID（remotePath）集合 */
   loadingGameIds: Set<string>;
 
-  // Actions
   fetchCloudData: () => Promise<void>;
   /** 指定ゲームのファイル一覧を遅延取得し、ディレクトリツリーへマージする */
   ensureGameLoaded: (gameId: string) => Promise<void>;
@@ -65,7 +63,6 @@ function buildCloudDataFromTree(tree: CloudDirectoryNode[]): CloudDataItem[] {
  * クラウドデータ管理フック
  */
 export function useCloudData(): UseCloudDataReturn {
-  // 状態を統合管理
   const [state, setState] = useState({
     cloudData: [] as CloudDataItem[],
     directoryTree: [] as CloudDirectoryNode[],
@@ -74,14 +71,12 @@ export function useCloudData(): UseCloudDataReturn {
     loadingGameIds: new Set<string>(),
   });
 
-  // ナビゲーションキャッシュ
   const navigationCacheRef = useRef<Map<string, CloudDirectoryNode[]>>(new Map());
   // 詳細を取得済みのゲームID（再ナビゲーション時の二重取得を防ぐ）
   const loadedGamesRef = useRef<Set<string>>(new Set());
   // 取得中のゲームID（同時呼び出しによる二重取得を防ぐ）
   const loadingGamesRef = useRef<Set<string>>(new Set());
 
-  // 現在のディレクトリノードをメモ化
   const currentDirectoryNodes = useMemo(() => {
     if (state.directoryTree.length === 0) return [];
     return getNodesByPath(state.directoryTree, state.currentPath);
@@ -320,7 +315,6 @@ export function useCloudData(): UseCloudDataReturn {
   }, [state.cloudData, fetchCloudData]);
 
   return {
-    // State
     cloudData: state.cloudData,
     directoryTree: state.directoryTree,
     loading: state.loading,
@@ -328,7 +322,6 @@ export function useCloudData(): UseCloudDataReturn {
     currentDirectoryNodes,
     loadingGameIds: state.loadingGameIds,
 
-    // Actions
     fetchCloudData,
     ensureGameLoaded,
     navigateToDirectory,

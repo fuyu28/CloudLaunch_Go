@@ -15,7 +15,6 @@ export default function MemoEditor(): React.JSX.Element {
   const { gameId, memoId } = useParams<{ gameId?: string; memoId?: string }>();
   const { handleBack, handleSaveSuccess } = useMemoNavigation();
 
-  // パラメータによってモードを決定
   const mode = memoId ? "edit" : "create";
   const pageTitle = mode === "edit" ? "メモを編集" : "新しいメモ";
 

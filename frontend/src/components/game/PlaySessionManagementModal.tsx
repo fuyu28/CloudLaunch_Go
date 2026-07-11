@@ -78,10 +78,8 @@ export default function PlaySessionManagementModal({
     sessionName: "",
   });
 
-  // フォームデータをuseMemoでラップ
   const memoizedEditFormData = useMemo(() => editFormData, [editFormData]);
 
-  // バリデーション
   const validation = useZodValidation(playSessionEditSchema, memoizedEditFormData);
   const { formatSmart, formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
@@ -159,7 +157,6 @@ export default function PlaySessionManagementModal({
   const handleEditSession = useCallback(async () => {
     if (!editingProcess) return;
 
-    // バリデーション実行
     const validationResult = validation.validate();
     if (!validationResult.isValid) {
       showToast("入力内容に問題があります", "error");

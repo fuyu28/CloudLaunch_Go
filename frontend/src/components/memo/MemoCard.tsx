@@ -27,7 +27,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // 共通フックを使用
   const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu();
   const {
     handleDeleteMemo,
@@ -48,7 +47,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
     },
   });
 
-  // メモ一覧を取得
   const fetchMemos = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -67,7 +65,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
     fetchMemos();
   }, [fetchMemos]);
 
-  // 表示するメモリストと統計をメモ化
   const displayData = useMemo(() => {
     const displayMemos = memos.slice(0, 3);
     const remainingCount = Math.max(0, memos.length - 3);
@@ -80,7 +77,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
     };
   }, [memos]);
 
-  // メモ統計情報をメモ化
   const memoStats = useMemo(() => {
     if (memos.length === 0) return null;
 

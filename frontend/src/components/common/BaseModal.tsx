@@ -95,7 +95,6 @@ export function BaseModal({
   closeOnClickOutside = true,
   closeOnEscape = true,
 }: BaseModalProps): React.JSX.Element {
-  // ESCキーでの閉じる処理
   React.useEffect(() => {
     if (!closeOnEscape || !isOpen) return;
 
@@ -129,7 +128,6 @@ export function BaseModal({
     return undefined;
   }, [isOpen, onClosed]);
 
-  // モーダル外クリック時の処理
   const handleBackdropClick = (event: React.MouseEvent): void => {
     if (closeOnClickOutside && event.target === event.currentTarget) {
       onClose();

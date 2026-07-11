@@ -40,7 +40,6 @@ const DynamicImage = memo(function DynamicImage({
 }: DynamicImgProps): React.JSX.Element {
   const { imageSrc, isLoading } = useImageLoader(originalSrc);
 
-  // ローディング中の表示
   if (isLoading && !imageSrc) {
     return (
       <div
@@ -56,7 +55,6 @@ const DynamicImage = memo(function DynamicImage({
     );
   }
 
-  // 画像またはNoImageを表示
   if (imageSrc) {
     return <img src={imageSrc} {...imgProps} />;
   }

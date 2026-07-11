@@ -101,7 +101,6 @@ export type SettingsFormResult = {
  * @returns 設定フォーム管理の結果とヘルパー関数
  */
 export function useSettingsFormZod(): SettingsFormResult {
-  // フォームデータ状態
   const [formData, setFormData] = useState<SettingsFormData>({
     bucketName: "",
     endpoint: "",
@@ -110,7 +109,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     secretAccessKey: "",
   });
 
-  // 各種処理状態
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
@@ -267,7 +265,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     }
   }, [formData]);
 
-  // 各フィールドのバリデーション状態
   const fieldValidation = useMemo(() => {
     const fieldNames: (keyof SettingsFormData)[] = [
       "bucketName",
@@ -292,7 +289,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     );
   }, [validateField]);
 
-  // バリデーションエラーオブジェクト
   const errors = useMemo((): SettingsValidationErrors => {
     return {
       bucketName: fieldValidation.bucketName?.message,
@@ -303,7 +299,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     };
   }, [fieldValidation]);
 
-  // 送信可能状態の判定
   const canSubmit = useMemo(() => {
     const validationResult = validateAllFields();
     return validationResult.isValid && !isSaving && !isTesting;
@@ -325,7 +320,6 @@ export function useSettingsFormZod(): SettingsFormResult {
         isDataChanged(formData, lastTestedData) || isConnectionSuccessful !== true;
 
       if (needsConnectionTest) {
-        // 接続テストを実行
         const testResult: ApiResult = await window.api.credential.validateCredential(formData);
 
         if (!testResult.success) {
@@ -334,12 +328,10 @@ export function useSettingsFormZod(): SettingsFormResult {
           return;
         }
 
-        // 接続テスト成功
         setIsConnectionSuccessful(true);
         setLastTestedData({ ...formData });
       }
 
-      // 設定を保存
       const result: ApiResult = await window.api.credential.upsertCredential(formData);
 
       if (result.success) {

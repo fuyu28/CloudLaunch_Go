@@ -78,7 +78,6 @@ export default function GameFormModal({
     }
   }, [initialData, isOpen, mode]);
 
-  // モーダルが開かれるたびにtouchedFieldsをリセット
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       validation.resetTouchedFields();
@@ -89,15 +88,12 @@ export default function GameFormModal({
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
-    // 送信前にすべてのフィールドをタッチ済みにしてエラーを表示
     validation.markAllFieldsAsTouched();
 
     setSubmitting(true);
     try {
-      // ファイル存在チェックを含む非同期バリデーションを実行
       const validationResult = await validation.validateAllFieldsWithFileCheck();
       if (!validationResult.isValid) {
-        // バリデーションエラーがある場合は送信を停止
         return;
       }
 

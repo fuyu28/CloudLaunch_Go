@@ -45,7 +45,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
   const [sessions, setSessions] = useState<PlaySessionType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 統計情報をメモ化して計算
   const stats = useMemo(() => {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -65,7 +64,6 @@ const PlaySessionCardSimple = memo(function PlaySessionCardSimple({
     };
   }, [sessions]);
 
-  // プレイセッションを取得
   const fetchSessions = useCallback(async () => {
     try {
       setIsLoading(true);

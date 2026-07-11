@@ -47,7 +47,6 @@ export function handleApiError<T = void>(
  * @param toastId - 既存のトーストIDを指定する場合
  */
 export function handleUnexpectedError(error: unknown, context: string, toastId?: string): void {
-  // デバッグ時のみコンソールにログ出力
   const isDev = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
   if (isDev) {
     logger.error(`予期しないエラー (${context}):`, {

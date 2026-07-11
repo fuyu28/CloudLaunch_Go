@@ -37,7 +37,6 @@ import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/typ
  * クラウドデータ管理ページメインコンポーネント
  */
 export default function Cloud(): React.JSX.Element {
-  // 状態管理
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<CloudDataItem | CloudDirectoryNode | null>(
@@ -57,7 +56,6 @@ export default function Cloud(): React.JSX.Element {
   const { isOfflineMode } = useOfflineMode();
   const isValidCreds = useAtomValue(isValidCredsAtom);
 
-  // クラウドデータ管理フック
   const {
     cloudData,
     directoryTree,
@@ -242,7 +240,6 @@ export default function Cloud(): React.JSX.Element {
     }
   };
 
-  // コンポーネントマウント時にタイトル一覧を取得（カード/ツリーで共通）
   useEffect(() => {
     fetchCloudData();
   }, [fetchCloudData]);

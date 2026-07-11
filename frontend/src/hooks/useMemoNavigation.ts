@@ -33,7 +33,6 @@ export function useMemoNavigation(): UseMemoNavigationReturn {
   const gameIdParam = searchParams.get("gameId");
   const isFromGame = fromParam === "game" && gameIdParam !== null;
 
-  // 戻るボタン処理
   const handleBack = (): void => {
     if (isFromGame && gameIdParam) {
       // MemoCardから来た場合は、ゲーム詳細ページに戻る
@@ -44,7 +43,6 @@ export function useMemoNavigation(): UseMemoNavigationReturn {
     }
   };
 
-  // 保存成功時の処理
   const handleSaveSuccess = (
     effectiveGameId: string,
     mode: "create" | "edit",

@@ -60,12 +60,12 @@ export default function GameDetail(): React.JSX.Element {
   } | null>(null);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  // 同期確認モーダル（状態表示）。null = 非表示
+  // null のあいだは同期確認モーダルを出さない。
   const [syncStatusDetail, setSyncStatusDetail] = useState<SyncStatusDetail | null>(null);
   const [isSyncActionRunning, setIsSyncActionRunning] = useState(false);
-  // 同期管理外（untracked）ファイルの削除確認モーダル状態
+  // Pull が Applied=false を返したときの削除候補。確認前はローカル無変更。
   const [untrackedDeletes, setUntrackedDeletes] = useState<string[] | null>(null);
-  // 確認後に再実行する操作の種別（通常 pull か、コンフリクトのリモート採用か）
+  // 確認後に pull か resolveRemote のどちらを deleteUntracked=true で再実行するか。
   const [untrackedConfirmKind, setUntrackedConfirmKind] = useState<"pull" | "resolveRemote" | null>(
     null,
   );
@@ -75,14 +75,13 @@ export default function GameDetail(): React.JSX.Element {
   const { getStatus, push, pull, resolveConflict } = useCloudSync(isOfflineMode);
   const { formatDateWithTime } = useTimeFormat();
 
-  // ゲームデータを取得
   useEffect(() => {
     if (!id) return;
 
     const fetchGame = async (): Promise<void> => {
       setIsLoadingGame(true);
       try {
-        // まずvisibleGamesから検索
+        // 一覧キャッシュにあれば DB 往復を避ける。
         const existingGame = visibleGames.find((g) => g.id === id);
         if (existingGame) {
           setGame(existingGame);
@@ -91,14 +90,12 @@ export default function GameDetail(): React.JSX.Element {
           return;
         }
 
-        // visibleGamesにない場合は直接データベースから取得
+        // 詳細直リンクやフィルタ外のゲームはキャッシュに無い。
         const fetchedGame = await window.api.database.getGameById(id);
         if (fetchedGame) {
-          // APIから返されたデータは既にtransformされているのでそのまま使用
           const transformedGame = fetchedGame as GameType;
           setGame(transformedGame);
           setCurrentGameId(id);
-          // visibleGamesも更新
           setVisibleGames((prev) => {
             const exists = prev.find((g) => g.id === id);
             return exists ? prev : [...prev, transformedGame];
@@ -122,7 +119,7 @@ export default function GameDetail(): React.JSX.Element {
     fetchGame();
   }, [id, visibleGames, setCurrentGameId, setVisibleGames]);
 
-  // コンポーネントのアンマウント時にIDをクリア
+  // 詳細を離れたあとに PlayStatusBar 等が古い currentGameId を見ないようクリア。
   useEffect(() => {
     return () => {
       setCurrentGameId(null);
@@ -130,7 +127,6 @@ export default function GameDetail(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // カスタムフック
   const { uploadSaveData, downloadSaveData, isUploading, isDownloading } = useGameSaveData();
   const {
     editData,
@@ -153,7 +149,6 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [validateCreds, isOfflineMode]);
 
-  // セーブデータ操作のコールバック
   const handleUploadSaveData = useCallback(async (): Promise<void> => {
     if (!checkNetworkFeature("セーブデータアップロード")) {
       return;
@@ -182,7 +177,6 @@ export default function GameDetail(): React.JSX.Element {
     [formatDateWithTime],
   );
 
-  // プレイセッション追加関連のコールバック
   const handleOpenPlaySessionModal = (): void => {
     setIsPlaySessionModalOpen(true);
   };
@@ -191,22 +185,18 @@ export default function GameDetail(): React.JSX.Element {
     setIsPlaySessionModalOpen(false);
   };
 
-  // 全データを再取得する関数
   const refreshGameData = useCallback(async () => {
     if (!game?.id) return;
 
     try {
-      // ゲームデータを再取得
       const updatedGame = await window.api.database.getGameById(game.id);
 
       if (updatedGame) {
-        // ローカルの状態を更新（APIから返されたデータは既にtransformされている）
         const transformedGame = updatedGame as GameType;
         setGame(transformedGame);
-        // visibleGamesも更新
         setVisibleGames((prev) => prev.map((g) => (g.id === game.id ? transformedGame : g)));
       }
-      // リフレッシュキーを更新してコンポーネントの再レンダリングを促す
+      // 子カードが props 同一でも再取得するよう key を進める。
       setRefreshKey((prev) => prev + 1);
     } catch (error) {
       logger.error("ゲームデータの更新に失敗", {
@@ -226,7 +216,6 @@ export default function GameDetail(): React.JSX.Element {
         const result = await window.api.database.createSession(duration, game.id, sessionName);
         if (result.success) {
           showToast("プレイセッションを追加しました", "success");
-          // 全データを再取得
           await refreshGameData();
         } else {
           showToast(result.message || "プレイセッションの追加に失敗しました", "error");
@@ -282,7 +271,7 @@ export default function GameDetail(): React.JSX.Element {
             return false;
           }
           if (op.ok && op.applied === false) {
-            // 同期管理外ファイルの削除確認が必要（ここまでローカル無変更）
+            // untracked 削除確認が必要（ここまでローカル無変更）。
             if (showResult) {
               setUntrackedDeletes(op.untrackedDeletes ?? []);
               setUntrackedConfirmKind("pull");
@@ -292,7 +281,7 @@ export default function GameDetail(): React.JSX.Element {
           if (showResult) showToast("クラウドからダウンロードしました", "success");
           return true;
         }
-        // conflict
+        // conflict は自動解決せず専用モーダルへ。
         if (showResult) {
           setConflictMeta({
             localMeta: statusResult.data.localMeta,
@@ -369,7 +358,7 @@ export default function GameDetail(): React.JSX.Element {
   const handleSkipDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
     setSaveSyncMessage("");
-    // スキップ時は同期せず起動する（GameDetail の launchGameDirect は裏で sync するため使わない）
+    // スキップ時は同期せず起動する（launchGameDirect は裏で sync するため使わない）。
     await handleLaunchGame();
   }, [handleLaunchGame]);
 
@@ -381,7 +370,7 @@ export default function GameDetail(): React.JSX.Element {
         const op = await resolveConflict(game.id, useLocal);
         if (op.ok) {
           if (!useLocal && op.applied === false) {
-            // リモート採用だが、同期管理外ファイルの削除確認が必要（ローカル無変更）
+            // リモート採用でも untracked 削除確認が必要（ローカル無変更）。
             setIsConflictModalOpen(false);
             setConflictMeta(null);
             setUntrackedDeletes(op.untrackedDeletes ?? []);
@@ -412,7 +401,7 @@ export default function GameDetail(): React.JSX.Element {
     [game, showToast, resolveConflict, pendingLaunchAfterConflict, handleLaunchGame],
   );
 
-  // untracked 削除の確認後、deleteUntracked=true で再実行する。
+  // 確認後に deleteUntracked=true で再実行する（未確認のまま消さない）。
   const handleConfirmUntrackedDelete = useCallback(async (): Promise<void> => {
     if (!game || !untrackedConfirmKind) return;
     setIsDeletingUntracked(true);
@@ -458,7 +447,7 @@ export default function GameDetail(): React.JSX.Element {
       }
       const detail = statusResult.data;
       if (detail.status === "conflict") {
-        // 競合は専用モーダルで解決する
+        // 競合を Status モーダルに載せると上書き操作と混ざるので専用へ。
         setConflictMeta({ localMeta: detail.localMeta, remoteMeta: detail.remoteMeta });
         setIsConflictModalOpen(true);
         return;
@@ -476,7 +465,6 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [game, checkNetworkFeature, getStatus, showToast]);
 
-  // 同期確認モーダルからのアップロード実行
   const handleSyncUpload = useCallback(async (): Promise<void> => {
     if (!game) return;
     setIsSyncActionRunning(true);
@@ -494,14 +482,13 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [game, push, showToast, refreshGameData]);
 
-  // 同期確認モーダルからのダウンロード実行
   const handleSyncDownload = useCallback(async (): Promise<void> => {
     if (!game) return;
     setIsSyncActionRunning(true);
     try {
       const op = await pull(game.id);
       if (op.ok && op.applied === false) {
-        // 同期管理外ファイルの削除確認が必要（ここまでローカル無変更）
+        // untracked 削除確認が必要（ここまでローカル無変更）。
         setSyncStatusDetail(null);
         setUntrackedDeletes(op.untrackedDeletes ?? []);
         setUntrackedConfirmKind("pull");
@@ -519,7 +506,6 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [game, pull, showToast, refreshGameData]);
 
-  // プレイステータス変更のハンドラー
   const handleStatusChange = useCallback(
     async (newStatus: "unplayed" | "playing" | "played"): Promise<void> => {
       if (!game) return;
@@ -530,7 +516,6 @@ export default function GameDetail(): React.JSX.Element {
 
         if (result.success) {
           showToast("プレイステータスを更新しました", "success");
-          // 全データを再取得
           await refreshGameData();
         } else {
           showToast(result.message || "プレイステータスの更新に失敗しました", "error");
@@ -554,7 +539,6 @@ export default function GameDetail(): React.JSX.Element {
     return <Navigate to="/" replace />;
   }
 
-  // ローディング中の表示
   if (isLoadingGame) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -563,7 +547,7 @@ export default function GameDetail(): React.JSX.Element {
     );
   }
 
-  // ゲームが見つからない場合のみリダイレクト
+  // 取得完了後に無いときだけ戻す（ロード中の誤 Navigate を防ぐ）。
   if (!game) {
     return <Navigate to="/" replace />;
   }

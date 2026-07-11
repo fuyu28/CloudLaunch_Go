@@ -62,9 +62,7 @@ export default function MemoForm({
   // 2度目の fetch が入力を上書きするのを防ぐ。
   const isInitializedRef = useRef<boolean>(false);
 
-  // データ取得
   const fetchData = useCallback(async () => {
-    // 既存のリクエストをキャンセル
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -76,13 +74,11 @@ export default function MemoForm({
     try {
       const promises: Promise<unknown>[] = [];
 
-      // ゲーム選択機能が有効な場合、ゲーム一覧を取得
       if (showGameSelector) {
         promises.push(
           window.api.database.listGames("", "all", "title").then((gameResult) => {
             if (controller.signal.aborted) return;
             if (gameResult && Array.isArray(gameResult)) {
-              // 型安全性の改善：GameType[]として明示的にキャスト
               const typedGames = gameResult as GameType[];
               const sortedGames = typedGames.sort((a, b) => a.title.localeCompare(b.title));
               setGames(sortedGames);
@@ -96,7 +92,6 @@ export default function MemoForm({
         );
       }
 
-      // 編集モードの場合、メモ情報を取得
       if (mode === "edit" && memoId) {
         promises.push(
           window.api.memo.getMemoById(memoId).then(async (memoResult) => {
@@ -105,7 +100,6 @@ export default function MemoForm({
               setTitle(memoResult.data.title);
               setContent(memoResult.data.content);
 
-              // メモからゲーム情報を取得
               if (!selectedGameId && !preSelectedGameId) {
                 const gameResult = await window.api.database.getGameById(memoResult.data.gameId);
                 if (!controller.signal.aborted && gameResult) {
@@ -122,7 +116,6 @@ export default function MemoForm({
         );
       }
 
-      // 特定のゲームが選択されている場合、ゲーム情報を取得
       const targetGameId = selectedGameId || preSelectedGameId;
       if (targetGameId && mode !== "edit") {
         promises.push(
@@ -138,7 +131,6 @@ export default function MemoForm({
         );
       }
 
-      // 並行実行
       await Promise.allSettled(promises);
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -163,7 +155,6 @@ export default function MemoForm({
     isInitializedRef.current = true;
     fetchData();
 
-    // クリーンアップで進行中のリクエストをキャンセル
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -173,7 +164,6 @@ export default function MemoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 保存処理の最適化
   const saveData = useMemo(
     () => ({
       title: title.trim(),
@@ -183,7 +173,6 @@ export default function MemoForm({
     [title, content, selectedGameId, preSelectedGameId],
   );
 
-  // 表示用データの最適化
   const displayData = useMemo(
     () => ({
       effectiveGameId: selectedGameId || preSelectedGameId,
@@ -218,10 +207,8 @@ export default function MemoForm({
     [showToast],
   );
 
-  // 保存処理
   const handleSave = useCallback(
     async (closeAfterSave: boolean = true) => {
-      // バリデーション
       if (!saveData.title) {
         showToast("タイトルを入力してください", "error");
         return;
@@ -242,7 +229,6 @@ export default function MemoForm({
         let result;
 
         if (mode === "create") {
-          // 新規作成
           const createData: CreateMemoData = {
             title: saveData.title,
             content: saveData.content,
@@ -263,7 +249,6 @@ export default function MemoForm({
             showToast(`作成エラー: ${errorMessage}`, "error");
           }
         } else if (mode === "edit" && memoId) {
-          // 編集
           const updateData: UpdateMemoData = {
             title: saveData.title,
             content: saveData.content,
@@ -292,7 +277,6 @@ export default function MemoForm({
     [mode, saveData, memoId, showToast, onSaveSuccess, uploadMemoToCloud],
   );
 
-  // 戻るボタン処理
   const handleBack = useCallback(() => {
     if (typeof backTo === "function") {
       backTo();
@@ -301,7 +285,6 @@ export default function MemoForm({
     }
   }, [navigate, backTo]);
 
-  // キーボードショートカット
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.ctrlKey && e.key === "s") {

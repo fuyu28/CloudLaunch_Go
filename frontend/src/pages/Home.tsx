@@ -70,14 +70,11 @@ export default function Home(): React.ReactElement {
   const { formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
 
-  // 検索語をデバウンス
   const debouncedSearchWord = useDebounce(searchWord, CONFIG.TIMING.SEARCH_DEBOUNCE_MS);
 
-  // ローディング状態管理
   const gameListLoading = useLoadingState();
   const gameActionLoading = useLoadingState();
 
-  // ゲーム操作フック
   const { createGameAndRefreshList } = useGameActions({
     searchWord: debouncedSearchWord,
     filter,

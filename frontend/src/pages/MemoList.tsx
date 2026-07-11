@@ -47,10 +47,8 @@ export default function MemoList(): React.JSX.Element {
 
   const autoTracking = useAtomValue(autoTrackingAtom);
 
-  // 検索クエリのデバウンス処理
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  // 共通フックを使用
   const { toggleDropdown, closeDropdown, isOpen } = useDropdownMenu();
   const {
     handleDeleteMemo,
@@ -70,16 +68,13 @@ export default function MemoList(): React.JSX.Element {
     },
   });
 
-  // フィルタリング・ソート処理
   const filteredAndSortedMemos = useMemo(() => {
     let filtered = [...memos];
 
-    // ゲームフィルター
     if (selectedGameId !== "all") {
       filtered = filtered.filter((memo) => memo.gameId === selectedGameId);
     }
 
-    // タイトル検索フィルター
     if (debouncedSearchQuery) {
       const query = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -90,7 +85,6 @@ export default function MemoList(): React.JSX.Element {
       );
     }
 
-    // ソート処理
     filtered.sort((a, b) => {
       let comparison = 0;
 
@@ -113,11 +107,9 @@ export default function MemoList(): React.JSX.Element {
     return filtered;
   }, [memos, selectedGameId, debouncedSearchQuery, sortBy, sortDirection]);
 
-  // 全メモ一覧とゲーム一覧を取得する関数
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 全メモ一覧を取得
       const memoResult = await window.api.memo.getAllMemos();
       if (memoResult.success && memoResult.data) {
         setMemos(memoResult.data);
@@ -125,7 +117,6 @@ export default function MemoList(): React.JSX.Element {
         showToast("メモの取得に失敗しました", "error");
       }
 
-      // ゲーム一覧を取得（フィルター用）
       const gameResult = await window.api.database.listGames("", "all", "title");
       if (gameResult && Array.isArray(gameResult)) {
         // データベースの型をGameType型に変換
@@ -152,17 +143,14 @@ export default function MemoList(): React.JSX.Element {
     fetchData();
   }, [fetchData]);
 
-  // ソート方向を切り替える関数
   const toggleSortDirection = useCallback(() => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
   }, []);
 
-  // 検索をクリアする関数
   const clearSearch = useCallback(() => {
     setSearchQuery("");
   }, []);
 
-  // メモフォルダを開く処理
   const handleOpenMemoFolder = useCallback(async () => {
     try {
       const result = await window.api.memo.getMemoRootDir();

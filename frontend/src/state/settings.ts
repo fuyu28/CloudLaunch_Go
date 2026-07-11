@@ -133,10 +133,8 @@ export const changeThemeAtom = atom(null, async (_, set, newTheme: ThemeName) =>
     // DOM を巻き戻すロールバックが煩雑になるので、成功してから DOM を反映する。
     set(themeAtom, newTheme);
 
-    // HTMLのdata-theme属性を更新
     document.documentElement.setAttribute("data-theme", newTheme);
 
-    // 成功トースト
     toast.success(`テーマを「${newTheme}」に変更しました`);
 
     return { success: true };

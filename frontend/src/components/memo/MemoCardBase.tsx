@@ -62,7 +62,6 @@ function MemoCardBase({
 }: MemoCardBaseProps): React.JSX.Element {
   const { formatDateWithTime } = useTimeFormat();
 
-  // テキストの切り詰め処理を最適化
   const truncatedTexts = useMemo(() => {
     const truncatedTitle =
       titleMaxLength && memo.title.length > titleMaxLength
@@ -77,17 +76,14 @@ function MemoCardBase({
     return { truncatedTitle, truncatedContent };
   }, [memo.title, memo.content, titleMaxLength, contentMaxLength]);
 
-  // フォーマット済み日時をメモ化
   const formattedDate = useMemo(() => {
     return formatDateWithTime(memo.updatedAt);
   }, [memo.updatedAt, formatDateWithTime]);
 
-  // クリックハンドラーをメモ化
   const handleCardClick = useCallback(() => {
     onClick(memo.id);
   }, [onClick, memo.id]);
 
-  // CSSクラスをメモ化
   const cardClassName = useMemo(() => {
     return `${className} cursor-pointer hover:bg-base-200 transition-colors duration-200 relative`;
   }, [className]);

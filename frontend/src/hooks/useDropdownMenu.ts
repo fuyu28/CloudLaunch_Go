@@ -48,18 +48,15 @@ export function useDropdownMenu(): UseDropdownMenuReturn {
     return undefined;
   }, [openDropdownId]);
 
-  // ドロップダウンの開閉
   const toggleDropdown = (id: string, event: React.MouseEvent): void => {
     event.stopPropagation();
     setOpenDropdownId(openDropdownId === id ? null : id);
   };
 
-  // ドロップダウンを閉じる
   const closeDropdown = (): void => {
     setOpenDropdownId(null);
   };
 
-  // 指定されたIDのドロップダウンが開いているかチェック
   const isOpen = (id: string): boolean => {
     return openDropdownId === id;
   };

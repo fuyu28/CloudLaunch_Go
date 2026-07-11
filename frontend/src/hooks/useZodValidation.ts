@@ -92,10 +92,8 @@ export function useZodValidation<T extends Record<string, unknown>>(
 ): ZodValidationResult<T> {
   const { showUntouchedErrors = false } = options;
 
-  // タッチされたフィールドの状態
   const [touchedFields, setTouchedFields] = useState<Set<keyof T>>(new Set());
 
-  // 現在のバリデーション結果
   const validationResult = useMemo(() => {
     try {
       schema.parse(data);
@@ -115,14 +113,12 @@ export function useZodValidation<T extends Record<string, unknown>>(
     }
   }, [schema, data]);
 
-  // バリデーション状態
   const state: ValidationState<T> = useMemo(() => {
     const displayErrors: Record<keyof T, string | undefined> = {} as Record<
       keyof T,
       string | undefined
     >;
 
-    // エラー表示ロジック
     Object.keys(validationResult.errors).forEach((field) => {
       const fieldKey = field as keyof T;
       const shouldShow = showUntouchedErrors || touchedFields.has(fieldKey);
@@ -136,7 +132,6 @@ export function useZodValidation<T extends Record<string, unknown>>(
     };
   }, [validationResult, touchedFields, showUntouchedErrors]);
 
-  // 特定フィールドのエラーを取得
   const getError = useCallback(
     (field: keyof T): string | undefined => {
       return state.errors[field];
@@ -144,7 +139,6 @@ export function useZodValidation<T extends Record<string, unknown>>(
     [state.errors],
   );
 
-  // 特定フィールドにエラーがあるかチェック
   const hasError = useCallback(
     (field: keyof T): boolean => {
       return !!state.errors[field];
@@ -152,29 +146,24 @@ export function useZodValidation<T extends Record<string, unknown>>(
     [state.errors],
   );
 
-  // 特定フィールドをタッチ済みにマーク
   const touch = useCallback((field: keyof T) => {
     setTouchedFields((prev) => new Set([...prev, field]));
   }, []);
 
-  // すべてのフィールドをタッチ済みにマーク
   const touchAll = useCallback(() => {
     const allFields = Object.keys(data) as (keyof T)[];
     setTouchedFields(new Set(allFields));
   }, [data]);
 
-  // タッチ状態をリセット
   const resetTouched = useCallback(() => {
     setTouchedFields(new Set());
   }, []);
 
-  // 全体のバリデーション実行
   const validate = useCallback(() => {
     touchAll();
     return validationResult;
   }, [touchAll, validationResult]);
 
-  // 送信可能かどうか
   const canSubmit = useMemo(() => {
     return validationResult.isValid;
   }, [validationResult.isValid]);

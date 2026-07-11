@@ -148,12 +148,10 @@ export const useImageLoader = (src: string): ImageLoadState => {
  * @returns 画像読み込み結果
  */
 const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => {
-  // URLの形式を事前に検証
   const isHttpUrl = src.startsWith("http://") || src.startsWith("https://");
   const isFileUrl = src.startsWith("file://");
   const isAbsolutePath = /^[A-Za-z]:\\/.test(src) || src.startsWith("/");
 
-  // 有効なパス形式かチェック
   if (!isHttpUrl && !isFileUrl && !isAbsolutePath) {
     return {
       success: false,
@@ -161,7 +159,6 @@ const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => 
     };
   }
 
-  // HTTP(S) URLの場合は追加の検証
   if (isHttpUrl) {
     try {
       new URL(src); // URL形式の検証
@@ -173,7 +170,6 @@ const validateAndLoadImage = async (src: string): Promise<ApiResult<string>> => 
     }
   }
 
-  // file:// か絶対パスならローカル読み込み
   const isLocal = isFileUrl || isAbsolutePath;
 
   try {

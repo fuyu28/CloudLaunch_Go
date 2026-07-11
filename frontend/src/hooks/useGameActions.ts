@@ -70,7 +70,6 @@ export function useGameActions({
             throw new Error((createResult as { success: false; message: string }).message);
           }
 
-          // ゲーム一覧を再取得
           const games = await window.api.database.listGames(
             searchWord,
             filter,

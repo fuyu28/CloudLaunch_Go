@@ -81,7 +81,6 @@ function CloudDataCard({
   const [isFileDetailsLoading, setIsFileDetailsLoading] = useState(false);
   const [lastFetchedGameId, setLastFetchedGameId] = useState<string | undefined>(undefined);
 
-  // ファイル詳細情報を取得
   const fetchFileDetails = useCallback(
     async (forceRefresh = false) => {
       if (!isValidCreds || !gameId || isOfflineMode) return;
@@ -102,7 +101,6 @@ function CloudDataCard({
           setFileDetails(result.data);
           setLastFetchedGameId(gameId);
 
-          // ファイル詳細情報から基本情報も設定
           if (result.data.exists) {
             const latestFile = result.data.files.sort(
               (a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime(),
@@ -139,7 +137,6 @@ function CloudDataCard({
     [gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
   );
 
-  // gameIdが変わった場合に状態をリセット
   useEffect(() => {
     if (lastFetchedGameId !== gameId) {
       setIsLoading(true);
@@ -155,7 +152,6 @@ function CloudDataCard({
     }
   }, [gameId, isValidCreds, isOfflineMode, fetchFileDetails]);
 
-  // アップロード完了後にデータを再取得
   const handleUpload = useCallback(async () => {
     if (!checkNetworkFeature("セーブデータアップロード")) {
       return;
@@ -164,7 +160,6 @@ function CloudDataCard({
     await fetchFileDetails(true); // 強制リフレッシュ
   }, [onUpload, fetchFileDetails, checkNetworkFeature]);
 
-  // ダウンロード実行
   const handleDownload = useCallback(async () => {
     if (!checkNetworkFeature("セーブデータダウンロード")) {
       return;

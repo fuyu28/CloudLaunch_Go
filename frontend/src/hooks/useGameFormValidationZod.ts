@@ -83,10 +83,8 @@ export type GameFormValidationResult = {
  * @returns バリデーション結果とヘルパー関数
  */
 export function useGameFormValidationZod(gameData: InputGameData): GameFormValidationResult {
-  // タッチされたフィールドを記録する状態
   const [touchedFields, setTouchedFields] = useState<Set<keyof InputGameData>>(new Set());
 
-  // ファイル存在チェックエラーの状態
   const [fileCheckErrors, setFileCheckErrors] = useState<Record<string, string>>({});
 
   // ファイル存在チェックが debounce 待機中のフィールド集合。
@@ -103,7 +101,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
       const fieldValue = gameData[fieldName] as string;
 
       if (!fieldValue || fieldValue.trim() === "") {
-        // 空の場合はエラーをクリア
         setFileCheckErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors[fieldName];
@@ -130,9 +127,7 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
             if (!isValidImage) {
               try {
                 new URL(fieldValue);
-                // URLの場合はアクセスチェックなし
               } catch {
-                // ローカルファイルの場合は存在チェック
                 hasError = true;
                 errorMessage = "画像ファイルが存在しないか、無効なファイルです";
               }
@@ -149,7 +144,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
           }
         }
 
-        // エラー状態を更新
         setFileCheckErrors((prev) => {
           const newErrors = { ...prev };
           if (hasError) {
@@ -192,7 +186,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
         }, 500);
         timeoutIds.push(timeoutId);
       } else {
-        // フィールドが空の場合はエラーをクリア
         setFileCheckErrors((prev) => {
           const newErrors = { ...prev };
           delete newErrors[fieldName];
@@ -206,7 +199,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
       setPendingFileCheckCount((prev) => prev + scheduledCount);
     }
 
-    // クリーンアップ関数で全てのタイムアウトをクリア
     return () => {
       timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
       // 未実行分の pending は取り消し扱いにする（新しい effect が改めて予約する）。
@@ -217,17 +209,14 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameData.exePath, gameData.imagePath, gameData.saveFolderPath, validateFileField]);
 
-  // フィールドをタッチ済みとして記録
   const markFieldAsTouched = useCallback((fieldName: keyof InputGameData) => {
     setTouchedFields((prev) => new Set([...prev, fieldName]));
   }, []);
 
-  // すべてのフィールドをタッチ済みとして設定
   const markAllFieldsAsTouched = useCallback(() => {
     setTouchedFields(new Set(["title", "publisher", "exePath", "imagePath", "saveFolderPath"]));
   }, []);
 
-  // タッチされたフィールドをリセット
   const resetTouchedFields = useCallback(() => {
     setTouchedFields(new Set());
     setFileCheckErrors({});
@@ -241,12 +230,10 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
   const validateField = useCallback(
     (fieldName: keyof InputGameData): string | undefined => {
       try {
-        // 全体スキーマで検証し、指定フィールドのエラーのみを取得
         gameFormSchema.parse(gameData);
         return undefined;
       } catch (error) {
         if (error instanceof ZodError) {
-          // 指定フィールドに関連するエラーのみを返す
           const fieldError = error.issues.find((issue) => issue.path.includes(fieldName));
           return fieldError?.message;
         }
@@ -285,12 +272,10 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
    */
   const validateAllFieldsWithFileCheck = useCallback(async () => {
     try {
-      // まず基本バリデーションを実行
       gameFormSchema.parse(gameData);
 
       const errors: Record<string, string> = {};
 
-      // 実行ファイルの存在チェック
       if (gameData.exePath) {
         const isValidExe = await validateExecutablePath(gameData.exePath);
         if (!isValidExe) {
@@ -298,21 +283,17 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
         }
       }
 
-      // 画像ファイルの存在チェック（URLでない場合のみ）
       if (gameData.imagePath && gameData.imagePath.trim()) {
         const isValidImage = await validateImagePath(gameData.imagePath);
         if (!isValidImage) {
           try {
             new URL(gameData.imagePath);
-            // URLの場合はアクセスチェックなし
           } catch {
-            // ローカルファイルの場合は存在チェック
             errors.imagePath = "画像ファイルが存在しないか、無効なファイルです";
           }
         }
       }
 
-      // セーブフォルダの存在チェック
       if (gameData.saveFolderPath && gameData.saveFolderPath.trim()) {
         const isValidFolder = await validateSaveFolderPath(gameData.saveFolderPath);
         if (!isValidFolder) {
@@ -321,7 +302,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
       }
 
       const hasErrors = Object.keys(errors).length > 0;
-      // ファイル存在チェックエラーをstateに保存
       setFileCheckErrors(errors);
       return { isValid: !hasErrors, errors };
     } catch (error) {
@@ -339,7 +319,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     }
   }, [gameData]);
 
-  // 各フィールドのバリデーション状態（Zodベース）
   const fieldValidation = useMemo(() => {
     const fieldNames: (keyof InputGameData)[] = [
       "title",
@@ -373,7 +352,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     );
   }, [touchedFields, validateField, fileCheckErrors]);
 
-  // エラーオブジェクトの生成（タッチされたフィールドのみ）
   const errors = useMemo((): ValidationErrors => {
     return {
       title: fieldValidation.title?.shouldShowError ? fieldValidation.title.message : undefined,
@@ -392,7 +370,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     };
   }, [fieldValidation]);
 
-  // 必須フィールドの入力チェック（Zodベース）
   const hasRequiredFields = useMemo(() => {
     return (
       fieldValidation.title?.isValid &&

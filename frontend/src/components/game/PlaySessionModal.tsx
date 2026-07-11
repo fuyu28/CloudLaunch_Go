@@ -77,7 +77,6 @@ export function PlaySessionModal({
   const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const { formatShort } = useTimeFormat();
 
-  // モーダルが開いたときの初期化
   useEffect(() => {
     if (isOpen) {
       setMode("manual");

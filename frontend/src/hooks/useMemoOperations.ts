@@ -73,7 +73,6 @@ export function useMemoOperations({
     }
   };
 
-  // 編集ページへの遷移
   const handleEditMemo = (memoId: string, event: React.MouseEvent): void => {
     event.stopPropagation();
     closeDropdown();
@@ -87,7 +86,6 @@ export function useMemoOperations({
     }
   };
 
-  // メモ詳細ページへの遷移
   const handleViewMemo = (memoId: string): void => {
     if (gameId) {
       // MemoCardから来た場合はクエリパラメータを付与
@@ -98,14 +96,12 @@ export function useMemoOperations({
     }
   };
 
-  // 削除確認処理
   const handleDeleteConfirm = (memoId: string, event: React.MouseEvent): void => {
     event.stopPropagation();
     closeDropdown();
     openDeleteModal(memoId);
   };
 
-  // 同期処理
   const handleSyncFromCloud = async (event: React.MouseEvent): Promise<void> => {
     event.stopPropagation();
     closeDropdown();

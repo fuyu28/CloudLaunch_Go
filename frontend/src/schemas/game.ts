@@ -25,7 +25,6 @@ export const gameSchema = z.object({
 export const gameFormSchema = gameSchema
   .refine(
     (data) => {
-      // 実行ファイルの拡張子チェック
       if (
         data.exePath &&
         ![".exe", ".app"].some((ext) => data.exePath.toLowerCase().endsWith(ext))
@@ -41,18 +40,14 @@ export const gameFormSchema = gameSchema
   )
   .refine(
     (data) => {
-      // 画像ファイルの拡張子チェック（入力がある場合のみ）
       if (data.imagePath && data.imagePath.trim()) {
-        // URLの判定
         try {
           new URL(data.imagePath);
-          // URLの場合は拡張子チェック
           const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
           const url = new URL(data.imagePath);
           const pathname = url.pathname.toLowerCase();
           return imageExtensions.some((ext) => pathname.endsWith(ext));
         } catch {
-          // ローカルファイルの場合は拡張子チェック
           const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
           if (!imageExtensions.some((ext) => data.imagePath!.toLowerCase().endsWith(ext))) {
             return false;

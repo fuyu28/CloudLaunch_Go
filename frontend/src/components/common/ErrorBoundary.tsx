@@ -83,12 +83,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       errorInfo,
     });
 
-    // カスタムエラーハンドラーがあれば実行
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }
 
-    // メインプロセスにエラーを報告
     window.api.errorReport.reportError({
       message: error.message,
       stack: error.stack || "",
@@ -280,7 +278,6 @@ export function useErrorHandler(): { handleError: (error: Error, context?: strin
       context,
     });
 
-    // メインプロセスにエラーを報告
     window.api.errorReport.reportError({
       message: error.message,
       stack: error.stack || "",
