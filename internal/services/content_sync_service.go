@@ -111,6 +111,16 @@ func (s *ContentSyncService) IsOffline() bool {
 	return s.offline.Load()
 }
 
+// SetUploadConcurrency はアップロード／ダウンロード並列度を更新する。
+// NewContentSyncService は config を値コピーするため、app.Config だけ書き換えても
+// Push/Pull に反映されない。設定 UI からの変更は必ずここを経由する。
+func (s *ContentSyncService) SetUploadConcurrency(value int) {
+	if value <= 0 {
+		return
+	}
+	s.config.S3UploadConcurrency = value
+}
+
 // NewContentSyncService は ContentSyncService を生成する。
 func NewContentSyncService(cfg config.Config, store credentials.Store, repo ContentSyncRepository, logger *slog.Logger) *ContentSyncService {
 	svc := &ContentSyncService{

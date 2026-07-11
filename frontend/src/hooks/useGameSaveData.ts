@@ -39,9 +39,9 @@ import {
  */
 export type GameSaveDataResult = {
   /** セーブデータアップロード関数 */
-  uploadSaveData: (game: GameType) => Promise<void>;
-  /** セーブデータダウンロード関数 */
-  downloadSaveData: (game: GameType) => Promise<void>;
+  uploadSaveData: (game: GameType) => Promise<boolean>;
+  /** セーブデータダウンロード関数（適用成功時 true） */
+  downloadSaveData: (game: GameType) => Promise<boolean>;
   /** アップロード中かどうか */
   isUploading: boolean;
   /** ダウンロード中かどうか */
@@ -59,13 +59,13 @@ export function useGameSaveData(): GameSaveDataResult {
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const uploadSaveData = useCallback(async (game: GameType): Promise<void> => {
+  const uploadSaveData = useCallback(async (game: GameType): Promise<boolean> => {
     if (!game.saveFolderPath) {
       handleApiError({
         success: false,
         message: "セーブデータフォルダが設定されていません。",
       });
-      return;
+      return false;
     }
 
     setIsUploading(true);
@@ -82,24 +82,26 @@ export function useGameSaveData(): GameSaveDataResult {
       const result = await uploadSaveDataAndSyncHash({ gameId: game.id });
       if (result.success) {
         toast.success("セーブデータのアップロードに成功しました。", { id: toastId });
-      } else {
-        toast.error(result.message || "エラーが発生しました", { id: toastId });
+        return true;
       }
+      toast.error(result.message || "エラーが発生しました", { id: toastId });
+      return false;
     } catch (error) {
       handleUnexpectedError(error, "セーブデータのアップロード", toastId);
+      return false;
     } finally {
       unsubscribe();
       setIsUploading(false);
     }
   }, []);
 
-  const downloadSaveData = useCallback(async (game: GameType): Promise<void> => {
+  const downloadSaveData = useCallback(async (game: GameType): Promise<boolean> => {
     if (!game.saveFolderPath) {
       handleApiError({
         success: false,
         message: "セーブデータフォルダが設定されていません。",
       });
-      return;
+      return false;
     }
 
     setIsDownloading(true);
@@ -121,13 +123,17 @@ export function useGameSaveData(): GameSaveDataResult {
           "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
           { id: toastId },
         );
-      } else if (result.success) {
-        toast.success("セーブデータのダウンロードに成功しました。", { id: toastId });
-      } else {
-        toast.error(result.message || "エラーが発生しました", { id: toastId });
+        return false;
       }
+      if (result.success) {
+        toast.success("セーブデータのダウンロードに成功しました。", { id: toastId });
+        return true;
+      }
+      toast.error(result.message || "エラーが発生しました", { id: toastId });
+      return false;
     } catch (error) {
       handleUnexpectedError(error, "セーブデータのダウンロード", toastId);
+      return false;
     } finally {
       unsubscribe();
       setIsDownloading(false);

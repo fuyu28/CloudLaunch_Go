@@ -313,6 +313,9 @@ func (app *App) UpdateUploadConcurrency(value int) result.ApiResult[bool] {
 		return result.ErrorResult[bool]("同時実行数が不正です", "valueが不正です")
 	}
 	app.Config.S3UploadConcurrency = value
+	if app.ContentSyncService != nil {
+		app.ContentSyncService.SetUploadConcurrency(value)
+	}
 	return result.OkResult(true)
 }
 

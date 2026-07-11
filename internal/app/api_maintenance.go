@@ -98,8 +98,10 @@ func (app *App) resumeRuntimeServicesAfterRestore() error {
 		}
 		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
 	}
+	// ホットキーは任意機能。失敗を restore 全体のエラーにすると、
+	// AppData 置換と DB reopen が成功していてもロールバックされてしまう。
 	if err := app.startHotkey(); err != nil {
-		return err
+		app.Logger.Warn("復元後のホットキー開始に失敗しました（復元自体は成功）", "error", err)
 	}
 	return nil
 }

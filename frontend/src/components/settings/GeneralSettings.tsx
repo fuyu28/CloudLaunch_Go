@@ -55,7 +55,6 @@ export default function GeneralSettings(): React.JSX.Element {
 
   // オフラインモード変更ハンドラー
   const handleOfflineModeChange = async (enabled: boolean): Promise<void> => {
-    setOfflineMode(enabled);
     // バックエンド ContentSyncService にも反映しないと、process_monitor 経由の
     // 自動同期や直接の cloudSync.Push 呼び出しが UI 設定を無視して S3 にアクセスし続ける。
     const result = await window.api.settings.updateOfflineMode(enabled);
@@ -68,6 +67,7 @@ export default function GeneralSettings(): React.JSX.Element {
       toast.error("オフラインモードの更新に失敗しました");
       return;
     }
+    setOfflineMode(enabled);
     if (enabled) {
       toast.success("オフラインモードを有効にしました");
     } else {
@@ -77,12 +77,10 @@ export default function GeneralSettings(): React.JSX.Element {
 
   // 自動ゲーム検出変更ハンドラー
   const handleAutoTrackingChange = async (enabled: boolean): Promise<void> => {
-    setAutoTracking(enabled);
-
-    // メインプロセスに設定変更を通知
     try {
       const result = await window.api.settings.updateAutoTracking(enabled);
       if (result.success) {
+        setAutoTracking(enabled);
         if (enabled) {
           toast.success("自動ゲーム検出を有効にしました");
         } else {
@@ -182,6 +180,8 @@ export default function GeneralSettings(): React.JSX.Element {
           if (op.ok && op.applied === false) skipped++;
           else if (op.ok) downloaded++;
           else failed++;
+        } else if (status === "conflict") {
+          skipped++;
         }
       }
 
