@@ -85,8 +85,10 @@ function CloudDataCard({
     async (forceRefresh = false) => {
       if (!isValidCreds || !gameId || isOfflineMode) return;
 
-      // 同じゲームIDで既にデータを取得済みの場合はスキップ（強制リフレッシュ以外）
-      if (!forceRefresh && lastFetchedGameId === gameId && fileDetails !== undefined) {
+      // 同じゲームIDで既にデータを取得済みの場合はスキップ（強制リフレッシュ以外）。
+      // fileDetails を deps に含めると、state 更新でコールバックが再生成されて
+      // useEffect が再実行される循環になるため、重複判定は lastFetchedGameId のみで行う。
+      if (!forceRefresh && lastFetchedGameId === gameId) {
         setIsLoading(false);
         return;
       }
@@ -133,7 +135,7 @@ function CloudDataCard({
         setIsLoading(false);
       }
     },
-    [fileDetails, gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
+    [gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
   );
 
   // gameIdが変わった場合に状態をリセット
@@ -171,7 +173,8 @@ function CloudDataCard({
 
   // ファイルサイズをフォーマット
   const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return "不明";
+    // 0 バイトも有効な値として扱い、null/undefined/NaN のみ「不明」表示にする。
+    if (bytes == null || Number.isNaN(bytes)) return "不明";
 
     const units = ["B", "KB", "MB", "GB"];
     let size = bytes;

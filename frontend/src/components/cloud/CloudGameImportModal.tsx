@@ -245,15 +245,26 @@ export default function CloudGameImportModal({
 
     setConflict(null);
     if (mode === "replace") {
+      const deletedIds: string[] = [];
       for (const localGame of conflict.localMatches) {
         const result = await window.api.database.deleteGame(localGame.id);
         if (!result.success) {
           toast.error(result.message ?? "ローカルゲームの削除に失敗しました");
+          // 部分的に削除済みの場合、次回の重複判定でズレが出ないよう localCache も更新する。
+          if (deletedIds.length > 0) {
+            setLocalCache((prev) => prev.filter((g) => !deletedIds.includes(g.id)));
+          }
           await finishBatch();
           return;
         }
         // 削除が発生した時点で一覧更新が必要。バッチ終了時にまとめて通知する。
         importedAnyRef.current = true;
+        deletedIds.push(localGame.id);
+      }
+      // importing 中は fetchLocalGames が走らないため、削除済みIDを localCache から除去し
+      // 後続キューの localTitleMap 判定に「削除済み」を反映する。
+      if (deletedIds.length > 0) {
+        setLocalCache((prev) => prev.filter((g) => !deletedIds.includes(g.id)));
       }
     }
 
