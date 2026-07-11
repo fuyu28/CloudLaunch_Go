@@ -1,4 +1,9 @@
-import { themeAtom, offlineModeAtom } from "@renderer/state/settings";
+import {
+  themeAtom,
+  offlineModeAtom,
+  autoTrackingAtom,
+  transferConcurrencyAtom,
+} from "@renderer/state/settings";
 import { useAtom, useAtomValue } from "jotai";
 import { useRef, useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
@@ -16,6 +21,8 @@ export default function MainLayout(): React.JSX.Element {
   const drawerRef = useRef<HTMLInputElement>(null);
   const [currentTheme] = useAtom(themeAtom);
   const offlineMode = useAtomValue(offlineModeAtom);
+  const autoTracking = useAtomValue(autoTrackingAtom);
+  const transferConcurrency = useAtomValue(transferConcurrencyAtom);
   // Windows のみフレームレス＝独自のウィンドウ操作ボタンを表示する。
   // macOS / Linux はネイティブ装飾を使うため非表示にする。
   const [isWindows, setIsWindows] = useState(false);
@@ -54,14 +61,15 @@ export default function MainLayout(): React.JSX.Element {
     };
   }, []);
 
-  // 起動時にバックエンドの ContentSyncService へオフラインモードを同期する。
-  // offlineModeAtom は localStorage で永続化されているが、バックエンドはプロセス起動毎に
-  // 既定（オンライン）に戻るため、ここで再宣言しないと process_monitor 経由の自動同期が
-  // ユーザー設定を無視して S3 にアクセスし続けてしまう。
+  // 起動時にバックエンドへ localStorage 永続設定を再同期する。
+  // バックエンドはプロセス起動毎に既定値に戻るため、ここで再宣言しないと
+  // autoTracking OFF なのに監視が動き続けたり、offline / 並列度が無視されたりする。
   // 初回マウント時のみ実行する（atom 更新の度に呼ぶのはハンドラ側の責務）。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     void window.api.settings.updateOfflineMode(offlineMode);
+    void window.api.settings.updateAutoTracking(autoTracking);
+    void window.api.settings.updateUploadConcurrency(transferConcurrency);
   }, []);
 
   return (
