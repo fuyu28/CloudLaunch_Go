@@ -2,7 +2,7 @@
  * @fileoverview 未捕捉エラーのグローバル捕捉
  *
  * try/catch で囲まれていない同期例外（window の error イベント）と、
- * catch されない Promise の拒否（unhandledrejection）を捕捉し、
+ * catch されない Promise の拒否（unhandledrejection）をログに記録する。
  */
 
 import { logger } from "./logger";

@@ -1,7 +1,6 @@
 /**
  * @fileoverview セーブデータのクラウド同期確認メッセージ用ヘルパ。
- *
- * Home / GameDetail 双方で繰り返されていた
+ * Home / GameDetail 双方で重複していた確認ダイアログ文言の組み立てを共通化する。
  */
 
 export function toValidDate(value: Date | string | number | null | undefined): Date | null {

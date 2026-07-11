@@ -1,6 +1,5 @@
 /**
- * @fileoverview パス操作ユーティリティ
- *
+ * @fileoverview パス操作ユーティリティ。Windows のバックスラッシュ区切りを正規化した上で親ディレクトリを求める。
  */
 
 export function getParentDirectory(filePath: string): string {

@@ -30,10 +30,6 @@ class RendererLogger {
     this.isDevelopment = process.env.NODE_ENV === "development";
   }
 
-  /**
-   * デバッグログを出力
-   * ログレベル設定と開発環境をチェック
-   */
   debug(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("debug")) {
       return;
@@ -46,9 +42,6 @@ class RendererLogger {
     this.logToMain("debug", message, metadata);
   }
 
-  /**
-   * 情報ログを出力
-   */
   info(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("info")) {
       return;
@@ -58,9 +51,6 @@ class RendererLogger {
     this.logToMain("info", message, metadata);
   }
 
-  /**
-   * 警告ログを出力
-   */
   warn(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("warn")) {
       return;
@@ -70,9 +60,6 @@ class RendererLogger {
     this.logToMain("warn", message, metadata);
   }
 
-  /**
-   * エラーログを出力
-   */
   error(message: string, metadata?: LogMetadata): void {
     if (!logLevelManager.shouldLog("error")) {
       return;
@@ -96,9 +83,6 @@ class RendererLogger {
     }
   }
 
-  /**
-   * コンソールにログを出力
-   */
   private logToConsole(level: LogLevel, message: string, metadata?: LogMetadata): void {
     const timestamp = new Date().toISOString();
     const componentInfo = metadata?.component
@@ -123,9 +107,6 @@ class RendererLogger {
     }
   }
 
-  /**
-   * メインプロセスにログを送信
-   */
   private logToMain(
     level: "debug" | "info" | "warn" | "error",
     message: string,
@@ -145,9 +126,6 @@ class RendererLogger {
     }
   }
 
-  /**
-   * ユーザーアクションをログに記録
-   */
   logUserAction(action: string, details?: Record<string, unknown>): void {
     this.info(`ユーザーアクション: ${action}`, {
       component: "UserAction",
@@ -155,9 +133,6 @@ class RendererLogger {
     });
   }
 
-  /**
-   * パフォーマンス測定を開始
-   */
   startPerformanceTimer(label: string): () => void {
     const startTime = performance.now();
     return () => {
