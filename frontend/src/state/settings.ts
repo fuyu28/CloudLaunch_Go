@@ -44,10 +44,7 @@ export const s3ForcePathStyleAtom = atomWithStorage<boolean>("s3ForcePathStyle",
 
 export const s3UseTLSAtom = atomWithStorage<boolean>("s3UseTLS", true);
 
-/**
- * テーマ変更中の状態atom
- * 一時的な状態なのでLocalStorageには保存しない
- */
+// 一時的な状態なので LocalStorage には保存しない（atomWithStorage を使わない）
 export const isChangingThemeAtom = atom(false);
 
 export const changeThemeAtom = atom(null, async (_, set, newTheme: ThemeName) => {
@@ -75,9 +72,6 @@ export const changeThemeAtom = atom(null, async (_, set, newTheme: ThemeName) =>
   }
 });
 
-/**
- * ソート順の表示名マップ
- */
 export const sortOptionLabels: Record<SortOption, string> = {
   title: "タイトル順",
   lastPlayed: "最近プレイした順",
@@ -86,9 +80,6 @@ export const sortOptionLabels: Record<SortOption, string> = {
   lastRegistered: "最近登録した順",
 };
 
-/**
- * フィルター状態の表示名マップ
- */
 export const filterStateLabels: Record<FilterOption, string> = {
   all: "すべて",
   unplayed: "未プレイ",

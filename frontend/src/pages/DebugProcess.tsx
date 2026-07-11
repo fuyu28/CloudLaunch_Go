@@ -1,6 +1,5 @@
 /**
  * @fileoverview プロセス監視のデバッグページ
- *
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";

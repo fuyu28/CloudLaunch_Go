@@ -64,7 +64,7 @@ export default function MemoList(): React.JSX.Element {
     closeDropdown,
     openDeleteModal: setDeleteConfirmId,
     onSyncSuccess: () => {
-      fetchData(); // 同期後にメモ一覧を再取得
+      fetchData();
     },
   });
 

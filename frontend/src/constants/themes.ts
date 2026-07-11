@@ -4,9 +4,6 @@
  * DaisyUIで利用可能なテーマの一覧を定義します。
  */
 
-/**
- * DaisyUIの標準テーマ一覧
- */
 export const DAISYUI_THEMES = [
   "cloudlaunch",
   "light",

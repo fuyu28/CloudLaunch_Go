@@ -26,9 +26,6 @@ import { logger } from "@renderer/utils/logger";
 import { countFilesRecursively, sumSizesRecursively } from "@renderer/utils/cloudUtils";
 import type { CloudDataItem, CloudDirectoryNode, CloudFileDetail } from "src/types/cloud";
 
-/**
- * クラウドデータ管理ページメインコンポーネント
- */
 export default function Cloud(): React.JSX.Element {
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -112,9 +109,6 @@ export default function Cloud(): React.JSX.Element {
   // 遅延取得中は空一覧を「0ファイル」と誤表示しないためのフラグ。
   const isOpenGameLoading = openGameNode ? loadingGameIds.has(openGameNode.path) : false;
 
-  /**
-   * ツリーノードの展開・折りたたみ
-   */
   const handleToggleExpand = (path: string): void => {
     const newExpanded = new Set(expandedNodes);
     if (newExpanded.has(path)) {
@@ -130,9 +124,6 @@ export default function Cloud(): React.JSX.Element {
     setExpandedNodes(newExpanded);
   };
 
-  /**
-   * ツリーノード選択
-   */
   const handleSelectNode = (node: CloudDirectoryNode): void => {
     if (!node.isDirectory) {
       logger.debug("ファイルが選択されました:", {
@@ -183,9 +174,6 @@ export default function Cloud(): React.JSX.Element {
   // 新しく開いた対象のファイル一覧を上書きしないようガードするため使う。
   const detailsRequest = useLatestRequestId();
 
-  /**
-   * ファイル詳細を表示
-   */
   const handleViewDetails = async (node: CloudDirectoryNode): Promise<void> => {
     const detailItem: CloudDataItem = {
       name: node.name,
