@@ -66,9 +66,6 @@ export function useSettingsFormZod(): SettingsFormResult {
   const [isConnectionSuccessful, setIsConnectionSuccessful] = useState<boolean | null>(null);
   const [lastTestedData, setLastTestedData] = useState<SettingsFormData | null>(null);
 
-  /**
-   * フォームデータが変更されているかチェック
-   */
   const isDataChanged = useCallback(
     (data1: SettingsFormData, data2: SettingsFormData | null): boolean => {
       if (!data2) return true;
@@ -127,9 +124,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     };
   }, []);
 
-  /**
-   * フィールド単体の更新
-   */
   const updateField = useCallback(
     (field: keyof SettingsFormData, value: string) => {
       setFormData((prev) => {
@@ -149,9 +143,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     [lastTestedData, isDataChanged],
   );
 
-  /**
-   * フォームデータの部分更新
-   */
   const updateFormData = useCallback(
     (data: Partial<SettingsFormData>) => {
       setFormData((prev) => {
@@ -171,9 +162,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     [lastTestedData, isDataChanged],
   );
 
-  /**
-   * Zodスキーマを使用したフィールドバリデーション
-   */
   const validateField = useCallback(
     (fieldName: keyof SettingsFormData): string | undefined => {
       try {
@@ -192,9 +180,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     [formData],
   );
 
-  /**
-   * 全フィールドのバリデーション
-   */
   const validateAllFields = useCallback(() => {
     try {
       credsSchema.parse(formData);
@@ -331,9 +316,6 @@ export function useSettingsFormZod(): SettingsFormResult {
     }
   }, [formData, canSubmit]);
 
-  /**
-   * フォームのリセット
-   */
   const resetForm = useCallback(() => {
     setFormData({
       bucketName: "",

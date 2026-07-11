@@ -67,7 +67,6 @@ export function useGameActions({
   );
 
   return {
-    /** ゲーム追加とリスト更新 */
     createGameAndRefreshList,
     isLoading: gameActionLoading.isLoading,
   };

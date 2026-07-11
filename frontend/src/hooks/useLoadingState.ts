@@ -29,7 +29,6 @@ export function useLoadingState(initialLoading = false): UseLoadingStateReturn {
   const isLoading = runningCount > 0;
   const toastHandler = useToastHandler();
 
-  // 並行実行を安全に扱うため、+1/-1 の参照カウントで isLoading を管理する。
   const executeWithLoading = useCallback(
     async <T>(asyncFn: () => Promise<T>, options?: ToastOptions): Promise<T | undefined> => {
       setRunningCount((prev) => prev + 1);

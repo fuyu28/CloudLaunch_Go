@@ -7,9 +7,6 @@
 import { useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
 
-/**
- * トーストオプション
- */
 export type ToastOptions = {
   loadingMessage?: string;
   successMessage?: string;
@@ -17,9 +14,6 @@ export type ToastOptions = {
   showToast?: boolean;
 };
 
-/**
- * トーストハンドラーの戻り値
- */
 export type ToastHandler = {
   showLoading: (message?: string, toastId?: string) => string | undefined;
   showSuccess: (message: string, toastId?: string) => void;

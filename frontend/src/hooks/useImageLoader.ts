@@ -17,10 +17,6 @@ type ImageLoadState = {
   error?: string;
 };
 
-/**
- * NoImage SVGをbase64エンコードしたdata URL
- * 灰色の背景に "No Image" テキストが表示される
- */
 const createNoImageDataUrl = (): string => {
   const svg = `
     <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">

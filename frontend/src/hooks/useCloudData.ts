@@ -73,9 +73,6 @@ export function useCloudData(): UseCloudDataReturn {
     return getNodesByPath(state.directoryTree, state.currentPath);
   }, [state.directoryTree, state.currentPath]);
 
-  /**
-   * ナビゲーションキャッシュをクリア
-   */
   const clearNavigationCache = useCallback((): void => {
     navigationCacheRef.current.clear();
   }, []);
@@ -216,17 +213,11 @@ export function useCloudData(): UseCloudDataReturn {
     }));
   }, []);
 
-  /**
-   * カードビューで親ディレクトリに戻る
-   */
   const navigateBack = useCallback((): void => {
     const newPath = state.currentPath.slice(0, -1);
     setState((prev) => ({ ...prev, currentPath: newPath }));
   }, [state.currentPath]);
 
-  /**
-   * 指定パスに直接移動
-   */
   const navigateToPath = useCallback((newPath: CloudPathSegment[]): void => {
     setState((prev) => ({ ...prev, currentPath: newPath }));
   }, []);

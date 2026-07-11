@@ -22,12 +22,6 @@ export function useConnectionStatus(): ConnectionStatusResult {
   // アンマウント後の setState を防ぐガード。外部から呼ばれる check() でも共通に参照する。
   const mountedRef = useRef(true);
 
-  /**
-   * 接続状態を確認する関数
-   *
-   * 認証情報の有効性を検証し、接続状態を更新します。
-   * アンマウント後の呼び出しでは setState を行わない。
-   */
   const check: () => Promise<void> = useCallback(async () => {
     if (!mountedRef.current) return;
     setStatus("loading");

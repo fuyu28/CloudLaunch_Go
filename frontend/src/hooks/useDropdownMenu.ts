@@ -17,7 +17,6 @@ type UseDropdownMenuReturn = {
 export function useDropdownMenu(): UseDropdownMenuReturn {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
-  // ドロップダウンメニューを閉じるためのクリックイベント
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
       const target = event.target as Element;

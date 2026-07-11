@@ -51,38 +51,23 @@ export function useGameEdit(
     };
   }, [game]);
 
-  /**
-   * 編集モーダルを開く
-   */
   const openEdit = useCallback(() => {
     if (!editData) return;
     setIsEditModalOpen(true);
   }, [editData]);
 
-  /**
-   * 編集モーダルを閉じる
-   */
   const closeEdit = useCallback(() => {
     setIsEditModalOpen(false);
   }, []);
 
-  /**
-   * 編集モーダルが完全に閉じた後の処理
-   */
   const onEditClosed = useCallback(() => {
     // メモ化されたeditDataを使用するため、特別な処理は不要
   }, []);
 
-  /**
-   * 削除モーダルを開く
-   */
   const openDelete = useCallback(() => {
     setIsDeleteModalOpen(true);
   }, []);
 
-  /**
-   * 削除モーダルを閉じる
-   */
   const closeDelete = useCallback(() => {
     setIsDeleteModalOpen(false);
   }, []);
@@ -108,9 +93,6 @@ export function useGameEdit(
     [game, setFilteredGames],
   );
 
-  /**
-   * ゲームを削除する
-   */
   const handleDeleteGame = useCallback(async (): Promise<void> => {
     if (!game) return;
 
@@ -129,9 +111,6 @@ export function useGameEdit(
     closeDelete();
   }, [game, navigate, setFilteredGames, closeDelete]);
 
-  /**
-   * ゲームを起動する
-   */
   const handleLaunchGame = useCallback(async (): Promise<void> => {
     if (!game) return;
 

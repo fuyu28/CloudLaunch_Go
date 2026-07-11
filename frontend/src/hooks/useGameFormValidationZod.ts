@@ -55,10 +55,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
   // pending が空になるまで送信を無効化する。
   const [pendingFileCheckCount, setPendingFileCheckCount] = useState<number>(0);
 
-  /**
-   * 特定フィールドのファイル存在チェックを実行
-   * フィールドにアクセスがあったときにリアルタイムで実行
-   */
   const validateFileField = useCallback(
     async (fieldName: keyof InputGameData) => {
       const fieldValue = gameData[fieldName] as string;
@@ -185,11 +181,7 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     setFileCheckErrors({});
   }, []);
 
-  /**
-   * Zodスキーマを使用したフィールドバリデーション
-   * 個別フィールドの検証を実行し、エラーメッセージを返す
-   * 全体スキーマを使用してrefineバリデーションも適用
-   */
+  // フィールド単体ではなく全体スキーマを parse する。フィールド横断の refine バリデーションも拾うため。
   const validateField = useCallback(
     (fieldName: keyof InputGameData): string | undefined => {
       try {
@@ -206,10 +198,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     [gameData],
   );
 
-  /**
-   * 全フィールドのバリデーション結果を取得
-   * Zodスキーマの全体検証を実行
-   */
   const validateAllFields = useCallback(() => {
     try {
       gameFormSchema.parse(gameData);
@@ -229,10 +217,6 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
     }
   }, [gameData]);
 
-  /**
-   * ファイル存在チェックを含む非同期バリデーション
-   * フォーム送信時の最終バリデーションで使用
-   */
   const validateAllFieldsWithFileCheck = useCallback(async () => {
     try {
       gameFormSchema.parse(gameData);
