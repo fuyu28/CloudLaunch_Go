@@ -105,6 +105,18 @@ export const screenshotHotkeyAtom = atomWithStorage<string>("screenshotHotkey", 
 export const screenshotHotkeyNotifyAtom = atomWithStorage<boolean>("screenshotHotkeyNotify", true);
 
 /**
+ * S3 path-style アドレス指定（MinIO 等）
+ * LocalStorageに自動保存される
+ */
+export const s3ForcePathStyleAtom = atomWithStorage<boolean>("s3ForcePathStyle", false);
+
+/**
+ * S3 TLS 利用設定
+ * LocalStorageに自動保存される
+ */
+export const s3UseTLSAtom = atomWithStorage<boolean>("s3UseTLS", true);
+
+/**
  * テーマ変更中の状態atom
  * 一時的な状態なのでLocalStorageには保存しない
  */

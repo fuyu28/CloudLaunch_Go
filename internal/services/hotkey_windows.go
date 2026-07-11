@@ -61,7 +61,7 @@ type hotkeyServiceWindows struct {
 	handler    HotkeyHandler
 	modifiers  uint32
 	key        uint32
-	notify     bool
+	notify     atomic.Bool
 	notifyHWND windows.Handle
 	started    atomic.Bool
 	capturing  atomic.Bool
@@ -130,13 +130,14 @@ func newHotkeyService(logger *slog.Logger, config HotkeyConfig, handler HotkeyHa
 		}
 		return &hotkeyServiceWindows{logger: logger}
 	}
-	return &hotkeyServiceWindows{
+	service := &hotkeyServiceWindows{
 		logger:    logger,
 		handler:   handler,
 		modifiers: modifiers,
 		key:       key,
-		notify:    config.Notify,
 	}
+	service.notify.Store(config.Notify)
+	return service
 }
 
 func (service *hotkeyServiceWindows) Start() error {
@@ -173,6 +174,13 @@ func (service *hotkeyServiceWindows) Stop() {
 		<-service.stoppedCh
 	}
 	service.started.Store(false)
+}
+
+func (service *hotkeyServiceWindows) SetNotify(enabled bool) {
+	if service == nil {
+		return
+	}
+	service.notify.Store(enabled)
 }
 
 func (service *hotkeyServiceWindows) run() {
@@ -343,7 +351,7 @@ func (service *hotkeyServiceWindows) deleteNotifyIcon() error {
 }
 
 func (service *hotkeyServiceWindows) showHotkeyNotification(message string) {
-	if !service.notify || service.notifyHWND == 0 {
+	if !service.notify.Load() || service.notifyHWND == 0 {
 		return
 	}
 	trimmedMessage := strings.TrimSpace(message)

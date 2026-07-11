@@ -1,61 +1,56 @@
 /**
  * @fileoverview 設定ページ
  *
- * アプリケーションの各種設定を管理するページです。
- * タブ形式で一般設定とR2/S3設定を分けています。
- *
- * 主な機能：
- * - タブナビゲーション
- * - 一般設定（テーマ変更等）
- * - R2/S3設定（クラウドストレージ）
- *
- * 使用技術：
- * - React Hooks（useState）
- * - DaisyUI タブコンポーネント
- * - 分離されたコンポーネント
+ * トップレベルのフラットなタブで各設定カテゴリを切り替える。
  */
 
 import { useState } from "react";
 
-import GeneralSettings from "@renderer/components/settings/GeneralSettings";
+import AppearanceTab from "@renderer/components/settings/AppearanceTab";
+import BehaviorTab from "@renderer/components/settings/BehaviorTab";
+import DefaultsTab from "@renderer/components/settings/DefaultsTab";
 import R2S3Settings from "@renderer/components/settings/R2S3Settings";
+import ScreenshotSettingsTab from "@renderer/components/settings/ScreenshotSettingsTab";
+import SyncAndLogsTab from "@renderer/components/settings/SyncAndLogsTab";
 
-type TabType = "general" | "r2s3";
+type TabType = "appearance" | "behavior" | "defaults" | "screenshot" | "cloud" | "data";
 
-/**
- * 設定ページコンポーネント
- *
- * タブ形式で一般設定とR2/S3設定を提供します。
- *
- * @returns 設定ページ要素
- */
+const TABS: { id: TabType; label: string }[] = [
+  { id: "appearance", label: "外観" },
+  { id: "behavior", label: "動作" },
+  { id: "defaults", label: "初期表示" },
+  { id: "screenshot", label: "スクリーンショット" },
+  { id: "cloud", label: "クラウド" },
+  { id: "data", label: "データ・ログ" },
+];
+
 export default function Settings(): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<TabType>("general");
+  const [activeTab, setActiveTab] = useState<TabType>("appearance");
 
   return (
     <div className="container mx-auto px-6 py-8">
       <h1 className="text-3xl font-bold mb-6">設定</h1>
 
-      {/* タブナビゲーション */}
-      <div className="tabs tabs-lifted mb-6">
-        <button
-          className={`tab tab-lifted ${activeTab === "general" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("general")}
-        >
-          一般設定
-        </button>
-        <button
-          className={`tab tab-lifted ${activeTab === "r2s3" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("r2s3")}
-        >
-          R2/S3 設定
-        </button>
+      <div role="tablist" className="tabs tabs-lifted mb-6 overflow-x-auto">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            role="tab"
+            className={`tab tab-lifted ${activeTab === tab.id ? "tab-active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* タブコンテンツ */}
       <div className="bg-base-100 p-6 rounded-lg border border-base-200">
-        {activeTab === "general" && <GeneralSettings />}
-        {activeTab === "r2s3" && <R2S3Settings />}
+        {activeTab === "appearance" && <AppearanceTab />}
+        {activeTab === "behavior" && <BehaviorTab />}
+        {activeTab === "defaults" && <DefaultsTab />}
+        {activeTab === "screenshot" && <ScreenshotSettingsTab />}
+        {activeTab === "cloud" && <R2S3Settings />}
+        {activeTab === "data" && <SyncAndLogsTab />}
       </div>
     </div>
   );

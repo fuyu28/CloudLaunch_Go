@@ -13,6 +13,9 @@ import {
   UpdateScreenshotLocalJpeg,
   UpdateScreenshotHotkey,
   UpdateScreenshotHotkeyNotify,
+  UpdateS3ForcePathStyle,
+  UpdateS3UseTLS,
+  UpdateLogLevel,
 } from "../../wailsjs/go/app/App";
 import { toApiResultVoid } from "./helpers";
 import type { WindowApi } from "./types";
@@ -35,5 +38,9 @@ export function createSettingsBridge(): WindowApi["settings"] {
     updateScreenshotHotkey: async (combo) => toApiResultVoid(await UpdateScreenshotHotkey(combo)),
     updateScreenshotHotkeyNotify: async (enabled) =>
       toApiResultVoid(await UpdateScreenshotHotkeyNotify(enabled)),
+    updateS3ForcePathStyle: async (enabled) =>
+      toApiResultVoid(await UpdateS3ForcePathStyle(enabled)),
+    updateS3UseTLS: async (enabled) => toApiResultVoid(await UpdateS3UseTLS(enabled)),
+    updateLogLevel: async (level) => toApiResultVoid(await UpdateLogLevel(level)),
   };
 }

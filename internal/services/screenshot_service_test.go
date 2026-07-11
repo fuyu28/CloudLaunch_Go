@@ -415,6 +415,7 @@ func TestBuildScreencapArgs(t *testing.T) {
 		outPath     string
 		localJpeg   bool
 		jpegQuality int
+		clientOnly  bool
 		want        []string
 	}{
 		{
@@ -437,13 +438,20 @@ func TestBuildScreencapArgs(t *testing.T) {
 			jpegQuality: 70,
 			want:        []string{"cap", "--method", "wgc-window", "--pid", "5", "--out", "out.jpg", "--json", "--overwrite", "--no-log", "--format", "jpg", "--quality", "70"},
 		},
+		{
+			name:       "client only crop",
+			pid:        9,
+			outPath:    "out.png",
+			clientOnly: true,
+			want:       []string{"cap", "--method", "wgc-window", "--pid", "9", "--out", "out.png", "--json", "--overwrite", "--no-log", "--crop", "client"},
+		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := buildScreencapArgs(tc.pid, tc.outPath, tc.localJpeg, tc.jpegQuality)
+			got := buildScreencapArgs(tc.pid, tc.outPath, tc.localJpeg, tc.jpegQuality, tc.clientOnly)
 			if strings.Join(got, " ") != strings.Join(tc.want, " ") {
 				t.Fatalf("args mismatch\n want: %v\n got:  %v", tc.want, got)
 			}

@@ -1,36 +1,59 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import toast from "react-hot-toast";
+
+import { useSyncAndLogsActions } from "@renderer/hooks/useSyncAndLogsActions";
+import { logLevelManager, type LogLevel } from "@renderer/utils/logLevel";
+import { logger } from "@renderer/utils/logger";
 
 import { TabSectionHeader } from "./TabSectionHeader";
 
-type SyncAndLogsTabProps = {
-  offlineMode: boolean;
-  onSyncAllGames: () => Promise<void>;
-  isSyncingAll: boolean;
-  onExportGameData: () => Promise<void>;
-  isExportingData: boolean;
-  onCreateBackup: () => Promise<void>;
-  isCreatingBackup: boolean;
-  onRestoreBackup: () => Promise<void>;
-  isRestoringBackup: boolean;
-  onOpenLogsDirectory: () => Promise<void>;
-};
+export default function SyncAndLogsTab(): React.JSX.Element {
+  const {
+    offlineMode,
+    isSyncingAll,
+    isExportingData,
+    isCreatingBackup,
+    isRestoringBackup,
+    handleSyncAllGames,
+    handleExportGameData,
+    handleCreateBackup,
+    handleRestoreBackup,
+    handleOpenLogsDirectory,
+  } = useSyncAndLogsActions();
 
-export default function SyncAndLogsTab({
-  offlineMode,
-  onSyncAllGames,
-  isSyncingAll,
-  onExportGameData,
-  isExportingData,
-  onCreateBackup,
-  isCreatingBackup,
-  onRestoreBackup,
-  isRestoringBackup,
-  onOpenLogsDirectory,
-}: SyncAndLogsTabProps): React.JSX.Element {
+  const [frontendLogLevel, setFrontendLogLevel] = useState<LogLevel>(() =>
+    logLevelManager.getCurrentLevel(),
+  );
+
+  const handleFrontendLogLevelChange = async (level: LogLevel): Promise<void> => {
+    try {
+      logLevelManager.setLevel(level);
+      setFrontendLogLevel(level);
+      if (level === "off") {
+        toast.success("フロントエンドのログを無効にしました");
+        return;
+      }
+      const result = await window.api.settings.updateLogLevel(level);
+      if (!result.success) {
+        toast.error("バックエンドのログレベル更新に失敗しました");
+        return;
+      }
+      toast.success(`ログレベルを ${level} に設定しました`);
+    } catch (error) {
+      logger.error("ログレベル更新エラー:", {
+        component: "SyncAndLogsTab",
+        function: "handleFrontendLogLevelChange",
+        data: error,
+      });
+      toast.error("ログレベルの更新に失敗しました");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <TabSectionHeader
-        title="同期・ログ"
+        title="データ・ログ"
         description="クラウド同期とトラブルシューティング"
         color="info"
       />
@@ -43,7 +66,7 @@ export default function SyncAndLogsTab({
         <div className="form-control">
           <button
             className="btn btn-outline btn-sm w-fit"
-            onClick={onSyncAllGames}
+            onClick={() => void handleSyncAllGames()}
             disabled={isSyncingAll || offlineMode}
           >
             {isSyncingAll ? "同期中..." : "全ゲームを同期"}
@@ -62,7 +85,7 @@ export default function SyncAndLogsTab({
         <div className="form-control">
           <button
             className="btn btn-outline btn-sm w-fit"
-            onClick={onExportGameData}
+            onClick={() => void handleExportGameData()}
             disabled={isExportingData}
           >
             {isExportingData ? "エクスポート中..." : "CSV/JSONを出力"}
@@ -81,14 +104,14 @@ export default function SyncAndLogsTab({
         <div className="form-control gap-3">
           <button
             className="btn btn-outline btn-sm w-fit"
-            onClick={onCreateBackup}
+            onClick={() => void handleCreateBackup()}
             disabled={isCreatingBackup}
           >
             {isCreatingBackup ? "バックアップ作成中..." : "バックアップを作成"}
           </button>
           <button
             className="btn btn-warning btn-sm w-fit"
-            onClick={onRestoreBackup}
+            onClick={() => void handleRestoreBackup()}
             disabled={isRestoringBackup}
           >
             {isRestoringBackup ? "復元中..." : "バックアップを復元"}
@@ -101,11 +124,34 @@ export default function SyncAndLogsTab({
 
       <div className="bg-base-200 p-4 rounded-lg">
         <div className="mb-3">
+          <h4 className="font-medium">ログレベル</h4>
+          <p className="text-sm text-base-content/70">
+            フロントエンドの出力レベル。off 以外はバックエンドにも反映します
+          </p>
+        </div>
+        <select
+          className="select select-bordered select-sm w-full max-w-xs"
+          value={frontendLogLevel}
+          onChange={(e) => void handleFrontendLogLevelChange(e.target.value as LogLevel)}
+        >
+          {logLevelManager.getAvailableLevels().map((level) => (
+            <option key={level} value={level}>
+              {level} — {logLevelManager.getLevelDescription(level)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="bg-base-200 p-4 rounded-lg">
+        <div className="mb-3">
           <h4 className="font-medium">ログ・デバッグ</h4>
           <p className="text-sm text-base-content/70">トラブルシューティング用</p>
         </div>
         <div className="form-control gap-3">
-          <button className="btn btn-outline btn-sm w-fit" onClick={onOpenLogsDirectory}>
+          <button
+            className="btn btn-outline btn-sm w-fit"
+            onClick={() => void handleOpenLogsDirectory()}
+          >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"

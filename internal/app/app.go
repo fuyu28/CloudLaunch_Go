@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
@@ -21,6 +22,7 @@ type App struct {
 	ctx                 context.Context
 	Config              config.Config
 	Logger              *slog.Logger
+	logLevel            *slog.LevelVar
 	GameService         *services.GameService
 	SessionService      *services.SessionService
 	RouteService        *services.RouteService
@@ -34,6 +36,7 @@ type App struct {
 	MemoCloudService    *services.MemoCloudService
 	MaintenanceService  *services.MaintenanceService
 	HotkeyService       services.HotkeyService
+	hotkeyMu            sync.Mutex
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool
@@ -43,7 +46,7 @@ type App struct {
 // NewApp はアプリケーションを初期化する。
 func NewApp(ctx context.Context) (*App, error) {
 	cfg := config.LoadFromEnv()
-	logger := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
+	logger, logLevel := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
 
 	if error := os.MkdirAll(cfg.AppDataDir, 0o700); error != nil {
 		return nil, error
@@ -72,6 +75,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	app := &App{
 		Config:       cfg,
 		Logger:       logger,
+		logLevel:     logLevel,
 		MemoFiles:    memoFiles,
 		dbConnection: connection,
 		autoTracking: true,

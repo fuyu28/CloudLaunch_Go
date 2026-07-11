@@ -89,6 +89,9 @@ export type WindowApi = {
     updateScreenshotLocalJpeg: (enabled: boolean) => Promise<ApiResult<void>>;
     updateScreenshotHotkey: (combo: string) => Promise<ApiResult<void>>;
     updateScreenshotHotkeyNotify: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateS3ForcePathStyle: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateS3UseTLS: (enabled: boolean) => Promise<ApiResult<void>>;
+    updateLogLevel: (level: string) => Promise<ApiResult<void>>;
   };
   maintenance: {
     exportGameData: (

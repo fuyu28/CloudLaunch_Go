@@ -31,23 +31,20 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
   // 「編集は draftHotkey に保持 → onBlur で apply 成功時のみ atom を更新」の順序に統一する。
   const [draftHotkey, setDraftHotkey] = useState<string>(screenshotHotkey);
 
-  // atom が他所（初期マウント同期・キャプチャモードでの反映など）で書き換わったら、
+  // atom が他所（起動同期・キャプチャモードでの反映など）で書き換わったら、
   // 未フォーカスの draft も追従させる。
   useEffect(() => {
     setDraftHotkey(screenshotHotkey);
   }, [screenshotHotkey]);
 
+  const jpegQualityEnabled = screenshotLocalJpeg || (screenshotSyncEnabled && screenshotUploadJpeg);
+
   return (
     <div className="space-y-6">
-      <TabSectionHeader title="スクリーンショット" description="撮影データの同期と形式" />
-      <div className="bg-base-200 p-4 rounded-lg space-y-4">
-        <SettingsToggle
-          label="クラウド同期"
-          description="スクリーンショットをクラウドにアップロードします"
-          checked={screenshotSyncEnabled}
-          onChange={(value) => void handleScreenshotSyncEnabledChange(value)}
-        />
+      <TabSectionHeader title="スクリーンショット" description="撮影・保存・クラウド同期" />
 
+      <div className="bg-base-200 p-4 rounded-lg space-y-4">
+        <h4 className="font-medium">撮影</h4>
         <SettingsToggle
           label="タイトルバーを除外"
           description="オンでクライアント領域のみを撮影します"
@@ -55,48 +52,10 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
           onChange={(value) => void handleScreenshotClientOnlyChange(value)}
         />
 
-        <SettingsToggle
-          label="ローカル保存をJPEGにする"
-          description="オンでPNGより容量を抑えて保存します"
-          checked={screenshotLocalJpeg}
-          onChange={(value) => void handleScreenshotLocalJpegChange(value)}
-        />
-
-        <SettingsToggle
-          label="JPEGでアップロード"
-          description="PNGより容量を抑えられます"
-          checked={screenshotUploadJpeg}
-          onChange={(value) => void handleScreenshotUploadJpegChange(value)}
-          disabled={!screenshotSyncEnabled}
-        />
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h4 className="font-medium">JPEG品質</h4>
-              <p className="text-sm text-base-content/70">
-                数値が高いほど画質は向上します（1-100）
-              </p>
-            </div>
-            <span className="text-sm font-mono">{screenshotJpegQuality}</span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={100}
-            value={screenshotJpegQuality}
-            onChange={(event) => void handleScreenshotJpegQualityChange(Number(event.target.value))}
-            className="range range-primary"
-            disabled={!screenshotSyncEnabled || !screenshotUploadJpeg}
-          />
-        </div>
-
         <div>
           <div className="mb-2">
             <h4 className="font-medium">ホットキー</h4>
-            <p className="text-sm text-base-content/70">
-              例: Ctrl+Alt+S（押すとSnipping Toolが起動します）
-            </p>
+            <p className="text-sm text-base-content/70">例: Ctrl+Alt+S</p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -106,11 +65,9 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
               onChange={(event) => setDraftHotkey(event.target.value)}
               onBlur={async (event) => {
                 const nextValue = event.target.value;
-                // 変更がない場合は何もしない（apply で余計な toast/リクエストが飛ぶのを防ぐ）
                 if (nextValue === screenshotHotkey) return;
                 const ok = await applyScreenshotHotkey(nextValue, true);
                 if (!ok) {
-                  // 失敗時は atom の現行値へロールバック
                   setDraftHotkey(screenshotHotkey);
                 }
               }}
@@ -145,6 +102,55 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
           checked={screenshotHotkeyNotify}
           onChange={(value) => void handleScreenshotHotkeyNotifyChange(value)}
         />
+      </div>
+
+      <div className="bg-base-200 p-4 rounded-lg space-y-4">
+        <h4 className="font-medium">ローカル保存</h4>
+        <SettingsToggle
+          label="ローカル保存をJPEGにする"
+          description="オンでPNGより容量を抑えて保存します"
+          checked={screenshotLocalJpeg}
+          onChange={(value) => void handleScreenshotLocalJpegChange(value)}
+        />
+      </div>
+
+      <div className="bg-base-200 p-4 rounded-lg space-y-4">
+        <h4 className="font-medium">クラウド</h4>
+        <SettingsToggle
+          label="クラウド同期"
+          description="スクリーンショットをクラウドにアップロードします"
+          checked={screenshotSyncEnabled}
+          onChange={(value) => void handleScreenshotSyncEnabledChange(value)}
+        />
+
+        <SettingsToggle
+          label="JPEGでアップロード"
+          description="PNGより容量を抑えられます"
+          checked={screenshotUploadJpeg}
+          onChange={(value) => void handleScreenshotUploadJpegChange(value)}
+          disabled={!screenshotSyncEnabled}
+        />
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h4 className="font-medium">JPEG品質</h4>
+              <p className="text-sm text-base-content/70">
+                ローカル保存 / アップロードの両方に適用（1-100）
+              </p>
+            </div>
+            <span className="text-sm font-mono">{screenshotJpegQuality}</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={100}
+            value={screenshotJpegQuality}
+            onChange={(event) => void handleScreenshotJpegQualityChange(Number(event.target.value))}
+            className="range range-primary"
+            disabled={!jpegQualityEnabled}
+          />
+        </div>
       </div>
     </div>
   );

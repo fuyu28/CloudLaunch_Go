@@ -1,24 +1,18 @@
+import { useBehaviorSettings } from "@renderer/hooks/useBehaviorSettings";
+
 import { TabSectionHeader } from "./TabSectionHeader";
 
-type BehaviorTabProps = {
-  offlineMode: boolean;
-  onOfflineModeChange: (enabled: boolean) => Promise<void>;
-  autoTracking: boolean;
-  onAutoTrackingChange: (enabled: boolean) => Promise<void>;
-  transferConcurrency: number;
-  onTransferConcurrencyInputChange: (value: number) => void;
-  onTransferConcurrencyBlur: (value: number) => Promise<void>;
-};
+export default function BehaviorTab(): React.JSX.Element {
+  const {
+    offlineMode,
+    autoTracking,
+    transferConcurrency,
+    setTransferConcurrency,
+    handleOfflineModeChange,
+    handleAutoTrackingChange,
+    handleTransferConcurrencyChange,
+  } = useBehaviorSettings();
 
-export default function BehaviorTab({
-  offlineMode,
-  onOfflineModeChange,
-  autoTracking,
-  onAutoTrackingChange,
-  transferConcurrency,
-  onTransferConcurrencyInputChange,
-  onTransferConcurrencyBlur,
-}: BehaviorTabProps): React.JSX.Element {
   return (
     <div className="space-y-6">
       <TabSectionHeader
@@ -35,7 +29,7 @@ export default function BehaviorTab({
                 type="checkbox"
                 className="toggle toggle-primary mr-3"
                 checked={offlineMode}
-                onChange={(e) => void onOfflineModeChange(e.target.checked)}
+                onChange={(e) => void handleOfflineModeChange(e.target.checked)}
               />
               <div>
                 <span className="label-text font-medium">オフラインモード</span>
@@ -52,7 +46,7 @@ export default function BehaviorTab({
                 type="checkbox"
                 className="toggle toggle-primary mr-3"
                 checked={autoTracking}
-                onChange={(e) => void onAutoTrackingChange(e.target.checked)}
+                onChange={(e) => void handleAutoTrackingChange(e.target.checked)}
               />
               <div>
                 <span className="label-text font-medium">自動ゲーム検出</span>
@@ -75,8 +69,8 @@ export default function BehaviorTab({
                 step={1}
                 className="input input-bordered input-sm w-24"
                 value={transferConcurrency}
-                onChange={(e) => onTransferConcurrencyInputChange(Number(e.target.value))}
-                onBlur={(e) => void onTransferConcurrencyBlur(Number(e.target.value))}
+                onChange={(e) => setTransferConcurrency(Number(e.target.value))}
+                onBlur={(e) => void handleTransferConcurrencyChange(Number(e.target.value))}
               />
               <span className="text-xs text-base-content/50">1〜32</span>
             </div>

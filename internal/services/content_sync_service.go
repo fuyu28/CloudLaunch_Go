@@ -121,6 +121,16 @@ func (s *ContentSyncService) SetUploadConcurrency(value int) {
 	s.config.S3UploadConcurrency = value
 }
 
+// SetS3ForcePathStyle は path-style アドレス指定の有効/無効を更新する。
+func (s *ContentSyncService) SetS3ForcePathStyle(enabled bool) {
+	s.config.S3ForcePathStyle = enabled
+}
+
+// SetS3UseTLS は S3 通信の TLS 有効/無効を更新する。
+func (s *ContentSyncService) SetS3UseTLS(enabled bool) {
+	s.config.S3UseTLS = enabled
+}
+
 // NewContentSyncService は ContentSyncService を生成する。
 func NewContentSyncService(cfg config.Config, store credentials.Store, repo ContentSyncRepository, logger *slog.Logger) *ContentSyncService {
 	svc := &ContentSyncService{
