@@ -134,6 +134,30 @@ func TestMemoServiceCreateMemoRollsBackDatabaseWhenFileWriteFails(t *testing.T) 
 	}
 }
 
+func TestMemoServiceCreateMemoPreservesExplicitID(t *testing.T) {
+	t.Parallel()
+
+	manager := memo.NewFileManager(t.TempDir())
+	repository := &trackingMemoRepository{}
+	service := NewMemoService(repository, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	created, err := service.CreateMemo(context.Background(), MemoInput{
+		ID:      "cloud-memo-id",
+		Title:   "Synced",
+		Content: "Body",
+		GameID:  "game-1",
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if created == nil || created.ID != "cloud-memo-id" {
+		t.Fatalf("expected cloud memo ID to be preserved, got %#v", created)
+	}
+	if repository.lastCreated == nil || repository.lastCreated.ID != "cloud-memo-id" {
+		t.Fatalf("expected repository to receive explicit ID, got %#v", repository.lastCreated)
+	}
+}
+
 func TestMemoServiceCreateMemoWritesDatabaseAndLocalFile(t *testing.T) {
 	t.Parallel()
 
@@ -230,6 +254,7 @@ func TestMemoServiceUpdateMemoRenamesLocalFile(t *testing.T) {
 
 type trackingMemoRepository struct {
 	createResult    *domain.Memo
+	lastCreated     *domain.Memo
 	getResult       *domain.Memo
 	findResult      *domain.Memo
 	updateResults   []*domain.Memo
@@ -238,7 +263,15 @@ type trackingMemoRepository struct {
 }
 
 func (repository *trackingMemoRepository) CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
-	return repository.createResult, nil
+	copied := memo
+	repository.lastCreated = &copied
+	if repository.createResult != nil {
+		return repository.createResult, nil
+	}
+	if memo.ID == "" {
+		memo.ID = "generated-id"
+	}
+	return &memo, nil
 }
 func (repository *trackingMemoRepository) UpdateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
 	repository.updateMemoCalls++

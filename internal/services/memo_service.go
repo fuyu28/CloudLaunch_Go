@@ -31,6 +31,7 @@ func (service *MemoService) CreateMemo(ctx context.Context, input MemoInput) (*d
 	}
 
 	memo := domain.Memo{
+		ID:      strings.TrimSpace(input.ID),
 		Title:   strings.TrimSpace(input.Title),
 		Content: input.Content,
 		GameID:  strings.TrimSpace(input.GameID),
@@ -182,7 +183,9 @@ func (service *MemoService) DeleteMemo(ctx context.Context, memoID string) error
 }
 
 // MemoInput はメモ作成入力を表す。
+// ID は任意。クラウド同期で既存 memo ID をローカルに再現するときに指定する。
 type MemoInput struct {
+	ID      string
 	Title   string
 	Content string
 	GameID  string

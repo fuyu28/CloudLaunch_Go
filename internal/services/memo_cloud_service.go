@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path"
 	"strings"
 	"time"
 
@@ -102,11 +103,18 @@ func (service *MemoCloudService) DownloadMemoFromCloud(ctx context.Context, game
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(gameID) == "" || strings.TrimSpace(memoFileName) == "" {
+	trimmedGameID := strings.TrimSpace(gameID)
+	trimmedFileName := strings.TrimSpace(memoFileName)
+	if trimmedGameID == "" || trimmedFileName == "" {
 		service.logger.Warn("メモのダウンロード入力が不正です", "operation", "DownloadMemoFromCloud", "gameId", gameID, "memoFileName", memoFileName)
 		return "", newServiceError("メモのダウンロードに失敗しました", "入力が不正です")
 	}
-	key := fmt.Sprintf("games/%s/memo/%s", strings.TrimSpace(gameID), memoFileName)
+	// パス連結のまま受け付けると `../` で他キーを読めるため、ファイル名のみ許可する。
+	if trimmedFileName != path.Base(trimmedFileName) || strings.ContainsAny(trimmedFileName, `/\`) {
+		service.logger.Warn("メモのダウンロード入力が不正です", "operation", "DownloadMemoFromCloud", "memoFileName", memoFileName)
+		return "", newServiceError("メモのダウンロードに失敗しました", "ファイル名が不正です")
+	}
+	key := fmt.Sprintf("games/%s/memo/%s", trimmedGameID, trimmedFileName)
 	payload, err := service.objectStore.DownloadObject(ctx, cfg, credential, key)
 	if err != nil {
 		service.logger.Error("メモのダウンロードに失敗しました", "error", err, "operation", "DownloadMemoFromCloud.downloadObject", "key", key)
@@ -341,6 +349,7 @@ func (service *MemoCloudService) syncCloudToLocal(
 
 		if existingMemo == nil {
 			createdMemo, err := service.memoService.CreateMemo(ctx, MemoInput{
+				ID:      cloudMemo.MemoID,
 				Title:   cloudMemo.MemoTitle,
 				Content: content,
 				GameID:  game.ID,
