@@ -24,7 +24,7 @@ type ScreenshotService struct {
 	resolver   ProcessIDResolver
 	logger     *slog.Logger
 	appDataDir string
-	// screencap-cli 運用では自動適用できないため、設定互換性のために保持する（未使用）。
+	// clientOnly が true のとき screencap-cli に --crop client を渡し、クライアント領域のみ撮る。
 	clientOnly  bool
 	localJpeg   bool
 	jpegQuality int

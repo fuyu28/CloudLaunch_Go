@@ -38,7 +38,7 @@ func (service *ScreenshotService) captureWithScreencap(ctx context.Context, pid 
 		return err
 	}
 
-	args := buildScreencapArgs(pid, outPath, service.localJpeg, service.jpegQuality)
+	args := buildScreencapArgs(pid, outPath, service.localJpeg, service.jpegQuality, service.clientOnly)
 
 	runCtx, cancel := context.WithTimeout(ctx, screencapTimeout)
 	defer cancel()

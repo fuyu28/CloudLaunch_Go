@@ -12,7 +12,8 @@ import (
 
 // buildScreencapArgs は screencap-cli.exe の cap サブコマンド引数を組み立てる。
 // pid が 0 のときはフォアグラウンドウィンドウを対象にする。
-func buildScreencapArgs(pid int, outPath string, localJpeg bool, jpegQuality int) []string {
+// clientOnly が true のときは --crop client でタイトルバー等を除いたクライアント領域のみ撮る。
+func buildScreencapArgs(pid int, outPath string, localJpeg bool, jpegQuality int, clientOnly bool) []string {
 	args := []string{"cap", "--method", "wgc-window"}
 	if pid > 0 {
 		args = append(args, "--pid", strconv.Itoa(pid))
@@ -20,6 +21,9 @@ func buildScreencapArgs(pid int, outPath string, localJpeg bool, jpegQuality int
 		args = append(args, "--foreground")
 	}
 	args = append(args, "--out", outPath, "--json", "--overwrite", "--no-log")
+	if clientOnly {
+		args = append(args, "--crop", "client")
+	}
 	if localJpeg {
 		args = append(args, "--format", "jpg", "--quality", strconv.Itoa(normalizeJpegQuality(jpegQuality)))
 	}
