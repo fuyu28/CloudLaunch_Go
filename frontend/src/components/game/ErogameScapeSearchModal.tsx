@@ -44,8 +44,7 @@ export default function ErogameScapeSearchModal({
       setActiveQuery("");
       searchRequest.reset();
     }
-    // searchRequest は安定した参照だが、eslint の exhaustive-deps 検知回避のため列挙する
-  }, [isOpen, searchRequest]);
+  }, [isOpen, searchRequest.reset]);
 
   const searchErogameScape = useCallback(
     async (query: string) => {

@@ -16,7 +16,7 @@
  * ```
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 export type UseLatestRequestIdReturn = {
   /** 新しいリクエストIDを発行してカウンタを進める。 */
@@ -30,6 +30,10 @@ export type UseLatestRequestIdReturn = {
 /**
  * monotonic counter を返すフック。
  * 主にモーダルや検索など「並行に投げうるリクエストのうち最新1件だけを反映したい」箇所で使う。
+ *
+ * 戻り値オブジェクトは useMemo で安定させる。毎レンダー新規オブジェクトを返すと、
+ * `useEffect(..., [request])` かつ閉じているときに setState する呼び出し元で
+ * Maximum update depth exceeded になる。
  */
 export function useLatestRequestId(): UseLatestRequestIdReturn {
   const ref = useRef<number>(0);
@@ -45,5 +49,5 @@ export function useLatestRequestId(): UseLatestRequestIdReturn {
     ref.current = 0;
   }, []);
 
-  return { next, isLatest, reset };
+  return useMemo(() => ({ next, isLatest, reset }), [next, isLatest, reset]);
 }
