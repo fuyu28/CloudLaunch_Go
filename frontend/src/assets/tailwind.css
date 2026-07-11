@@ -73,16 +73,6 @@ body,
   overscroll-behavior: none;
 }
 
-/*
- * daisyUI 5 の drawer は「開く」側の translate:0% が :where() 経由のため詳細度 0 となり、
- * 閉じる側の translate:-100%（.drawer-side > :not(.drawer-overlay)）に負ける。
- * その結果、チェックで開いてもサイドバーが画面外のままオーバーレイだけが前面に出て
- * 画面クリックを奪う。詳細度を上げてモバイルのトグル開閉を直す。
- */
-.drawer > .drawer-toggle:checked ~ .drawer-side > :not(.drawer-overlay) {
-  translate: 0;
-}
-
 /* Wails frameless drag regions */
 .wails-drag {
   --wails-draggable: drag;
