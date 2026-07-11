@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -25,6 +25,7 @@ const (
 
 const (
 	notifyCallbackMessage = wmApp + 1
+	wmInitNotifyIcon      = wmApp + 2
 	nimAdd                = 0x0
 	nimModify             = 0x1
 	nimDelete             = 0x2
@@ -155,8 +156,18 @@ func (service *hotkeyServiceWindows) Start() error {
 	}
 
 	service.stoppedCh = make(chan struct{})
+	readyCh := make(chan error, 1)
+	go service.run(readyCh)
 
-	go service.run()
+	err := <-readyCh
+	if err != nil {
+		<-service.stoppedCh
+		service.started.Store(false)
+		service.mu.Lock()
+		service.threadID = 0
+		service.mu.Unlock()
+		return err
+	}
 	return nil
 }
 
@@ -164,16 +175,43 @@ func (service *hotkeyServiceWindows) Stop() {
 	if service == nil || !service.started.Load() {
 		return
 	}
-	service.mu.Lock()
-	threadID := service.threadID
-	service.mu.Unlock()
-	if threadID != 0 {
-		procPostThreadMessage.Call(uintptr(threadID), wmQuit, 0, 0)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		service.mu.Lock()
+		threadID := service.threadID
+		stoppedCh := service.stoppedCh
+		service.mu.Unlock()
+
+		if threadID != 0 {
+			procPostThreadMessage.Call(uintptr(threadID), wmQuit, 0, 0)
+			break
+		}
+		if stoppedCh != nil {
+			select {
+			case <-stoppedCh:
+				service.started.Store(false)
+				return
+			default:
+			}
+		}
+		if time.Now().After(deadline) {
+			if service.logger != nil {
+				service.logger.Warn("ホットキー停止を待機できませんでした")
+			}
+			service.started.Store(false)
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
+
 	if service.stoppedCh != nil {
 		<-service.stoppedCh
 	}
 	service.started.Store(false)
+	service.mu.Lock()
+	service.threadID = 0
+	service.mu.Unlock()
 }
 
 func (service *hotkeyServiceWindows) SetNotify(enabled bool) {
@@ -181,9 +219,21 @@ func (service *hotkeyServiceWindows) SetNotify(enabled bool) {
 		return
 	}
 	service.notify.Store(enabled)
+	if !enabled || !service.started.Load() {
+		return
+	}
+	service.mu.Lock()
+	threadID := service.threadID
+	hwnd := service.notifyHWND
+	service.mu.Unlock()
+	if hwnd != 0 || threadID == 0 {
+		return
+	}
+	// メッセージループスレッド上で HWND を作る（他スレッドからの CreateWindow は不可）
+	procPostThreadMessage.Call(uintptr(threadID), wmInitNotifyIcon, 0, 0)
 }
 
-func (service *hotkeyServiceWindows) run() {
+func (service *hotkeyServiceWindows) run(readyCh chan<- error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -194,9 +244,11 @@ func (service *hotkeyServiceWindows) run() {
 
 	ok, _, err := procRegisterHotKey.Call(0, hotkeyID, uintptr(service.modifiers), uintptr(service.key))
 	if ok == 0 {
+		regErr := fmt.Errorf("RegisterHotKey failed: %w", err)
 		if service.logger != nil {
 			service.logger.Error("ホットキー登録に失敗しました", "error", err)
 		}
+		readyCh <- regErr
 		close(service.stoppedCh)
 		return
 	}
@@ -204,6 +256,8 @@ func (service *hotkeyServiceWindows) run() {
 	if service.logger != nil {
 		service.logger.Info("ホットキーを登録しました", "combo", formatHotkey(service.modifiers, service.key))
 	}
+	readyCh <- nil
+
 	defer func() {
 		service.cleanupNotifyIcon()
 		procUnregisterHotKey.Call(0, hotkeyID)
@@ -216,7 +270,8 @@ func (service *hotkeyServiceWindows) run() {
 		if int32(ret) <= 0 {
 			return
 		}
-		if msg.Message == wmHotkey {
+		switch msg.Message {
+		case wmHotkey:
 			if service.logger != nil {
 				service.logger.Debug("ホットキーを受信しました")
 			}
@@ -232,10 +287,12 @@ func (service *hotkeyServiceWindows) run() {
 					service.showHotkeyNotification("スクリーンショットを保存しました")
 				}
 			}()
-			continue
+		case wmInitNotifyIcon:
+			service.initNotifyIcon()
+		default:
+			procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		}
-		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
 }
 
@@ -257,21 +314,11 @@ func formatHotkey(modifiers uint32, key uint32) string {
 	return strings.Join(parts, "+")
 }
 
-func hotkeyKeyName(key uint32) string {
-	if key >= 'A' && key <= 'Z' {
-		return string(rune(key))
-	}
-	if key >= '0' && key <= '9' {
-		return string(rune(key))
-	}
-	if key >= vkF1 && key <= vkF1+11 {
-		return "F" + strconv.Itoa(int(key-vkF1+1))
-	}
-	return fmt.Sprintf("0x%X", key)
-}
-
 func (service *hotkeyServiceWindows) initNotifyIcon() {
-	if !service.notify {
+	if !service.notify.Load() {
+		return
+	}
+	if service.notifyHWND != 0 {
 		return
 	}
 	if err := ensureNotifyClass(); err != nil {

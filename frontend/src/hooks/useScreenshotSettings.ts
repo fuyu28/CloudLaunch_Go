@@ -11,6 +11,10 @@ import {
   screenshotHotkeyAtom,
   screenshotHotkeyNotifyAtom,
 } from "../state/settings";
+import {
+  normalizeHotkeyFailureMessage,
+  normalizeHotkeyFromEvent as normalizeHotkeyEvent,
+} from "../utils/hotkeyNormalize";
 
 type SettingResult = { success: boolean; message?: string };
 
@@ -132,36 +136,6 @@ export function useScreenshotSettings() {
     return applyScreenshotHotkey(value, true);
   };
 
-  const normalizeHotkeyFromEvent = (event: KeyboardEvent): string | null => {
-    if (event.key === "Escape") {
-      setIsCapturingHotkey(false);
-      return null;
-    }
-    const modifiers: string[] = [];
-    if (event.ctrlKey) modifiers.push("Ctrl");
-    if (event.altKey) modifiers.push("Alt");
-    if (event.shiftKey) modifiers.push("Shift");
-    if (event.metaKey) modifiers.push("Win");
-
-    const key = event.key;
-    if (key === "Control" || key === "Alt" || key === "Shift" || key === "Meta") {
-      return null;
-    }
-    let mainKey = "";
-    if (/^F(1[0-2]|[1-9])$/.test(key)) {
-      mainKey = key.toUpperCase();
-    } else if (key.length === 1) {
-      mainKey = key.toUpperCase();
-    } else {
-      return null;
-    }
-
-    if (modifiers.length === 0) {
-      return null;
-    }
-    return [...modifiers, mainKey].join("+");
-  };
-
   // 起動時のバックエンド同期は MainLayout の useSettingsBootSync が担う。
   // ここではユーザー操作時の反映のみ扱う。
 
@@ -169,19 +143,30 @@ export function useScreenshotSettings() {
     if (!isCapturingHotkey) {
       return;
     }
+    const shownHints = new Set<string>();
     const handler = (event: KeyboardEvent): void => {
       event.preventDefault();
-      const hotkey = normalizeHotkeyFromEvent(event);
-      if (!hotkey) {
+      event.stopPropagation();
+      const result = normalizeHotkeyEvent(event);
+      if (!result.ok) {
+        if (result.reason === "cancel") {
+          setIsCapturingHotkey(false);
+          return;
+        }
+        const message = normalizeHotkeyFailureMessage(result.reason);
+        if (message && !shownHints.has(result.reason)) {
+          shownHints.add(result.reason);
+          toast.error(message);
+        }
         return;
       }
       setIsCapturingHotkey(false);
       // applyScreenshotHotkey 成功時にのみ atom を更新する（乖離防止）
-      void applyScreenshotHotkey(hotkey, true);
+      void applyScreenshotHotkey(result.combo, true);
     };
-    window.addEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
     return () => {
-      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keydown", handler, true);
     };
   }, [isCapturingHotkey]);
 
@@ -204,6 +189,5 @@ export function useScreenshotSettings() {
     applyScreenshotHotkey,
     handleScreenshotHotkeyChange,
     handleScreenshotHotkeyNotifyChange,
-    normalizeHotkeyFromEvent,
   };
 }

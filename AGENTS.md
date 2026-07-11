@@ -135,3 +135,5 @@ Windows 専用機能は `_windows.go` サフィックスのファイルに実装
   「何をしたか」は最小限
 - PR には概要、テスト計画、UI 変更ならスクリーンショットを添える
 - `Co-Authored-By: Claude ...` はコミット末尾に付ける
+- **`main` への取り込みは必ず PR 経由**（ブランチ push → `gh pr create` →
+  明示指示があるときだけ merge）。`main` へ直接 merge して push しない

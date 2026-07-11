@@ -77,5 +77,58 @@ func TestUpdateScreenshotHotkeyNotifyUpdatesFlagWithoutRestart(t *testing.T) {
 	}
 }
 
+func TestUpdateScreenshotHotkeyRejectsUnknownKey(t *testing.T) {
+	stub := &stubHotkeyService{}
+	app := &App{
+		Config:        config.Config{ScreenshotHotkey: "Ctrl+Alt+S"},
+		Logger:        slog.Default(),
+		HotkeyService: stub,
+	}
+
+	result := app.UpdateScreenshotHotkey("Ctrl+Foo")
+	if result.Success {
+		t.Fatal("expected failure for unknown key")
+	}
+	if app.Config.ScreenshotHotkey != "Ctrl+Alt+S" {
+		t.Fatalf("config should stay unchanged, got %q", app.Config.ScreenshotHotkey)
+	}
+}
+
+func TestUpdateScreenshotHotkeyRejectsPrintScreenAndF12(t *testing.T) {
+	stub := &stubHotkeyService{}
+	app := &App{
+		Config:        config.Config{ScreenshotHotkey: "Ctrl+Alt+S"},
+		Logger:        slog.Default(),
+		HotkeyService: stub,
+	}
+
+	for _, combo := range []string{"PrintScreen", "F12", "Ctrl+F12"} {
+		result := app.UpdateScreenshotHotkey(combo)
+		if result.Success {
+			t.Fatalf("expected failure for %q", combo)
+		}
+	}
+	if app.Config.ScreenshotHotkey != "Ctrl+Alt+S" {
+		t.Fatalf("config should stay unchanged, got %q", app.Config.ScreenshotHotkey)
+	}
+}
+
+func TestUpdateScreenshotHotkeyAcceptsF8(t *testing.T) {
+	stub := &stubHotkeyService{}
+	app := &App{
+		Config:        config.Config{ScreenshotHotkey: "Ctrl+Alt+S"},
+		Logger:        slog.Default(),
+		HotkeyService: stub,
+	}
+
+	result := app.UpdateScreenshotHotkey("F8")
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result)
+	}
+	if app.Config.ScreenshotHotkey != "F8" {
+		t.Fatalf("config not updated: %q", app.Config.ScreenshotHotkey)
+	}
+}
+
 // Ensure stub satisfies interface at compile time.
 var _ services.HotkeyService = (*stubHotkeyService)(nil)

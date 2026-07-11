@@ -55,7 +55,10 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
         <div>
           <div className="mb-2">
             <h4 className="font-medium">ホットキー</h4>
-            <p className="text-sm text-base-content/70">例: Ctrl+Alt+S</p>
+            <p className="text-sm text-base-content/70">
+              例: Ctrl+Alt+S / F8 / Insert。英数字と Space には修飾キーが必要。PrintScreen と F12
+              は非対応
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -73,8 +76,11 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
               }}
               readOnly={isCapturingHotkey}
             />
-            <button className="btn btn-primary btn-sm" onClick={() => setIsCapturingHotkey(true)}>
-              入力開始
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setIsCapturingHotkey((capturing) => !capturing)}
+            >
+              {isCapturingHotkey ? "キャンセル" : "入力開始"}
             </button>
             <button
               className="btn btn-outline btn-sm"
@@ -91,7 +97,7 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
           </div>
           {isCapturingHotkey && (
             <p className="text-xs text-base-content/60 mt-2">
-              ホットキーを押してください（Escでキャンセル）
+              ホットキーを押してください（Esc またはキャンセル）
             </p>
           )}
         </div>
