@@ -287,15 +287,17 @@ func (repository *Repository) DeleteRoute(ctx context.Context, routeID string) e
 
 // CreatePlaySession はプレイセッションを作成して返す。
 func (repository *Repository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
-	_, error := repository.connection.ExecContext(ctx, `
+	var id string
+	error := repository.connection.QueryRowContext(ctx, `
 		INSERT INTO "PlaySession" (gameId, playedAt, duration, sessionName, routeId)
 		VALUES (?, ?, ?, ?, ?)
-	`, session.GameID, session.PlayedAt, session.Duration, session.SessionName, session.RouteID)
+		RETURNING id
+	`, session.GameID, session.PlayedAt, session.Duration, session.SessionName, session.RouteID).Scan(&id)
 	if error != nil {
 		return nil, error
 	}
 
-	return repository.findLatestPlaySession(ctx, session.GameID)
+	return repository.GetPlaySessionByID(ctx, id)
 }
 
 // GetPlaySessionByID はID指定でセッションを取得する。
@@ -592,7 +594,20 @@ func (repository *Repository) UpdatePlaySessionName(ctx context.Context, session
 }
 
 // CreateMemo はメモを作成して返す。
+// memo.ID が空でなければその ID で挿入する（クラウド→ローカル同期で ID を保持するため）。
+// 空なら SQLite の DEFAULT（randomblob）に任せる。
 func (repository *Repository) CreateMemo(ctx context.Context, memo domain.Memo) (*domain.Memo, error) {
+	if strings.TrimSpace(memo.ID) != "" {
+		_, error := repository.connection.ExecContext(ctx, `
+			INSERT INTO "Memo" (id, title, content, gameId)
+			VALUES (?, ?, ?, ?)
+		`, memo.ID, memo.Title, memo.Content, memo.GameID)
+		if error != nil {
+			return nil, error
+		}
+		return repository.GetMemoByID(ctx, memo.ID)
+	}
+
 	_, error := repository.connection.ExecContext(ctx, `
 		INSERT INTO "Memo" (title, content, gameId)
 		VALUES (?, ?, ?)
@@ -856,14 +871,6 @@ func (repository *Repository) findLatestRoute(ctx context.Context, gameID string
 		`SELECT `+routeSelectCols+` FROM "Route" WHERE gameId = ? AND name = ? ORDER BY createdAt DESC LIMIT 1`,
 		gameID, name)
 	return scanRoute(row)
-}
-
-// findLatestPlaySession は直近のプレイセッションを取得する。
-func (repository *Repository) findLatestPlaySession(ctx context.Context, gameID string) (*domain.PlaySession, error) {
-	row := repository.connection.QueryRowContext(ctx,
-		`SELECT `+playSessionSelectCols+` FROM "PlaySession" WHERE gameId = ? ORDER BY playedAt DESC LIMIT 1`,
-		gameID)
-	return scanPlaySession(row)
 }
 
 // findLatestMemo は直近のメモを取得する。
