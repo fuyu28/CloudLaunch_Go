@@ -9,9 +9,6 @@ import { FiAlertTriangle } from "react-icons/fi";
 
 import { BaseModal } from "./BaseModal";
 
-/**
- * 注意事項アイテムの型定義
- */
 export type WarningItem = {
   text: string;
   highlight?: boolean;

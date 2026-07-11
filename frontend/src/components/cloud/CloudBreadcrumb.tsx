@@ -10,9 +10,6 @@ import { FiHome, FiChevronRight, FiArrowLeft } from "react-icons/fi";
 
 import type { CloudPathSegment } from "@renderer/utils/cloudUtils";
 
-/**
- * パンくずリストのプロパティ
- */
 type CloudBreadcrumbProps = {
   currentPath: CloudPathSegment[];
   onNavigateToPath: (path: CloudPathSegment[]) => void;
@@ -24,7 +21,6 @@ export function CloudBreadcrumb({
   onNavigateToPath,
   onNavigateBack,
 }: CloudBreadcrumbProps): React.JSX.Element | null {
-  // ルートレベルの場合はパンくずリストを表示しない
   if (currentPath.length === 0) {
     return null;
   }

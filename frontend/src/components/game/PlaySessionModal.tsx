@@ -9,9 +9,6 @@ import { FaClock, FaEdit, FaPlay, FaStop, FaCheck, FaTimes } from "react-icons/f
 
 import { useTimeFormat, timeUtils } from "@renderer/hooks/useTimeFormat";
 
-/**
- * プレイセッション追加モーダルのprops
- */
 export type PlaySessionModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -19,14 +16,8 @@ export type PlaySessionModalProps = {
   gameTitle: string;
 };
 
-/**
- * モーダルのモード（手動追加 or タイマー）
- */
 type ModalMode = "manual" | "timer";
 
-/**
- * タイマーの状態
- */
 type TimerState = "stopped" | "running" | "paused";
 
 export function PlaySessionModal({
@@ -118,31 +109,19 @@ export function PlaySessionModal({
     return validateDurationSeconds(totalSeconds, "manual");
   };
 
-  /**
-   * タイマー開始処理
-   */
   const handleStartTimer = (): void => {
     setTimerState("running");
     setError("");
   };
 
-  /**
-   * タイマー停止処理
-   */
   const handleStopTimer = (): void => {
     setTimerState("paused");
   };
 
-  /**
-   * タイマー再開処理
-   */
   const handleResumeTimer = (): void => {
     setTimerState("running");
   };
 
-  /**
-   * プレイセッション追加処理
-   */
   const handleSubmitSession = async (): Promise<void> => {
     setIsSubmitting(true);
     setError("");
@@ -177,9 +156,6 @@ export function PlaySessionModal({
     }
   };
 
-  /**
-   * モーダルを閉じる処理
-   */
   const handleClose = (): void => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);

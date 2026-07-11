@@ -49,7 +49,6 @@ export default function MainLayout(): React.JSX.Element {
     document.documentElement.setAttribute("data-theme", currentTheme);
   }, [currentTheme]);
 
-  // Windows だけ独自タイトルボタン。他OSはネイティブ枠を使う。
   useEffect(() => {
     let active = true;
     void window.api.window.getPlatform().then((platform) => {
@@ -130,7 +129,6 @@ export default function MainLayout(): React.JSX.Element {
               </li>
             </ul>
 
-            {/* 下部メニューは mt-auto で下端へ */}
             <ul className="space-y-1 mt-auto">
               <li>
                 <NavLink
@@ -152,7 +150,6 @@ export default function MainLayout(): React.JSX.Element {
       </div>
 
       <div className="drawer-content flex flex-col h-screen">
-        {/* ↓ ここをカスタムタイトルバーに */}
         <header
           className="
           relative

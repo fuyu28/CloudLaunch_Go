@@ -1,6 +1,6 @@
 /**
  * @fileoverview クラウドゲームインポートの競合モーダル
- *
+ * クラウド側と同名のローカルゲームがある場合に、重複追加かローカル置換かを選ばせる。
  */
 
 import { BaseModal } from "@renderer/components/common/BaseModal";

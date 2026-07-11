@@ -42,7 +42,6 @@ type CloudDataCardProps = {
   isDownloading: boolean;
   onUpload: () => Promise<void>;
   onDownload: () => Promise<void>;
-  /** 同期確認処理（省略可） */
   onSync?: () => Promise<void>;
   isSyncing?: boolean;
 };

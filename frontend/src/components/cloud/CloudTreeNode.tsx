@@ -24,9 +24,6 @@ type CloudTreeNodeProps = {
   onSelect: (node: CloudDirectoryNode) => void;
 };
 
-/**
- * クラウドディレクトリツリーノードコンポーネント
- */
 export default function CloudTreeNode({
   node,
   level,

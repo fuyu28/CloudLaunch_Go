@@ -13,9 +13,6 @@ import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import type { ConfirmDetails, WarningItem } from "@renderer/components/common/ConfirmModal";
 import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
-/**
- * 削除確認モーダルのプロパティ
- */
 type CloudDeleteModalProps = {
   deleteConfirm: CloudDataItem | CloudDirectoryNode | null;
   onCancel: () => void;

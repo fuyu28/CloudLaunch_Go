@@ -25,9 +25,6 @@ export type BaseModalProps = {
   closeOnEscape?: boolean;
 };
 
-/**
- * モーダルサイズに対応するCSSクラスのマッピング
- */
 const sizeClasses: Record<ModalSize, string> = {
   sm: "max-w-sm",
   md: "max-w-md",

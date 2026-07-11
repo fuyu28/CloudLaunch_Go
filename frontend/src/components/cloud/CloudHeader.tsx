@@ -1,8 +1,5 @@
 /**
- * @fileoverview クラウドページヘッダーコンポーネント
- *
- * このコンポーネントは、クラウドデータ管理ページのヘッダー部分を
- * 担当し、ビュー切り替えや操作ボタンを提供します。
+ * @fileoverview クラウドデータ管理ページのヘッダー。ビュー切り替えと更新・全削除の操作ボタンを提供する。
  */
 
 import { FiTrash2, FiRefreshCw, FiCloud, FiFolder, FiFolderPlus } from "react-icons/fi";
@@ -11,9 +8,6 @@ import type { CloudDataItem, CloudDirectoryNode } from "src/types/cloud";
 
 export type ViewMode = "cards" | "tree";
 
-/**
- * クラウドヘッダーのプロパティ
- */
 type CloudHeaderProps = {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;

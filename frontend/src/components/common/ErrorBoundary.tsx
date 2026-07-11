@@ -11,20 +11,13 @@ import { FiAlertTriangle, FiRefreshCw, FiChevronDown, FiChevronUp } from "react-
 import { logger } from "../../utils/logger";
 import type { ReactNode } from "react";
 
-/**
- * エラーバウンダリのProps
- */
 interface ErrorBoundaryProps {
   children: ReactNode;
-  /** フォールバック表示をカスタマイズする場合 */
   fallback?: (error: Error, errorInfo: React.ErrorInfo, retry: () => void) => ReactNode;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
   onReset?: () => void;
 }
 
-/**
- * エラーバウンダリのState
- */
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
@@ -32,12 +25,6 @@ interface ErrorBoundaryState {
   showDetails: boolean;
 }
 
-/**
- * Reactエラーバウンダリコンポーネント
- *
- * React コンポーネントツリー内のJavaScriptエラーをキャッチし、
- * エラーログを記録してフォールバックUIを表示します。
- */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -49,9 +36,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     };
   }
 
-  /**
-   * エラーキャッチ時に呼ばれる
-   */
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return {
       hasError: true,
@@ -59,9 +43,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     };
   }
 
-  /**
-   * エラー詳細をキャッチ
-   */
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     logger.error("ErrorBoundary caught an error", {
       component: "ErrorBoundary",
@@ -86,9 +67,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     });
   }
 
-  /**
-   * エラー状態をリセット
-   */
   handleReset = (): void => {
     this.setState({
       hasError: false,
@@ -102,18 +80,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
   };
 
-  /**
-   * エラー詳細の表示/非表示を切り替え
-   */
   toggleDetails = (): void => {
     this.setState((prevState) => ({
       showDetails: !prevState.showDetails,
     }));
   };
 
-  /**
-   * デフォルトのフォールバックUI
-   */
   renderDefaultFallback(): React.JSX.Element {
     const { error, errorInfo, showDetails } = this.state;
 
@@ -208,12 +180,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { children, fallback } = this.props;
 
     if (hasError && error) {
-      // カスタムフォールバックがある場合はそれを使用
       if (fallback) {
         return fallback(error, errorInfo!, this.handleReset);
       }
 
-      // デフォルトフォールバックを使用
       return this.renderDefaultFallback();
     }
 

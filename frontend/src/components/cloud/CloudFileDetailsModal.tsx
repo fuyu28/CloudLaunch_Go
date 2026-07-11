@@ -1,8 +1,5 @@
 /**
- * @fileoverview クラウドファイル詳細表示モーダルコンポーネント
- *
- * このコンポーネントは、クラウドストレージ上のファイル詳細情報を
- * モーダル形式で表示する機能を提供します。
+ * @fileoverview クラウドストレージ上のファイル詳細情報をモーダル形式で表示する。
  */
 
 import { FiFolder, FiFile } from "react-icons/fi";
@@ -10,9 +7,6 @@ import { FiFolder, FiFile } from "react-icons/fi";
 import { formatFileSize, formatDate } from "@renderer/utils/cloudUtils";
 import type { CloudDataItem, CloudFileDetail } from "src/types/cloud";
 
-/**
- * ファイル詳細モーダルのプロパティ
- */
 type CloudFileDetailsModalProps = {
   isOpen: boolean;
   onClose: () => void;

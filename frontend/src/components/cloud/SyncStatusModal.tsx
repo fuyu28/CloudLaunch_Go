@@ -2,7 +2,8 @@
  * @fileoverview 同期状態の確認モーダル
  *
  * 「同期確認」押下時に、いきなりアップロード/ダウンロードするのではなく、
- * 現在の同期状態（最新 / アップロード可 / ダウンロード可 / 未同期）と
+ * 現在の同期状態（最新 / アップロード可 / ダウンロード可 / 未同期）とローカル・リモートの
+ * メタ情報を表示し、必要な操作だけをユーザーに選ばせる。
  */
 
 import { FaCloud, FaCloudUploadAlt, FaCloudDownloadAlt, FaCheckCircle } from "react-icons/fa";

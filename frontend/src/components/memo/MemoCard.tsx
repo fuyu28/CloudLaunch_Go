@@ -37,13 +37,13 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
   } = useMemoOperations({
     gameId,
     onDeleteSuccess: () => {
-      fetchMemos(); // メモ削除後に一覧を再取得
+      fetchMemos();
       setDeleteConfirmId(null);
     },
     closeDropdown,
     openDeleteModal: setDeleteConfirmId,
     onSyncSuccess: () => {
-      fetchMemos(); // 同期後にメモ一覧を再取得
+      fetchMemos();
     },
   });
 
@@ -111,7 +111,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
           </div>
         ) : displayData.totalCount > 0 ? (
           <div className="space-y-3 min-h-0 flex-1">
-            {/* 最新のメモを最大3件表示 */}
             <div className="space-y-2">
               {displayData.displayMemos.map((memo) => (
                 <MemoCardBase
@@ -130,7 +129,6 @@ export default function MemoCard({ gameId }: MemoCardProps): React.JSX.Element {
               ))}
             </div>
 
-            {/* もっとあることを示すインジケーター */}
             {displayData.hasMore && (
               <div className="bg-base-200 rounded-lg p-2 text-center">
                 <span className="text-xs text-base-content/70 font-medium">

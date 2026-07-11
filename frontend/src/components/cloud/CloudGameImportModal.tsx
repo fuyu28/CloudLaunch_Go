@@ -1,6 +1,8 @@
 /**
  * @fileoverview クラウドから既存ゲームを追加するモーダル
  *
+ * クラウドのみに存在するゲームを一覧表示し、選択したものをローカルへ取り込む。
+ * 同名のローカルゲームがある場合は重複追加かローカル置換かを確認する。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

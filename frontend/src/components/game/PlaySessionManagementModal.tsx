@@ -18,21 +18,12 @@ import { playSessionEditSchema } from "@renderer/schemas/playSession";
 import type { PlaySessionType } from "src/types/game";
 import { useZodValidation } from "../../hooks/useZodValidation";
 
-/**
- * 編集用のフォームデータ
- */
 type EditFormData = Record<string, unknown> & {
   sessionName: string;
 };
 
-/**
- * 編集フォームのフィールド名の型
- */
 type EditFormFields = keyof Pick<EditFormData, "sessionName">;
 
-/**
- * セッション管理モーダルのProps
- */
 type PlaySessionManagementModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -41,9 +32,6 @@ type PlaySessionManagementModalProps = {
   onProcessUpdated?: () => void;
 };
 
-/**
- * セッション管理モーダルコンポーネント
- */
 export default function PlaySessionManagementModal({
   isOpen,
   onClose,
@@ -67,9 +55,6 @@ export default function PlaySessionManagementModal({
   const { formatSmart, formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
 
-  /**
-   * セッション情報を取得
-   */
   const fetchProcesses = useCallback(async () => {
     if (!gameId) return;
 
@@ -93,9 +78,6 @@ export default function PlaySessionManagementModal({
     }
   }, [gameId, showToast]);
 
-  /**
-   * 編集モーダルを開く
-   */
   const openEditModal = useCallback(
     (process: PlaySessionType) => {
       setEditingProcess(process);
@@ -105,27 +87,21 @@ export default function PlaySessionManagementModal({
       setEditFormData({
         sessionName: process.sessionName ?? "",
       });
-      validation.resetTouched(); // タッチ状態をリセット
+      validation.resetTouched();
       setIsEditModalOpen(true);
     },
     [validation],
   );
 
-  /**
-   * 編集モーダルを閉じる
-   */
   const closeEditModal = useCallback(() => {
     setIsEditModalOpen(false);
     setEditingProcess(undefined);
     setEditFormData({
       sessionName: "",
     });
-    validation.resetTouched(); // タッチ状態をリセット
+    validation.resetTouched();
   }, [validation]);
 
-  /**
-   * フォーム入力変更処理
-   */
   const handleFormChange = useCallback(
     (field: EditFormFields, value: string | null) => {
       setEditFormData((prev) => ({ ...prev, [field]: value ?? "" }));
@@ -134,9 +110,6 @@ export default function PlaySessionManagementModal({
     [validation],
   );
 
-  /**
-   * セッション編集処理
-   */
   const handleEditSession = useCallback(async () => {
     if (!editingProcess) return;
 
@@ -147,7 +120,6 @@ export default function PlaySessionManagementModal({
     }
 
     try {
-      // セッション名を更新
       // 既存の未設定（null / undefined）と空文字は同一視し、変更がなければ API を叩かない。
       const nextName = memoizedEditFormData.sessionName;
       const prevName = editingProcess.sessionName ?? "";
@@ -181,9 +153,6 @@ export default function PlaySessionManagementModal({
     closeEditModal,
   ]);
 
-  /**
-   * セッション削除処理
-   */
   const handleDeleteProcess = useCallback(async () => {
     if (!selectedProcessId) return;
 
@@ -209,34 +178,22 @@ export default function PlaySessionManagementModal({
     }
   }, [selectedProcessId, fetchProcesses, onProcessUpdated, showToast]);
 
-  /**
-   * 削除確認モーダルを開く
-   */
   const openDeleteModal = useCallback((processId: string) => {
     setSelectedProcessId(processId);
     setIsDeleteModalOpen(true);
   }, []);
 
-  /**
-   * 削除確認モーダルを閉じる
-   */
   const closeDeleteModal = useCallback(() => {
     setIsDeleteModalOpen(false);
     setSelectedProcessId(undefined);
   }, []);
 
-  /**
-   * モーダルが開かれたときにセッション情報を取得
-   */
   useEffect(() => {
     if (isOpen) {
       fetchProcesses();
     }
   }, [isOpen, fetchProcesses]);
 
-  /**
-   * 選択されたセッションの情報を取得
-   */
   const selectedProcess = processes.find((p) => p.id === selectedProcessId);
 
   return (
