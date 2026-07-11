@@ -8,7 +8,7 @@
  * - カスタマイズ可能なメッセージ
  */
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
 
 /**
@@ -90,13 +90,17 @@ export function useToastHandler(): ToastHandler {
     }
   }, []);
 
-  return {
-    showLoading,
-    showSuccess,
-    showError,
-    dismiss,
-    showToast,
-  };
+  // 戻り値を安定させないと useLoadingState の executeWithLoading が毎レンダー再生成される
+  return useMemo(
+    () => ({
+      showLoading,
+      showSuccess,
+      showError,
+      dismiss,
+      showToast,
+    }),
+    [showLoading, showSuccess, showError, dismiss, showToast],
+  );
 }
 
 /**
