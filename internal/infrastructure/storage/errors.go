@@ -1,4 +1,3 @@
-// クラウドストレージエラー判定を提供する。
 package storage
 
 import (

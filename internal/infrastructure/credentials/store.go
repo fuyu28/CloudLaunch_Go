@@ -1,4 +1,3 @@
-// 認証情報ストアの共通インターフェースを定義する。
 package credentials
 
 import "context"

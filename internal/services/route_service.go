@@ -1,4 +1,3 @@
-// ルート管理のビジネスロジックを提供する。
 package services
 
 import (
