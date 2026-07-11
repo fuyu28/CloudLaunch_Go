@@ -13,6 +13,12 @@ func (app *App) startHotkey() error {
 
 func (app *App) stopHotkey() {}
 
+func (app *App) startHotkeyLocked() error {
+	return nil
+}
+
+func (app *App) stopHotkeyLocked() {}
+
 func newCredentialStore(cfg config.Config) credentials.Store {
 	return credentials.NewUnsupportedStore(cfg.CredentialNamespace)
 }

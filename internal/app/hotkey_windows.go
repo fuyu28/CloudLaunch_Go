@@ -10,6 +10,18 @@ import (
 )
 
 func (app *App) startHotkey() error {
+	app.hotkeyMu.Lock()
+	defer app.hotkeyMu.Unlock()
+	return app.startHotkeyLocked()
+}
+
+func (app *App) stopHotkey() {
+	app.hotkeyMu.Lock()
+	defer app.hotkeyMu.Unlock()
+	app.stopHotkeyLocked()
+}
+
+func (app *App) startHotkeyLocked() error {
 	if app.ScreenshotService == nil {
 		return nil
 	}
@@ -22,7 +34,7 @@ func (app *App) startHotkey() error {
 	return nil
 }
 
-func (app *App) stopHotkey() {
+func (app *App) stopHotkeyLocked() {
 	if app.HotkeyService == nil {
 		return
 	}

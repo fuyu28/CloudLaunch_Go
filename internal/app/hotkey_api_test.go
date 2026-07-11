@@ -1,0 +1,81 @@
+package app
+
+import (
+	"log/slog"
+	"testing"
+
+	"CloudLaunch_Go/internal/config"
+	"CloudLaunch_Go/internal/services"
+)
+
+type stubHotkeyService struct {
+	starts     int
+	stops      int
+	notifySet  []bool
+	startError error
+}
+
+func (s *stubHotkeyService) Start() error {
+	s.starts++
+	return s.startError
+}
+
+func (s *stubHotkeyService) Stop() {
+	s.stops++
+}
+
+func (s *stubHotkeyService) SetNotify(enabled bool) {
+	s.notifySet = append(s.notifySet, enabled)
+}
+
+func TestUpdateScreenshotHotkeyNoopWhenUnchanged(t *testing.T) {
+	stub := &stubHotkeyService{}
+	app := &App{
+		Config:        config.Config{ScreenshotHotkey: "Ctrl+Alt+S"},
+		Logger:        slog.Default(),
+		HotkeyService: stub,
+	}
+
+	result := app.UpdateScreenshotHotkey("Ctrl+Alt+S")
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result)
+	}
+	if stub.starts != 0 || stub.stops != 0 {
+		t.Fatalf("expected no restart, starts=%d stops=%d", stub.starts, stub.stops)
+	}
+}
+
+func TestUpdateScreenshotHotkeyNotifyUpdatesFlagWithoutRestart(t *testing.T) {
+	stub := &stubHotkeyService{}
+	app := &App{
+		Config:        config.Config{ScreenshotHotkeyNotify: true},
+		Logger:        slog.Default(),
+		HotkeyService: stub,
+	}
+
+	result := app.UpdateScreenshotHotkeyNotify(false)
+	if !result.Success {
+		t.Fatalf("expected success, got %#v", result)
+	}
+	if app.Config.ScreenshotHotkeyNotify {
+		t.Fatal("expected notify config to be false")
+	}
+	if stub.starts != 0 || stub.stops != 0 {
+		t.Fatalf("expected no OS re-register, starts=%d stops=%d", stub.starts, stub.stops)
+	}
+	if len(stub.notifySet) != 1 || stub.notifySet[0] {
+		t.Fatalf("expected SetNotify(false), got %#v", stub.notifySet)
+	}
+
+	// 同値なら SetNotify も呼ばない
+	result = app.UpdateScreenshotHotkeyNotify(false)
+	if !result.Success {
+		t.Fatalf("expected success on noop, got %#v", result)
+	}
+	if len(stub.notifySet) != 1 {
+		t.Fatalf("expected no additional SetNotify, got %#v", stub.notifySet)
+	}
+}
+
+// Ensure stub satisfies interface at compile time.
+var _ services.HotkeyService = (*stubHotkeyService)(nil)

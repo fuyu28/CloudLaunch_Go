@@ -24,6 +24,10 @@ import {
 } from "@renderer/state/settings";
 import { logLevelManager } from "@renderer/utils/logLevel";
 
+// StrictMode の effect 二重実行やレイアウト再マウントで、ホットキー再登録が
+// 多重に走らないようにプロセス寿命で一度だけ同期する。
+let bootSyncCompleted = false;
+
 /**
  * アプリ常駐レイアウトから呼び、Settings タブを開かなくてもスクショ設定等が効くようにする。
  * 個々の設定変更は各タブのハンドラが担うため、ここでは初回マウント時のみ同期する。
@@ -45,25 +49,40 @@ export function useSettingsBootSync(): void {
   // 初回マウント時のみ。atom 更新のたびに呼ぶのは各設定ハンドラの責務。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (bootSyncCompleted) {
+      return;
+    }
+    bootSyncCompleted = true;
+
     const settings = window.api.settings;
-    void settings.updateOfflineMode(offlineMode);
-    void settings.updateAutoTracking(autoTracking);
-    void settings.updateUploadConcurrency(transferConcurrency);
-    void settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
-    void settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
-    void settings.updateScreenshotJpegQuality(screenshotJpegQuality);
-    void settings.updateScreenshotClientOnly(screenshotClientOnly);
-    void settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
-    void settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
-    void settings.updateS3ForcePathStyle(s3ForcePathStyle);
-    void settings.updateS3UseTLS(s3UseTLS);
-    const feLevel = logLevelManager.getCurrentLevel();
-    if (feLevel !== "off") {
-      void settings.updateLogLevel(feLevel);
-    }
-    const trimmedHotkey = screenshotHotkey.trim();
-    if (trimmedHotkey) {
-      void settings.updateScreenshotHotkey(trimmedHotkey);
-    }
+    void (async () => {
+      // ホットキー系は並列だと stop/start が競合して already registered になるため直列化する。
+      // コンボ未変更時は backend 側で no-op になる。
+      await settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
+      const trimmedHotkey = screenshotHotkey.trim();
+      if (trimmedHotkey) {
+        await settings.updateScreenshotHotkey(trimmedHotkey);
+      }
+
+      void settings.updateOfflineMode(offlineMode);
+      void settings.updateAutoTracking(autoTracking);
+      void settings.updateUploadConcurrency(transferConcurrency);
+      void settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
+      void settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
+      void settings.updateScreenshotJpegQuality(screenshotJpegQuality);
+      void settings.updateScreenshotClientOnly(screenshotClientOnly);
+      void settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
+      void settings.updateS3ForcePathStyle(s3ForcePathStyle);
+      void settings.updateS3UseTLS(s3UseTLS);
+      const feLevel = logLevelManager.getCurrentLevel();
+      if (feLevel !== "off") {
+        void settings.updateLogLevel(feLevel);
+      }
+    })();
   }, []);
+}
+
+/** テスト用: boot sync の一度きりガードをリセットする。 */
+export function resetSettingsBootSyncForTests(): void {
+  bootSyncCompleted = false;
 }

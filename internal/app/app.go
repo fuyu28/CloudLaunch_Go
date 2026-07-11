@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
@@ -35,6 +36,7 @@ type App struct {
 	MemoCloudService    *services.MemoCloudService
 	MaintenanceService  *services.MaintenanceService
 	HotkeyService       services.HotkeyService
+	hotkeyMu            sync.Mutex
 	dbConnection        *sql.DB
 	autoTracking        bool
 	isMonitoring        bool

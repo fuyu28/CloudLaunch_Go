@@ -411,10 +411,12 @@ func (app *App) UpdateScreenshotLocalJpeg(enabled bool) result.ApiResult[bool] {
 // 失敗時は呼び出し側の rollback を呼んで旧設定に戻す。
 // rollback は新設定を旧設定へ戻すクロージャ。errMessage はユーザー向けメッセージ。
 func (app *App) applyHotkeyChange(operation, errMessage string, rollback func(), attrs ...any) result.ApiResult[bool] {
-	app.stopHotkey()
-	if err := app.startHotkey(); err != nil {
+	app.hotkeyMu.Lock()
+	defer app.hotkeyMu.Unlock()
+	app.stopHotkeyLocked()
+	if err := app.startHotkeyLocked(); err != nil {
 		rollback()
-		_ = app.startHotkey()
+		_ = app.startHotkeyLocked()
 		logArgs := append([]any{"operation", operation, "error", err}, attrs...)
 		app.Logger.Error(errMessage, logArgs...)
 		return result.ErrorResult[bool](errMessage, err.Error())
@@ -433,6 +435,11 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 		app.Logger.Warn("ホットキーが不正です", "operation", "UpdateScreenshotHotkey", "combo", trimmed, "error", err)
 		return result.ErrorResult[bool]("ホットキーが不正です", err.Error())
 	}
+	if app.Config.ScreenshotHotkey == trimmed {
+		// Startup 済みの同一コンボを boot sync が再登録しようとして
+		// already registered になるのを防ぐ。
+		return result.OkResult(true)
+	}
 	prev := app.Config.ScreenshotHotkey
 	app.Config.ScreenshotHotkey = trimmed
 	return app.applyHotkeyChange("UpdateScreenshotHotkey", "ホットキーの更新に失敗しました",
@@ -440,11 +447,18 @@ func (app *App) UpdateScreenshotHotkey(combo string) result.ApiResult[bool] {
 }
 
 // UpdateScreenshotHotkeyNotify はホットキー通知の有効/無効を更新する。
+// OS ホットキーの再登録は不要なので、実行中サービスのフラグだけ更新する。
 func (app *App) UpdateScreenshotHotkeyNotify(enabled bool) result.ApiResult[bool] {
-	prev := app.Config.ScreenshotHotkeyNotify
+	if app.Config.ScreenshotHotkeyNotify == enabled {
+		return result.OkResult(true)
+	}
 	app.Config.ScreenshotHotkeyNotify = enabled
-	return app.applyHotkeyChange("UpdateScreenshotHotkeyNotify", "ホットキー通知の更新に失敗しました",
-		func() { app.Config.ScreenshotHotkeyNotify = prev }, "enabled", enabled)
+	app.hotkeyMu.Lock()
+	if app.HotkeyService != nil {
+		app.HotkeyService.SetNotify(enabled)
+	}
+	app.hotkeyMu.Unlock()
+	return result.OkResult(true)
 }
 
 // GetMonitoringStatus は監視状態を取得する。

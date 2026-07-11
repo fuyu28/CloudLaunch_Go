@@ -16,6 +16,8 @@ type HotkeyConfig struct {
 type HotkeyService interface {
 	Start() error
 	Stop()
+	// SetNotify はトースト通知の有効/無効を、OS ホットキーを再登録せずに切り替える。
+	SetNotify(enabled bool)
 }
 
 // NewHotkeyService はプラットフォームに応じたホットキーサービスを生成する。

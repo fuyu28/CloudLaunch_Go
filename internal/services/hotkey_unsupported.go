@@ -18,3 +18,5 @@ func (service *hotkeyServiceUnsupported) Start() error {
 }
 
 func (service *hotkeyServiceUnsupported) Stop() {}
+
+func (service *hotkeyServiceUnsupported) SetNotify(enabled bool) {}
