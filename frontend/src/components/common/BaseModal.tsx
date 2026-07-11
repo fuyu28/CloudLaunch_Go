@@ -118,7 +118,7 @@ export function BaseModal({
       return undefined;
     }
     if (onClosed && hasBeenOpenedRef.current) {
-      // DaisyUIのアニメーション時間を考慮してコールバックを実行
+      // 即 onClosed すると閉じアニメ中に親が unmount しチラつくため、DaisyUI 分待ってから。
       const timer = setTimeout(() => {
         onClosed();
       }, 300);

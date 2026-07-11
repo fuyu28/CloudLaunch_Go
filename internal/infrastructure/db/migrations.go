@@ -139,7 +139,7 @@ func splitSQLStatements(sqlText string) []string {
 			continue
 		}
 
-		// 末尾が;でもtrigger内なので継続
+		// 末尾が ; でも trigger 内なら文を切らない（BEGIN...END; を壊す）。
 	}
 
 	rest := strings.TrimSpace(buffer.String())
