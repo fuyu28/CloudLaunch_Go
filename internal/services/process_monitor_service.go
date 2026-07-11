@@ -91,6 +91,10 @@ type ProcessMonitorService struct {
 	interval           time.Duration
 	sessionTimeout     time.Duration
 	gameCleanupTimeout time.Duration
+	// lastProcesses は直近の非空プロセス一覧スナップショット（service.mu で保護）。
+	// 監視ループが定期更新するため、ホットキー撮影時の再列挙をほぼ不要にする。
+	lastProcesses   []ProcessInfo
+	lastProcessesAt time.Time
 }
 
 // NewProcessMonitorService は ProcessMonitorService を生成する。
@@ -680,9 +684,14 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 		return nil, errors.New("exePath is empty")
 	}
 
-	processes, _ := service.getProcesses()
+	// 監視ループが更新した新しいスナップショットがあればそれを使い、無ければ再列挙する。
+	processes := service.recentProcesses()
+	if processes == nil {
+		processes, _ = service.getProcesses()
+	}
+	// 稼働中の Windows でプロセス一覧が空になるのは列挙失敗時のみ。
 	if len(processes) == 0 {
-		return nil, nil
+		return nil, errors.New("プロセス一覧を取得できませんでした")
 	}
 
 	exeName := windowsPathBase(trimmed)
@@ -851,10 +860,13 @@ func parseCSVBytes(output []byte) ([][]string, error) {
 
 func (service *ProcessMonitorService) getProcesses() ([]ProcessInfo, string) {
 	if service.processProvider != nil {
-		return service.processProvider()
+		processes, source := service.processProvider()
+		service.cacheProcesses(processes)
+		return processes, source
 	}
 	processes, err := service.getProcessesNative()
 	if err == nil {
+		service.cacheProcesses(processes)
 		return processes, "native"
 	}
 
@@ -864,7 +876,31 @@ func (service *ProcessMonitorService) getProcesses() ([]ProcessInfo, string) {
 		service.logger.Error("フォールバックも失敗しました", "error", err)
 		return []ProcessInfo{}, "fallback"
 	}
+	service.cacheProcesses(processes)
 	return processes, "fallback"
+}
+
+// cacheProcesses は非空のプロセス一覧をスナップショットとして保存する。
+// getProcesses は service.mu を保持せずに呼ばれる前提のため、ここで短くロックを取得する。
+func (service *ProcessMonitorService) cacheProcesses(processes []ProcessInfo) {
+	if len(processes) == 0 {
+		return
+	}
+	service.mu.Lock()
+	service.lastProcesses = processes
+	service.lastProcessesAt = time.Now()
+	service.mu.Unlock()
+}
+
+// recentProcesses は監視ループの間隔内に更新された新しいスナップショットを返す。
+// 古い（または未取得の）場合は nil を返し、呼び出し側で再列挙させる。
+func (service *ProcessMonitorService) recentProcesses() []ProcessInfo {
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	if service.lastProcesses != nil && time.Since(service.lastProcessesAt) <= service.interval+time.Second {
+		return service.lastProcesses
+	}
+	return nil
 }
 
 func normalizeProcessToken(value string) string {

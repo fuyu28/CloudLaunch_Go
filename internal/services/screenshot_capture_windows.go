@@ -3,202 +3,115 @@
 package services
 
 import (
+	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"sync"
 	"time"
 
-	"CloudLaunch_Go/internal/domain"
-	"golang.org/x/sys/windows"
+	"CloudLaunch_Go/internal/config"
 )
 
 const (
-	screenClipTimeout  = 30 * time.Second
-	screenClipPollWait = 250 * time.Millisecond
-	hotkeyDefaultDirID = "default"
+	// screencapTimeout は screencap-cli.exe 実行のタイムアウト。
+	screencapTimeout = 10 * time.Second
+	// screencapBlackWarnRatio を超える真っ黒率で警告する（最小化中の可能性）。
+	screencapBlackWarnRatio = 0.98
 )
 
+// screencapPathCache は解決済み CLI パスのメモ化（プロセス生存中は不変）。
 var (
-	user32Screenshot          = windows.NewLazySystemDLL("user32.dll")
-	errClipboardImageNotFound = errors.New("clipboard image not found")
-	procClipboardSeqNumber    = user32Screenshot.NewProc("GetClipboardSequenceNumber")
+	screencapPathMu    sync.Mutex
+	screencapPathCache string
 )
 
-// CaptureHotkey はホットキー経由でSnipping Toolを起動し、画像を保存する。
-func (service *ScreenshotService) CaptureHotkey(ctx context.Context, preferredGameID string) (string, string, error) {
-	game, err := service.resolveHotkeyGame(ctx, preferredGameID)
+// captureWithScreencap は同梱の screencap-cli.exe を呼び出して outPath に画像を保存する。
+// pid が 0 のときはフォアグラウンドウィンドウを対象にする。
+func (service *ScreenshotService) captureWithScreencap(ctx context.Context, pid int, outPath string) error {
+	cliPath, err := resolveScreencapCLIPath()
 	if err != nil {
-		return "", "", err
-	}
-	gameID := hotkeyDefaultDirID
-	gameTitle := "default"
-	gameExePath := ""
-	if game != nil {
-		gameID = game.ID
-		gameTitle = game.Title
-		gameExePath = game.ExePath
+		return err
 	}
 
-	baseDir := strings.TrimSpace(service.appDataDir)
-	if baseDir == "" {
-		baseDir = os.TempDir()
-	}
-	saveDir := filepath.Join(baseDir, "screenshots", gameID)
-	fullPath, tmpPath, err := service.buildScreenshotPaths(gameID, saveDir)
-	if err != nil {
-		return "", "", err
-	}
+	args := buildScreencapArgs(pid, outPath, service.localJpeg, service.jpegQuality)
 
-	service.logCapture(
-		slog.LevelInfo,
-		"ホットキーキャプチャ開始",
-		"gameId", gameID,
-		"title", gameTitle,
-		"exePath", gameExePath,
-		"output", fullPath,
-	)
+	runCtx, cancel := context.WithTimeout(ctx, screencapTimeout)
+	defer cancel()
 
-	if err := service.captureFunc(ctx, fullPath, tmpPath); err != nil {
-		if errors.Is(err, ErrNoNewScreenshot) {
-			service.logCapture(slog.LevelInfo, "スクリーンショットが取得されなかったため保存をスキップ", "gameId", gameID)
-			return "", "", err
+	command := execCommandHidden(runCtx, cliPath, args...)
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	runErr := command.Run()
+	if runErr == nil {
+		result, parseErr := parseScreencapResult(stdout.Bytes())
+		if parseErr != nil {
+			// exit 0 でも結果JSONを解釈できない場合は、出力ファイルの実在で成否を判断する。
+			if _, statErr := os.Stat(outPath); statErr != nil {
+				return fmt.Errorf(
+					"screencap-cli は正常終了しましたが出力ファイルが確認できません: %v (parse=%v)",
+					statErr,
+					parseErr,
+				)
+			}
+			service.logCapture(slog.LevelWarn, "screencap-cli の結果JSONを解析できませんでした", "error", parseErr)
+			return nil
 		}
-		service.logCapture(slog.LevelWarn, "スクリーンショット取得に失敗", "error", err)
-		return "", "", err
-	}
-
-	if game == nil {
-		return "", fullPath, nil
-	}
-	return game.ID, fullPath, nil
-}
-
-func (service *ScreenshotService) resolveHotkeyGame(
-	ctx context.Context,
-	preferredGameID string,
-) (*domain.Game, error) {
-	trimmed := strings.TrimSpace(preferredGameID)
-	if trimmed == "" {
-		return nil, nil
-	}
-	game, err := service.repository.GetGameByID(ctx, trimmed)
-	if err != nil {
-		return nil, err
-	}
-	return game, nil
-}
-
-func (service *ScreenshotService) captureWithScreenClip(ctx context.Context, fullPath string, tmpPath string) error {
-	beforeSeq := clipboardSequenceNumber()
-	beforeHash, _ := readClipboardImageHash(ctx)
-
-	command := execCommandHidden(ctx, "explorer.exe", "ms-screenclip:")
-	if err := command.Start(); err != nil {
-		return fmt.Errorf("failed to start ms-screenclip: %w", err)
-	}
-
-	imageBytes, err := waitForNewClipboardImage(ctx, beforeSeq, beforeHash, screenClipTimeout)
-	if err != nil {
-		return err
-	}
-
-	outputPath := fullPath
-	if tmpPath != "" {
-		outputPath = tmpPath
-	}
-	if err := os.WriteFile(outputPath, imageBytes, 0o600); err != nil {
-		return err
-	}
-	if tmpPath == "" {
+		if !result.OK {
+			return screencapErrorFromResult(result)
+		}
+		if result.ImageStats.BlackRatio > screencapBlackWarnRatio {
+			service.logCapture(
+				slog.LevelWarn,
+				"キャプチャがほぼ真っ黒（最小化中の可能性）",
+				"blackRatio", result.ImageStats.BlackRatio,
+				"outPath", result.OutPath,
+			)
+		}
+		service.logCapture(slog.LevelDebug, "screencap-cli 実行成功", "outPath", result.OutPath)
 		return nil
 	}
-	if err := service.convertFileToJpeg(tmpPath, fullPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
+
+	// タイムアウトは他の失敗と区別して明示する。
+	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("screencap-cli がタイムアウトしました (%s)", screencapTimeout)
 	}
-	_ = os.Remove(tmpPath)
-	return nil
+
+	// 失敗時は結果JSONの error 情報を優先し、解析できなければ生の出力を含めて返す。
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		if result, parseErr := parseScreencapResult(stdout.Bytes()); parseErr == nil && result.Error != nil {
+			return screencapErrorFromResult(result)
+		}
+		return screencapExitError(exitErr.ExitCode(), stdout.String(), stderr.String())
+	}
+	return fmt.Errorf("screencap-cli の起動に失敗しました: %w", runErr)
 }
 
-func waitForNewClipboardImage(ctx context.Context, beforeSeq uint32, beforeHash string, timeout time.Duration) ([]byte, error) {
-	deadline := time.Now().Add(timeout)
-	for {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		if time.Now().After(deadline) {
-			return nil, ErrNoNewScreenshot
-		}
+// resolveScreencapCLIPath は実行ファイルと同じディレクトリの screencap-cli.exe のみを解決する。
+// ピン留めしたバージョン以外の野良バイナリを拾わないよう PATH フォールバックは行わない。
+// 解決結果はプロセス生存中不変なため成功時のみメモ化する（エラーはキャッシュしない）。
+func resolveScreencapCLIPath() (string, error) {
+	screencapPathMu.Lock()
+	defer screencapPathMu.Unlock()
+	if screencapPathCache != "" {
+		return screencapPathCache, nil
+	}
 
-		seq := clipboardSequenceNumber()
-		if seq == beforeSeq {
-			time.Sleep(screenClipPollWait)
-			continue
-		}
-
-		imageBytes, err := readClipboardImageBytes(ctx)
-		if err != nil {
-			if errors.Is(err, errClipboardImageNotFound) {
-				time.Sleep(screenClipPollWait)
-				continue
-			}
-			return nil, err
-		}
-		hash := hashBytes(imageBytes)
-		if hash == beforeHash {
-			time.Sleep(screenClipPollWait)
-			continue
-		}
-		return imageBytes, nil
+	dir := config.ExecutableDir()
+	if dir == "" {
+		return "", errors.New("screencap-cli.exe の配置先を特定できません（実行ファイルパスを解決できません）")
 	}
-}
-
-func clipboardSequenceNumber() uint32 {
-	value, _, _ := procClipboardSeqNumber.Call()
-	return uint32(value)
-}
-
-func readClipboardImageHash(ctx context.Context) (string, error) {
-	imageBytes, err := readClipboardImageBytes(ctx)
-	if err != nil {
-		return "", err
+	candidate := filepath.Join(dir, "screencap-cli.exe")
+	if _, statErr := os.Stat(candidate); statErr != nil {
+		return "", fmt.Errorf("screencap-cli.exe が見つかりません: %s", candidate)
 	}
-	return hashBytes(imageBytes), nil
-}
-
-func readClipboardImageBytes(ctx context.Context) ([]byte, error) {
-	command := execCommandHidden(
-		ctx,
-		"powershell",
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		`Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $img=[Windows.Forms.Clipboard]::GetImage(); if ($null -eq $img) { exit 3 }; $ms=New-Object System.IO.MemoryStream; $img.Save($ms,[System.Drawing.Imaging.ImageFormat]::Png); [Convert]::ToBase64String($ms.ToArray())`,
-	)
-	output, err := command.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 3 {
-			return nil, errClipboardImageNotFound
-		}
-		return nil, err
-	}
-	encoded := strings.TrimSpace(string(output))
-	if encoded == "" {
-		return nil, errClipboardImageNotFound
-	}
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, err
-	}
-	if len(decoded) == 0 {
-		return nil, errClipboardImageNotFound
-	}
-	return decoded, nil
+	screencapPathCache = candidate
+	return candidate, nil
 }

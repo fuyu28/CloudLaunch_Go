@@ -93,6 +93,8 @@ Section "${INFO_PRODUCTNAME}" SecMain
 
     !insertmacro wails.files
 
+    File "..\screencap-cli.exe" # スクリーンショット用CLIを同梱
+
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 

@@ -591,7 +591,7 @@ func (app *App) CaptureGameScreenshot(gameID string) result.ApiResult[string] {
 	path, err := app.ScreenshotService.CaptureGameScreenshot(app.context(), strings.TrimSpace(gameID))
 	if err != nil {
 		app.Logger.Error("スクリーンショット取得に失敗", "error", err)
-		return result.ErrorResult[string]("スクリーンショットの取得に失敗しました", err.Error())
+		return serviceErrorResult[string](err, "スクリーンショットの取得に失敗しました")
 	}
 	if app.Config.ScreenshotSyncEnabled {
 		if syncErr := app.uploadScreenshot(app.context(), strings.TrimSpace(gameID), path); syncErr != nil {

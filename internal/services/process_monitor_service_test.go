@@ -393,3 +393,59 @@ func TestProcessMonitorServiceFindProcessIDsByExeUsesInjectedProcesses(t *testin
 		t.Fatalf("unexpected process ids: %#v", ids)
 	}
 }
+
+func newTestProcessMonitorService() *ProcessMonitorService {
+	return NewProcessMonitorService(fakeProcessMonitorRepository{
+		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+			return &session, nil
+		},
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
+		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
+		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
+			return nil, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+}
+
+// TestProcessMonitorServiceFindProcessIDsByExeErrorsOnEmptyList は、プロセス列挙が空
+// （列挙失敗）のとき「見つからない」ではなくエラーになることを検証する。
+func TestProcessMonitorServiceFindProcessIDsByExeErrorsOnEmptyList(t *testing.T) {
+	t.Parallel()
+
+	service := newTestProcessMonitorService()
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{}, "test"
+	}
+
+	if _, err := service.FindProcessIDsByExe(`C:\games\game.exe`); err == nil {
+		t.Fatalf("expected error when process list is empty")
+	}
+}
+
+// TestProcessMonitorServiceFindProcessIDsByExeUsesCache は、監視ループが更新した
+// 新しいスナップショットがある場合に再列挙せずキャッシュを使うことを検証する。
+func TestProcessMonitorServiceFindProcessIDsByExeUsesCache(t *testing.T) {
+	t.Parallel()
+
+	service := newTestProcessMonitorService()
+	// 直近スナップショットをキャッシュに載せる。
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{
+			{Name: "game.exe", Pid: 55, Cmd: `C:\games\game.exe`},
+		}, "warm"
+	}
+	service.getProcesses()
+
+	// 以降 provider が空を返しても、鮮度内ならキャッシュから解決できる。
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{}, "cold"
+	}
+
+	ids, err := service.FindProcessIDsByExe(`C:\games\game.exe`)
+	if err != nil {
+		t.Fatalf("expected cache hit, got error %v", err)
+	}
+	if len(ids) != 1 || ids[0] != 55 {
+		t.Fatalf("unexpected process ids: %#v", ids)
+	}
+}
