@@ -162,18 +162,8 @@ export function useScreenshotSettings() {
     return [...modifiers, mainKey].join("+");
   };
 
-  // 初回マウント時にLocalStorage設定をバックエンドへ同期する。
-  // 個々の handle* と違って各設定値が変わるたびではなく、起動時の1回だけ送る意図のため deps は [] のまま。
-  useEffect(() => {
-    void settings.updateScreenshotSyncEnabled(screenshotSyncEnabled);
-    void settings.updateScreenshotUploadJpeg(screenshotUploadJpeg);
-    void settings.updateScreenshotJpegQuality(screenshotJpegQuality);
-    void settings.updateScreenshotClientOnly(screenshotClientOnly);
-    void settings.updateScreenshotLocalJpeg(screenshotLocalJpeg);
-    void settings.updateScreenshotHotkeyNotify(screenshotHotkeyNotify);
-    void applyScreenshotHotkey(screenshotHotkey, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // 起動時のバックエンド同期は MainLayout の useSettingsBootSync が担う。
+  // ここではユーザー操作時の反映のみ扱う。
 
   useEffect(() => {
     if (!isCapturingHotkey) {
