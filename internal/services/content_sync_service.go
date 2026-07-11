@@ -285,7 +285,14 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 		status = domain.SyncStatusConflict
 	}
 
-	detail := domain.SyncStatusDetail{Status: status}
+	// SavesDiffer は Saves コンポーネントのみの差分（=セーブファイル内容の差分）。
+	// contentFingerprint は sessions.json / game.json も含むため、それらだけの変化で
+	// PushNeeded になっても SavesDiffer=false になる。呼び出し側（セッション終了後の
+	// アップロード確認プロンプト等）でセーブ不変時のノイズを消すために使う。
+	detail := domain.SyncStatusDetail{
+		Status:      status,
+		SavesDiffer: localMeta.Snapshot.Saves != remoteMeta.Saves,
+	}
 	if status == domain.SyncStatusConflict {
 		snap := localMeta.Snapshot
 		detail.LocalMeta = &snap

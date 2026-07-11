@@ -14,14 +14,16 @@
 import React from "react";
 import { FiHome, FiChevronRight, FiArrowLeft } from "react-icons/fi";
 
+import type { CloudPathSegment } from "@renderer/utils/cloudUtils";
+
 /**
  * パンくずリストのプロパティ
  */
 type CloudBreadcrumbProps = {
   /** 現在のパス */
-  currentPath: string[];
+  currentPath: CloudPathSegment[];
   /** パス移動コールバック */
-  onNavigateToPath: (path: string[]) => void;
+  onNavigateToPath: (path: CloudPathSegment[]) => void;
   /** 戻るコールバック */
   onNavigateBack: () => void;
 };
@@ -56,8 +58,8 @@ export function CloudBreadcrumb({
       <FiChevronRight className="text-base-content/50" />
 
       {/* パス階層 */}
-      {currentPath.map((pathSegment, index) => (
-        <React.Fragment key={index}>
+      {currentPath.map((segment, index) => (
+        <React.Fragment key={`${segment.id}-${index}`}>
           <button
             onClick={() => {
               const newPath = currentPath.slice(0, index + 1);
@@ -65,7 +67,7 @@ export function CloudBreadcrumb({
             }}
             className="btn btn-sm btn-ghost text-sm"
           >
-            {pathSegment}
+            {segment.name}
           </button>
           {index < currentPath.length - 1 && <FiChevronRight className="text-base-content/50" />}
         </React.Fragment>

@@ -2,11 +2,12 @@
  * @fileoverview 批評空間タイトル検索モーダル
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { useLatestRequestId } from "@renderer/hooks/useLatestRequestId";
 
 import { BaseModal } from "../common/BaseModal";
 import type { ErogameScapeSearchItem, ErogameScapeSearchResult } from "src/types/erogamescape";
-import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 
 type ErogameScapeSearchModalProps = {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export default function ErogameScapeSearchModal({
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
   const [activeQuery, setActiveQuery] = useState("");
-  const searchRequestIdRef = useRef(0);
+  const searchRequest = useLatestRequestId();
 
   useEffect(() => {
     if (!isOpen) {
@@ -41,54 +42,65 @@ export default function ErogameScapeSearchModal({
       setLoadingMore(false);
       setNextPageUrl(null);
       setActiveQuery("");
-      searchRequestIdRef.current = 0;
+      searchRequest.reset();
     }
-  }, [isOpen]);
+    // searchRequest は安定した参照だが、eslint の exhaustive-deps 検知回避のため列挙する
+  }, [isOpen, searchRequest]);
 
-  const searchErogameScape = useCallback(async (query: string) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setSearchError("検索ワードを入力してください");
-      return;
-    }
-    const requestId = searchRequestIdRef.current + 1;
-    searchRequestIdRef.current = requestId;
-    setSearching(true);
-    setSearchError(null);
-    try {
-      const result = await window.api.erogameScape.searchByTitle(trimmed);
-      if (requestId !== searchRequestIdRef.current) {
+  const searchErogameScape = useCallback(
+    async (query: string) => {
+      const trimmed = query.trim();
+      if (!trimmed) {
+        setSearchError("検索ワードを入力してください");
         return;
       }
-      if (!result.success || !result.data) {
-        setSearchError(
-          (result as { success: false; message: string }).message || "批評空間の検索に失敗しました",
-        );
+      const requestId = searchRequest.next();
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const result = await window.api.erogameScape.searchByTitle(trimmed);
+        if (!searchRequest.isLatest(requestId)) {
+          return;
+        }
+        if (!result.success || !result.data) {
+          setSearchError(
+            (result as { success: false; message: string }).message ||
+              "批評空間の検索に失敗しました",
+          );
+          setSearchResults([]);
+          setNextPageUrl(null);
+          return;
+        }
+        const data = result.data as ErogameScapeSearchResult;
+        setSearchResults(data.items ?? []);
+        setNextPageUrl(data.nextPageUrl ?? null);
+        setActiveQuery(trimmed);
+      } catch {
+        setSearchError("批評空間の検索に失敗しました");
         setSearchResults([]);
         setNextPageUrl(null);
-        return;
+      } finally {
+        setSearching(false);
       }
-      const data = result.data as ErogameScapeSearchResult;
-      setSearchResults(data.items ?? []);
-      setNextPageUrl(data.nextPageUrl ?? null);
-      setActiveQuery(trimmed);
-    } catch {
-      setSearchError("批評空間の検索に失敗しました");
-      setSearchResults([]);
-      setNextPageUrl(null);
-    } finally {
-      setSearching(false);
-    }
-  }, []);
+    },
+    [searchRequest],
+  );
 
   const loadMoreResults = useCallback(async () => {
     if (!nextPageUrl || loadingMore) {
       return;
     }
+    // 検索と同じ requestId ガードを追記結果側にも適用する。
+    // 追加ロード実行中にモーダルを閉じて再度開いた場合や新規検索を発火した場合、
+    // 古いレスポンスが後から届いても捨てる。
+    const requestId = searchRequest.next();
     setLoadingMore(true);
     setSearchError(null);
     try {
       const result = await window.api.erogameScape.searchByTitle(activeQuery, nextPageUrl);
+      if (!searchRequest.isLatest(requestId)) {
+        return;
+      }
       if (!result.success || !result.data) {
         setSearchError(
           (result as { success: false; message: string }).message || "批評空間の検索に失敗しました",
@@ -99,11 +111,15 @@ export default function ErogameScapeSearchModal({
       setSearchResults((prev) => [...prev, ...(data.items ?? [])]);
       setNextPageUrl(data.nextPageUrl ?? null);
     } catch {
-      setSearchError("批評空間の検索に失敗しました");
+      if (searchRequest.isLatest(requestId)) {
+        setSearchError("批評空間の検索に失敗しました");
+      }
     } finally {
-      setLoadingMore(false);
+      if (searchRequest.isLatest(requestId)) {
+        setLoadingMore(false);
+      }
     }
-  }, [activeQuery, loadingMore, nextPageUrl]);
+  }, [activeQuery, loadingMore, nextPageUrl, searchRequest]);
 
   const handleResultsScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -201,7 +217,9 @@ export default function ErogameScapeSearchModal({
                       <button
                         type="button"
                         className="btn btn-sm btn-ghost"
-                        onClick={() => BrowserOpenURL(sanitizeExternalUrl(item.gameUrl))}
+                        onClick={() =>
+                          window.api.browser.openExternalUrl(sanitizeExternalUrl(item.gameUrl))
+                        }
                       >
                         開く
                       </button>

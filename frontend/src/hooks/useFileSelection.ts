@@ -35,13 +35,15 @@ export function useFileSelection(): {
         const result = await window.api.file.selectFile(filters);
         if (result.success && result.data !== undefined) {
           onSuccess(result.data);
+        } else if (result.success) {
+          // バックエンドのファイルダイアログはユーザキャンセル時に success:true, data:undefined を返す。
+          // これをエラー扱いにするとキャンセル時にトーストが出てしまうため、何もせず抜ける。
+          return;
         } else {
           handleApiError(
             {
               success: false,
-              message: result.success
-                ? "ファイルが選択されませんでした"
-                : (result as { success: false; message: string }).message,
+              message: (result as { success: false; message: string }).message,
             },
             "ファイルの選択に失敗しました",
           );
@@ -59,13 +61,15 @@ export function useFileSelection(): {
       const result = await window.api.file.selectFolder();
       if (result.success && result.data !== undefined) {
         onSuccess(result.data);
+      } else if (result.success) {
+        // フォルダダイアログもユーザキャンセル時は success:true, data:undefined を返す仕様。
+        // エラートーストを出さず何もせず終了する。
+        return;
       } else {
         handleApiError(
           {
             success: false,
-            message: result.success
-              ? "フォルダが選択されませんでした"
-              : (result as { success: false; message: string }).message,
+            message: (result as { success: false; message: string }).message,
           },
           "フォルダの選択に失敗しました",
         );

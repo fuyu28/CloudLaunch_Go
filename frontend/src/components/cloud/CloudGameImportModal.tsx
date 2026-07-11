@@ -205,14 +205,20 @@ export default function CloudGameImportModal({
   }, [onImported]);
 
   const processQueue = useCallback(
-    async (queue: CloudGameMetadata[]): Promise<void> => {
+    async (queue: CloudGameMetadata[], excludeLocalIds?: Set<string>): Promise<void> => {
       if (queue.length === 0) {
         await finishBatch();
         return;
       }
 
       const [current, ...rest] = queue;
-      const conflicts = localTitleMap.get(normalizeTitle(current.title)) ?? [];
+      // replace 直後は localCache の setState が反映される前に processQueue を呼び出すため、
+      // localTitleMap の再計算は次のレンダリングまで走らない。呼び出し元が「今削除したローカルID」を
+      // excludeLocalIds として渡すことで、古い closure でも削除済みゲームを競合判定から除外できる。
+      const rawConflicts = localTitleMap.get(normalizeTitle(current.title)) ?? [];
+      const conflicts = excludeLocalIds
+        ? rawConflicts.filter((g) => !excludeLocalIds.has(g.id))
+        : rawConflicts;
       if (conflicts.length > 0) {
         setConflict({ cloudGame: current, localMatches: conflicts, remainingQueue: rest });
         return;
@@ -224,7 +230,7 @@ export default function CloudGameImportModal({
         return;
       }
 
-      await processQueue(rest);
+      await processQueue(rest, excludeLocalIds);
     },
     [finishBatch, importGame, localTitleMap],
   );
@@ -245,15 +251,26 @@ export default function CloudGameImportModal({
 
     setConflict(null);
     if (mode === "replace") {
+      const deletedIds: string[] = [];
       for (const localGame of conflict.localMatches) {
         const result = await window.api.database.deleteGame(localGame.id);
         if (!result.success) {
           toast.error(result.message ?? "ローカルゲームの削除に失敗しました");
+          // 部分的に削除済みの場合、次回の重複判定でズレが出ないよう localCache も更新する。
+          if (deletedIds.length > 0) {
+            setLocalCache((prev) => prev.filter((g) => !deletedIds.includes(g.id)));
+          }
           await finishBatch();
           return;
         }
         // 削除が発生した時点で一覧更新が必要。バッチ終了時にまとめて通知する。
         importedAnyRef.current = true;
+        deletedIds.push(localGame.id);
+      }
+      // importing 中は fetchLocalGames が走らないため、削除済みIDを localCache から除去し
+      // 後続キューの localTitleMap 判定に「削除済み」を反映する。
+      if (deletedIds.length > 0) {
+        setLocalCache((prev) => prev.filter((g) => !deletedIds.includes(g.id)));
       }
     }
 
@@ -263,7 +280,11 @@ export default function CloudGameImportModal({
       return;
     }
 
-    await processQueue(conflict.remainingQueue);
+    // replace 時に削除したローカルIDを後続キューへ引き継ぐ。localCache の再計算前に
+    // processQueue が走る場合でも「削除済み」を競合判定から除外できる。
+    const excludeLocalIds =
+      mode === "replace" ? new Set(conflict.localMatches.map((g) => g.id)) : undefined;
+    await processQueue(conflict.remainingQueue, excludeLocalIds);
   };
 
   const handleClose = (): void => {

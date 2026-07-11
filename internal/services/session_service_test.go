@@ -156,17 +156,24 @@ func TestSessionServiceCreateSessionRecalculatesTotalWithLastPlayed(t *testing.T
 	}
 }
 
-func TestSessionServiceUpdateSessionNameRejectsInvalidName(t *testing.T) {
+func TestSessionServiceUpdateSessionNameAllowsEmptyToClear(t *testing.T) {
 	t.Parallel()
 
+	// 空白のみの入力は「セッション名をクリア（NULL 化）」として許容される。
+	// リポジトリ層では NULLIF によって空文字が NULL に変換されるため、
+	// サービス層では空白トリム後の空文字をそのままリポジトリへ渡す挙動を検証する。
+	existingName := "old-name"
 	repository := &fakeSessionRepository{
-		session: &domain.PlaySession{ID: "session-1", GameID: "game-1"},
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1", SessionName: &existingName},
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	_, err := service.UpdateSessionName(context.Background(), "session-1", "   ")
-	if err == nil {
-		t.Fatalf("expected invalid session name to fail")
+	if err != nil {
+		t.Fatalf("expected empty/whitespace session name to succeed for clearing, got %v", err)
+	}
+	if repository.session.SessionName == nil || *repository.session.SessionName != "" {
+		t.Fatalf("expected session name to be cleared to empty string (repository-level NULLIF handles the NULL conversion)")
 	}
 }
 

@@ -89,6 +89,11 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
   // ファイル存在チェックエラーの状態
   const [fileCheckErrors, setFileCheckErrors] = useState<Record<string, string>>({});
 
+  // ファイル存在チェックが debounce 待機中のフィールド集合。
+  // debounce 期間中（500ms）に canSubmit が true になり submit が通ってしまう問題を避けるため、
+  // pending が空になるまで送信を無効化する。
+  const [pendingFileCheckCount, setPendingFileCheckCount] = useState<number>(0);
+
   /**
    * 特定フィールドのファイル存在チェックを実行
    * フィールドにアクセスがあったときにリアルタイムで実行
@@ -170,13 +175,20 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
   useEffect(() => {
     const fileFields = ["exePath", "imagePath", "saveFolderPath"] as const;
     const timeoutIds: NodeJS.Timeout[] = [];
+    let scheduledCount = 0;
 
     fileFields.forEach((fieldName) => {
       const fieldValue = gameData[fieldName] as string;
       if (fieldValue && fieldValue.trim() !== "") {
         // デバウンスされたファイル存在チェック（500ms後に実行）
-        const timeoutId = setTimeout(() => {
-          validateFileField(fieldName);
+        scheduledCount += 1;
+        const timeoutId = setTimeout(async () => {
+          try {
+            await validateFileField(fieldName);
+          } finally {
+            // debounce 完了で pending カウントを1つ減らす。
+            setPendingFileCheckCount((prev) => Math.max(0, prev - 1));
+          }
         }, 500);
         timeoutIds.push(timeoutId);
       } else {
@@ -189,9 +201,18 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
       }
     });
 
+    // 予約したデバウンス数だけ pending を増やす。
+    if (scheduledCount > 0) {
+      setPendingFileCheckCount((prev) => prev + scheduledCount);
+    }
+
     // クリーンアップ関数で全てのタイムアウトをクリア
     return () => {
       timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
+      // 未実行分の pending は取り消し扱いにする（新しい effect が改めて予約する）。
+      if (scheduledCount > 0) {
+        setPendingFileCheckCount((prev) => Math.max(0, prev - scheduledCount));
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameData.exePath, gameData.imagePath, gameData.saveFolderPath, validateFileField]);
@@ -381,11 +402,14 @@ export function useGameFormValidationZod(gameData: InputGameData): GameFormValid
   }, [fieldValidation]);
 
   // 送信可能状態の判定（Zodスキーマでの全体検証＋ファイル存在チェック）
+  // debounce 待機中のファイルチェックが残っている間は false にしておき、
+  // 「存在しないパス」を入力した直後に一瞬 canSubmit=true になり submit が通ってしまうのを防ぐ。
   const canSubmit = useMemo(() => {
     const validationResult = validateAllFields();
     const hasFileCheckErrors = Object.keys(fileCheckErrors).length > 0;
-    return validationResult.isValid && !hasFileCheckErrors;
-  }, [validateAllFields, fileCheckErrors]);
+    const hasPendingFileChecks = pendingFileCheckCount > 0;
+    return validationResult.isValid && !hasFileCheckErrors && !hasPendingFileChecks;
+  }, [validateAllFields, fileCheckErrors, pendingFileCheckCount]);
 
   return {
     canSubmit,

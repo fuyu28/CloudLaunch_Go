@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { useScreenshotSettings } from "@renderer/hooks/useScreenshotSettings";
 
 import { SettingsToggle } from "./SettingsToggle";
@@ -11,7 +13,6 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
     screenshotClientOnly,
     screenshotLocalJpeg,
     screenshotHotkey,
-    setScreenshotHotkey,
     screenshotHotkeyNotify,
     isCapturingHotkey,
     setIsCapturingHotkey,
@@ -24,6 +25,17 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
     handleScreenshotHotkeyChange,
     handleScreenshotHotkeyNotifyChange,
   } = useScreenshotSettings();
+
+  // ホットキー入力は uncontrolled 化する。atomWithStorage は入力途中の1文字ごとに
+  // localStorage へ書き込まれ、失敗時にロールバックできないため、
+  // 「編集は draftHotkey に保持 → onBlur で apply 成功時のみ atom を更新」の順序に統一する。
+  const [draftHotkey, setDraftHotkey] = useState<string>(screenshotHotkey);
+
+  // atom が他所（初期マウント同期・キャプチャモードでの反映など）で書き換わったら、
+  // 未フォーカスの draft も追従させる。
+  useEffect(() => {
+    setDraftHotkey(screenshotHotkey);
+  }, [screenshotHotkey]);
 
   return (
     <div className="space-y-6">
@@ -90,9 +102,18 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
             <input
               type="text"
               className="input input-bordered input-sm flex-1"
-              value={screenshotHotkey}
-              onChange={(event) => setScreenshotHotkey(event.target.value)}
-              onBlur={(event) => void applyScreenshotHotkey(event.target.value, false)}
+              value={draftHotkey}
+              onChange={(event) => setDraftHotkey(event.target.value)}
+              onBlur={async (event) => {
+                const nextValue = event.target.value;
+                // 変更がない場合は何もしない（apply で余計な toast/リクエストが飛ぶのを防ぐ）
+                if (nextValue === screenshotHotkey) return;
+                const ok = await applyScreenshotHotkey(nextValue, true);
+                if (!ok) {
+                  // 失敗時は atom の現行値へロールバック
+                  setDraftHotkey(screenshotHotkey);
+                }
+              }}
               readOnly={isCapturingHotkey}
             />
             <button className="btn btn-primary btn-sm" onClick={() => setIsCapturingHotkey(true)}>
@@ -100,7 +121,12 @@ export default function ScreenshotSettingsTab(): React.JSX.Element {
             </button>
             <button
               className="btn btn-outline btn-sm"
-              onClick={() => void handleScreenshotHotkeyChange(screenshotHotkey)}
+              onClick={async () => {
+                const ok = await handleScreenshotHotkeyChange(draftHotkey);
+                if (!ok) {
+                  setDraftHotkey(screenshotHotkey);
+                }
+              }}
               disabled={isCapturingHotkey}
             >
               適用

@@ -30,6 +30,13 @@ export type SyncStatus = "never_synced" | "in_sync" | "push_needed" | "pull_need
 
 export type SyncStatusDetail = {
   status: SyncStatus;
+  /**
+   * Saves コンポーネントのみの差分（=セーブファイル内容の差分）を示す。
+   * `status` は sessions.json / game.json のメタデータ差分も含む fingerprint 比較なので、
+   * セッション終了後のアップロード確認プロンプトのように「セーブ不変ならプロンプト不要」を
+   * 判定したい呼び出し側では `status` に加えてこのフラグでさらに狭窄する。
+   */
+  savesDiffer: boolean;
   localMeta?: SyncMetaSnapshot;
   remoteMeta?: SyncMetaSnapshot;
 };
@@ -66,6 +73,10 @@ export type WindowApi = {
     openFolder: (path: string) => Promise<void>;
     /** 実行プラットフォーム（"windows" / "darwin" / "linux"）を返す */
     getPlatform: () => Promise<string>;
+  };
+  browser: {
+    /** URL を既定のブラウザ（外部ブラウザ）で開く。http/https のみ受け付ける。 */
+    openExternalUrl: (url: string) => void;
   };
   settings: {
     updateAutoTracking: (enabled: boolean) => Promise<ApiResult<void>>;
@@ -116,9 +127,11 @@ export type WindowApi = {
   };
   memo: {
     getAllMemos: () => Promise<ApiResult<MemoType[]>>;
-    getMemoById: (memoId: string) => Promise<ApiResult<MemoType>>;
+    // Go 側は該当なしで nil を返しうるため、undefined 込みで表現する。呼び出し側は既に data の
+    // 存在チェック（`result.data?` / `if (result.data)`) をしているので破壊はない。
+    getMemoById: (memoId: string) => Promise<ApiResult<MemoType | undefined>>;
     getMemosByGameId: (gameId: string) => Promise<ApiResult<MemoType[]>>;
-    createMemo: (data: CreateMemoData) => Promise<ApiResult<void>>;
+    createMemo: (data: CreateMemoData) => Promise<ApiResult<MemoType | undefined>>;
     updateMemo: (memoId: string, data: UpdateMemoData) => Promise<ApiResult<void>>;
     deleteMemo: (memoId: string) => Promise<ApiResult<void>>;
     getMemoRootDir: () => Promise<ApiResult<string>>;

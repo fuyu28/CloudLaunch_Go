@@ -11,6 +11,7 @@ import { FaUpload, FaDownload, FaCloud, FaCloudDownloadAlt, FaFile, FaSync } fro
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 
+import { formatFileSize } from "@renderer/utils/cloudUtils";
 import { logger } from "@renderer/utils/logger";
 import { getOfflineDisabledClasses } from "@renderer/utils/offlineUtils";
 
@@ -85,8 +86,10 @@ function CloudDataCard({
     async (forceRefresh = false) => {
       if (!isValidCreds || !gameId || isOfflineMode) return;
 
-      // 同じゲームIDで既にデータを取得済みの場合はスキップ（強制リフレッシュ以外）
-      if (!forceRefresh && lastFetchedGameId === gameId && fileDetails !== undefined) {
+      // 同じゲームIDで既にデータを取得済みの場合はスキップ（強制リフレッシュ以外）。
+      // fileDetails を deps に含めると、state 更新でコールバックが再生成されて
+      // useEffect が再実行される循環になるため、重複判定は lastFetchedGameId のみで行う。
+      if (!forceRefresh && lastFetchedGameId === gameId) {
         setIsLoading(false);
         return;
       }
@@ -133,7 +136,7 @@ function CloudDataCard({
         setIsLoading(false);
       }
     },
-    [fileDetails, gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
+    [gameId, isValidCreds, lastFetchedGameId, isOfflineMode],
   );
 
   // gameIdが変わった場合に状態をリセット
@@ -169,21 +172,8 @@ function CloudDataCard({
     await onDownload();
   }, [onDownload, checkNetworkFeature]);
 
-  // ファイルサイズをフォーマット
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return "不明";
-
-    const units = ["B", "KB", "MB", "GB"];
-    let size = bytes;
-    let unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
-  };
+  // ファイルサイズのフォーマットは共通ユーティリティ（cloudUtils.formatFileSize）に統一している。
+  // 以前はここにローカル実装があり、他の Cloud 系コンポーネントと表記が食い違っていた。
 
   const disabledClasses = getOfflineDisabledClasses(isOfflineMode);
 

@@ -264,8 +264,9 @@ describe("GameModal", () => {
       await user.type(publisherInput, "テスト出版社");
       await user.type(exePathInput, "/path/to/game.exe");
 
+      // ファイル存在チェックが 500ms debounce で走るため、その完了待ち後に有効化される。
       const submitButton = screen.getByRole("button", { name: "追加" });
-      expect(submitButton).toBeEnabled();
+      await waitFor(() => expect(submitButton).toBeEnabled(), { timeout: 2000 });
     });
   });
 
@@ -285,6 +286,9 @@ describe("GameModal", () => {
       await user.type(exePathInput, "/path/to/game.exe");
 
       const submitButton = screen.getByRole("button", { name: "追加" });
+      // ファイル存在チェック debounce (500ms) 待ちで submit を無効化しているため、
+      // 有効化を待ってからクリックする。
+      await waitFor(() => expect(submitButton).toBeEnabled(), { timeout: 2000 });
       await user.click(submitButton);
 
       await waitFor(() => {
@@ -315,6 +319,7 @@ describe("GameModal", () => {
       await user.type(exePathInput, "/path/to/game.exe");
 
       const submitButton = screen.getByRole("button", { name: "追加" });
+      await waitFor(() => expect(submitButton).toBeEnabled(), { timeout: 2000 });
       await user.click(submitButton);
 
       await waitFor(() => {
@@ -331,6 +336,8 @@ describe("GameModal", () => {
       render(<GameModal {...defaultProps} mode="edit" initialData={mockInitialData} />);
 
       const submitButton = screen.getByRole("button", { name: "更新" });
+      // 初期値付きの編集モードでも debounce ファイル存在チェックが走る間は disabled。
+      await waitFor(() => expect(submitButton).toBeEnabled(), { timeout: 2000 });
       await user.click(submitButton);
 
       await waitFor(() => {

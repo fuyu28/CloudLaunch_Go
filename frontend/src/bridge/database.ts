@@ -15,7 +15,7 @@ import {
 } from "../../wailsjs/go/app/App";
 import { toGameType, toPlaySessionType, toApiResultVoid } from "./helpers";
 import type { modelsServices, modelsTime } from "./helpers";
-import type { GameType, PlayStatus } from "src/types/game";
+import type { PlayStatus } from "src/types/game";
 import type { WindowApi } from "./types";
 
 export function createDatabaseBridge(): WindowApi["database"] {
@@ -87,9 +87,17 @@ export function createDatabaseBridge(): WindowApi["database"] {
       if (!updated.success) {
         return { success: false, message: updated.error?.message ?? "エラー" };
       }
+      // updated.data が欠落しているケースを undefined を GameType にキャストして誤魔化さず、
+      // 明示的に失敗として返す。呼び出し側は message を見てエラー処理する。
+      if (!updated.data) {
+        return {
+          success: false,
+          message: "更新後のゲーム情報を取得できませんでした",
+        };
+      }
       return {
         success: true,
-        data: updated.data ? toGameType(updated.data) : (undefined as unknown as GameType),
+        data: toGameType(updated.data),
       };
     },
     createSession: async (duration, gameId, sessionName) => {

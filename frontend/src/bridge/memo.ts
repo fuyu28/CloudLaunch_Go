@@ -22,25 +22,21 @@ import {
   toCloudMemoInfo,
   toApiResult,
   toApiResultArray,
+  toApiResultOptional,
   toApiResultVoid,
 } from "./helpers";
-import type { MemoType } from "src/types/memo";
 import type { MemoSyncResult } from "src/types/memo";
 import type { WindowApi } from "./types";
 
 export function createMemoBridge(): WindowApi["memo"] {
   return {
     getAllMemos: async () => toApiResultArray(await ListAllMemos(), toMemoType),
-    getMemoById: async (memoId) =>
-      toApiResult<MemoType>(await GetMemoByID(memoId), undefined, (data) =>
-        data
-          ? toMemoType(data as Parameters<typeof toMemoType>[0])
-          : (undefined as unknown as MemoType),
-      ),
+    getMemoById: async (memoId) => toApiResultOptional(await GetMemoByID(memoId), toMemoType),
     getMemosByGameId: async (gameId) => toApiResultArray(await ListMemosByGame(gameId), toMemoType),
     createMemo: async (data) =>
-      toApiResultVoid(
+      toApiResultOptional(
         await CreateMemo({ Title: data.title, Content: data.content, GameID: data.gameId }),
+        toMemoType,
       ),
     updateMemo: async (memoId, data) =>
       toApiResultVoid(await UpdateMemo(memoId, { Title: data.title, Content: data.content })),

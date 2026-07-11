@@ -15,7 +15,10 @@ import {
 type SettingResult = { success: boolean; message?: string };
 
 /**
- * 「状態を更新 → バックエンドに反映 → 失敗時 toast.error / 成功時 toast.success」の定型を集約する。
+ * 「バックエンドに反映 → 成功で atom（＝localStorage）を更新 → 失敗時 toast.error」の定型を集約する。
+ * atom を先に更新すると、失敗時に localStorage の値がバックエンドと乖離し、
+ * 次回起動時のマウント effect が誤った値を再 push してしまうため、
+ * 「成功したら初めて反映する」順序に統一する（失敗時は atom を触らない）。
  * successMessage は文字列、または値から文字列を生成する関数を受け取る（未指定で成功トーストなし）。
  */
 async function applySetting<T>(
@@ -25,12 +28,12 @@ async function applySetting<T>(
   errorMessage: string,
   successMessage?: string | ((value: T) => string),
 ): Promise<void> {
-  setter(value);
   const result = await apply(value);
   if (!result.success) {
     toast.error(errorMessage);
     return;
   }
+  setter(value);
   if (successMessage !== undefined) {
     toast.success(typeof successMessage === "function" ? successMessage(value) : successMessage);
   }
@@ -101,29 +104,32 @@ export function useScreenshotSettings() {
       (v) => (v ? "ホットキー通知を有効にしました" : "ホットキー通知を無効にしました"),
     );
 
-  const applyScreenshotHotkey = async (value: string, showToast: boolean): Promise<void> => {
+  // 成否を boolean で返し、呼び出し側が失敗時にローカル draft をロールバックできるようにする。
+  const applyScreenshotHotkey = async (value: string, showToast: boolean): Promise<boolean> => {
     const trimmed = value.trim();
     if (!trimmed) {
       if (showToast) {
         toast.error("ホットキーを入力してください");
       }
-      return;
+      return false;
     }
     const result = await settings.updateScreenshotHotkey(trimmed);
     if (!result.success) {
       if (showToast) {
         toast.error(result.message || "ホットキーの更新に失敗しました");
       }
-      return;
+      return false;
     }
+    // 成功したときのみ atom（localStorage）を更新して、バックエンドとの乖離を防ぐ
+    setScreenshotHotkey(trimmed);
     if (showToast) {
       toast.success(`ホットキーを「${trimmed}」に更新しました`);
     }
+    return true;
   };
 
-  const handleScreenshotHotkeyChange = async (value: string): Promise<void> => {
-    setScreenshotHotkey(value);
-    await applyScreenshotHotkey(value, true);
+  const handleScreenshotHotkeyChange = async (value: string): Promise<boolean> => {
+    return applyScreenshotHotkey(value, true);
   };
 
   const normalizeHotkeyFromEvent = (event: KeyboardEvent): string | null => {
@@ -180,7 +186,7 @@ export function useScreenshotSettings() {
         return;
       }
       setIsCapturingHotkey(false);
-      setScreenshotHotkey(hotkey);
+      // applyScreenshotHotkey 成功時にのみ atom を更新する（乖離防止）
       void applyScreenshotHotkey(hotkey, true);
     };
     window.addEventListener("keydown", handler);

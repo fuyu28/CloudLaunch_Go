@@ -117,11 +117,12 @@ export const isChangingThemeAtom = atom(false);
 export const changeThemeAtom = atom(null, async (_, set, newTheme: ThemeName) => {
   set(isChangingThemeAtom, true);
   try {
+    // 先に atom (=LocalStorage) を更新する。atomWithStorage の setItem が例外を投げた場合、
+    // DOM を巻き戻すロールバックが煩雑になるので、成功してから DOM を反映する。
+    set(themeAtom, newTheme);
+
     // HTMLのdata-theme属性を更新
     document.documentElement.setAttribute("data-theme", newTheme);
-
-    // atomを更新（LocalStorageにも自動保存される）
-    set(themeAtom, newTheme);
 
     // 成功トースト
     toast.success(`テーマを「${newTheme}」に変更しました`);

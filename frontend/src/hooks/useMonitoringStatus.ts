@@ -22,15 +22,32 @@ type UseMonitoringStatusResult = {
 
 export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusResult {
   const [monitoringGames, setMonitoringGames] = useState<MonitoringGameStatus[]>([]);
-  const [pendingConfirmationGame, setPendingConfirmationGame] =
+  const [pendingConfirmationGameState, setPendingConfirmationGameState] =
     useState<MonitoringGameStatus | null>(null);
-  const [pendingResumeGame, setPendingResumeGame] = useState<MonitoringGameStatus | null>(null);
+  const [pendingResumeGameState, setPendingResumeGameState] = useState<MonitoringGameStatus | null>(
+    null,
+  );
   const [isFocused, setIsFocused] = useState<boolean>(
     typeof document !== "undefined" ? document.visibilityState === "visible" : true,
   );
   const hasActiveGamesRef = useRef<boolean>(false);
   const backoffIndexRef = useRef<number>(0);
   const pollTimeoutRef = useRef<number | null>(null);
+  // 再帰 setTimeout の内側から参照される updateMonitoringStatus が
+  // 古い pending* を閉じ込んだままにならないよう、ref で最新値を参照する。
+  // setTimeout 起動時点の state を見てしまうと、モーダル表示中でも別ゲームで
+  // 再度モーダルを開いてしまう silent swap が発生する。
+  const pendingConfirmationGameRef = useRef<MonitoringGameStatus | null>(null);
+  const pendingResumeGameRef = useRef<MonitoringGameStatus | null>(null);
+
+  const setPendingConfirmationGame = useCallback((game: MonitoringGameStatus | null): void => {
+    pendingConfirmationGameRef.current = game;
+    setPendingConfirmationGameState(game);
+  }, []);
+  const setPendingResumeGame = useCallback((game: MonitoringGameStatus | null): void => {
+    pendingResumeGameRef.current = game;
+    setPendingResumeGameState(game);
+  }, []);
 
   const clearPollTimeout = useCallback((): void => {
     if (pollTimeoutRef.current !== null) {
@@ -65,11 +82,11 @@ export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusR
         (game) => game.isPlaying || game.isPaused || game.needsConfirmation,
       );
       const pending = status.find((game) => game.needsConfirmation);
-      if (pending && !pendingConfirmationGame) {
+      if (pending && !pendingConfirmationGameRef.current) {
         setPendingConfirmationGame(pending);
       }
       const resumePending = status.find((game) => game.needsResume && game.isPaused);
-      if (resumePending && !pendingResumeGame) {
+      if (resumePending && !pendingResumeGameRef.current) {
         setPendingResumeGame(resumePending);
       }
     } catch (error) {
@@ -96,11 +113,11 @@ export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusR
     scheduleNextPoll(delay, () => void updateMonitoringStatus());
   }, [
     autoTracking,
-    pendingConfirmationGame,
-    pendingResumeGame,
     isFocused,
     resetBackoff,
     scheduleNextPoll,
+    setPendingConfirmationGame,
+    setPendingResumeGame,
   ]);
 
   useEffect(() => {
@@ -153,8 +170,8 @@ export function useMonitoringStatus(autoTracking: boolean): UseMonitoringStatusR
   return {
     monitoringGames,
     activeGames,
-    pendingConfirmationGame,
-    pendingResumeGame,
+    pendingConfirmationGame: pendingConfirmationGameState,
+    pendingResumeGame: pendingResumeGameState,
     setPendingConfirmationGame,
     setPendingResumeGame,
     updateMonitoringStatus,

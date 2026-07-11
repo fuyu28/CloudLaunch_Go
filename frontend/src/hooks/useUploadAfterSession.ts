@@ -49,21 +49,46 @@ export function useUploadAfterSession(
       try {
         const statusResult = await getStatus(gameId);
         if (!statusResult.success || !statusResult.data) {
+          // 同期状態の取得自体が失敗した場合は、pendingUpload を未設定のまま
+          // 「同期済み」と誤認しないよう、警告と通知を出して手動確認を促す。
+          const failureMessage = !statusResult.success
+            ? (statusResult.message ?? "unknown error")
+            : "no data";
+          logger.warn("同期状態の取得に失敗しました:", {
+            component: "useUploadAfterSession",
+            function: "checkUploadPrompt",
+            data: failureMessage,
+          });
+          toastHandler.showToast(
+            "同期状態の確認に失敗しました。手動同期をご確認ください。",
+            "error",
+          );
           return;
         }
-        const { status } = statusResult.data;
-        if (status === "push_needed" || status === "conflict") {
+        const { status, savesDiffer } = statusResult.data;
+        // status=push_needed / conflict でも、fingerprint 差分の実体が sessions.json
+        // または game.json のメタデータだけ（=セーブファイル内容は不変）のときは
+        // ユーザーに確認するアップロード対象がない。savesDiffer でさらに狭窄する。
+        if ((status === "push_needed" || status === "conflict") && savesDiffer) {
           setPendingUpload({
             gameId,
             gameTitle: game.title,
             saveFolderPath: game.saveFolderPath,
           });
         }
-      } catch {
-        // バックグラウンドチェックのエラーは無視する
+      } catch (error) {
+        // ネットワーク・権限エラーなどをサイレントに握りつぶすと
+        // 差分ありでもプロンプトが出ないまま「同期済み」と誤認するので、
+        // 警告ログ＋トーストで手動同期の確認を促す。
+        logger.warn("同期状態の確認に失敗しました:", {
+          component: "useUploadAfterSession",
+          function: "checkUploadPrompt",
+          data: error,
+        });
+        toastHandler.showToast("同期状態の確認に失敗しました。手動同期をご確認ください。", "error");
       }
     },
-    [isOfflineMode, isValidCreds, uploadingAfterEndGameId, getStatus],
+    [isOfflineMode, isValidCreds, uploadingAfterEndGameId, getStatus, toastHandler],
   );
 
   const handleUploadAfterEnd = useCallback(async (): Promise<void> => {

@@ -9,6 +9,7 @@ import { GameFormFields } from "./GameFormFields";
 import ErogameScapeSearchModal from "./ErogameScapeSearchModal";
 import { useGameFormHandlers } from "@renderer/hooks/useGameFormHandlers";
 import { useGameFormValidationZod } from "@renderer/hooks/useGameFormValidationZod";
+import { useLatestRequestId } from "@renderer/hooks/useLatestRequestId";
 import {
   handleApiError,
   handleUnexpectedError,
@@ -49,6 +50,9 @@ export default function ErogameScapeImportModal({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const lastFetchedIdRef = useRef<string | null>(null);
+  // fetchFromErogameScape の in-flight 追跡。連続実行や検索モーダルからの選択と手動取得が
+  // 交差した際に、古い応答が新しい状態を上書きしないようにする。
+  const fetchRequest = useLatestRequestId();
   const validation = useGameFormValidationZod(gameData);
   const { isBrowsing, browseImage, browseExe, browseSaveFolder, handleChange } =
     useGameFormHandlers({
@@ -73,8 +77,9 @@ export default function ErogameScapeImportModal({
       setIsSearchOpen(false);
       setSubmitting(false);
       lastFetchedIdRef.current = null;
+      fetchRequest.reset();
     }
-  }, [isOpen]);
+  }, [isOpen, fetchRequest]);
 
   const applyImport = useCallback(
     (info: GameImport) => {
@@ -98,10 +103,15 @@ export default function ErogameScapeImportModal({
         setFetchError("批評空間IDは数字のみで入力してください");
         return;
       }
+      // requestId で in-flight 追跡。古い応答が新しい状態を上書きしないようにする。
+      const requestId = fetchRequest.next();
       setFetching(true);
       setFetchError(null);
       try {
         const result = await window.api.erogameScape.fetchById(id);
+        if (!fetchRequest.isLatest(requestId)) {
+          return;
+        }
         if (!result.success || !result.data) {
           handleApiError(result, "批評空間からの取得に失敗しました");
           setFetchError(
@@ -115,13 +125,18 @@ export default function ErogameScapeImportModal({
         applyImport(result.data);
         showSuccessToast("批評空間から情報を取得しました");
       } catch (error) {
+        if (!fetchRequest.isLatest(requestId)) {
+          return;
+        }
         handleUnexpectedError(error, "批評空間情報の取得");
         setFetchError("批評空間からの取得に失敗しました");
       } finally {
-        setFetching(false);
+        if (fetchRequest.isLatest(requestId)) {
+          setFetching(false);
+        }
       }
     },
-    [applyImport],
+    [applyImport, fetchRequest],
   );
 
   const handleSelectSearchItem = useCallback(

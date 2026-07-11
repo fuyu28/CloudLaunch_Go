@@ -32,10 +32,15 @@ export function useDropdownMenu(): UseDropdownMenuReturn {
     };
 
     if (openDropdownId) {
-      setTimeout(() => {
+      // setTimeout の返値を保持し、クリーンアップで clearTimeout する。
+      // これを忘れると、アンマウント／再オープンのタイミングで
+      // addEventListener だけが遅延実行され、対応する removeEventListener が
+      // 呼ばれずリスナーが残留する。
+      const timerId = window.setTimeout(() => {
         document.addEventListener("click", handleClickOutside);
       }, 0);
       return (): void => {
+        window.clearTimeout(timerId);
         document.removeEventListener("click", handleClickOutside);
       };
     }
