@@ -57,6 +57,10 @@ export default function MemoForm({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 初期ロードは1回だけ実行する。fetchData の依存に selectedGameId が入っており、
+  // 初回ロード → setSelectedGameId → fetchData 再生成 → useEffect 再発火 の連鎖で
+  // 2度目の fetch が入力を上書きするのを防ぐ。
+  const isInitializedRef = useRef<boolean>(false);
 
   // データ取得
   const fetchData = useCallback(async () => {
@@ -153,6 +157,10 @@ export default function MemoForm({
   }, [selectedGameId, showToast, mode, memoId, preSelectedGameId, showGameSelector]);
 
   useEffect(() => {
+    if (isInitializedRef.current) {
+      return undefined;
+    }
+    isInitializedRef.current = true;
     fetchData();
 
     // クリーンアップで進行中のリクエストをキャンセル
@@ -161,7 +169,9 @@ export default function MemoForm({
         abortControllerRef.current.abort();
       }
     };
-  }, [fetchData]);
+    // 初期化のみ 1 回実行する（fetchData の再生成による再取得での入力上書きを避ける）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 保存処理の最適化
   const saveData = useMemo(
@@ -242,9 +252,11 @@ export default function MemoForm({
           result = await window.api.memo.createMemo(createData);
           if (result.success) {
             showToast("メモを作成しました", "success");
-            void uploadMemoToCloud(undefined);
+            // 作成されたメモの ID をバックエンドから取得し、そのメモをクラウドへアップロードする
+            const createdMemoId = result.data?.id;
+            void uploadMemoToCloud(createdMemoId);
             if (closeAfterSave) {
-              onSaveSuccess(saveData.effectiveGameId, undefined);
+              onSaveSuccess(saveData.effectiveGameId, createdMemoId);
             }
           } else {
             const errorMessage = result.message || "メモの作成に失敗しました";

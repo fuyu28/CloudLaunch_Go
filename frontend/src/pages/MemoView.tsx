@@ -49,12 +49,12 @@ export default function MemoView(): React.JSX.Element {
         }
       } else {
         showToast("メモが見つかりません", "error");
-        navigate(-1);
+        navigate("/memo", { replace: true });
       }
     } catch (error) {
       logger.error("メモ取得エラー:", { component: "MemoView", function: "unknown", data: error });
       showToast("メモの取得に失敗しました", "error");
-      navigate(-1);
+      navigate("/memo", { replace: true });
     } finally {
       setIsLoading(false);
     }

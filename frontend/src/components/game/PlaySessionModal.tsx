@@ -120,16 +120,17 @@ export function PlaySessionModal({
   };
 
   /**
-   * 手動追加フォームのバリデーション
-   * @returns バリデーション結果
+   * プレイ時間（秒）のバリデーション。
+   * 手動・タイマーどちらのモードでも同じ上限（24時間 = 86400秒）を適用する。
+   * @returns バリデーション結果（false のときはエラーメッセージをセット済み）
    */
-  const validateManualInput = (): boolean => {
-    const hours = parseInputValue(hoursInput);
-    const minutes = parseInputValue(minutesInput);
-    const seconds = parseInputValue(secondsInput);
-    const totalSeconds = timeUtils.toSeconds(hours, minutes, seconds);
+  const validateDurationSeconds = (totalSeconds: number, mode: ModalMode): boolean => {
     if (totalSeconds <= 0) {
-      setError("プレイ時間は1秒以上で入力してください");
+      setError(
+        mode === "timer"
+          ? "タイマーを開始してからセッションを追加してください"
+          : "プレイ時間は1秒以上で入力してください",
+      );
       return false;
     }
     if (totalSeconds > 86400) {
@@ -138,6 +139,18 @@ export function PlaySessionModal({
       return false;
     }
     return true;
+  };
+
+  /**
+   * 手動追加フォームのバリデーション
+   * @returns バリデーション結果
+   */
+  const validateManualInput = (): boolean => {
+    const hours = parseInputValue(hoursInput);
+    const minutes = parseInputValue(minutesInput);
+    const seconds = parseInputValue(secondsInput);
+    const totalSeconds = timeUtils.toSeconds(hours, minutes, seconds);
+    return validateDurationSeconds(totalSeconds, "manual");
   };
 
   /**
@@ -182,8 +195,8 @@ export function PlaySessionModal({
         const seconds = parseInputValue(secondsInput);
         duration = timeUtils.toSeconds(hours, minutes, seconds);
       } else {
-        if (timerSeconds <= 0) {
-          setError("タイマーを開始してからセッションを追加してください");
+        // タイマーモードでも24時間上限の検証を行う（手動追加と同じ制限）
+        if (!validateDurationSeconds(timerSeconds, "timer")) {
           setIsSubmitting(false);
           return;
         }

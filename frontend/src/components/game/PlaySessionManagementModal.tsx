@@ -118,8 +118,11 @@ export default function PlaySessionManagementModal({
   const openEditModal = useCallback(
     (process: PlaySessionType) => {
       setEditingProcess(process);
+      // フォームの初期値には表示用フォールバック "未設定" を含めず、空文字を入れる。
+      // 表示側のフォールバックは placeholder（下記 input）に分離しており、
+      // ユーザが編集せずに更新を押しても "未設定" 文字列が保存されない。
       setEditFormData({
-        sessionName: process.sessionName ?? "未設定",
+        sessionName: process.sessionName ?? "",
       });
       validation.resetTouched(); // タッチ状態をリセット
       setIsEditModalOpen(true);
@@ -165,11 +168,11 @@ export default function PlaySessionManagementModal({
 
     try {
       // セッション名を更新
-      if (memoizedEditFormData.sessionName !== editingProcess.sessionName) {
-        const nameResult = await window.api.database.updateSessionName(
-          editingProcess.id,
-          memoizedEditFormData.sessionName,
-        );
+      // 既存の未設定（null / undefined）と空文字は同一視し、変更がなければ API を叩かない。
+      const nextName = memoizedEditFormData.sessionName;
+      const prevName = editingProcess.sessionName ?? "";
+      if (nextName !== prevName) {
+        const nameResult = await window.api.database.updateSessionName(editingProcess.id, nextName);
         if (!nameResult.success) {
           showToast("セッション名の更新に失敗しました", "error");
           return;
@@ -362,7 +365,7 @@ export default function PlaySessionManagementModal({
                 }`}
                 value={editFormData.sessionName}
                 onChange={(e) => handleFormChange("sessionName", e.target.value)}
-                placeholder="セッション名を入力"
+                placeholder="未設定"
               />
               {validation.getError("sessionName") && (
                 <div className="text-error text-sm mt-1">{validation.getError("sessionName")}</div>

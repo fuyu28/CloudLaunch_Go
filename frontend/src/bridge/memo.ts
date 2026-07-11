@@ -39,8 +39,13 @@ export function createMemoBridge(): WindowApi["memo"] {
       ),
     getMemosByGameId: async (gameId) => toApiResultArray(await ListMemosByGame(gameId), toMemoType),
     createMemo: async (data) =>
-      toApiResultVoid(
+      toApiResult<MemoType>(
         await CreateMemo({ Title: data.title, Content: data.content, GameID: data.gameId }),
+        undefined,
+        (raw) =>
+          raw
+            ? toMemoType(raw as Parameters<typeof toMemoType>[0])
+            : (undefined as unknown as MemoType),
       ),
     updateMemo: async (memoId, data) =>
       toApiResultVoid(await UpdateMemo(memoId, { Title: data.title, Content: data.content })),
