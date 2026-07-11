@@ -131,7 +131,7 @@ func splitSQLStatements(sqlText string) []string {
 			continue
 		}
 
-		// Trigger内はEND;で終了させる
+		// SQLite トリガ本文にも `;` が含まれるため、END; までを1文として切り出す。
 		if strings.HasSuffix(strings.TrimSpace(strings.ToUpper(current)), "END;") {
 			statements = append(statements, current)
 			buffer.Reset()
