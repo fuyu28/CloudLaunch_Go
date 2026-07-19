@@ -1,6 +1,7 @@
 # CloudLaunch
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/fuyu28/CloudLaunch_Go/actions/workflows/ci.yml/badge.svg)](https://github.com/fuyu28/CloudLaunch_Go/actions/workflows/ci.yml)
 
 **CloudLaunch** は、PC ゲームのセーブデータを S3 互換のクラウドストレージへ差分同期し、複数の PC で進行状況を持ち運べるようにするデスクトップアプリです。プレイ時間の自動計測、ルート単位の進行管理、Markdown プレイメモ、スクリーンショット、まとめてバックアップなど、ひとつのゲームライブラリで完結する周辺機能も備えています。
 
@@ -80,7 +81,10 @@
 
 ### インストール(推奨)
 
-GitHub Releases から最新の `CloudLaunch-Setup-x.y.z.exe`(Windows)をダウンロードして実行してください。
+GitHub Releases から最新の `CloudLaunch-amd64-installer.exe`(Windows)をダウンロードして実行してください。
+
+> [!WARNING]
+> 現在の配布物はコード署名されていません。必要に応じて同梱の `SHA256SUMS.txt` でダウンロードしたファイルの整合性を確認してください。
 
 ### 初回セットアップ
 
@@ -165,6 +169,16 @@ cd frontend && bun run test
 
 # 本番ビルド(プラットフォーム別バイナリ)
 wails build
+```
+
+### リリース
+
+`v*` のSemVerタグをpushすると、GitHub ActionsがWindows向けポータブル版とNSISインストーラをビルドし、SHA-256チェックサムと自動生成したリリースノートをGitHub Releasesへ公開します。プレリリース部分を除いたタグのバージョンは、`wails.json` の `info.productVersion` と一致させてください。
+
+```bash
+# 例: wails.jsonのproductVersionを0.2.0へ更新した後
+git tag v0.2.0-beta.1
+git push origin v0.2.0-beta.1
 ```
 
 ### 技術スタック
