@@ -50,7 +50,7 @@
 |----|------|------|
 | M1 | done | DeleteGame がメモファイルを残す |
 | M2 | done | CreateGame の CreateRoute 失敗無視 |
-| M3 | todo | Status が lockGame 外 |
+| M3 | done | Status が lockGame 外 |
 | M4 | todo | ErogameScape ホスト未検証 |
 | M5 | todo | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
@@ -87,6 +87,9 @@
 
 ### M2
 `CreateGameWithInitialRoute` で Game と初期 Route を同一トランザクション。
+
+### M3
+`ContentSyncService.Status` が `lockGame` 内で実行。内部向けはロックなし `status`。
 
 ### H3 / H8
 影響大のため本 PR では着手せず、別コミット／ADR 後に実施。
