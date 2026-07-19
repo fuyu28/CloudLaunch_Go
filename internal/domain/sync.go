@@ -60,3 +60,13 @@ type PullResult struct {
 	Applied          bool     `json:"applied"`
 	UntrackedDeletes []string `json:"untrackedDeletes,omitempty"`
 }
+
+// PendingPush は Push のリモート HEAD 更新後にローカル baseline 確定が未完了の記録。
+// expectedRemoteHead は初回 Push や force 時は空文字になり得る。
+type PendingPush struct {
+	GameID             string
+	ExpectedRemoteHead string
+	NewCommitHash      string
+	ContentFingerprint string
+	SaveTree           string
+}

@@ -54,7 +54,7 @@
 | M4 | todo | ErogameScape ホスト未検証 |
 | M5 | todo | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
-| M12 | todo | Push HEAD 後の local baseline 非原子 |
+| M12 | done | Push HEAD 後の local baseline 非原子 |
 | M14 | done | DownloadMemoFromCloud キー未サニタイズ |
 | M18 | done | 設定 atom を backend 成功前に更新 |
 | M19 | done | download→launch が失敗でも起動 |
@@ -90,6 +90,9 @@
 
 ### M3
 `ContentSyncService.Status` が `lockGame` 内で実行。内部向けはロックなし `status`。
+
+### M12
+`PendingPush` + `FinalizePendingPush`（baseline 更新と pending 削除を同一 TX）。HEAD 成功後の DB 失敗は `RecoverPendingPushes` / Status 前 Recover で確定。
 
 ### H3 / H8
 影響大のため本 PR では着手せず、別コミット／ADR 後に実施。

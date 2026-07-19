@@ -26,6 +26,7 @@ type fakeContentSyncRepository struct {
 	sessions []domain.PlaySession
 	settings map[string]string
 	saveTree string
+	pending  map[string]domain.PendingPush
 
 	// 記録された呼び出し
 	localSyncHeadSet string
@@ -35,7 +36,9 @@ type fakeContentSyncRepository struct {
 	upsertedSessions []domain.PlaySession
 
 	// エラー注入
-	getGameErr error
+	getGameErr           error
+	finalizePendingErr   error
+	finalizePendingFails int // >0 のあいだ FinalizePendingPush を失敗させる
 }
 
 func newFakeRepo(game *domain.Game, sessions []domain.PlaySession) *fakeContentSyncRepository {
@@ -43,6 +46,7 @@ func newFakeRepo(game *domain.Game, sessions []domain.PlaySession) *fakeContentS
 		game:     game,
 		sessions: sessions,
 		settings: make(map[string]string),
+		pending:  make(map[string]domain.PendingPush),
 	}
 }
 
@@ -56,17 +60,9 @@ func (r *fakeContentSyncRepository) GetGameByID(_ context.Context, _ string) (*d
 }
 
 func (r *fakeContentSyncRepository) ListPlaySessionsByGame(_ context.Context, _ string) ([]domain.PlaySession, error) {
-	return r.sessions, nil
-}
-
-func (r *fakeContentSyncRepository) SetLocalSyncHead(_ context.Context, _ string, hash string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.localSyncHeadSet = hash
-	if r.game != nil {
-		r.game.LocalSyncHead = &hash
-	}
-	return nil
+	return append([]domain.PlaySession{}, r.sessions...), nil
 }
 
 func (r *fakeContentSyncRepository) GetLocalSaveTree(_ context.Context, _ string) (string, error) {
@@ -75,12 +71,60 @@ func (r *fakeContentSyncRepository) GetLocalSaveTree(_ context.Context, _ string
 	return r.saveTree, nil
 }
 
-func (r *fakeContentSyncRepository) SetLocalSaveTree(_ context.Context, _ string, tree string) error {
+func (r *fakeContentSyncRepository) SetLocalSyncState(_ context.Context, _ string, syncHead, saveTree string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.saveTree = tree
-	r.saveTreeSet = tree
+	r.localSyncHeadSet = syncHead
+	r.saveTree = saveTree
+	r.saveTreeSet = saveTree
+	if r.game != nil {
+		r.game.LocalSyncHead = &syncHead
+	}
 	return nil
+}
+
+func (r *fakeContentSyncRepository) BeginPendingPush(_ context.Context, pending domain.PendingPush) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pending[pending.GameID] = pending
+	return nil
+}
+
+func (r *fakeContentSyncRepository) FinalizePendingPush(_ context.Context, gameID, syncHead, saveTree string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.finalizePendingFails > 0 {
+		r.finalizePendingFails--
+		if r.finalizePendingErr != nil {
+			return r.finalizePendingErr
+		}
+		return fmt.Errorf("injected finalize pending failure")
+	}
+	r.localSyncHeadSet = syncHead
+	r.saveTree = saveTree
+	r.saveTreeSet = saveTree
+	if r.game != nil {
+		r.game.LocalSyncHead = &syncHead
+	}
+	delete(r.pending, gameID)
+	return nil
+}
+
+func (r *fakeContentSyncRepository) ClearPendingPush(_ context.Context, gameID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.pending, gameID)
+	return nil
+}
+
+func (r *fakeContentSyncRepository) ListPendingPushes(_ context.Context) ([]domain.PendingPush, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]domain.PendingPush, 0, len(r.pending))
+	for _, item := range r.pending {
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 func (r *fakeContentSyncRepository) UpsertGameSync(_ context.Context, game domain.Game) error {
@@ -119,8 +163,10 @@ func (r *fakeContentSyncRepository) ApplyPullResult(
 	if r.game != nil {
 		r.game.LocalSyncHead = &syncHead
 	}
+	r.sessions = append([]domain.PlaySession{}, sessions...)
 	r.saveTree = saveTree
 	r.saveTreeSet = saveTree
+	delete(r.pending, game.ID)
 	return nil
 }
 
@@ -374,7 +420,7 @@ func TestContentSyncServicePushUploadsDataAndSetsHead(t *testing.T) {
 	}
 	// ローカル同期ヘッドが更新された
 	if repo.localSyncHeadSet == "" {
-		t.Error("expected SetLocalSyncHead to be called")
+		t.Error("expected local sync baseline to be set")
 	}
 
 	// セーブファイルのブロブが格納されている
@@ -608,7 +654,7 @@ func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
 
 	// 同期ヘッドが更新された
 	if repo.localSyncHeadSet == "" {
-		t.Error("expected SetLocalSyncHead to be called")
+		t.Error("expected local sync baseline to be set")
 	}
 }
 
@@ -1601,5 +1647,199 @@ func TestContentSyncServiceStatusDoesNotBlockDifferentGame(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Push did not finish")
+	}
+}
+
+// TestContentSyncServiceRecoversBaselineAfterRemoteSuccessDBFailure は、
+// writeHEAD 成功後に FinalizePendingPush が失敗しても、Recover で baseline が確定することを確認する。
+func TestContentSyncServiceRecoversBaselineAfterRemoteSuccessDBFailure(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("recover-me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	repo.finalizePendingFails = 1
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	if err := svc.Push(context.Background(), game.ID, nil); err == nil {
+		t.Fatal("Push should fail when FinalizePendingPush fails after HEAD write")
+	}
+	head := bstore.heads[game.ID]
+	if head == "" {
+		t.Fatal("remote HEAD should already be written")
+	}
+	if repo.localSyncHeadSet != "" {
+		t.Fatalf("baseline must not be set before recovery, got %q", repo.localSyncHeadSet)
+	}
+	if len(repo.pending) != 1 {
+		t.Fatalf("pending should remain after DB failure, got %#v", repo.pending)
+	}
+
+	if err := svc.RecoverPendingPushes(context.Background()); err != nil {
+		t.Fatalf("RecoverPendingPushes: %v", err)
+	}
+	if repo.localSyncHeadSet == "" {
+		t.Fatal("expected baseline to be finalized by recovery")
+	}
+	if repo.saveTreeSet == "" {
+		t.Fatal("expected saveTree to be finalized by recovery")
+	}
+	if len(repo.pending) != 0 {
+		t.Fatalf("pending should be cleared after recovery, got %#v", repo.pending)
+	}
+	if bstore.heads[game.ID] != head {
+		t.Fatalf("remote HEAD must not change during recovery")
+	}
+}
+
+// TestContentSyncServiceStatusFinalizesPendingPushBeforeJudging は、
+// HEAD 成功・baseline 未確定のまま Status を呼んでも偽 Conflict にならないことを確認する。
+func TestContentSyncServiceStatusFinalizesPendingPushBeforeJudging(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("pending-status"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	repo.finalizePendingFails = 1
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	if err := svc.Push(context.Background(), game.ID, nil); err == nil {
+		t.Fatal("Push should fail when FinalizePendingPush fails")
+	}
+	if len(repo.pending) != 1 {
+		t.Fatalf("pending should remain, got %#v", repo.pending)
+	}
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusInSync {
+		t.Fatalf("Status = %s, want in_sync after pending finalize", detail.Status)
+	}
+	if len(repo.pending) != 0 {
+		t.Fatalf("pending should be cleared by Status, got %#v", repo.pending)
+	}
+	if repo.localSyncHeadSet == "" {
+		t.Fatal("baseline should be finalized by Status")
+	}
+}
+
+// TestContentSyncServiceDoesNotFinalizePendingWhenRemoteHeadDiffers は、
+// pending 新コミットと remote HEAD が不一致なら自動確定せず pending を破棄することを確認する。
+func TestContentSyncServiceDoesNotFinalizePendingWhenRemoteHeadDiffers(t *testing.T) {
+	t.Parallel()
+
+	game := baseGame(t.TempDir())
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	repo.pending[game.ID] = domain.PendingPush{
+		GameID:             game.ID,
+		ExpectedRemoteHead: "old",
+		NewCommitHash:      "our-commit",
+		ContentFingerprint: "fp-ours",
+		SaveTree:           `{"files":{"a":"b"}}`,
+	}
+	bstore.heads[game.ID] = "someone-elses-commit"
+
+	if err := svc.RecoverPendingPushes(context.Background()); err != nil {
+		t.Fatalf("RecoverPendingPushes: %v", err)
+	}
+	if repo.localSyncHeadSet != "" {
+		t.Fatalf("must not auto-finalize baseline, got %q", repo.localSyncHeadSet)
+	}
+	if len(repo.pending) != 0 {
+		t.Fatalf("stale pending should be cleared, got %#v", repo.pending)
+	}
+}
+
+// TestContentSyncServiceForcePushRecoversPendingBaseline は force Push（ResolveConflict useLocal）でも
+// HEAD 成功後の DB 失敗を Recover で確定できることを確認する。
+func TestContentSyncServiceForcePushRecoversPendingBaseline(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local-force"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	baseMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	baseFP := contentFingerprint(baseMeta)
+	game.LocalSyncHead = &baseFP
+
+	remoteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remoteDir, "save.dat"), []byte("remote-other"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	setupRemoteState(t, bstore, game.ID, game, nil, remoteDir)
+
+	repo := newFakeRepo(&game, nil)
+	repo.finalizePendingFails = 1
+	svc := newTestService(repo, bstore)
+
+	if _, err := svc.ResolveConflict(context.Background(), game.ID, true, false); err == nil {
+		t.Fatal("force push should fail when FinalizePendingPush fails")
+	}
+	head := bstore.heads[game.ID]
+	if head == "" {
+		t.Fatal("force push should have written remote HEAD")
+	}
+	if repo.localSyncHeadSet != "" {
+		t.Fatalf("baseline must not be set before recovery, got %q", repo.localSyncHeadSet)
+	}
+
+	if err := svc.RecoverPendingPushes(context.Background()); err != nil {
+		t.Fatalf("RecoverPendingPushes: %v", err)
+	}
+	if repo.localSyncHeadSet == "" || repo.saveTreeSet == "" {
+		t.Fatal("force-push pending should finalize baseline on recovery")
+	}
+	if len(repo.pending) != 0 {
+		t.Fatalf("pending should be cleared, got %#v", repo.pending)
+	}
+	if bstore.heads[game.ID] != head {
+		t.Fatal("remote HEAD must remain the force-pushed commit")
+	}
+}
+
+// TestContentSyncServiceRecoverPendingSurvivesBlobStoreInitFailure は、
+// ネットワーク不通などで blob store 初期化に失敗しても Recover が fatal 扱いのエラーを返しつつ
+// pending を消さないことを確認する（起動側は Warn して継続する）。
+func TestContentSyncServiceRecoverPendingSurvivesBlobStoreInitFailure(t *testing.T) {
+	t.Parallel()
+
+	game := baseGame(t.TempDir())
+	repo := newFakeRepo(&game, nil)
+	repo.pending[game.ID] = domain.PendingPush{
+		GameID:             game.ID,
+		NewCommitHash:      "commit",
+		ContentFingerprint: "fp",
+		SaveTree:           "{}",
+	}
+	svc := newTestService(repo, newFakeBlobStore())
+	svc.newBlobStore = func(context.Context) (contentBlobStore, error) {
+		return nil, fmt.Errorf("network unreachable")
+	}
+
+	err := svc.RecoverPendingPushes(context.Background())
+	if err == nil {
+		t.Fatal("expected network error to surface")
+	}
+	if len(repo.pending) != 1 {
+		t.Fatalf("pending must remain when remote inspect fails, got %#v", repo.pending)
 	}
 }

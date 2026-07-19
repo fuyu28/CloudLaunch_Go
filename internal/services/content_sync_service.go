@@ -253,8 +253,13 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 
 // status はロックを取らない Status 本体。lockGame 保持中の内部呼び出し向け。
 func (s *ContentSyncService) status(ctx context.Context, gameID string) (domain.SyncStatusDetail, error) {
+	// 起動時 Recover が未完了／失敗したまま UI が Status を叩くと、ディスクと baseline が
+	// ずれたまま判定される。判定前に同一ゲームの未完了分だけ先に消化する。
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
+		return domain.SyncStatusDetail{}, err
+	}
+	if err := s.recoverPendingPushForGame(ctx, bstore, gameID); err != nil {
 		return domain.SyncStatusDetail{}, err
 	}
 
@@ -343,6 +348,10 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress ProgressFunc, force bool) error {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
+		return err
+	}
+	// 前回 Push で HEAD 成功・DB 失敗していた場合、先に baseline を確定してから進める。
+	if err := s.recoverPendingPushForGame(ctx, bstore, gameID); err != nil {
 		return err
 	}
 
@@ -493,7 +502,8 @@ func (s *ContentSyncService) pushUploadBlobs(ctx context.Context, bstore content
 	return nil
 }
 
-// pushFinalizeHead は HEAD 書き換え直前の再確認・HEAD 書き換え・ローカル同期基準の更新を行う。
+// pushFinalizeHead は HEAD 書き換え直前の再確認・pending 永続化・HEAD 書き換え・
+// ローカル baseline 確定（pending クリア込み）を行う。
 func (s *ContentSyncService) pushFinalizeHead(ctx context.Context, bstore contentBlobStore, gameID string, force bool, expectedHead string, metaHash domain.BlobHash, meta metaBuildResult, saveSnapJSON []byte) error {
 	// HEAD 書き換え直前に再度リモート HEAD を確認し、push 開始時から変化していれば中断する。
 	// S3 に CAS が無いため完全な排他はできないが、アップロード中に別デバイスが push した場合の
@@ -507,14 +517,70 @@ func (s *ContentSyncService) pushFinalizeHead(ctx context.Context, bstore conten
 			return fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
 		}
 	}
+
+	fingerprint := contentFingerprint(meta.Snapshot)
+	saveTree := string(saveSnapJSON)
+	// HEAD 更新より先に pending を確定させる。リモート成功後に DB が落ちても起動時に回復できる。
+	if err := s.repository.BeginPendingPush(ctx, domain.PendingPush{
+		GameID:             gameID,
+		ExpectedRemoteHead: expectedHead,
+		NewCommitHash:      metaHash,
+		ContentFingerprint: fingerprint,
+		SaveTree:           saveTree,
+	}); err != nil {
+		return err
+	}
+
 	if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
+		// HEAD 未更新なら pending は不要。消し損ねても Recover が HEAD 不一致で破棄する。
+		if clearErr := s.repository.ClearPendingPush(ctx, gameID); clearErr != nil {
+			s.logger.Warn("pending Push のクリアに失敗", "gameId", gameID, "error", clearErr)
+		}
 		return err
 	}
-	if err := s.repository.SetLocalSyncHead(ctx, gameID, contentFingerprint(meta.Snapshot)); err != nil {
+
+	// baseline 更新と pending 削除は同一トランザクション。ここが失敗しても remote HEAD は
+	// 既に新コミットなので、次回 RecoverPendingPushes が remote を見て確定する。
+	return s.repository.FinalizePendingPush(ctx, gameID, fingerprint, saveTree)
+}
+
+// RecoverPendingPushes は未確定の pending Push をリモート HEAD と照合して回復する。
+// remote HEAD が pending の新コミットと一致するときだけ baseline を確定する。
+// 一致しない場合は自動確定せず pending を捨て、通常の conflict / Status 判定に委ねる。
+// ネットワーク不通など remote 照会に失敗した場合は pending を残したままエラーを返す
+// （起動時は呼び出し側が握りつぶして起動を継続する）。
+func (s *ContentSyncService) RecoverPendingPushes(ctx context.Context) error {
+	if s.offline.Load() {
+		return nil
+	}
+	pending, err := s.repository.ListPendingPushes(ctx)
+	if err != nil {
 		return err
 	}
-	// Push 直後のツリーを base に残さないと、次回 Pull が既存ローカルを untracked と誤判定する。
-	return s.repository.SetLocalSaveTree(ctx, gameID, string(saveSnapJSON))
+	if len(pending) == 0 {
+		return nil
+	}
+
+	bstore, err := s.newBlobStore(ctx)
+	if err != nil {
+		return err
+	}
+
+	var firstErr error
+	for _, item := range pending {
+		if err := s.recoverOnePendingPush(ctx, bstore, item); err != nil {
+			s.logger.Warn("pending Push の回復に失敗", "gameId", item.GameID, "error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (s *ContentSyncService) recoverOnePendingPush(ctx context.Context, bstore contentBlobStore, pending domain.PendingPush) error {
+	defer s.lockGame(pending.GameID)()
+	return s.recoverOnePendingPushUnlocked(ctx, bstore, pending)
 }
 
 // Pull はリモートデータをローカルに適用する。同一ゲームの同期と直列化される。
@@ -537,6 +603,11 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
+		return domain.PullResult{}, err
+	}
+	// pending Push の baseline 未確定のまま Pull すると localSaveTree が古く、
+	// tracked/untracked 分類が誤る。ApplyPullResult でも消えるが先に確定させる。
+	if err := s.recoverPendingPushForGame(ctx, bstore, gameID); err != nil {
 		return domain.PullResult{}, err
 	}
 
@@ -814,13 +885,46 @@ func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string)
 	// リモート削除後はローカルの同期基準（localSyncHead/localSaveTree）を無効化して状態を
 	// 一貫させる。残しても Status は remoteHead=="" を先に判定するため誤判定はしないが、
 	// 古い基準が残るのを避ける。削除は成功済みなのでクリア失敗は致命扱いせずログのみ。
-	if err := s.repository.SetLocalSyncHead(ctx, gameID, ""); err != nil {
-		s.logger.Warn("localSyncHead のクリアに失敗", "gameId", gameID, "error", err)
+	if err := s.repository.SetLocalSyncState(ctx, gameID, "", ""); err != nil {
+		s.logger.Warn("localSyncState のクリアに失敗", "gameId", gameID, "error", err)
 	}
-	if err := s.repository.SetLocalSaveTree(ctx, gameID, ""); err != nil {
-		s.logger.Warn("localSaveTree のクリアに失敗", "gameId", gameID, "error", err)
+	if err := s.repository.ClearPendingPush(ctx, gameID); err != nil {
+		s.logger.Warn("pending Push のクリアに失敗", "gameId", gameID, "error", err)
 	}
 	return nil
+}
+
+// recoverPendingPushForGame は指定ゲームの pending があれば recoverOnePendingPush する。
+func (s *ContentSyncService) recoverPendingPushForGame(ctx context.Context, bstore contentBlobStore, gameID string) error {
+	pendingList, err := s.repository.ListPendingPushes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range pendingList {
+		if item.GameID != gameID {
+			continue
+		}
+		return s.recoverOnePendingPushUnlocked(ctx, bstore, item)
+	}
+	return nil
+}
+
+// recoverOnePendingPushUnlocked は呼び出し側が既に game lock を保持している前提。
+func (s *ContentSyncService) recoverOnePendingPushUnlocked(ctx context.Context, bstore contentBlobStore, pending domain.PendingPush) error {
+	remoteHead, err := bstore.readHEAD(ctx, pending.GameID)
+	if err != nil {
+		return err
+	}
+	if remoteHead == pending.NewCommitHash {
+		return s.repository.FinalizePendingPush(ctx, pending.GameID, pending.ContentFingerprint, pending.SaveTree)
+	}
+	// 別端末の上書き・自 Push の HEAD 更新失敗など。baseline は触らず pending だけ捨てる。
+	s.logger.Info("pending Push を破棄（remote HEAD が pending 新コミットと不一致）",
+		"gameId", pending.GameID,
+		"remoteHead", remoteHead,
+		"pendingCommit", pending.NewCommitHash,
+	)
+	return s.repository.ClearPendingPush(ctx, pending.GameID)
 }
 
 // fanOutGames は gameIDs をまたいで fn を最大 concurrency 並列で実行し、
