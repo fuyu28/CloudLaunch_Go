@@ -217,41 +217,156 @@ func TestDeleteGameAndQueueMemoCleanupRollsBackMarkerAndPreservesGameOnDeleteFai
 	}
 }
 
-// --- UpdateGameTotalPlayTimeWithLastPlayed ---
+// --- PlaySession 正本 + Game 派生キャッシュ ---
 
-func TestRepositoryLastPlayedOnlyAdvances(t *testing.T) {
+func TestCreatePlaySessionAndRefreshGameUpdatesTotals(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	repo := newTestRepo(t)
+	game, _ := repo.CreateGame(ctx, newGame("Game", "/game.exe"))
 
 	older := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 
+	if _, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
+		GameID: game.ID, PlayedAt: older, Duration: 100,
+	}); err != nil {
+		t.Fatalf("create older: %v", err)
+	}
+	if _, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
+		GameID: game.ID, PlayedAt: newer, Duration: 50,
+	}); err != nil {
+		t.Fatalf("create newer: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, game.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.TotalPlayTime != 150 {
+		t.Fatalf("totalPlayTime = %d, want 150", got.TotalPlayTime)
+	}
+	if got.LastPlayed == nil || !got.LastPlayed.Equal(newer) {
+		t.Fatalf("lastPlayed = %v, want %v", got.LastPlayed, newer)
+	}
+}
+
+func TestDeletePlaySessionAndRefreshGameRecalculatesLastPlayed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newTestRepo(t)
 	game, _ := repo.CreateGame(ctx, newGame("Game", "/game.exe"))
 
-	if err := repo.UpdateGameTotalPlayTimeWithLastPlayed(ctx, game.ID, 100, older); err != nil {
-		t.Fatalf("first update: %v", err)
+	older := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	newer := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	first, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
+		GameID: game.ID, PlayedAt: older, Duration: 100,
+	})
+	if err != nil {
+		t.Fatalf("create first: %v", err)
 	}
+	second, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
+		GameID: game.ID, PlayedAt: newer, Duration: 50,
+	})
+	if err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+
+	gameID, err := repo.DeletePlaySessionAndRefreshGame(ctx, second.ID)
+	if err != nil || gameID != game.ID {
+		t.Fatalf("delete newest: gameID=%q err=%v", gameID, err)
+	}
+
 	got, _ := repo.GetGameByID(ctx, game.ID)
+	if got.TotalPlayTime != 100 {
+		t.Fatalf("totalPlayTime = %d, want 100", got.TotalPlayTime)
+	}
 	if got.LastPlayed == nil || !got.LastPlayed.Equal(older) {
-		t.Fatalf("want lastPlayed=%v, got %v", older, got.LastPlayed)
+		t.Fatalf("lastPlayed should fall back to older session, got %v", got.LastPlayed)
 	}
 
-	if err := repo.UpdateGameTotalPlayTimeWithLastPlayed(ctx, game.ID, 200, newer); err != nil {
-		t.Fatalf("newer update: %v", err)
+	if _, err := repo.DeletePlaySessionAndRefreshGame(ctx, first.ID); err != nil {
+		t.Fatalf("delete remaining: %v", err)
 	}
 	got, _ = repo.GetGameByID(ctx, game.ID)
-	if got.LastPlayed == nil || !got.LastPlayed.Equal(newer) {
-		t.Fatalf("want lastPlayed advanced to %v, got %v", newer, got.LastPlayed)
+	if got.TotalPlayTime != 0 || got.LastPlayed != nil {
+		t.Fatalf("expected empty play cache, got total=%d last=%v", got.TotalPlayTime, got.LastPlayed)
+	}
+}
+
+func TestCreatePlaySessionAndRefreshGameRollsBackOnGameUpdateFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, conn := newTestRepoWithConnection(t)
+	game, _ := repo.CreateGame(ctx, newGame("Game", "/game.exe"))
+
+	if _, err := conn.ExecContext(ctx, `
+		CREATE TRIGGER fail_game_playtime_update
+		BEFORE UPDATE OF totalPlayTime ON "Game"
+		BEGIN
+			SELECT RAISE(ABORT, 'playtime update failed');
+		END
+	`); err != nil {
+		t.Fatalf("create failure trigger: %v", err)
 	}
 
-	if err := repo.UpdateGameTotalPlayTimeWithLastPlayed(ctx, game.ID, 300, older); err != nil {
-		t.Fatalf("older update: %v", err)
+	created, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
+		GameID: game.ID, PlayedAt: time.Now().UTC(), Duration: 60,
+	})
+	if err == nil || created != nil {
+		t.Fatalf("expected rollback failure, got created=%#v err=%v", created, err)
 	}
-	got, _ = repo.GetGameByID(ctx, game.ID)
-	if got.LastPlayed == nil || !got.LastPlayed.Equal(newer) {
-		t.Fatalf("want lastPlayed unchanged at %v, got %v", newer, got.LastPlayed)
+
+	sessions, err := repo.ListPlaySessionsByGame(ctx, game.ID)
+	if err != nil {
+		t.Fatalf("ListPlaySessionsByGame: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("session insert was not rolled back: %#v", sessions)
+	}
+}
+
+func TestCreatePlaySessionAndRefreshGameConcurrentSum(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newTestRepo(t)
+	game, _ := repo.CreateGame(ctx, newGame("Game", "/game.exe"))
+
+	const workers = 20
+	const duration int64 = 7
+	errCh := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			_, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
+				GameID:   game.ID,
+				PlayedAt: time.Date(2026, 1, 1, 0, 0, i, 0, time.UTC),
+				Duration: duration,
+			})
+			errCh <- err
+		}(i)
+	}
+	for i := 0; i < workers; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatalf("concurrent create: %v", err)
+		}
+	}
+
+	got, err := repo.GetGameByID(ctx, game.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	want := int64(workers) * duration
+	if got.TotalPlayTime != want {
+		t.Fatalf("totalPlayTime = %d, want %d", got.TotalPlayTime, want)
+	}
+	sessions, err := repo.ListPlaySessionsByGame(ctx, game.ID)
+	if err != nil || int64(len(sessions)) != workers {
+		t.Fatalf("sessions=%d err=%v", len(sessions), err)
 	}
 }
 
@@ -359,6 +474,125 @@ func TestApplyPullResultPersistsHeadAndTree(t *testing.T) {
 	}
 	if tree != "{\"files\":{\"a.sav\":\"h\"}}" {
 		t.Fatalf("localSaveTree not persisted, got %q", tree)
+	}
+}
+
+func TestApplyPullResultDerivesPlayTimeFromSessionsNotGameJSON(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("PullGame", "/pull.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	wrongLast := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	realLast := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	game := *created
+	game.TotalPlayTime = 99999
+	game.LastPlayed = &wrongLast
+
+	sessions := []domain.PlaySession{
+		{ID: "sess-a", GameID: created.ID, PlayedAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Duration: 100, UpdatedAt: time.Now().UTC()},
+		{ID: "sess-b", GameID: created.ID, PlayedAt: realLast, Duration: 40, UpdatedAt: time.Now().UTC()},
+	}
+	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{}"); err != nil {
+		t.Fatalf("ApplyPullResult: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.TotalPlayTime != 140 {
+		t.Fatalf("totalPlayTime = %d, want 140 from sessions", got.TotalPlayTime)
+	}
+	if got.LastPlayed == nil || !got.LastPlayed.Equal(realLast) {
+		t.Fatalf("lastPlayed = %v, want %v", got.LastPlayed, realLast)
+	}
+}
+
+func TestMigration0010PlaytimeAdjustmentIsIdempotent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, conn := newTestRepoWithConnection(t)
+
+	game, err := repo.CreateGame(ctx, newGame("Legacy", "/legacy.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	// マイグレーション前の不整合を再現: セッション合計より大きい totalPlayTime。
+	if _, err := conn.ExecContext(ctx, `
+		UPDATE "Game" SET totalPlayTime = 1000, lastPlayed = ? WHERE id = ?
+	`, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), game.ID); err != nil {
+		t.Fatalf("seed game total: %v", err)
+	}
+	if _, err := repo.CreatePlaySession(ctx, domain.PlaySession{
+		GameID: game.ID, PlayedAt: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), Duration: 200,
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	insertAdjustment := `
+INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, routeId)
+SELECT
+  'h4adj-' || g.id,
+  g.id,
+  COALESCE(g.lastPlayed, g.createdAt, CURRENT_TIMESTAMP),
+  g.totalPlayTime - COALESCE((
+    SELECT SUM(ps.duration) FROM "PlaySession" ps WHERE ps.gameId = g.id
+  ), 0),
+  'プレイ時間の移行調整',
+  NULL
+FROM "Game" g
+WHERE g.totalPlayTime > COALESCE((
+  SELECT SUM(ps.duration) FROM "PlaySession" ps WHERE ps.gameId = g.id
+), 0)
+ON CONFLICT(id) DO NOTHING`
+	refreshTotals := `
+UPDATE "Game"
+SET
+  totalPlayTime = (
+    SELECT COALESCE(SUM(duration), 0) FROM "PlaySession" WHERE gameId = "Game".id
+  ),
+  lastPlayed = (
+    SELECT MAX(playedAt) FROM "PlaySession" WHERE gameId = "Game".id
+  )`
+	for i := 0; i < 2; i++ {
+		if _, err := conn.ExecContext(ctx, insertAdjustment); err != nil {
+			t.Fatalf("adjustment insert pass %d: %v", i+1, err)
+		}
+		if _, err := conn.ExecContext(ctx, refreshTotals); err != nil {
+			t.Fatalf("adjustment refresh pass %d: %v", i+1, err)
+		}
+	}
+
+	sessions, err := repo.ListPlaySessionsByGame(ctx, game.ID)
+	if err != nil {
+		t.Fatalf("ListPlaySessionsByGame: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 sessions after idempotent adjustment, got %d", len(sessions))
+	}
+	var adjCount int
+	var adjDuration int64
+	for _, s := range sessions {
+		if s.ID == "h4adj-"+game.ID {
+			adjCount++
+			adjDuration = s.Duration
+			if s.SessionName == nil || *s.SessionName != "プレイ時間の移行調整" {
+				t.Fatalf("unexpected adjustment name: %#v", s.SessionName)
+			}
+		}
+	}
+	if adjCount != 1 || adjDuration != 800 {
+		t.Fatalf("adjustment session count=%d duration=%d", adjCount, adjDuration)
+	}
+
+	got, _ := repo.GetGameByID(ctx, game.ID)
+	if got.TotalPlayTime != 1000 {
+		t.Fatalf("totalPlayTime = %d, want 1000 preserved", got.TotalPlayTime)
 	}
 }
 

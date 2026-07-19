@@ -63,7 +63,7 @@ func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result
 	return result.OkResult(updated)
 }
 
-// UpdatePlayTime はプレイ時間を更新する。
+// UpdatePlayTime はセッション集計からプレイ時間キャッシュを再構築する（互換 API）。
 func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*domain.Game] {
 	game, err := app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
 	return serviceResult(game, err, "プレイ時間更新に失敗しました")

@@ -41,6 +41,10 @@ func (repository *startupGameRepository) ListPendingMemoCleanup(context.Context)
 	return repository.pending, nil
 }
 
+func (repository *startupGameRepository) RefreshGamePlayTimeFromSessions(context.Context, string) error {
+	return nil
+}
+
 func (repository *startupGameRepository) ClearPendingMemoCleanup(_ context.Context, gameID string) error {
 	repository.cleared = append(repository.cleared, gameID)
 	return nil
