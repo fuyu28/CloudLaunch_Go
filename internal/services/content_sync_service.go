@@ -50,10 +50,13 @@ type s3BlobStore struct {
 }
 
 func (b *s3BlobStore) readHEAD(ctx context.Context, gameID string) (string, error) {
-	return storage.ReadHEAD(ctx, b.client, b.bucket, gameID)
+	// 新クライアントは HEAD.v2 を優先し、無いときだけレガシー HEAD を読む。
+	hash, _, err := storage.ReadPreferredHEAD(ctx, b.client, b.bucket, gameID)
+	return hash, err
 }
 func (b *s3BlobStore) writeHEAD(ctx context.Context, gameID, hash string) error {
-	return storage.WriteHEAD(ctx, b.client, b.bucket, gameID, hash)
+	// レガシー HEAD は上書きしない（旧クライアントによる Route 消失を防ぐ）。
+	return storage.WriteHEADv2(ctx, b.client, b.bucket, gameID, hash)
 }
 func (b *s3BlobStore) getBlob(ctx context.Context, gameID, kind, hash string) ([]byte, error) {
 	return storage.GetBlob(ctx, b.client, b.bucket, gameID, kind, hash)
@@ -181,14 +184,28 @@ func (s *ContentSyncService) newClient(ctx context.Context) (*s3.Client, storage
 
 // contentFingerprint は MetaSnapshot のコンテンツ部分（タイムスタンプ・デバイス名を除く）からハッシュを生成する。
 // ローカル変更検出の基準値として使用する。
+// v2 では RoutesJSON と SchemaVersion も含める（Route 名・順序変更を PushNeeded にするため）。
+// omitempty により v1 commit（RoutesJSON/SchemaVersion 欠落）の fingerprint 形式を維持する。
 func contentFingerprint(meta domain.MetaSnapshot) string {
 	type fp struct {
-		G string `json:"g"`
-		S string `json:"s"`
-		V string `json:"v"`
+		G   string `json:"g"`
+		S   string `json:"s"`
+		V   string `json:"v"`
+		R   string `json:"r,omitempty"`
+		Ver int    `json:"ver,omitempty"`
 	}
-	data, _ := json.Marshal(fp{G: meta.GameJSON, S: meta.SessionsJSON, V: meta.Saves})
+	data, _ := json.Marshal(fp{
+		G:   meta.GameJSON,
+		S:   meta.SessionsJSON,
+		V:   meta.Saves,
+		R:   meta.RoutesJSON,
+		Ver: meta.SchemaVersion,
+	})
 	return hashBytes(data)
+}
+
+func isSyncSchemaV2(meta domain.MetaSnapshot) bool {
+	return meta.SchemaVersion >= domain.SyncSchemaVersionV2
 }
 
 func (s *ContentSyncService) getOrInitDeviceName(ctx context.Context) (string, error) {
@@ -217,6 +234,10 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 	if err != nil {
 		return metaBuildResult{}, err
 	}
+	routes, err := s.repository.ListRoutesByGame(ctx, game.ID)
+	if err != nil {
+		return metaBuildResult{}, err
+	}
 	deviceName, err := s.getOrInitDeviceName(ctx)
 	if err != nil {
 		return metaBuildResult{}, err
@@ -242,7 +263,7 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 	savesHash := hashBytes(saveSnapJSON)
 	// Status 経路は contentFingerprint しか参照しないため、サマリ表示用キャッシュは
 	// 埋めない（0 を渡す）。実値は Push 時の pushBuildLocalMeta 側で書き込む。
-	return buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName, 0, 0)
+	return buildMetaSnapshot(game, sessions, routes, imageHash, savesHash, deviceName, 0, 0)
 }
 
 // Status は現在の同期状態を返す。同一ゲームの同期と直列化し、スナップショット全体を一貫させる。
@@ -430,6 +451,10 @@ func (s *ContentSyncService) pushBuildLocalMeta(ctx context.Context, gameID stri
 	if err != nil {
 		return metaBuildResult{}, nil, "", nil, "", nil, err
 	}
+	routes, err := s.repository.ListRoutesByGame(ctx, gameID)
+	if err != nil {
+		return metaBuildResult{}, nil, "", nil, "", nil, err
+	}
 	deviceName, err := s.getOrInitDeviceName(ctx)
 	if err != nil {
 		return metaBuildResult{}, nil, "", nil, "", nil, err
@@ -467,14 +492,14 @@ func (s *ContentSyncService) pushBuildLocalMeta(ctx context.Context, gameID stri
 	for _, h := range saveSnap.Files {
 		totalSize += int64(len(saveBlobs[h]))
 	}
-	meta, err := buildMetaSnapshot(*game, sessions, imageHash, savesHash, deviceName, fileCount, totalSize)
+	meta, err := buildMetaSnapshot(*game, sessions, routes, imageHash, savesHash, deviceName, fileCount, totalSize)
 	if err != nil {
 		return metaBuildResult{}, nil, "", nil, "", nil, err
 	}
 	return meta, saveSnapJSON, savesHash, saveBlobs, imageHash, imageData, nil
 }
 
-// pushUploadBlobs はセーブブロブ・セーブスナップショット・画像・game.json・sessions.json・
+// pushUploadBlobs はセーブブロブ・セーブスナップショット・画像・game/sessions/routes.json・
 // コミットブロブを HEAD 書き換え前にアップロードする。
 func (s *ContentSyncService) pushUploadBlobs(ctx context.Context, bstore contentBlobStore, gameID string, onProgress ProgressFunc, meta metaBuildResult, saveSnapJSON []byte, savesHash domain.BlobHash, saveBlobs map[string][]byte, imageHash domain.BlobHash, imageData []byte, metaHash domain.BlobHash) error {
 	// HEAD より先にブロブを置く。途中失敗しても古い HEAD のままなので、中途半端なコミットを公開しない。
@@ -495,6 +520,11 @@ func (s *ContentSyncService) pushUploadBlobs(ctx context.Context, bstore content
 	}
 	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
 		return err
+	}
+	if meta.Snapshot.RoutesJSON != "" && meta.RoutesJSON != nil {
+		if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.RoutesJSON, meta.RoutesJSON); err != nil {
+			return err
+		}
 	}
 	if err := bstore.putBlob(ctx, gameID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
 		return err
@@ -658,6 +688,20 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
+	var cloudRoutes []cloudRoute
+	if isSyncSchemaV2(meta) {
+		if meta.RoutesJSON == "" {
+			return domain.PullResult{}, fmt.Errorf("v2 commit missing routes.json")
+		}
+		routesJSONBytes, rerr := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.RoutesJSON)
+		if rerr != nil {
+			return domain.PullResult{}, rerr
+		}
+		if err := json.Unmarshal(routesJSONBytes, &cloudRoutes); err != nil {
+			return domain.PullResult{}, fmt.Errorf("malformed routes.json: %w", err)
+		}
+	}
+
 	// exe/save/image はマシン固有。クラウド game.json で上書きしないよう先に取る。
 	localGame, err := s.repository.GetGameByID(ctx, gameID)
 	if err != nil {
@@ -693,7 +737,7 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
-	return s.pullApplyToDB(ctx, gameID, cloudG, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes)
+	return s.pullApplyToDB(ctx, gameID, cloudG, cloudRoutes, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes)
 }
 
 // pullPlanDeletions はリモートのセーブスナップショットとローカルの base tree を突き合わせ、
@@ -804,11 +848,10 @@ func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore conte
 	return nil
 }
 
-// pullApplyToDB はリモートのゲーム情報・セッション・同期基準・base tree を単一トランザクションで反映する。
+// pullApplyToDB はリモートのゲーム情報・セッション・（v2 ならルート）・同期基準を単一トランザクションで反映する。
 // localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
-func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
-	// 単一トランザクションにまとめる理由: 部分失敗による DB 不整合と、
-	// 同期対象外 Route 参照による FK 違反を防ぐため。
+// v1 commit はローカル Route を削除しない。v2 は Route を置換し、参照不整合は rollback する。
+func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudRoutes []cloudRoute, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
 	updatedGame := domain.Game{
 		ID:             cloudG.ID,
 		Title:          cloudG.Title,
@@ -843,8 +886,23 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 			UpdatedAt:   cs.UpdatedAt,
 		})
 	}
-	// ApplyPullResult に saveSnap を渡して base tree も更新する。残さないと次回 Pull が untracked 誤判定する。
-	if err := s.repository.ApplyPullResult(ctx, updatedGame, sessions, contentFingerprint(meta), string(saveSnapBytes)); err != nil {
+	fp := contentFingerprint(meta)
+	saveTree := string(saveSnapBytes)
+	if isSyncSchemaV2(meta) {
+		routes := make([]domain.Route, 0, len(cloudRoutes))
+		for _, cr := range cloudRoutes {
+			routes = append(routes, domain.Route{
+				ID:        cr.ID,
+				Name:      cr.Name,
+				Order:     cr.Order,
+				GameID:    gameID,
+				CreatedAt: cr.CreatedAt,
+			})
+		}
+		if err := s.repository.ApplyPullResultV2(ctx, updatedGame, routes, sessions, fp, saveTree); err != nil {
+			return domain.PullResult{}, err
+		}
+	} else if err := s.repository.ApplyPullResult(ctx, updatedGame, sessions, fp, saveTree); err != nil {
 		return domain.PullResult{}, err
 	}
 	return domain.PullResult{Applied: true}, nil

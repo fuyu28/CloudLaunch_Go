@@ -95,6 +95,9 @@ func (r *startupContentSyncRepository) GetGameByID(context.Context, string) (*do
 func (r *startupContentSyncRepository) ListPlaySessionsByGame(context.Context, string) ([]domain.PlaySession, error) {
 	return nil, nil
 }
+func (r *startupContentSyncRepository) ListRoutesByGame(context.Context, string) ([]domain.Route, error) {
+	return nil, nil
+}
 func (r *startupContentSyncRepository) GetLocalSaveTree(context.Context, string) (string, error) {
 	return "", nil
 }
@@ -118,6 +121,9 @@ func (r *startupContentSyncRepository) ListPendingPushes(context.Context) ([]dom
 	return nil, nil
 }
 func (r *startupContentSyncRepository) ApplyPullResult(context.Context, domain.Game, []domain.PlaySession, string, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) ApplyPullResultV2(context.Context, domain.Game, []domain.Route, []domain.PlaySession, string, string) error {
 	return nil
 }
 func (r *startupContentSyncRepository) GetSetting(context.Context, string) (string, error) {

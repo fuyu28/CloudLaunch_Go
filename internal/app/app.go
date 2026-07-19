@@ -24,6 +24,11 @@ type playSessionLookup interface {
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error)
 }
 
+// routeLookup はルート mutation（特に Delete）前に gameID を確保するための最小ポート。
+type routeLookup interface {
+	GetRouteByID(ctx context.Context, routeID string) (*domain.Route, error)
+}
+
 // App はWailsと連携するアプリケーション本体を表す。
 type App struct {
 	ctx                 context.Context
@@ -49,6 +54,7 @@ type App struct {
 	isMonitoring        bool
 	syncCoalescer       *asyncCoalescer
 	playSessionLookup   playSessionLookup
+	routeLookup         routeLookup
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -149,6 +155,7 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.SessionService = services.NewSessionService(repository, app.Logger)
 	app.playSessionLookup = repository
 	app.RouteService = services.NewRouteService(repository, app.Logger)
+	app.routeLookup = repository
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
 	app.ContentSyncService = services.NewContentSyncService(app.Config, credentialStore, repository, app.Logger)
