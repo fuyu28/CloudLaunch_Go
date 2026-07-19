@@ -574,14 +574,6 @@ func (repository *Repository) DeletePlaySessionsByGame(ctx context.Context, game
 	return error
 }
 
-// SetLocalSyncHead はゲームの localSyncHead を更新する。
-func (repository *Repository) SetLocalSyncHead(ctx context.Context, gameID, hash string) error {
-	_, err := repository.connection.ExecContext(ctx, `
-		UPDATE "Game" SET localSyncHead = ? WHERE id = ?
-	`, hash, gameID)
-	return err
-}
-
 // GetLocalSaveTree はゲームの localSaveTree（前回同期した SaveSnapshot JSON）を取得する。
 // 未設定の場合は "" を返す。
 func (repository *Repository) GetLocalSaveTree(ctx context.Context, gameID string) (string, error) {
@@ -598,12 +590,104 @@ func (repository *Repository) GetLocalSaveTree(ctx context.Context, gameID strin
 	return value.String, nil
 }
 
-// SetLocalSaveTree はゲームの localSaveTree を更新する。
-func (repository *Repository) SetLocalSaveTree(ctx context.Context, gameID, tree string) error {
-	_, err := repository.connection.ExecContext(ctx, `
-		UPDATE "Game" SET localSaveTree = ? WHERE id = ?
-	`, tree, gameID)
+// SetLocalSyncState は localSyncHead と localSaveTree を単一トランザクションで更新する。
+func (repository *Repository) SetLocalSyncState(ctx context.Context, gameID, syncHead, saveTree string) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = setLocalSyncStateTx(ctx, tx, gameID, syncHead, saveTree); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func setLocalSyncStateTx(ctx context.Context, tx *sql.Tx, gameID, syncHead, saveTree string) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE "Game" SET localSyncHead = ?, localSaveTree = ? WHERE id = ?
+	`, syncHead, saveTree, gameID)
 	return err
+}
+
+// BeginPendingPush はリモート HEAD 更新前に pending Push を永続化する。
+func (repository *Repository) BeginPendingPush(ctx context.Context, pending domain.PendingPush) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PendingPush" (gameId, expectedRemoteHead, newCommitHash, contentFingerprint, saveTree)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(gameId) DO UPDATE SET
+			expectedRemoteHead = excluded.expectedRemoteHead,
+			newCommitHash = excluded.newCommitHash,
+			contentFingerprint = excluded.contentFingerprint,
+			saveTree = excluded.saveTree,
+			createdAt = CURRENT_TIMESTAMP
+	`, pending.GameID, pending.ExpectedRemoteHead, pending.NewCommitHash,
+		pending.ContentFingerprint, pending.SaveTree)
+	return err
+}
+
+// FinalizePendingPush は local baseline 更新と pending 削除を単一トランザクションで行う。
+func (repository *Repository) FinalizePendingPush(ctx context.Context, gameID, syncHead, saveTree string) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = setLocalSyncStateTx(ctx, tx, gameID, syncHead, saveTree); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, gameID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ClearPendingPush は baseline を変えずに pending だけ削除する。
+func (repository *Repository) ClearPendingPush(ctx context.Context, gameID string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		DELETE FROM "PendingPush" WHERE gameId = ?
+	`, gameID)
+	return err
+}
+
+// ListPendingPushes は未確定の pending Push を返す。
+func (repository *Repository) ListPendingPushes(ctx context.Context) ([]domain.PendingPush, error) {
+	rows, err := repository.connection.QueryContext(ctx, `
+		SELECT gameId, expectedRemoteHead, newCommitHash, contentFingerprint, saveTree
+		FROM "PendingPush"
+		ORDER BY createdAt, gameId
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	pending := make([]domain.PendingPush, 0)
+	for rows.Next() {
+		var item domain.PendingPush
+		if err := rows.Scan(
+			&item.GameID,
+			&item.ExpectedRemoteHead,
+			&item.NewCommitHash,
+			&item.ContentFingerprint,
+			&item.SaveTree,
+		); err != nil {
+			return nil, err
+		}
+		pending = append(pending, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return pending, nil
 }
 
 // GetSetting は Settings テーブルから値を取得する。存在しない場合は "" を返す。
@@ -706,10 +790,10 @@ func (repository *Repository) ApplyPullResult(
 	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, game.ID); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSyncHead = ? WHERE id = ?`, syncHead, game.ID); err != nil {
+	if err = setLocalSyncStateTx(ctx, tx, game.ID, syncHead, saveTree); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSaveTree = ? WHERE id = ?`, saveTree, game.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, game.ID); err != nil {
 		return err
 	}
 

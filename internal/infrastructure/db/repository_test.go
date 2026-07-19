@@ -710,3 +710,130 @@ func TestOpenSetsBusyTimeout(t *testing.T) {
 		t.Fatalf("busy_timeout should be >= 5000ms, got %d", timeout)
 	}
 }
+
+func TestSetLocalSyncStateUpdatesHeadAndTreeAtomically(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("SyncStateGame", "/sync-state.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	if err := repo.SetLocalSyncState(ctx, created.ID, "fp-1", `{"files":{"a.sav":"h1"}}`); err != nil {
+		t.Fatalf("SetLocalSyncState: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-1" {
+		t.Fatalf("localSyncHead = %v, want fp-1", got.LocalSyncHead)
+	}
+	tree, err := repo.GetLocalSaveTree(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetLocalSaveTree: %v", err)
+	}
+	if tree != `{"files":{"a.sav":"h1"}}` {
+		t.Fatalf("localSaveTree = %q", tree)
+	}
+}
+
+func TestPendingPushLifecycleFinalizeClearsPending(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("PendingPushGame", "/pending.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	pending := domain.PendingPush{
+		GameID:             created.ID,
+		ExpectedRemoteHead: "old-head",
+		NewCommitHash:      "new-commit",
+		ContentFingerprint: "fp-new",
+		SaveTree:           `{"files":{"b.sav":"h2"}}`,
+	}
+	if err := repo.BeginPendingPush(ctx, pending); err != nil {
+		t.Fatalf("BeginPendingPush: %v", err)
+	}
+	listed, err := repo.ListPendingPushes(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingPushes: %v", err)
+	}
+	if len(listed) != 1 || listed[0].NewCommitHash != "new-commit" {
+		t.Fatalf("listed pending = %#v", listed)
+	}
+
+	if err := repo.FinalizePendingPush(ctx, created.ID, pending.ContentFingerprint, pending.SaveTree); err != nil {
+		t.Fatalf("FinalizePendingPush: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-new" {
+		t.Fatalf("localSyncHead = %v, want fp-new", got.LocalSyncHead)
+	}
+	tree, err := repo.GetLocalSaveTree(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetLocalSaveTree: %v", err)
+	}
+	if tree != pending.SaveTree {
+		t.Fatalf("localSaveTree = %q, want %q", tree, pending.SaveTree)
+	}
+	listed, err = repo.ListPendingPushes(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingPushes after finalize: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("pending should be cleared, got %#v", listed)
+	}
+}
+
+func TestClearPendingPushDoesNotTouchBaseline(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("ClearPendingGame", "/clear-pending.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	if err := repo.SetLocalSyncState(ctx, created.ID, "fp-keep", `{"files":{}}`); err != nil {
+		t.Fatalf("SetLocalSyncState: %v", err)
+	}
+	if err := repo.BeginPendingPush(ctx, domain.PendingPush{
+		GameID:             created.ID,
+		ExpectedRemoteHead: "",
+		NewCommitHash:      "abandoned",
+		ContentFingerprint: "fp-abandoned",
+		SaveTree:           `{"files":{"x":"y"}}`,
+	}); err != nil {
+		t.Fatalf("BeginPendingPush: %v", err)
+	}
+
+	if err := repo.ClearPendingPush(ctx, created.ID); err != nil {
+		t.Fatalf("ClearPendingPush: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-keep" {
+		t.Fatalf("baseline should remain fp-keep, got %v", got.LocalSyncHead)
+	}
+	listed, err := repo.ListPendingPushes(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingPushes: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("pending should be cleared, got %#v", listed)
+	}
+}

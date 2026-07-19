@@ -61,14 +61,22 @@ type RouteRepository interface {
 type ContentSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
-	SetLocalSyncHead(ctx context.Context, gameID, hash string) error
 	GetLocalSaveTree(ctx context.Context, gameID string) (string, error)
-	SetLocalSaveTree(ctx context.Context, gameID, tree string) error
+	// SetLocalSyncState は localSyncHead と localSaveTree を単一トランザクションで更新する。
+	SetLocalSyncState(ctx context.Context, gameID, syncHead, saveTree string) error
+	// BeginPendingPush はリモート HEAD 更新前に pending Push を永続化する（UPSERT）。
+	BeginPendingPush(ctx context.Context, pending domain.PendingPush) error
+	// FinalizePendingPush は local baseline 更新と pending 削除を単一トランザクションで行う。
+	FinalizePendingPush(ctx context.Context, gameID, syncHead, saveTree string) error
+	// ClearPendingPush は baseline を変えずに pending だけ削除する（自動確定できない場合）。
+	ClearPendingPush(ctx context.Context, gameID string) error
+	ListPendingPushes(ctx context.Context) ([]domain.PendingPush, error)
 	// ApplyPullResult は Pull で取得したリモート状態を単一トランザクションで反映する。
 	// Game の upsert・セッションの全削除と再投入・localSyncHead・localSaveTree を all-or-nothing で書き込む。
 	// totalPlayTime / lastPlayed は投入セッションの SUM/MAX から導出する（game.json の値は使わない）。
 	// game.CurrentRouteID および各 session.RouteID のうち、ローカルに対応する Route が存在しないものは
 	// NULL に正規化する（Route は同期対象外のため、別PCで FK 違反になるのを防ぐ）。
+	// 成功時は同一 TX で PendingPush も削除する（Pull が正になった baseline と矛盾する保留を残さない）。
 	ApplyPullResult(ctx context.Context, game domain.Game, sessions []domain.PlaySession, syncHead, saveTree string) error
 	GetSetting(ctx context.Context, key string) (string, error)
 	UpsertSetting(ctx context.Context, key, value string) error
