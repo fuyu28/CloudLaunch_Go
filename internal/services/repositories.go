@@ -3,7 +3,6 @@ package services
 
 import (
 	"context"
-	"time"
 
 	"CloudLaunch_Go/internal/domain"
 )
@@ -17,20 +16,18 @@ type GameRepository interface {
 	DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) error
 	ListPendingMemoCleanup(ctx context.Context) ([]string, error)
 	ClearPendingMemoCleanup(ctx context.Context, gameID string) error
+	RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error
 }
 
 // SessionRepository は SessionService が必要とする永続化境界を定義する。
 type SessionRepository interface {
-	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
+	CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error)
-	DeletePlaySession(ctx context.Context, sessionID string) error
+	DeletePlaySessionAndRefreshGame(ctx context.Context, sessionID string) (gameID string, err error)
 	UpdatePlaySessionRoute(ctx context.Context, sessionID string, routeID *string) error
 	UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error
 	TouchGameUpdatedAt(ctx context.Context, gameID string) error
-	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
-	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
-	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
 // MemoRepository は MemoService が必要とする永続化境界を定義する。
@@ -69,6 +66,7 @@ type ContentSyncRepository interface {
 	SetLocalSaveTree(ctx context.Context, gameID, tree string) error
 	// ApplyPullResult は Pull で取得したリモート状態を単一トランザクションで反映する。
 	// Game の upsert・セッションの全削除と再投入・localSyncHead・localSaveTree を all-or-nothing で書き込む。
+	// totalPlayTime / lastPlayed は投入セッションの SUM/MAX から導出する（game.json の値は使わない）。
 	// game.CurrentRouteID および各 session.RouteID のうち、ローカルに対応する Route が存在しないものは
 	// NULL に正規化する（Route は同期対象外のため、別PCで FK 違反になるのを防ぐ）。
 	ApplyPullResult(ctx context.Context, game domain.Game, sessions []domain.PlaySession, syncHead, saveTree string) error
@@ -94,7 +92,7 @@ type ProcessIDResolver interface {
 
 // ProcessMonitorRepository は ProcessMonitorService が必要とする永続化境界を定義する。
 type ProcessMonitorRepository interface {
-	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
+	CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
 	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)

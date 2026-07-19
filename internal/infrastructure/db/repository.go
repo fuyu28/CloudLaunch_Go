@@ -380,7 +380,8 @@ func (repository *Repository) DeleteRoute(ctx context.Context, routeID string) e
 	return error
 }
 
-// CreatePlaySession はプレイセッションを作成して返す。
+// CreatePlaySession はプレイセッションを作成して返す（Game 派生キャッシュは更新しない）。
+// 通常のユースケースは CreatePlaySessionAndRefreshGame を使う。
 func (repository *Repository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 	var id string
 	error := repository.connection.QueryRowContext(ctx, `
@@ -393,6 +394,46 @@ func (repository *Repository) CreatePlaySession(ctx context.Context, session dom
 	}
 
 	return repository.GetPlaySessionByID(ctx, id)
+}
+
+// CreatePlaySessionAndRefreshGame はセッション作成と Game.totalPlayTime / lastPlayed の再計算を
+// 単一トランザクションで行う。PlaySession が正本、Game 列は派生キャッシュ。
+func (repository *Repository) CreatePlaySessionAndRefreshGame(
+	ctx context.Context,
+	session domain.PlaySession,
+) (created *domain.PlaySession, err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var id string
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO "PlaySession" (gameId, playedAt, duration, sessionName, routeId)
+		VALUES (?, ?, ?, ?, ?)
+		RETURNING id
+	`, session.GameID, session.PlayedAt, session.Duration, session.SessionName, session.RouteID).Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, session.GameID); err != nil {
+		return nil, err
+	}
+
+	created, err = scanPlaySession(tx.QueryRowContext(ctx, `SELECT `+playSessionSelectCols+` FROM "PlaySession" WHERE id = ?`, id))
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return created, nil
 }
 
 // GetPlaySessionByID はID指定でセッションを取得する。
@@ -417,10 +458,84 @@ func (repository *Repository) ListPlaySessionsByGame(ctx context.Context, gameID
 		scanPlaySession, gameID)
 }
 
-// DeletePlaySession はセッションを削除する。
+// DeletePlaySession はセッションを削除する（Game 派生キャッシュは更新しない）。
+// 通常のユースケースは DeletePlaySessionAndRefreshGame を使う。
 func (repository *Repository) DeletePlaySession(ctx context.Context, sessionID string) error {
 	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE id = ?`, sessionID)
 	return error
+}
+
+// DeletePlaySessionAndRefreshGame はセッション削除と Game 派生キャッシュ再計算を単一トランザクションで行う。
+// 削除したセッションの gameID を返す（存在しなければ空文字）。
+func (repository *Repository) DeletePlaySessionAndRefreshGame(
+	ctx context.Context,
+	sessionID string,
+) (gameID string, err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	err = tx.QueryRowContext(ctx, `SELECT gameId FROM "PlaySession" WHERE id = ?`, sessionID).Scan(&gameID)
+	if errors.Is(err, sql.ErrNoRows) {
+		if err = tx.Commit(); err != nil {
+			return "", err
+		}
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE id = ?`, sessionID); err != nil {
+		return "", err
+	}
+	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, gameID); err != nil {
+		return "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return "", err
+	}
+	return gameID, nil
+}
+
+// RefreshGamePlayTimeFromSessions は Game.totalPlayTime / lastPlayed をセッション集計から再構築する。
+func (repository *Repository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, gameID); err != nil {
+		return err
+	}
+	err = tx.Commit()
+	return err
+}
+
+// refreshGamePlayTimeFromSessionsTx は tx 内で SUM(duration) / MAX(playedAt) を Game へ反映する。
+func refreshGamePlayTimeFromSessionsTx(ctx context.Context, tx *sql.Tx, gameID string) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE "Game"
+		SET totalPlayTime = (
+			SELECT COALESCE(SUM(duration), 0) FROM "PlaySession" WHERE gameId = ?
+		),
+		lastPlayed = (
+			SELECT MAX(playedAt) FROM "PlaySession" WHERE gameId = ?
+		),
+		updatedAt = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, gameID, gameID, gameID)
+	return err
 }
 
 // ListPlaySessionsByGames は複数ゲームのセッションを一括取得し、gameID→sessions の map を返す。
@@ -456,45 +571,6 @@ func (repository *Repository) ListPlaySessionsByGames(ctx context.Context, gameI
 // DeletePlaySessionsByGame はゲームID配下のセッションを削除する。
 func (repository *Repository) DeletePlaySessionsByGame(ctx context.Context, gameID string) error {
 	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE gameId = ?`, gameID)
-	return error
-}
-
-// SumPlaySessionDurationsByGame はゲームIDのセッション合計時間を取得する。
-func (repository *Repository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
-	row := repository.connection.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(duration), 0) FROM "PlaySession" WHERE gameId = ?
-	`, gameID)
-	var total int64
-	if err := row.Scan(&total); err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
-// UpdateGameTotalPlayTime はゲームの総プレイ時間のみ更新する。
-func (repository *Repository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
-	_, error := repository.connection.ExecContext(ctx, `
-		UPDATE "Game" SET totalPlayTime = ? WHERE id = ?
-	`, totalPlayTime, gameID)
-	return error
-}
-
-// UpdateGameTotalPlayTimeWithLastPlayed は総プレイ時間と最終プレイ日時を更新する。
-func (repository *Repository) UpdateGameTotalPlayTimeWithLastPlayed(
-	ctx context.Context,
-	gameID string,
-	totalPlayTime int64,
-	playedAt time.Time,
-) error {
-	_, error := repository.connection.ExecContext(ctx, `
-		UPDATE "Game"
-		SET totalPlayTime = ?,
-		    lastPlayed = CASE
-		      WHEN lastPlayed IS NULL OR lastPlayed < ? THEN ?
-		      ELSE lastPlayed
-		    END
-		WHERE id = ?
-	`, totalPlayTime, playedAt, playedAt, gameID)
 	return error
 }
 
@@ -586,6 +662,7 @@ func routeExistsTx(ctx context.Context, tx *sql.Tx, routeID *string) (*string, e
 
 // ApplyPullResult は Pull のローカル反映を単一トランザクションで実行する。
 // 存在しない Route 参照（currentRouteId / routeId）は NULL に正規化して FK 違反を防ぐ。
+// totalPlayTime / lastPlayed は game.json を信用せず、投入したセッションから SUM/MAX で導出する。
 func (repository *Repository) ApplyPullResult(
 	ctx context.Context,
 	game domain.Game,
@@ -607,30 +684,7 @@ func (repository *Repository) ApplyPullResult(
 		return err
 	}
 
-	if _, err = tx.ExecContext(ctx, `
-		INSERT INTO "Game" (
-			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
-			localSaveHash, localSaveHashUpdatedAt,
-			totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			title = excluded.title,
-			publisher = excluded.publisher,
-			imagePath = excluded.imagePath,
-			exePath = excluded.exePath,
-			saveFolderPath = excluded.saveFolderPath,
-			createdAt = excluded.createdAt,
-			updatedAt = excluded.updatedAt,
-			localSaveHash = excluded.localSaveHash,
-			localSaveHashUpdatedAt = excluded.localSaveHashUpdatedAt,
-			totalPlayTime = excluded.totalPlayTime,
-			lastPlayed = excluded.lastPlayed,
-			clearedAt = excluded.clearedAt,
-			playStatus = excluded.playStatus,
-			currentRouteId = excluded.currentRouteId
-	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
-		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
-		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.PlayStatus, game.CurrentRouteID); err != nil {
+	if err = upsertGameForPullTx(ctx, tx, game, game.CurrentRouteID); err != nil {
 		return err
 	}
 
@@ -644,22 +698,14 @@ func (repository *Repository) ApplyPullResult(
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `
-			INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, routeId, updatedAt)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET
-				gameId = excluded.gameId,
-				playedAt = excluded.playedAt,
-				duration = excluded.duration,
-				sessionName = excluded.sessionName,
-				routeId = excluded.routeId,
-				updatedAt = excluded.updatedAt
-		`, session.ID, game.ID, session.PlayedAt, session.Duration, session.SessionName,
-			routeID, session.UpdatedAt); err != nil {
+		if err = insertPlaySessionForPullTx(ctx, tx, game.ID, session, routeID); err != nil {
 			return err
 		}
 	}
 
+	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, game.ID); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSyncHead = ? WHERE id = ?`, syncHead, game.ID); err != nil {
 		return err
 	}
@@ -668,6 +714,52 @@ func (repository *Repository) ApplyPullResult(
 	}
 
 	err = tx.Commit()
+	return err
+}
+
+// upsertGameForPullTx は Pull 用に Game を upsert する。
+// totalPlayTime / lastPlayed はプレースホルダ（0/NULL）にし、後続のセッション集計で埋める。
+func upsertGameForPullTx(ctx context.Context, tx *sql.Tx, game domain.Game, currentRouteID *string) error {
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO "Game" (
+			id, title, publisher, imagePath, exePath, saveFolderPath, createdAt, updatedAt,
+			localSaveHash, localSaveHashUpdatedAt,
+			totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			publisher = excluded.publisher,
+			imagePath = excluded.imagePath,
+			exePath = excluded.exePath,
+			saveFolderPath = excluded.saveFolderPath,
+			createdAt = excluded.createdAt,
+			updatedAt = excluded.updatedAt,
+			localSaveHash = excluded.localSaveHash,
+			localSaveHashUpdatedAt = excluded.localSaveHashUpdatedAt,
+			totalPlayTime = 0,
+			lastPlayed = NULL,
+			clearedAt = excluded.clearedAt,
+			playStatus = excluded.playStatus,
+			currentRouteId = excluded.currentRouteId
+	`, game.ID, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.CreatedAt, game.UpdatedAt, game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
+		game.ClearedAt, game.PlayStatus, currentRouteID)
+	return err
+}
+
+func insertPlaySessionForPullTx(ctx context.Context, tx *sql.Tx, gameID string, session domain.PlaySession, routeID *string) error {
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO "PlaySession" (id, gameId, playedAt, duration, sessionName, routeId, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			gameId = excluded.gameId,
+			playedAt = excluded.playedAt,
+			duration = excluded.duration,
+			sessionName = excluded.sessionName,
+			routeId = excluded.routeId,
+			updatedAt = excluded.updatedAt
+	`, session.ID, gameID, session.PlayedAt, session.Duration, session.SessionName,
+		routeID, session.UpdatedAt)
 	return err
 }
 
