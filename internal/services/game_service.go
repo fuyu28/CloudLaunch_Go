@@ -4,6 +4,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -14,12 +15,22 @@ import (
 // GameService はゲーム関連の操作を提供する。
 type GameService struct {
 	repository GameRepository
+	memoFiles  MemoDirectoryCleaner
 	logger     *slog.Logger
 }
 
+// MemoDirectoryCleaner はゲーム単位のローカルメモ削除境界を定義する。
+type MemoDirectoryCleaner interface {
+	DeleteGameMemoFiles(gameID string) error
+}
+
 // NewGameService は GameService を生成する。
-func NewGameService(repository GameRepository, logger *slog.Logger) *GameService {
-	return &GameService{repository: repository, logger: logger}
+func NewGameService(repository GameRepository, logger *slog.Logger, memoFiles ...MemoDirectoryCleaner) *GameService {
+	var cleaner MemoDirectoryCleaner
+	if len(memoFiles) > 0 {
+		cleaner = memoFiles[0]
+	}
+	return &GameService{repository: repository, memoFiles: cleaner, logger: logger}
 }
 
 // ListGames は検索・フィルタ・ソート付きでゲーム一覧を取得する。
@@ -169,9 +180,44 @@ func (service *GameService) DeleteGame(ctx context.Context, gameID string) error
 		return newServiceError("ゲームIDが不正です", detail)
 	}
 
-	if error := service.repository.DeleteGame(ctx, trimmedID); error != nil {
+	if error := service.repository.DeleteGameAndQueueMemoCleanup(ctx, trimmedID); error != nil {
 		service.logger.Error("ゲーム削除に失敗", "error", error)
 		return newServiceError("ゲーム削除に失敗しました", error.Error())
+	}
+	if error := service.cleanupMemoDirectory(ctx, trimmedID); error != nil {
+		return newServiceError("ゲームのローカルメモ削除に失敗しました", error.Error())
+	}
+	return nil
+}
+
+// RetryPendingMemoCleanup は保留中のローカルメモ削除を再実行する。
+func (service *GameService) RetryPendingMemoCleanup(ctx context.Context) error {
+	gameIDs, err := service.repository.ListPendingMemoCleanup(ctx)
+	if err != nil {
+		service.logger.Error("メモ削除保留一覧の取得に失敗", "error", err)
+		return err
+	}
+
+	var cleanupErrors []error
+	for _, gameID := range gameIDs {
+		if err := service.cleanupMemoDirectory(ctx, gameID); err != nil {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("%s: %w", gameID, err))
+		}
+	}
+	return errors.Join(cleanupErrors...)
+}
+
+func (service *GameService) cleanupMemoDirectory(ctx context.Context, gameID string) error {
+	if service.memoFiles == nil {
+		return errors.New("memo directory cleaner is not configured")
+	}
+	if err := service.memoFiles.DeleteGameMemoFiles(gameID); err != nil {
+		service.logger.Warn("ゲームのローカルメモ削除に失敗", "gameId", gameID, "error", err)
+		return err
+	}
+	if err := service.repository.ClearPendingMemoCleanup(ctx, gameID); err != nil {
+		service.logger.Warn("メモ削除保留の解除に失敗", "gameId", gameID, "error", err)
+		return err
 	}
 	return nil
 }

@@ -242,10 +242,60 @@ func (repository *Repository) TouchGameUpdatedAt(ctx context.Context, gameID str
 	return error
 }
 
-// DeleteGame はゲームを削除する。
-func (repository *Repository) DeleteGame(ctx context.Context, gameID string) error {
-	_, error := repository.connection.ExecContext(ctx, `DELETE FROM "Game" WHERE id = ?`, gameID)
-	return error
+// DeleteGameAndQueueMemoCleanup はメモ削除保留の記録とゲーム削除を単一トランザクションで行う。
+func (repository *Repository) DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.ExecContext(ctx, `
+		INSERT INTO "PendingMemoCleanup" (gameId) VALUES (?)
+		ON CONFLICT(gameId) DO NOTHING
+	`, gameID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "Game" WHERE id = ?`, gameID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ListPendingMemoCleanup はローカルメモ削除が保留中のゲームIDを返す。
+func (repository *Repository) ListPendingMemoCleanup(ctx context.Context) ([]string, error) {
+	rows, err := repository.connection.QueryContext(ctx, `
+		SELECT gameId FROM "PendingMemoCleanup" ORDER BY createdAt, gameId
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	gameIDs := make([]string, 0)
+	for rows.Next() {
+		var gameID string
+		if err := rows.Scan(&gameID); err != nil {
+			return nil, err
+		}
+		gameIDs = append(gameIDs, gameID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return gameIDs, nil
+}
+
+// ClearPendingMemoCleanup は完了したローカルメモ削除の保留記録を消す。
+func (repository *Repository) ClearPendingMemoCleanup(ctx context.Context, gameID string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		DELETE FROM "PendingMemoCleanup" WHERE gameId = ?
+	`, gameID)
+	return err
 }
 
 // CreateRoute はルートを作成して返す。

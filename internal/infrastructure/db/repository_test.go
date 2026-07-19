@@ -142,12 +142,78 @@ func TestRepositoryGameCRUDRoundTrip(t *testing.T) {
 		t.Fatalf("UpdateGame: %v (got %v)", err, updated)
 	}
 
-	if err := repo.DeleteGame(ctx, created.ID); err != nil {
-		t.Fatalf("DeleteGame: %v", err)
+	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteGameAndQueueMemoCleanup: %v", err)
 	}
 	gone, err := repo.GetGameByID(ctx, created.ID)
 	if err != nil || gone != nil {
 		t.Fatalf("expected nil after delete, got %v, err=%v", gone, err)
+	}
+}
+
+func TestDeleteGameAndQueueMemoCleanupCommitsPendingMarker(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newTestRepo(t)
+	game, err := repo.CreateGame(ctx, newGame("Delete Game", "/delete.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, game.ID); err != nil {
+		t.Fatalf("DeleteGameAndQueueMemoCleanup: %v", err)
+	}
+	if got, err := repo.GetGameByID(ctx, game.ID); err != nil || got != nil {
+		t.Fatalf("game was not deleted: game=%#v err=%v", got, err)
+	}
+	pending, err := repo.ListPendingMemoCleanup(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingMemoCleanup: %v", err)
+	}
+	if len(pending) != 1 || pending[0] != game.ID {
+		t.Fatalf("pending cleanup = %#v, want [%q]", pending, game.ID)
+	}
+	if err := repo.ClearPendingMemoCleanup(ctx, game.ID); err != nil {
+		t.Fatalf("ClearPendingMemoCleanup: %v", err)
+	}
+	pending, err = repo.ListPendingMemoCleanup(ctx)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("pending cleanup was not cleared: pending=%#v err=%v", pending, err)
+	}
+}
+
+func TestDeleteGameAndQueueMemoCleanupRollsBackMarkerAndPreservesGameOnDeleteFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, conn := newTestRepoWithConnection(t)
+	game, err := repo.CreateGame(ctx, newGame("Preserved Game", "/preserved.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, `
+		CREATE TRIGGER fail_game_delete
+		BEFORE DELETE ON "Game"
+		BEGIN
+			SELECT RAISE(ABORT, 'game delete failed');
+		END
+	`); err != nil {
+		t.Fatalf("create failure trigger: %v", err)
+	}
+
+	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, game.ID); err == nil {
+		t.Fatal("expected game deletion failure")
+	}
+	if got, err := repo.GetGameByID(ctx, game.ID); err != nil || got == nil {
+		t.Fatalf("game should be preserved: game=%#v err=%v", got, err)
+	}
+	pending, err := repo.ListPendingMemoCleanup(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingMemoCleanup: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending marker should roll back: %#v", pending)
 	}
 }
 
@@ -382,8 +448,8 @@ func TestRepositoryRoutesDeletedWithGame(t *testing.T) {
 		t.Fatalf("CreateRoute: %v", err)
 	}
 
-	if err := repo.DeleteGame(ctx, game.ID); err != nil {
-		t.Fatalf("DeleteGame: %v", err)
+	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, game.ID); err != nil {
+		t.Fatalf("DeleteGameAndQueueMemoCleanup: %v", err)
 	}
 
 	routes, err := repo.ListRoutesByGame(ctx, game.ID)
