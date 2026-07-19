@@ -690,6 +690,89 @@ func (repository *Repository) ListPendingPushes(ctx context.Context) ([]domain.P
 	return pending, nil
 }
 
+// BeginPullOperation はセーブ交換直前に PREPARED ジャーナルを永続化する。
+func (repository *Repository) BeginPullOperation(ctx context.Context, op domain.PullOperation) error {
+	if op.Status == "" {
+		op.Status = domain.PullOperationPrepared
+	}
+	hadLive := 0
+	if op.HadLive {
+		hadLive = 1
+	}
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PullOperation" (operationId, gameId, livePath, stagePath, backupPath, commitHash, status, hadLive)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, op.OperationID, op.GameID, op.LivePath, op.StagePath, op.BackupPath, op.CommitHash, string(op.Status), hadLive)
+	return err
+}
+
+// ClearPullOperation は指定ジャーナルを削除する。
+func (repository *Repository) ClearPullOperation(ctx context.Context, operationID string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		DELETE FROM "PullOperation" WHERE operationId = ?
+	`, operationID)
+	return err
+}
+
+// ListPullOperations は未完了の Pull ジャーナルを返す。
+func (repository *Repository) ListPullOperations(ctx context.Context) ([]domain.PullOperation, error) {
+	rows, err := repository.connection.QueryContext(ctx, `
+		SELECT operationId, gameId, livePath, stagePath, backupPath, commitHash, status, hadLive
+		FROM "PullOperation"
+		ORDER BY createdAt, operationId
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	ops := make([]domain.PullOperation, 0)
+	for rows.Next() {
+		var item domain.PullOperation
+		var status string
+		var hadLive int
+		if err := rows.Scan(
+			&item.OperationID,
+			&item.GameID,
+			&item.LivePath,
+			&item.StagePath,
+			&item.BackupPath,
+			&item.CommitHash,
+			&status,
+			&hadLive,
+		); err != nil {
+			return nil, err
+		}
+		item.Status = domain.PullOperationStatus(status)
+		item.HadLive = hadLive != 0
+		ops = append(ops, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ops, nil
+}
+
+func markPullOperationAppliedTx(ctx context.Context, tx *sql.Tx, operationID string) error {
+	if operationID == "" {
+		return nil
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE "PullOperation" SET status = ? WHERE operationId = ? AND status = ?
+	`, string(domain.PullOperationApplied), operationID, string(domain.PullOperationPrepared))
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("pull operation not found or not PREPARED: %s", operationID)
+	}
+	return nil
+}
+
 // GetSetting は Settings テーブルから値を取得する。存在しない場合は "" を返す。
 func (repository *Repository) GetSetting(ctx context.Context, key string) (string, error) {
 	var value string
@@ -751,7 +834,7 @@ func (repository *Repository) ApplyPullResult(
 	ctx context.Context,
 	game domain.Game,
 	sessions []domain.PlaySession,
-	syncHead, saveTree string,
+	syncHead, saveTree, pullOperationID string,
 ) (err error) {
 	tx, err := repository.connection.BeginTx(ctx, nil)
 	if err != nil {
@@ -796,6 +879,9 @@ func (repository *Repository) ApplyPullResult(
 	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, game.ID); err != nil {
 		return err
 	}
+	if err = markPullOperationAppliedTx(ctx, tx, pullOperationID); err != nil {
+		return err
+	}
 
 	err = tx.Commit()
 	return err
@@ -819,7 +905,7 @@ func (repository *Repository) ApplyPullResultV2(
 	game domain.Game,
 	routes []domain.Route,
 	sessions []domain.PlaySession,
-	syncHead, saveTree string,
+	syncHead, saveTree, pullOperationID string,
 ) (err error) {
 	if err = validatePullRoutesV2(game.ID, routes, game.CurrentRouteID, sessions); err != nil {
 		return err
@@ -870,7 +956,7 @@ func (repository *Repository) ApplyPullResultV2(
 		}
 	}
 
-	// 7–8. playtime / baseline / pending
+	// 7–8. playtime / baseline / pending / pull journal
 	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, game.ID); err != nil {
 		return err
 	}
@@ -878,6 +964,9 @@ func (repository *Repository) ApplyPullResultV2(
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+	if err = markPullOperationAppliedTx(ctx, tx, pullOperationID); err != nil {
 		return err
 	}
 
@@ -934,8 +1023,6 @@ func validatePullRoutesV2(gameID string, routes []domain.Route, currentRouteID *
 	return nil
 }
 
-// upsertGameForPullTx は Pull 用に Game を upsert する。
-// totalPlayTime / lastPlayed はプレースホルダ（0/NULL）にし、後続のセッション集計で埋める。
 func upsertGameForPullTx(ctx context.Context, tx *sql.Tx, game domain.Game, currentRouteID *string) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO "Game" (

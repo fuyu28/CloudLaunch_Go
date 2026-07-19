@@ -109,9 +109,12 @@ func (app *App) Startup(ctx context.Context) {
 			app.Logger.Warn("保留中のローカルメモ削除に失敗しました", "error", err)
 		}
 	}
-	// 同期 API / 自動 Push が動く前に、未完了の Push baseline を回復する。
+	// 同期 API / 自動 Push が動く前に、未完了の Pull 交換と Push baseline を回復する。
 	// オフライン・ネットワーク不通は起動を止めず、pending を残して次回に委ねる。
 	if app.ContentSyncService != nil {
+		if err := app.ContentSyncService.RecoverPullOperations(ctx); err != nil {
+			app.Logger.Warn("保留中の Pull ジャーナル回復に失敗しました", "error", err)
+		}
 		if err := app.ContentSyncService.RecoverPendingPushes(ctx); err != nil {
 			app.Logger.Warn("保留中の Push baseline 回復に失敗しました", "error", err)
 		}
