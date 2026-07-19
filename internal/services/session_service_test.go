@@ -85,12 +85,8 @@ func TestSessionServiceDeleteSessionUsesAtomicRefresh(t *testing.T) {
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result, err := service.DeleteSession(context.Background(), "session-1")
-	if err != nil {
+	if err := service.DeleteSession(context.Background(), "session-1"); err != nil {
 		t.Fatalf("expected success, got %v", err)
-	}
-	if result.GameID != "game-1" {
-		t.Fatalf("expected SessionMutationResult.GameID, got %q", result.GameID)
 	}
 	if repository.deleteAndRefreshCalls != 1 {
 		t.Fatalf("expected atomic delete+refresh, got %d calls", repository.deleteAndRefreshCalls)
@@ -159,12 +155,8 @@ func TestSessionServiceUpdateSessionNameAllowsEmptyToClear(t *testing.T) {
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result, err := service.UpdateSessionName(context.Background(), "session-1", "   ")
-	if err != nil {
+	if err := service.UpdateSessionName(context.Background(), "session-1", "   "); err != nil {
 		t.Fatalf("expected empty/whitespace session name to succeed for clearing, got %v", err)
-	}
-	if result.GameID != "game-1" {
-		t.Fatalf("expected SessionMutationResult.GameID, got %q", result.GameID)
 	}
 	if repository.session.SessionName == nil || *repository.session.SessionName != "" {
 		t.Fatalf("expected session name to be cleared to empty string (repository-level NULLIF handles the NULL conversion)")
@@ -179,12 +171,8 @@ func TestSessionServiceUpdateSessionNameTouchesUpdatedAtWithoutRefresh(t *testin
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	result, err := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  ")
-	if err != nil {
+	if err := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  "); err != nil {
 		t.Fatalf("expected success, got %v", err)
-	}
-	if result.GameID != "game-1" {
-		t.Fatalf("expected SessionMutationResult.GameID, got %q", result.GameID)
 	}
 	if repository.session.SessionName == nil || *repository.session.SessionName != "Chapter 1" {
 		t.Fatalf("expected session name to be trimmed and stored")
@@ -206,12 +194,8 @@ func TestSessionServiceUpdateSessionRouteTouchesUpdatedAtWithoutRefresh(t *testi
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	chapterID := "chapter-2"
 
-	result, err := service.UpdateSessionRoute(context.Background(), "session-1", &chapterID)
-	if err != nil {
+	if err := service.UpdateSessionRoute(context.Background(), "session-1", &chapterID); err != nil {
 		t.Fatalf("expected success, got %v", err)
-	}
-	if result.GameID != "game-1" {
-		t.Fatalf("expected SessionMutationResult.GameID, got %q", result.GameID)
 	}
 	if repository.session.RouteID == nil || *repository.session.RouteID != "chapter-2" {
 		t.Fatalf("expected route id to be stored")
@@ -230,8 +214,7 @@ func TestSessionServiceDeleteSessionHandlesLookupError(t *testing.T) {
 	repository := &fakeSessionRepositoryWithError{deleteErr: errors.New("db down")}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	_, err := service.DeleteSession(context.Background(), "session-1")
-	if err == nil {
+	if err := service.DeleteSession(context.Background(), "session-1"); err == nil {
 		t.Fatalf("expected failure")
 	}
 }
