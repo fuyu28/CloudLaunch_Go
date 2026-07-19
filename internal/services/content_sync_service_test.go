@@ -148,6 +148,9 @@ type fakeBlobStore struct {
 	// onPutBlobs は putBlobs 呼び出し時に1回呼ばれるフック。
 	// テストでアップロード中の HEAD 変更（別デバイスの並行 push）を模すのに使う。nil 可。
 	onPutBlobs func()
+	// onDownloadBlobs は downloadBlobs 呼び出し時に1回呼ばれるフック。
+	// Push の onPutBlobs と同様に、Pull 中のロック保持を検証するのに使う。nil 可。
+	onDownloadBlobs func()
 }
 
 func newFakeBlobStore() *fakeBlobStore {
@@ -210,6 +213,9 @@ func (f *fakeBlobStore) putBlobs(_ context.Context, gameID string, blobs map[str
 }
 
 func (f *fakeBlobStore) downloadBlobs(_ context.Context, gameID, saveDir string, blobs map[string]string, _ int, onProgress func(int, int)) error {
+	if f.onDownloadBlobs != nil {
+		f.onDownloadBlobs()
+	}
 	// 呼び出しを記録する
 	snapshot := make(map[string]string, len(blobs))
 	for k, v := range blobs {
@@ -1412,5 +1418,188 @@ func TestContentSyncServiceLockGameAllowsDifferentIDs(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("locks for different gameIDs must not block each other")
+	}
+}
+
+// TestContentSyncServiceStatusWaitsDuringSameGamePush は、同一 gameID の Push 中は
+// Status が一貫スナップショット用ロックで待機することを確認する。
+func TestContentSyncServiceStatusWaitsDuringSameGamePush(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	game := baseGame(saveDir)
+	repo := newFakeRepo(&game, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	hold := make(chan struct{})
+	entered := make(chan struct{})
+	bstore.onPutBlobs = func() {
+		close(entered)
+		<-hold
+	}
+
+	pushDone := make(chan error, 1)
+	go func() {
+		pushDone <- svc.Push(context.Background(), game.ID, nil)
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Push did not reach putBlobs")
+	}
+
+	statusDone := make(chan struct{})
+	go func() {
+		_, _ = svc.Status(context.Background(), game.ID)
+		close(statusDone)
+	}()
+
+	select {
+	case <-statusDone:
+		t.Fatal("Status must wait while same-game Push holds the lock")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(hold)
+	select {
+	case err := <-pushDone:
+		if err != nil {
+			t.Fatalf("Push: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Push did not finish")
+	}
+	select {
+	case <-statusDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Status did not finish after Push released the lock")
+	}
+}
+
+// TestContentSyncServiceStatusWaitsDuringSameGamePull は、同一 gameID の Pull 中は
+// Status が待機することを確認する。
+func TestContentSyncServiceStatusWaitsDuringSameGamePull(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("remote data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("old local data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repo := newFakeRepo(&game, nil)
+	svc := newTestService(repo, bstore)
+
+	hold := make(chan struct{})
+	entered := make(chan struct{})
+	bstore.onDownloadBlobs = func() {
+		close(entered)
+		<-hold
+	}
+
+	pullDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Pull(context.Background(), game.ID, nil, false)
+		pullDone <- err
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Pull did not reach downloadBlobs")
+	}
+
+	statusDone := make(chan struct{})
+	go func() {
+		_, _ = svc.Status(context.Background(), game.ID)
+		close(statusDone)
+	}()
+
+	select {
+	case <-statusDone:
+		t.Fatal("Status must wait while same-game Pull holds the lock")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(hold)
+	select {
+	case err := <-pullDone:
+		if err != nil {
+			t.Fatalf("Pull: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Pull did not finish")
+	}
+	select {
+	case <-statusDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Status did not finish after Pull released the lock")
+	}
+}
+
+// TestContentSyncServiceStatusDoesNotBlockDifferentGame は、別 gameID の Push 保持中でも
+// Status がブロックされないことを確認する。
+func TestContentSyncServiceStatusDoesNotBlockDifferentGame(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("local"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gameA := baseGame(saveDir)
+	repo := newFakeRepo(&gameA, nil)
+	bstore := newFakeBlobStore()
+	svc := newTestService(repo, bstore)
+
+	hold := make(chan struct{})
+	entered := make(chan struct{})
+	bstore.onPutBlobs = func() {
+		close(entered)
+		<-hold
+	}
+
+	pushDone := make(chan error, 1)
+	go func() {
+		pushDone <- svc.Push(context.Background(), gameA.ID, nil)
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Push did not reach putBlobs")
+	}
+
+	statusDone := make(chan error, 1)
+	go func() {
+		_, err := svc.Status(context.Background(), "game-other")
+		statusDone <- err
+	}()
+
+	select {
+	case err := <-statusDone:
+		if err != nil {
+			t.Fatalf("Status for different game: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Status for a different gameID must not wait on another game's Push")
+	}
+
+	close(hold)
+	select {
+	case err := <-pushDone:
+		if err != nil {
+			t.Fatalf("Push: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Push did not finish")
 	}
 }

@@ -96,7 +96,7 @@ type ContentSyncService struct {
 	repository   ContentSyncRepository
 	logger       *slog.Logger
 	newBlobStore func(ctx context.Context) (contentBlobStore, error)
-	gameLocks    sync.Map // gameID → *sync.Mutex（同一ゲームの Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
+	gameLocks    sync.Map // gameID → *sync.Mutex（同一ゲームの Status/Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
 	offline      atomic.Bool
 }
 
@@ -151,9 +151,11 @@ func NewContentSyncService(cfg config.Config, store credentials.Store, repo Cont
 }
 
 // lockGame は gameID 単位の排他ロックを取得し、解放関数を返す。
-// 同一ゲームに対する Push/Pull/ResolveConflict/DeleteFromCloud を直列化し、
+// 同一ゲームに対する Status/Push/Pull/ResolveConflict/DeleteFromCloud を直列化し、
 // ローカルファイル操作とリモート HEAD 操作が交錯しないようにする。
 // 使い方: defer s.lockGame(gameID)()
+// ロック保持中に Status/Push/Pull 相当の処理が必要な場合は、再入するとデッドロックするため
+// 公開メソッドではなく status / push / pull を呼ぶ。
 func (s *ContentSyncService) lockGame(gameID string) func() {
 	m, _ := s.gameLocks.LoadOrStore(gameID, &sync.Mutex{})
 	mu := m.(*sync.Mutex)
@@ -243,8 +245,14 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 	return buildMetaSnapshot(game, sessions, imageHash, savesHash, deviceName, 0, 0)
 }
 
-// Status は現在の同期状態を返す。
+// Status は現在の同期状態を返す。同一ゲームの同期と直列化し、スナップショット全体を一貫させる。
 func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.SyncStatusDetail, error) {
+	defer s.lockGame(gameID)()
+	return s.status(ctx, gameID)
+}
+
+// status はロックを取らない Status 本体。lockGame 保持中の内部呼び出し向け。
+func (s *ContentSyncService) status(ctx context.Context, gameID string) (domain.SyncStatusDetail, error) {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return domain.SyncStatusDetail{}, err
