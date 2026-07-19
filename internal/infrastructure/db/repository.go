@@ -744,8 +744,8 @@ func routeExistsTx(ctx context.Context, tx *sql.Tx, routeID *string) (*string, e
 	return routeID, nil
 }
 
-// ApplyPullResult は Pull のローカル反映を単一トランザクションで実行する。
-// 存在しない Route 参照（currentRouteId / routeId）は NULL に正規化して FK 違反を防ぐ。
+// ApplyPullResult は v1 Pull のローカル反映を単一トランザクションで実行する。
+// ローカル Route は削除せず、存在しない Route 参照は NULL に正規化して FK 違反を防ぐ。
 // totalPlayTime / lastPlayed は game.json を信用せず、投入したセッションから SUM/MAX で導出する。
 func (repository *Repository) ApplyPullResult(
 	ctx context.Context,
@@ -799,6 +799,139 @@ func (repository *Repository) ApplyPullResult(
 
 	err = tx.Commit()
 	return err
+}
+
+// ApplyPullResultV2 は v2 Pull のローカル反映を単一トランザクションで実行する。
+//
+// 適用順（FK 制約のため）:
+// 1. Game を currentRouteId=NULL で upsert
+// 2. 旧 Session 削除
+// 3. 旧 Route 削除
+// 4. クラウド Route を ID 保持で insert
+// 5. currentRouteId を設定
+// 6. Session を insert
+// 7. playtime をセッションから導出
+// 8. baseline / pending を更新
+//
+// 不正・重複・他ゲーム混入・参照欠落はサイレント正規化せずエラー（全体 rollback）。
+func (repository *Repository) ApplyPullResultV2(
+	ctx context.Context,
+	game domain.Game,
+	routes []domain.Route,
+	sessions []domain.PlaySession,
+	syncHead, saveTree string,
+) (err error) {
+	if err = validatePullRoutesV2(game.ID, routes, game.CurrentRouteID, sessions); err != nil {
+		return err
+	}
+
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// 1. currentRoute はまだ無いので NULL で upsert
+	if err = upsertGameForPullTx(ctx, tx, game, nil); err != nil {
+		return err
+	}
+
+	// 2–3. Session → Route の順で削除（Session が Route を参照するため）
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "Route" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+
+	// 4. Route を ID 保持で insert
+	for _, route := range routes {
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO "Route" (id, name, "order", gameId, createdAt)
+			VALUES (?, ?, ?, ?, ?)
+		`, route.ID, route.Name, route.Order, game.ID, route.CreatedAt); err != nil {
+			return fmt.Errorf("route insert failed: %w", err)
+		}
+	}
+
+	// 5. currentRouteId を設定
+	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET currentRouteId = ? WHERE id = ?`, game.CurrentRouteID, game.ID); err != nil {
+		return err
+	}
+
+	// 6. Session insert（参照は validate 済み）
+	for _, session := range sessions {
+		if err = insertPlaySessionForPullTx(ctx, tx, game.ID, session, session.RouteID); err != nil {
+			return err
+		}
+	}
+
+	// 7–8. playtime / baseline / pending
+	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, game.ID); err != nil {
+		return err
+	}
+	if err = setLocalSyncStateTx(ctx, tx, game.ID, syncHead, saveTree); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
+}
+
+// validatePullRoutesV2 は v2 Pull 入力の Route / 参照整合を検証する。
+func validatePullRoutesV2(gameID string, routes []domain.Route, currentRouteID *string, sessions []domain.PlaySession) error {
+	seenID := make(map[string]struct{}, len(routes))
+	seenOrder := make(map[int64]struct{}, len(routes))
+	seenName := make(map[string]struct{}, len(routes))
+	for _, route := range routes {
+		id := strings.TrimSpace(route.ID)
+		name := strings.TrimSpace(route.Name)
+		if id == "" {
+			return fmt.Errorf("malformed route: empty id")
+		}
+		if name == "" {
+			return fmt.Errorf("malformed route: empty name")
+		}
+		if route.Order < 0 {
+			return fmt.Errorf("malformed route: negative order")
+		}
+		if route.GameID != "" && route.GameID != gameID {
+			return fmt.Errorf("route %s belongs to wrong game", id)
+		}
+		if _, ok := seenID[id]; ok {
+			return fmt.Errorf("duplicate route id: %s", id)
+		}
+		if _, ok := seenOrder[route.Order]; ok {
+			return fmt.Errorf("duplicate route order: %d", route.Order)
+		}
+		if _, ok := seenName[name]; ok {
+			return fmt.Errorf("duplicate route name: %s", name)
+		}
+		seenID[id] = struct{}{}
+		seenOrder[route.Order] = struct{}{}
+		seenName[name] = struct{}{}
+	}
+
+	if currentRouteID != nil && *currentRouteID != "" {
+		if _, ok := seenID[*currentRouteID]; !ok {
+			return fmt.Errorf("missing route reference: currentRouteId=%s", *currentRouteID)
+		}
+	}
+	for _, session := range sessions {
+		if session.RouteID != nil && *session.RouteID != "" {
+			if _, ok := seenID[*session.RouteID]; !ok {
+				return fmt.Errorf("missing route reference: session %s routeId=%s", session.ID, *session.RouteID)
+			}
+		}
+	}
+	return nil
 }
 
 // upsertGameForPullTx は Pull 用に Game を upsert する。

@@ -513,6 +513,144 @@ func TestApplyPullResultDerivesPlayTimeFromSessionsNotGameJSON(t *testing.T) {
 	}
 }
 
+func TestApplyPullResultV2PreservesRouteIDsAndRefs(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGameWithInitialRoute(ctx, newGame("V2Game", "/v2.exe"), domain.Route{Name: "初期", Order: 0})
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	now := time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)
+	routeA := domain.Route{ID: "cloud-a", Name: "本編", Order: 0, GameID: created.ID, CreatedAt: now}
+	routeB := domain.Route{ID: "cloud-b", Name: "分岐", Order: 1, GameID: created.ID, CreatedAt: now}
+	current := routeB.ID
+	game := *created
+	game.CurrentRouteID = &current
+	game.Title = "クラウド題名"
+	sessions := []domain.PlaySession{
+		{ID: "s1", GameID: created.ID, PlayedAt: now, Duration: 50, RouteID: &routeA.ID, UpdatedAt: now},
+	}
+
+	if err := repo.ApplyPullResultV2(ctx, game, []domain.Route{routeA, routeB}, sessions, "fp-v2", `{"files":{}}`); err != nil {
+		t.Fatalf("ApplyPullResultV2: %v", err)
+	}
+
+	routes, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(routes) != 2 || routes[0].ID != "cloud-a" || routes[1].ID != "cloud-b" {
+		t.Fatalf("routes not preserved by ID: %#v", routes)
+	}
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.Title != "クラウド題名" {
+		t.Fatalf("title = %q", got.Title)
+	}
+	if got.CurrentRouteID == nil || *got.CurrentRouteID != "cloud-b" {
+		t.Fatalf("currentRouteId = %v", got.CurrentRouteID)
+	}
+	if got.TotalPlayTime != 50 {
+		t.Fatalf("totalPlayTime = %d, want 50", got.TotalPlayTime)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-v2" {
+		t.Fatalf("localSyncHead = %v", got.LocalSyncHead)
+	}
+}
+
+func TestApplyPullResultV2RejectsMissingRouteRefsAndRollsBack(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGameWithInitialRoute(ctx, newGame("BadRef", "/bad.exe"), domain.Route{Name: "local", Order: 0})
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	before, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("seed routes: %v %#v", err, before)
+	}
+	beforeTitle := created.Title
+
+	missing := "no-such-route"
+	game := *created
+	game.Title = "should-rollback"
+	game.CurrentRouteID = &missing
+	routes := []domain.Route{{ID: "only", Name: "only", Order: 0, GameID: created.ID, CreatedAt: time.Now().UTC()}}
+
+	err = repo.ApplyPullResultV2(ctx, game, routes, nil, "fp-bad", "{}")
+	if err == nil {
+		t.Fatal("expected missing currentRouteId to fail")
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.Title != beforeTitle {
+		t.Fatalf("title should rollback, got %q want %q", got.Title, beforeTitle)
+	}
+	after, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(after) != 1 || after[0].ID != before[0].ID {
+		t.Fatalf("routes should rollback, got %#v", after)
+	}
+}
+
+func TestApplyPullResultV2RejectsDuplicateRouteIDs(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("Dup", "/dup.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	now := time.Now().UTC()
+	routes := []domain.Route{
+		{ID: "same", Name: "A", Order: 0, GameID: created.ID, CreatedAt: now},
+		{ID: "same", Name: "B", Order: 1, GameID: created.ID, CreatedAt: now},
+	}
+	if err := repo.ApplyPullResultV2(ctx, *created, routes, nil, "fp", "{}"); err == nil {
+		t.Fatal("expected duplicate route id to fail")
+	}
+}
+
+func TestApplyPullResultV1DoesNotDeleteLocalRoutes(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGameWithInitialRoute(ctx, newGame("V1Keep", "/v1.exe"), domain.Route{Name: "手元", Order: 0})
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	before, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("seed: %v %#v", err, before)
+	}
+
+	game := *created
+	game.Title = "v1-pulled"
+	if err := repo.ApplyPullResult(ctx, game, nil, "fp-v1", "{}"); err != nil {
+		t.Fatalf("ApplyPullResult: %v", err)
+	}
+	after, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(after) != 1 || after[0].ID != before[0].ID {
+		t.Fatalf("v1 must keep local routes, got %#v", after)
+	}
+}
+
 func TestMigration0010PlaytimeAdjustmentIsIdempotent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

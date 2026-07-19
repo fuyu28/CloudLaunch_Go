@@ -239,7 +239,7 @@ func TestBuildMetaSnapshotReturnsConsistentHashes(t *testing.T) {
 		{ID: "s1", GameID: "game-1", PlayedAt: now, Duration: 3600, UpdatedAt: now},
 	}
 
-	result, err := buildMetaSnapshot(game, sessions, "", "sha256_of_saves", "TestPC", 0, 0)
+	result, err := buildMetaSnapshot(game, sessions, nil, "", "sha256_of_saves", "TestPC", 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestBuildMetaSnapshotPersistsStatsCache(t *testing.T) {
 	const wantFileCount int64 = 42
 	const wantTotalSize int64 = 1024 * 1024 * 7
 
-	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC", wantFileCount, wantTotalSize)
+	result, err := buildMetaSnapshot(game, nil, nil, "", "savehash", "PC", wantFileCount, wantTotalSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestBuildMetaSnapshotImageHashOmittedWhenEmpty(t *testing.T) {
 	now := time.Now().UTC()
 	game := domain.Game{ID: "g1", Title: "T", PlayStatus: domain.PlayStatusUnplayed, CreatedAt: now, UpdatedAt: now}
 
-	result, err := buildMetaSnapshot(game, nil, "", "savehash", "PC", 0, 0)
+	result, err := buildMetaSnapshot(game, nil, nil, "", "savehash", "PC", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,6 +375,36 @@ func TestBuildMetaSnapshotImageHashOmittedWhenEmpty(t *testing.T) {
 	}
 	if _, ok := parsed["imageHash"]; ok {
 		t.Error("imageHash should be omitted when empty")
+	}
+}
+
+func TestBuildMetaSnapshotIncludesSchemaVersionAndRoutes(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	game := domain.Game{ID: "g1", Title: "T", PlayStatus: domain.PlayStatusUnplayed, CreatedAt: now, UpdatedAt: now}
+	routes := []domain.Route{{ID: "r1", Name: "本編", Order: 0, GameID: "g1", CreatedAt: now}}
+
+	result, err := buildMetaSnapshot(game, nil, routes, "", "savehash", "PC", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Snapshot.SchemaVersion != domain.SyncSchemaVersionV2 {
+		t.Fatalf("SchemaVersion = %d, want %d", result.Snapshot.SchemaVersion, domain.SyncSchemaVersionV2)
+	}
+	if result.Snapshot.RoutesJSON == "" || hashBytes(result.RoutesJSON) != result.Snapshot.RoutesJSON {
+		t.Fatalf("RoutesJSON hash mismatch: %q", result.Snapshot.RoutesJSON)
+	}
+
+	fpWith := contentFingerprint(result.Snapshot)
+	renamed := append([]domain.Route{}, routes...)
+	renamed[0].Name = "改名"
+	other, err := buildMetaSnapshot(game, nil, renamed, "", "savehash", "PC", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contentFingerprint(other.Snapshot) == fpWith {
+		t.Fatal("route rename must change contentFingerprint")
 	}
 }
 
