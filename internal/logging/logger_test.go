@@ -11,7 +11,10 @@ import (
 
 func TestNewLoggerWritesAppAndErrorFiles(t *testing.T) {
 	dir := t.TempDir()
-	logger, _ := NewLogger(dir, "info")
+	logger, _, closer := NewLogger(dir, "info")
+	t.Cleanup(func() {
+		_ = closer.Close()
+	})
 
 	logger.Info("情報ログ", "k", "v")
 	logger.Error("重大エラー", "k", "v")
@@ -39,6 +42,9 @@ func TestRotatingWriterRotates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newRotatingWriter: %v", err)
 	}
+	t.Cleanup(func() {
+		_ = w.Close()
+	})
 
 	chunk := strings.Repeat("a", 60) + "\n"
 	for i := 0; i < 5; i++ {
