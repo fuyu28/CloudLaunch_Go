@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ type App struct {
 	Config              config.Config
 	Logger              *slog.Logger
 	logLevel            *slog.LevelVar
+	logCloser           io.Closer
 	GameService         *services.GameService
 	SessionService      *services.SessionService
 	RouteService        *services.RouteService
@@ -46,7 +48,7 @@ type App struct {
 // NewApp はアプリケーションを初期化する。
 func NewApp(ctx context.Context) (*App, error) {
 	cfg := config.LoadFromEnv()
-	logger, logLevel := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
+	logger, logLevel, logCloser := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
 
 	if error := os.MkdirAll(cfg.AppDataDir, 0o700); error != nil {
 		return nil, error
@@ -76,6 +78,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		Config:       cfg,
 		Logger:       logger,
 		logLevel:     logLevel,
+		logCloser:    logCloser,
 		MemoFiles:    memoFiles,
 		dbConnection: connection,
 		autoTracking: true,
@@ -118,10 +121,18 @@ func (app *App) Shutdown(ctx context.Context) error {
 			app.Logger.Warn("スクリーンショットログのクローズに失敗しました", "error", err)
 		}
 	}
+	var closeErr error
 	if app.dbConnection != nil {
-		return app.dbConnection.Close()
+		closeErr = app.dbConnection.Close()
 	}
-	return nil
+	// 最後の Warn より後で閉じる。所有する app.log / error.log を解放する。
+	if app.logCloser != nil {
+		if err := app.logCloser.Close(); err != nil && closeErr == nil {
+			closeErr = err
+		}
+		app.logCloser = nil
+	}
+	return closeErr
 }
 
 func (app *App) configureServices(repository *db.Repository, credentialStore credentials.Store) {

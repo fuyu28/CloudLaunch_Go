@@ -256,6 +256,10 @@ func newMaintenanceTestApp(t *testing.T) (*App, *db.Repository) {
 	app.configureServices(repository, newCredentialStore(app.Config))
 
 	t.Cleanup(func() {
+		if app.ScreenshotService != nil {
+			_ = app.ScreenshotService.Close()
+			app.ScreenshotService = nil
+		}
 		if app.dbConnection != nil {
 			_ = app.dbConnection.Close()
 			app.dbConnection = nil
