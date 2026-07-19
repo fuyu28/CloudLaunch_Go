@@ -132,13 +132,17 @@ func (service *ErogameScapeService) fetchHTML(ctx context.Context, gamePageURL s
 }
 
 func (service *ErogameScapeService) fetchHTMLOnce(ctx context.Context, gamePageURL string) (string, error) {
+	if error := validateErogameScapeURL(gamePageURL, erogameScapePageURL); error != nil {
+		return "", error
+	}
+
 	request, error := http.NewRequestWithContext(ctx, http.MethodGet, gamePageURL, nil)
 	if error != nil {
 		return "", FetchError{URL: gamePageURL, Err: error}
 	}
 	request.Header.Set("User-Agent", "CloudLaunch/1.0")
 
-	response, error := service.httpClient.Do(request)
+	response, error := service.clientForErogameScapeURL(erogameScapePageURL).Do(request)
 	if error != nil {
 		return "", FetchError{URL: gamePageURL, Err: error}
 	}
@@ -160,13 +164,17 @@ func (service *ErogameScapeService) fetchHTMLOnce(ctx context.Context, gamePageU
 }
 
 func (service *ErogameScapeService) downloadAndSaveImage(ctx context.Context, imageURL string, gameID string) (string, error) {
+	if error := validateErogameScapeURL(imageURL, erogameScapeImageURL); error != nil {
+		return "", ImageError{URL: imageURL, Err: error}
+	}
+
 	request, error := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
 	if error != nil {
 		return "", ImageError{URL: imageURL, Err: error}
 	}
 	request.Header.Set("User-Agent", "CloudLaunch/1.0")
 
-	response, error := service.httpClient.Do(request)
+	response, error := service.clientForErogameScapeURL(erogameScapeImageURL).Do(request)
 	if error != nil {
 		return "", ImageError{URL: imageURL, Err: error}
 	}
