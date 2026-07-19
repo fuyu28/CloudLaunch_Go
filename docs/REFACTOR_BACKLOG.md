@@ -93,16 +93,6 @@
   を 1 つ作り、app が実装。
 - **影響**: 中規模。MaintenanceService の API は変えなくて済む。
 
-### A9. ゲーム入力検証の二重定義を解消
-
-- **場所**: `internal/services/game_service.go::validateGameInput` ／ `frontend/src/schemas/game.ts`
-- **問題**: 長さ制約 (`title max:100`, `publisher max:50`)、拡張子チェック（`.exe`/`.app`）が
-  フロントエンドだけ。Wails 直叩き・バックアップ復元・ErogameScape import で
-  バックエンドが Zod の拒否を素通りさせる。
-- **解決方針**: サービス層に同じルールを持たせて、エラーコードを `ApiError` で返す。
-  もしくは共有スキーマを生成。
-- **影響**: 小〜中規模。エラーメッセージの UX は要確認。
-
 ### A10. `frontend/src/state/settings.ts` の localStorage キーレジストリ化
 
 - **場所**: `frontend/src/state/settings.ts`

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -313,24 +314,82 @@ func TestGameServiceUpdateGameHandlesRepositoryError(t *testing.T) {
 func TestGameServiceCreateGameRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
-	service := NewGameService(&fakeGameRepository{
-		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
-			return nil, nil
+	tests := []struct {
+		name  string
+		input GameInput
+	}{
+		{
+			name:  "空白のみのタイトル",
+			input: GameInput{Title: "　 \t", Publisher: "Publisher", ExePath: "/games/game.exe"},
 		},
-		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
-		createGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return nil, nil },
-		updateGameFn:  func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
-		deleteGameFn:  func(ctx context.Context, gameID string) error { return nil },
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		{
+			name:  "空白のみのブランド名",
+			input: GameInput{Title: "Game", Publisher: "　 \t", ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "空白のみの実行ファイルパス",
+			input: GameInput{Title: "Game", Publisher: "Publisher", ExePath: "　 \t"},
+		},
+		{
+			name:  "日本語101文字のタイトル",
+			input: GameInput{Title: strings.Repeat("界", 101), Publisher: "Publisher", ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "絵文字51文字のブランド名",
+			input: GameInput{Title: "Game", Publisher: strings.Repeat("🎮", 51), ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "対象外の実行ファイル拡張子",
+			input: GameInput{Title: "Game", Publisher: "Publisher", ExePath: "/games/game.bin"},
+		},
+	}
 
-	_, err := service.CreateGame(context.Background(), GameInput{
-		Title:     "Game",
-		Publisher: "",
-		ExePath:   "/games/game.exe",
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := &fakeGameRepository{}
+			service := NewGameService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+			created, err := service.CreateGame(context.Background(), test.input)
+			if err == nil || created != nil {
+				t.Fatalf("expected invalid input to fail, got created=%#v err=%v", created, err)
+			}
+			if repository.createWithInitialRouteCalls != 0 {
+				t.Fatalf("repository calls = %d, want 0", repository.createWithInitialRouteCalls)
+			}
+		})
+	}
+}
+
+func TestGameServiceCreateGameAcceptsUnicodeBoundariesAndUppercaseExtension(t *testing.T) {
+	t.Parallel()
+
+	var stored domain.Game
+	repository := &fakeGameRepository{
+		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
+			stored = game
+			return &game, nil
+		},
+	}
+	service := NewGameService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	title := strings.Repeat("界", 100)
+	publisher := strings.Repeat("🎮", 50)
+	created, err := service.CreateGame(context.Background(), GameInput{
+		Title:     " " + title + " ",
+		Publisher: " " + publisher + " ",
+		ExePath:   " /games/GAME.EXE ",
 	})
-
-	if err == nil {
-		t.Fatalf("expected invalid input to fail")
+	if err != nil || created == nil {
+		t.Fatalf("expected boundary input to succeed, got created=%#v err=%v", created, err)
+	}
+	if repository.createWithInitialRouteCalls != 1 {
+		t.Fatalf("repository calls = %d, want 1", repository.createWithInitialRouteCalls)
+	}
+	if stored.Title != title || stored.Publisher != publisher || stored.ExePath != "/games/GAME.EXE" {
+		t.Fatalf("unexpected stored input: %#v", stored)
 	}
 }
 
@@ -355,6 +414,108 @@ func TestGameServiceUpdateGameReturnsNotFoundWhenMissing(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("expected missing game to fail")
+	}
+}
+
+func TestGameServiceUpdateGameRejectsInvalidInputBeforeRepositoryAccess(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input GameUpdateInput
+	}{
+		{
+			name:  "空白のみのタイトル",
+			input: GameUpdateInput{Title: "　 \t", Publisher: "Publisher", ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "空白のみのブランド名",
+			input: GameUpdateInput{Title: "Game", Publisher: "　 \t", ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "空白のみの実行ファイルパス",
+			input: GameUpdateInput{Title: "Game", Publisher: "Publisher", ExePath: "　 \t"},
+		},
+		{
+			name:  "日本語101文字のタイトル",
+			input: GameUpdateInput{Title: strings.Repeat("界", 101), Publisher: "Publisher", ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "絵文字51文字のブランド名",
+			input: GameUpdateInput{Title: "Game", Publisher: strings.Repeat("🎮", 51), ExePath: "/games/game.exe"},
+		},
+		{
+			name:  "対象外の実行ファイル拡張子",
+			input: GameUpdateInput{Title: "Game", Publisher: "Publisher", ExePath: "/games/game.bin"},
+		},
+		{
+			name:  "対象外のプレイ状態",
+			input: GameUpdateInput{Title: "Game", Publisher: "Publisher", ExePath: "/games/game.exe", PlayStatus: "invalid"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			getCalls := 0
+			updateCalls := 0
+			service := NewGameService(&fakeGameRepository{
+				getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+					getCalls++
+					return &domain.Game{ID: gameID}, nil
+				},
+				updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
+					updateCalls++
+					return &game, nil
+				},
+			}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+			updated, err := service.UpdateGame(context.Background(), "game-1", test.input)
+			if err == nil || updated != nil {
+				t.Fatalf("expected invalid input to fail, got updated=%#v err=%v", updated, err)
+			}
+			if getCalls != 0 || updateCalls != 0 {
+				t.Fatalf("repository calls: get=%d update=%d, want 0", getCalls, updateCalls)
+			}
+		})
+	}
+}
+
+func TestGameServiceUpdateGameAcceptsUnicodeBoundariesAndUppercaseExtension(t *testing.T) {
+	t.Parallel()
+
+	getCalls := 0
+	updateCalls := 0
+	var stored domain.Game
+	service := NewGameService(&fakeGameRepository{
+		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			getCalls++
+			return &domain.Game{ID: gameID}, nil
+		},
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
+			updateCalls++
+			stored = game
+			return &game, nil
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	title := strings.Repeat("界", 100)
+	publisher := strings.Repeat("🎮", 50)
+	updated, err := service.UpdateGame(context.Background(), "game-1", GameUpdateInput{
+		Title:     " " + title + " ",
+		Publisher: " " + publisher + " ",
+		ExePath:   " /Applications/GAME.APP ",
+	})
+	if err != nil || updated == nil {
+		t.Fatalf("expected boundary input to succeed, got updated=%#v err=%v", updated, err)
+	}
+	if getCalls != 1 || updateCalls != 1 {
+		t.Fatalf("repository calls: get=%d update=%d, want 1 each", getCalls, updateCalls)
+	}
+	if stored.Title != title || stored.Publisher != publisher || stored.ExePath != "/Applications/GAME.APP" {
+		t.Fatalf("unexpected stored input: %#v", stored)
 	}
 }
 

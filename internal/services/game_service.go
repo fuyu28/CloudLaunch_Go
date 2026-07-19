@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/domain"
 )
@@ -96,6 +97,14 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return nil, newServiceError("ゲームIDが不正です", detail)
 	}
+	if error := validateGameFields(input.Title, input.Publisher, input.ExePath); error != nil {
+		service.logger.Warn("ゲーム入力が不正です", "error", error)
+		return nil, newServiceError("ゲーム入力が不正です", error.Error())
+	}
+	if input.PlayStatus != "" && !domain.IsValidPlayStatus(input.PlayStatus) {
+		service.logger.Warn("playStatus が不正です", "playStatus", input.PlayStatus)
+		return nil, newServiceError("playStatus が不正です", string(input.PlayStatus))
+	}
 
 	current, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
@@ -105,11 +114,6 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	if current == nil {
 		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedID)
 		return nil, newServiceError("ゲームが見つかりません", "指定されたIDが存在しません")
-	}
-
-	if input.PlayStatus != "" && !domain.IsValidPlayStatus(input.PlayStatus) {
-		service.logger.Warn("playStatus が不正です", "playStatus", input.PlayStatus)
-		return nil, newServiceError("playStatus が不正です", string(input.PlayStatus))
 	}
 
 	current.Title = strings.TrimSpace(input.Title)
@@ -243,16 +247,35 @@ type GameUpdateInput struct {
 	CurrentRouteID *string
 }
 
-// validateGameInput はゲーム作成入力の簡易検証を行う。
+// validateGameInput はゲーム作成入力を検証する。
 func validateGameInput(input GameInput) error {
-	if _, detail, ok := requireNonEmpty(input.Title, "title"); !ok {
+	return validateGameFields(input.Title, input.Publisher, input.ExePath)
+}
+
+func validateGameFields(title string, publisher string, exePath string) error {
+	trimmedTitle, detail, ok := requireNonEmpty(title, "title")
+	if !ok {
 		return errors.New(detail)
 	}
-	if _, detail, ok := requireNonEmpty(input.Publisher, "publisher"); !ok {
+	if utf8.RuneCountInString(trimmedTitle) > 100 {
+		return errors.New("title は100文字以内で指定してください")
+	}
+
+	trimmedPublisher, detail, ok := requireNonEmpty(publisher, "publisher")
+	if !ok {
 		return errors.New(detail)
 	}
-	if _, detail, ok := requireNonEmpty(input.ExePath, "exePath"); !ok {
+	if utf8.RuneCountInString(trimmedPublisher) > 50 {
+		return errors.New("publisher は50文字以内で指定してください")
+	}
+
+	trimmedExePath, detail, ok := requireNonEmpty(exePath, "exePath")
+	if !ok {
 		return errors.New(detail)
+	}
+	lowerExePath := strings.ToLower(trimmedExePath)
+	if !strings.HasSuffix(lowerExePath, ".exe") && !strings.HasSuffix(lowerExePath, ".app") {
+		return errors.New("exePath は .exe または .app で終わるパスを指定してください")
 	}
 	return nil
 }
