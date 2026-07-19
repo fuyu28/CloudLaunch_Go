@@ -51,7 +51,7 @@
 | M1 | todo | DeleteGame がメモファイルを残す |
 | M2 | todo | CreateGame の CreateRoute 失敗無視 |
 | M3 | todo | Status が lockGame 外 |
-| M4 | todo | ErogameScape ホスト未検証 |
+| M4 | done | ErogameScape ホスト未検証 |
 | M5 | todo | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
 | M12 | todo | Push HEAD 後の local baseline 非原子 |
@@ -62,7 +62,7 @@
 
 詳細な再現手順・修正方針は会話ログおよび下記「実装メモ」を参照。
 
-## 実装メモ（本ブランチで着手中）
+## 実装メモ
 
 ### H1
 `internal/services/cloud_common.go::resolveS3Config` に `ForcePathStyle: base.S3ForcePathStyle` を追加。
@@ -84,3 +84,6 @@
 
 ### H3 / H8
 影響大のため本 PR では着手せず、別コミット／ADR 後に実施。
+
+### M4
+`erogamescape_url.go` でページ／画像ホストを allowlist 検証。
