@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -12,6 +13,12 @@ import (
 
 func newTestRepo(t *testing.T) *db.Repository {
 	t.Helper()
+	repository, _ := newTestRepoWithConnection(t)
+	return repository
+}
+
+func newTestRepoWithConnection(t *testing.T) (*db.Repository, *sql.DB) {
+	t.Helper()
 	conn, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
@@ -20,7 +27,7 @@ func newTestRepo(t *testing.T) *db.Repository {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return db.NewRepository(conn)
+	return db.NewRepository(conn), conn
 }
 
 func newGame(title, exePath string) domain.Game {
@@ -286,6 +293,74 @@ func TestApplyPullResultPersistsHeadAndTree(t *testing.T) {
 	}
 	if tree != "{\"files\":{\"a.sav\":\"h\"}}" {
 		t.Fatalf("localSaveTree not persisted, got %q", tree)
+	}
+}
+
+// --- CreateGameWithInitialRoute ---
+
+func TestCreateGameWithInitialRouteCreatesExactlyOneRoute(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newTestRepo(t)
+
+	created, err := repo.CreateGameWithInitialRoute(
+		ctx,
+		newGame("Atomic Game", "/atomic.exe"),
+		domain.Route{Name: "メインルート", Order: 1},
+	)
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	if created == nil || created.ID == "" {
+		t.Fatalf("expected created game, got %#v", created)
+	}
+
+	routes, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("routes count = %d, want 1", len(routes))
+	}
+	if routes[0].Name != "メインルート" || routes[0].Order != 1 || routes[0].GameID != created.ID {
+		t.Fatalf("unexpected initial route: %#v", routes[0])
+	}
+	if routes[0].ID == "" || routes[0].CreatedAt.IsZero() {
+		t.Fatalf("expected generated route id and timestamp: %#v", routes[0])
+	}
+}
+
+func TestCreateGameWithInitialRouteRollsBackGameWhenRouteInsertFails(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, conn := newTestRepoWithConnection(t)
+	if _, err := conn.ExecContext(ctx, `
+		CREATE TRIGGER fail_initial_route
+		BEFORE INSERT ON "Route"
+		BEGIN
+			SELECT RAISE(ABORT, 'route insert failed');
+		END
+	`); err != nil {
+		t.Fatalf("create failure trigger: %v", err)
+	}
+
+	created, err := repo.CreateGameWithInitialRoute(
+		ctx,
+		newGame("Rollback Game", "/rollback.exe"),
+		domain.Route{Name: "メインルート", Order: 1},
+	)
+	if err == nil || created != nil {
+		t.Fatalf("expected route insert failure, got created=%#v err=%v", created, err)
+	}
+
+	games, err := repo.ListGames(ctx, "", "", "title", "asc")
+	if err != nil {
+		t.Fatalf("ListGames: %v", err)
+	}
+	if len(games) != 0 {
+		t.Fatalf("game insert was not rolled back: %#v", games)
 	}
 }
 

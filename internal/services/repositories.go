@@ -12,10 +12,9 @@ import (
 type GameRepository interface {
 	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
-	CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
+	CreateGameWithInitialRoute(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
 	DeleteGame(ctx context.Context, gameID string) error
-	CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error)
 }
 
 // SessionRepository は SessionService が必要とする永続化境界を定義する。

@@ -142,6 +142,52 @@ func (repository *Repository) CreateGame(ctx context.Context, game domain.Game) 
 	return repository.findLatestGame(ctx, game.Title, game.ExePath)
 }
 
+// CreateGameWithInitialRoute はゲームと初期ルートを単一トランザクションで作成する。
+func (repository *Repository) CreateGameWithInitialRoute(
+	ctx context.Context,
+	game domain.Game,
+	initialRoute domain.Route,
+) (created *domain.Game, err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var gameID string
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO "Game" (title, publisher, imagePath, exePath, saveFolderPath, localSaveHash, localSaveHashUpdatedAt,
+			totalPlayTime, lastPlayed, clearedAt, playStatus, currentRouteId)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
+	`, game.Title, game.Publisher, game.ImagePath, game.ExePath, game.SaveFolderPath,
+		game.LocalSaveHash, game.LocalSaveHashUpdatedAt,
+		game.TotalPlayTime, game.LastPlayed, game.ClearedAt, game.PlayStatus, game.CurrentRouteID).Scan(&gameID)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = tx.ExecContext(ctx, `
+		INSERT INTO "Route" (name, "order", gameId)
+		VALUES (?, ?, ?)
+	`, initialRoute.Name, initialRoute.Order, gameID); err != nil {
+		return nil, err
+	}
+
+	created, err = scanGame(tx.QueryRowContext(ctx, `SELECT `+gameSelectCols+` FROM "Game" WHERE id = ?`, gameID))
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
 // UpdateGame はゲームを更新して返す。
 func (repository *Repository) UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	_, error := repository.connection.ExecContext(ctx, `

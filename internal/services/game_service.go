@@ -65,18 +65,13 @@ func (service *GameService) CreateGame(ctx context.Context, input GameInput) (*d
 		TotalPlayTime:  0,
 	}
 
-	created, error := service.repository.CreateGame(ctx, game)
+	created, error := service.repository.CreateGameWithInitialRoute(ctx, game, domain.Route{
+		Name:  "メインルート",
+		Order: 1,
+	})
 	if error != nil {
 		service.logger.Error("ゲーム作成に失敗", "error", error)
 		return nil, newServiceError("ゲーム作成に失敗しました", error.Error())
-	}
-
-	if created != nil {
-		_, _ = service.repository.CreateRoute(ctx, domain.Route{
-			Name:   "メインルート",
-			Order:  1,
-			GameID: created.ID,
-		})
 	}
 
 	service.logger.Info("ゲームを作成", "title", game.Title)

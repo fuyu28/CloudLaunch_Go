@@ -12,12 +12,14 @@ import (
 )
 
 type fakeGameRepository struct {
-	listGamesFn      func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
-	getGameByIDFn    func(ctx context.Context, gameID string) (*domain.Game, error)
-	createGameFn     func(ctx context.Context, game domain.Game) (*domain.Game, error)
-	updateGameFn     func(ctx context.Context, game domain.Game) (*domain.Game, error)
-	deleteGameFn     func(ctx context.Context, gameID string) error
-	createRouteCalls int
+	listGamesFn                  func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	getGameByIDFn                func(ctx context.Context, gameID string) (*domain.Game, error)
+	createGameFn                 func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	createGameWithInitialRouteFn func(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error)
+	updateGameFn                 func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	deleteGameFn                 func(ctx context.Context, gameID string) error
+	initialRoute                 domain.Route
+	createWithInitialRouteCalls  int
 }
 
 func (repository fakeGameRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
@@ -28,7 +30,12 @@ func (repository fakeGameRepository) GetGameByID(ctx context.Context, gameID str
 	return repository.getGameByIDFn(ctx, gameID)
 }
 
-func (repository fakeGameRepository) CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
+func (repository *fakeGameRepository) CreateGameWithInitialRoute(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error) {
+	repository.createWithInitialRouteCalls++
+	repository.initialRoute = initialRoute
+	if repository.createGameWithInitialRouteFn != nil {
+		return repository.createGameWithInitialRouteFn(ctx, game, initialRoute)
+	}
 	return repository.createGameFn(ctx, game)
 }
 
@@ -38,11 +45,6 @@ func (repository fakeGameRepository) UpdateGame(ctx context.Context, game domain
 
 func (repository fakeGameRepository) DeleteGame(ctx context.Context, gameID string) error {
 	return repository.deleteGameFn(ctx, gameID)
-}
-
-func (repository *fakeGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
-	repository.createRouteCalls++
-	return &route, nil
 }
 
 func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
@@ -84,8 +86,35 @@ func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
 	if result == nil || result.ID != "game-1" {
 		t.Fatalf("expected created game id to be returned")
 	}
-	if repository.createRouteCalls != 1 {
-		t.Fatalf("expected initial route to be created once")
+	if repository.createWithInitialRouteCalls != 1 {
+		t.Fatalf("expected atomic create boundary to be called once")
+	}
+	if repository.initialRoute.Name != "メインルート" || repository.initialRoute.Order != 1 || repository.initialRoute.GameID != "" {
+		t.Fatalf("unexpected initial route: %#v", repository.initialRoute)
+	}
+}
+
+func TestGameServiceCreateGameReturnsErrorWhenAtomicCreateFails(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeGameRepository{
+		createGameWithInitialRouteFn: func(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error) {
+			return nil, errors.New("route insert failed")
+		},
+	}
+	service := NewGameService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	created, err := service.CreateGame(context.Background(), GameInput{
+		Title:     "Game",
+		Publisher: "Publisher",
+		ExePath:   "/games/game.exe",
+	})
+
+	if err == nil || created != nil {
+		t.Fatalf("expected atomic create failure, got created=%#v err=%v", created, err)
+	}
+	if repository.createWithInitialRouteCalls != 1 {
+		t.Fatalf("expected atomic create boundary to be called once")
 	}
 }
 
