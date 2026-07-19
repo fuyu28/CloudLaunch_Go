@@ -73,17 +73,6 @@
 - **影響**: app/services 両方・テスト。中〜大規模。
 - **メモ**: code-review Fix #4 で `stop()` を追加したが根本問題は未解決。
 
-### A7. `process_monitor_service.go` の Windows 専用コードを `_windows.go` へ封じる
-
-- **場所**: `internal/services/process_monitor_service.go::getProcessesNative` 周辺
-- **問題**: PowerShell / WMIC コマンド文字列が build tag なしのファイルにある。
-  CLAUDE.md の「Windows 専用機能は `_windows.go` サフィックスに」に違反。
-  macOS/Linux ビルドで永続的に「fallback も失敗」ログが出続ける。
-- **解決方針**: `processProvider` ポートを切って `process_provider_windows.go` /
-  `process_provider_unsupported.go` に分割。
-- **影響**: process_monitor 内で完結。小〜中規模。
-- **優先度**: 高（CLAUDE.md 規約違反 + クロスプラットフォームでの誤動作）
-
 ### A8. `MaintenanceRuntimeHooks` を単一の RuntimeOrchestrator ポートに
 
 - **場所**: `internal/services/maintenance_service.go::MaintenanceRuntimeHooks`

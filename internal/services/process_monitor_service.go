@@ -1,27 +1,19 @@
 // ゲームの実行プロセス監視と自動プレイ時間計測を提供する。
+// プロセス列挙の OS 固有実装は process_provider_*.go 側に置く。
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/logging"
 
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/encoding/unicode"
-	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -99,7 +91,7 @@ type ProcessMonitorService struct {
 
 // NewProcessMonitorService は ProcessMonitorService を生成する。
 func NewProcessMonitorService(repository ProcessMonitorRepository, logger *slog.Logger, cloudSync afterPlaySyncer) *ProcessMonitorService {
-	return &ProcessMonitorService{
+	service := &ProcessMonitorService{
 		repository:         repository,
 		logger:             logger,
 		cloudSync:          cloudSync,
@@ -109,6 +101,9 @@ func NewProcessMonitorService(repository ProcessMonitorRepository, logger *slog.
 		sessionTimeout:     0,
 		gameCleanupTimeout: 20 * time.Second,
 	}
+	// プラットフォーム既定の列挙。テストは processProvider を差し替えて注入する。
+	service.processProvider = defaultProcessProvider(logger)
+	return service
 }
 
 // StartMonitoring は監視を開始する。
@@ -709,174 +704,13 @@ func (service *ProcessMonitorService) FindProcessIDsByExe(exePath string) ([]int
 	return ids, nil
 }
 
-func (service *ProcessMonitorService) getProcessesNative() ([]ProcessInfo, error) {
-	return service.getProcessesPowerShell()
-}
-
-func (service *ProcessMonitorService) getProcessesPowerShell() ([]ProcessInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	command := execCommandHidden(
-		ctx,
-		"powershell",
-		"-Command",
-		`$OutputEncoding=[System.Text.Encoding]::UTF8; Get-Process | Select-Object ProcessName, Id, Path | ConvertTo-Csv -NoTypeInformation`,
-	)
-	output, err := command.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	records, err := parseCSVBytes(output)
-	if err != nil {
-		return nil, err
-	}
-
-	processes := make([]ProcessInfo, 0, len(records))
-	for i, record := range records {
-		if i == 0 {
-			continue
-		}
-		if len(record) < 3 {
-			continue
-		}
-		name := strings.TrimSpace(record[0])
-		pidStr := strings.TrimSpace(record[1])
-		fullPath := strings.TrimSpace(record[2])
-		pid, err := strconv.Atoi(pidStr)
-		if err != nil || pid <= 0 || name == "" {
-			continue
-		}
-		if !strings.HasSuffix(strings.ToLower(name), ".exe") {
-			name += ".exe"
-		}
-		if fullPath == "" {
-			fullPath = name
-		}
-		if ext := strings.ToLower(filepath.Ext(fullPath)); ext != ".exe" {
-			continue
-		}
-		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
-	}
-	return processes, nil
-}
-
-func (service *ProcessMonitorService) getProcessesFallback() ([]ProcessInfo, error) {
-	return service.getProcessesWmic()
-}
-
-func (service *ProcessMonitorService) getProcessesWmic() ([]ProcessInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	command := execCommandHidden(
-		ctx,
-		"wmic",
-		"process",
-		"get",
-		"Name,ProcessId,ExecutablePath",
-		"/FORMAT:CSV",
-	)
-	output, err := command.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	records, err := parseCSVBytes(output)
-	if err != nil {
-		return nil, err
-	}
-
-	processes := make([]ProcessInfo, 0, len(records))
-	for _, record := range records {
-		if len(record) < 4 {
-			continue
-		}
-		name := strings.TrimSpace(record[1])
-		pidStr := strings.TrimSpace(record[2])
-		fullPath := strings.TrimSpace(record[3])
-		if name == "" || pidStr == "" {
-			continue
-		}
-		pid, err := strconv.Atoi(pidStr)
-		if err != nil || pid <= 0 {
-			continue
-		}
-		if !strings.HasSuffix(strings.ToLower(name), ".exe") {
-			name += ".exe"
-		}
-		if fullPath == "" {
-			fullPath = name
-		}
-		if ext := strings.ToLower(filepath.Ext(fullPath)); ext != ".exe" {
-			continue
-		}
-		processes = append(processes, ProcessInfo{Name: name, Pid: pid, Cmd: fullPath})
-	}
-	return processes, nil
-}
-
-func decodeProcessOutput(output []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(output), japanese.ShiftJIS.NewDecoder())
-	return io.ReadAll(reader)
-}
-
-func decodeUTF16LE(output []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(output), unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder())
-	return io.ReadAll(reader)
-}
-
-func parseCSVBytes(output []byte) ([][]string, error) {
-	parse := func(data []byte) ([][]string, error) {
-		reader := csv.NewReader(bytes.NewReader(data))
-		reader.LazyQuotes = true
-		reader.TrimLeadingSpace = true
-		return reader.ReadAll()
-	}
-
-	if bytes.Contains(output, []byte{0x00}) {
-		if decoded, err := decodeUTF16LE(output); err == nil {
-			if records, err := parse(decoded); err == nil {
-				return records, nil
-			}
-		}
-	}
-
-	// まずUTF-8の生データを優先して解釈し、失敗時のみShift-JISへフォールバックする。
-	if utf8.Valid(output) {
-		if records, err := parse(output); err == nil {
-			return records, nil
-		}
-	}
-
-	if decoded, err := decodeProcessOutput(output); err == nil {
-		if records, err := parse(decoded); err == nil {
-			return records, nil
-		}
-	}
-
-	return parse(output)
-}
-
 func (service *ProcessMonitorService) getProcesses() ([]ProcessInfo, string) {
-	if service.processProvider != nil {
-		processes, source := service.processProvider()
-		service.cacheProcesses(processes)
-		return processes, source
+	if service.processProvider == nil {
+		return []ProcessInfo{}, "unsupported"
 	}
-	processes, err := service.getProcessesNative()
-	if err == nil {
-		service.cacheProcesses(processes)
-		return processes, "native"
-	}
-
-	service.logger.Warn("ネイティブコマンドが失敗しました。フォールバックを使用します", "error", err)
-	processes, err = service.getProcessesFallback()
-	if err != nil {
-		service.logger.Error("フォールバックも失敗しました", "error", err)
-		return []ProcessInfo{}, "fallback"
-	}
+	processes, source := service.processProvider()
 	service.cacheProcesses(processes)
-	return processes, "fallback"
+	return processes, source
 }
 
 // cacheProcesses は非空のプロセス一覧をスナップショットとして保存する。
