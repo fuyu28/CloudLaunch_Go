@@ -22,11 +22,6 @@ func NewSessionService(repository SessionRepository, logger *slog.Logger) *Sessi
 	return &SessionService{repository: repository, logger: logger}
 }
 
-// SessionMutationResult はセッション書き込み後に Wails アダプターが使用するメタデータを表す。
-type SessionMutationResult struct {
-	GameID string `json:"gameId"`
-}
-
 // CreateSession は新しいセッションを作成する。
 // Game.totalPlayTime / lastPlayed はリポジトリの原子的再計算で更新される。
 func (service *SessionService) CreateSession(ctx context.Context, input SessionInput) (*domain.PlaySession, error) {
@@ -62,76 +57,69 @@ func (service *SessionService) ListSessionsByGame(ctx context.Context, gameID st
 }
 
 // DeleteSession はセッションを削除する。
-func (service *SessionService) DeleteSession(ctx context.Context, sessionID string) (SessionMutationResult, error) {
+func (service *SessionService) DeleteSession(ctx context.Context, sessionID string) error {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return SessionMutationResult{}, newServiceError("セッションIDが不正です", detail)
+		return newServiceError("セッションIDが不正です", detail)
 	}
 
-	gameID, error := service.repository.DeletePlaySessionAndRefreshGame(ctx, trimmedID)
-	if error != nil {
+	if _, error := service.repository.DeletePlaySessionAndRefreshGame(ctx, trimmedID); error != nil {
 		service.logger.Error("セッション削除に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション削除に失敗しました", error.Error())
+		return newServiceError("セッション削除に失敗しました", error.Error())
 	}
-	return SessionMutationResult{GameID: gameID}, nil
+	return nil
 }
 
 // UpdateSessionRoute はセッションのルートを更新する。
 // duration は変わらないためプレイ時間は再計算せず、Game.updatedAt のみ触る。
-func (service *SessionService) UpdateSessionRoute(ctx context.Context, sessionID string, chapterID *string) (SessionMutationResult, error) {
+func (service *SessionService) UpdateSessionRoute(ctx context.Context, sessionID string, chapterID *string) error {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return SessionMutationResult{}, newServiceError("セッションIDが不正です", detail)
+		return newServiceError("セッションIDが不正です", detail)
 	}
 
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("セッション取得に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション取得に失敗しました", error.Error())
+		return newServiceError("セッション取得に失敗しました", error.Error())
 	}
 	if error := service.repository.UpdatePlaySessionRoute(ctx, trimmedID, chapterID); error != nil {
 		service.logger.Error("セッションルート更新に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッションルート更新に失敗しました", error.Error())
+		return newServiceError("セッションルート更新に失敗しました", error.Error())
 	}
-
-	mutation := SessionMutationResult{}
 	if session != nil {
 		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
-		mutation.GameID = session.GameID
 	}
-	return mutation, nil
+	return nil
 }
 
 // UpdateSessionName はセッション名を更新する。
 // 空文字（または空白のみ）を渡した場合は NULL クリアとして扱う。
 // フロントエンドから「セッション名を消したい」ユースケースを許可するため。
 // duration は変わらないためプレイ時間は再計算せず、Game.updatedAt のみ触る。
-func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) (SessionMutationResult, error) {
+func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) error {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
-		return SessionMutationResult{}, newServiceError("セッションIDが不正です", detail)
+		return newServiceError("セッションIDが不正です", detail)
 	}
 	trimmedName := strings.TrimSpace(sessionName)
 
 	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
 	if error != nil {
 		service.logger.Error("セッション取得に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション取得に失敗しました", error.Error())
+		return newServiceError("セッション取得に失敗しました", error.Error())
 	}
 	if error := service.repository.UpdatePlaySessionName(ctx, trimmedID, trimmedName); error != nil {
 		service.logger.Error("セッション名更新に失敗", "error", error)
-		return SessionMutationResult{}, newServiceError("セッション名更新に失敗しました", error.Error())
+		return newServiceError("セッション名更新に失敗しました", error.Error())
 	}
-
-	mutation := SessionMutationResult{}
 	if session != nil {
 		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
-		mutation.GameID = session.GameID
 	}
-	return mutation, nil
+	return nil
 }
 
 // SessionInput はセッション作成入力を表す。
