@@ -90,6 +90,11 @@ func NewApp(ctx context.Context) (*App, error) {
 // Startup はWailsの起動時に呼ばれる。
 func (app *App) Startup(ctx context.Context) {
 	app.ctx = ctx
+	if app.GameService != nil {
+		if err := app.GameService.RetryPendingMemoCleanup(ctx); err != nil {
+			app.Logger.Warn("保留中のローカルメモ削除に失敗しました", "error", err)
+		}
+	}
 	if app.ProcessMonitor != nil {
 		app.ProcessMonitor.StartMonitoring()
 		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
@@ -125,7 +130,7 @@ func (app *App) Shutdown(ctx context.Context) error {
 }
 
 func (app *App) configureServices(repository *db.Repository, credentialStore credentials.Store) {
-	app.GameService = services.NewGameService(repository, app.Logger)
+	app.GameService = services.NewGameService(repository, app.Logger, app.MemoFiles)
 	app.SessionService = services.NewSessionService(repository, app.Logger)
 	app.RouteService = services.NewRouteService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)

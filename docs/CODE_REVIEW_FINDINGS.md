@@ -48,7 +48,7 @@
 
 | ID | 状態 | 要約 |
 |----|------|------|
-| M1 | todo | DeleteGame がメモファイルを残す |
+| M1 | done | DeleteGame がメモファイルを残す |
 | M2 | done | CreateGame の CreateRoute 失敗無視 |
 | M3 | todo | Status が lockGame 外 |
 | M4 | todo | ErogameScape ホスト未検証 |
@@ -81,6 +81,9 @@
 
 ### H11
 `pull_needed` のみダウンロード確認。`conflict` は `SyncConflictModal`。
+
+### M1
+`DeleteGameAndQueueMemoCleanup` → ローカルメモ削除。失敗時は `PendingMemoCleanup` に残し起動時 `RetryPendingMemoCleanup`。
 
 ### M2
 `CreateGameWithInitialRoute` で Game と初期 Route を同一トランザクション。

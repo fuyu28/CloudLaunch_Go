@@ -18,6 +18,8 @@ type fakeGameRepository struct {
 	createGameWithInitialRouteFn func(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error)
 	updateGameFn                 func(ctx context.Context, game domain.Game) (*domain.Game, error)
 	deleteGameFn                 func(ctx context.Context, gameID string) error
+	listPendingMemoCleanupFn     func(ctx context.Context) ([]string, error)
+	clearPendingMemoCleanupFn    func(ctx context.Context, gameID string) error
 	initialRoute                 domain.Route
 	createWithInitialRouteCalls  int
 }
@@ -43,8 +45,30 @@ func (repository fakeGameRepository) UpdateGame(ctx context.Context, game domain
 	return repository.updateGameFn(ctx, game)
 }
 
-func (repository fakeGameRepository) DeleteGame(ctx context.Context, gameID string) error {
+func (repository fakeGameRepository) DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) error {
 	return repository.deleteGameFn(ctx, gameID)
+}
+
+func (repository fakeGameRepository) ListPendingMemoCleanup(ctx context.Context) ([]string, error) {
+	if repository.listPendingMemoCleanupFn != nil {
+		return repository.listPendingMemoCleanupFn(ctx)
+	}
+	return nil, nil
+}
+
+func (repository fakeGameRepository) ClearPendingMemoCleanup(ctx context.Context, gameID string) error {
+	if repository.clearPendingMemoCleanupFn != nil {
+		return repository.clearPendingMemoCleanupFn(ctx, gameID)
+	}
+	return nil
+}
+
+type fakeMemoDirectoryCleaner struct {
+	deleteFn func(gameID string) error
+}
+
+func (cleaner fakeMemoDirectoryCleaner) DeleteGameMemoFiles(gameID string) error {
+	return cleaner.deleteFn(gameID)
 }
 
 func TestGameServiceCreateGameUsesRepositoryBoundary(t *testing.T) {
@@ -132,7 +156,9 @@ func TestGameServiceListGetDeleteUseRepositoryBoundary(t *testing.T) {
 		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), fakeMemoDirectoryCleaner{
+		deleteFn: func(gameID string) error { return nil },
+	})
 
 	listed, err := service.ListGames(context.Background(), " game ", domain.PlayStatus(""), "title", "asc")
 	if err != nil || len(listed) != 1 || listed[0].ID != "game-1" {
@@ -146,6 +172,106 @@ func TestGameServiceListGetDeleteUseRepositoryBoundary(t *testing.T) {
 
 	if err := service.DeleteGame(context.Background(), "game-1"); err != nil {
 		t.Fatalf("unexpected delete error: %v", err)
+	}
+}
+
+func TestGameServiceDeleteGameCleansMemoAndClearsPendingMarker(t *testing.T) {
+	t.Parallel()
+
+	var deletedGameID string
+	var cleanedGameID string
+	var clearedGameID string
+	repository := &fakeGameRepository{
+		deleteGameFn: func(ctx context.Context, gameID string) error {
+			deletedGameID = gameID
+			return nil
+		},
+		clearPendingMemoCleanupFn: func(ctx context.Context, gameID string) error {
+			clearedGameID = gameID
+			return nil
+		},
+	}
+	service := NewGameService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)), fakeMemoDirectoryCleaner{
+		deleteFn: func(gameID string) error {
+			cleanedGameID = gameID
+			return nil
+		},
+	})
+
+	if err := service.DeleteGame(context.Background(), " game-1 "); err != nil {
+		t.Fatalf("DeleteGame: %v", err)
+	}
+	if deletedGameID != "game-1" || cleanedGameID != "game-1" || clearedGameID != "game-1" {
+		t.Fatalf("unexpected delete flow: delete=%q cleanup=%q clear=%q", deletedGameID, cleanedGameID, clearedGameID)
+	}
+}
+
+func TestGameServiceDeleteGamePreservesMemoWhenDatabaseDeleteFails(t *testing.T) {
+	t.Parallel()
+
+	cleanupCalls := 0
+	service := NewGameService(&fakeGameRepository{
+		deleteGameFn: func(ctx context.Context, gameID string) error {
+			return errors.New("delete failed")
+		},
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), fakeMemoDirectoryCleaner{
+		deleteFn: func(gameID string) error {
+			cleanupCalls++
+			return nil
+		},
+	})
+
+	if err := service.DeleteGame(context.Background(), "game-1"); err == nil {
+		t.Fatal("expected database deletion failure")
+	}
+	if cleanupCalls != 0 {
+		t.Fatalf("memo cleanup calls = %d, want 0", cleanupCalls)
+	}
+}
+
+func TestGameServiceRetriesPendingMemoCleanupAfterFileFailure(t *testing.T) {
+	t.Parallel()
+
+	pending := true
+	clearCalls := 0
+	repository := &fakeGameRepository{
+		deleteGameFn: func(ctx context.Context, gameID string) error {
+			return nil
+		},
+		listPendingMemoCleanupFn: func(ctx context.Context) ([]string, error) {
+			if pending {
+				return []string{"game-1"}, nil
+			}
+			return nil, nil
+		},
+		clearPendingMemoCleanupFn: func(ctx context.Context, gameID string) error {
+			clearCalls++
+			pending = false
+			return nil
+		},
+	}
+	cleanupCalls := 0
+	service := NewGameService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)), fakeMemoDirectoryCleaner{
+		deleteFn: func(gameID string) error {
+			cleanupCalls++
+			if cleanupCalls == 1 {
+				return errors.New("file is locked")
+			}
+			return nil
+		},
+	})
+
+	if err := service.DeleteGame(context.Background(), "game-1"); err == nil {
+		t.Fatal("expected initial memo cleanup failure")
+	}
+	if !pending || clearCalls != 0 {
+		t.Fatalf("pending marker was cleared after failure: pending=%v clearCalls=%d", pending, clearCalls)
+	}
+	if err := service.RetryPendingMemoCleanup(context.Background()); err != nil {
+		t.Fatalf("RetryPendingMemoCleanup: %v", err)
+	}
+	if pending || cleanupCalls != 2 || clearCalls != 1 {
+		t.Fatalf("unexpected retry state: pending=%v cleanupCalls=%d clearCalls=%d", pending, cleanupCalls, clearCalls)
 	}
 }
 

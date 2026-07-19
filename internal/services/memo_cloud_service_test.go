@@ -34,7 +34,15 @@ func (repository fakeMemoCloudGameRepository) UpdateGame(ctx context.Context, ga
 	return &game, nil
 }
 
-func (repository fakeMemoCloudGameRepository) DeleteGame(ctx context.Context, gameID string) error {
+func (repository fakeMemoCloudGameRepository) DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) error {
+	return nil
+}
+
+func (repository fakeMemoCloudGameRepository) ListPendingMemoCleanup(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (repository fakeMemoCloudGameRepository) ClearPendingMemoCleanup(ctx context.Context, gameID string) error {
 	return nil
 }
 

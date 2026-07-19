@@ -44,8 +44,16 @@ func (r noopAppGameRepository) UpdateGame(ctx context.Context, game domain.Game)
 	return &game, nil
 }
 
-func (r noopAppGameRepository) DeleteGame(ctx context.Context, gameID string) error {
+func (r noopAppGameRepository) DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) error {
 	return r.deleteErr
+}
+
+func (r noopAppGameRepository) ListPendingMemoCleanup(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (r noopAppGameRepository) ClearPendingMemoCleanup(ctx context.Context, gameID string) error {
+	return nil
 }
 
 type noopAppSessionRepository struct {

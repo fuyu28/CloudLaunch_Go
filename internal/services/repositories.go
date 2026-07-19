@@ -14,7 +14,9 @@ type GameRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	CreateGameWithInitialRoute(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
-	DeleteGame(ctx context.Context, gameID string) error
+	DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) error
+	ListPendingMemoCleanup(ctx context.Context) ([]string, error)
+	ClearPendingMemoCleanup(ctx context.Context, gameID string) error
 }
 
 // SessionRepository は SessionService が必要とする永続化境界を定義する。
