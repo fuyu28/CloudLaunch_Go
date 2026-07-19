@@ -347,9 +347,11 @@ func TestAppCreateSessionConvertsServiceError(t *testing.T) {
 func TestAppDeleteSessionConvertsServiceError(t *testing.T) {
 	t.Parallel()
 
+	repo := noopAppSessionRepository{deleteErr: errors.New("db fail")}
 	app := &App{
-		Logger:         newAdapterTestLogger(),
-		SessionService: services.NewSessionService(noopAppSessionRepository{deleteErr: errors.New("db fail")}, newAdapterTestLogger()),
+		Logger:            newAdapterTestLogger(),
+		SessionService:    services.NewSessionService(repo, newAdapterTestLogger()),
+		playSessionLookup: repo,
 	}
 
 	result := app.DeleteSession("session-1")
@@ -360,6 +362,230 @@ func TestAppDeleteSessionConvertsServiceError(t *testing.T) {
 	if result.Error == nil || result.Error.Message != "セッション削除に失敗しました" {
 		t.Fatalf("expected converted service error, got %#v", result.Error)
 	}
+}
+
+// sessionMutationOrderFixture は adapter の lookup → mutation → sync 順序を記録する。
+type sessionMutationOrderFixture struct {
+	calls     []string
+	session   *domain.PlaySession
+	lookupErr error
+	deleteErr error
+	updateErr error
+}
+
+func (f *sessionMutationOrderFixture) GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error) {
+	f.calls = append(f.calls, "lookup")
+	if f.lookupErr != nil {
+		return nil, f.lookupErr
+	}
+	return f.session, nil
+}
+
+func (f *sessionMutationOrderFixture) CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+	return &session, nil
+}
+func (f *sessionMutationOrderFixture) ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error) {
+	return nil, nil
+}
+func (f *sessionMutationOrderFixture) DeletePlaySessionAndRefreshGame(ctx context.Context, sessionID string) (string, error) {
+	f.calls = append(f.calls, "mutation")
+	if f.deleteErr != nil {
+		return "", f.deleteErr
+	}
+	if f.session != nil {
+		return f.session.GameID, nil
+	}
+	return "", nil
+}
+func (f *sessionMutationOrderFixture) UpdatePlaySessionRoute(ctx context.Context, sessionID string, routeID *string) error {
+	f.calls = append(f.calls, "mutation")
+	return f.updateErr
+}
+func (f *sessionMutationOrderFixture) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
+	f.calls = append(f.calls, "mutation")
+	return f.updateErr
+}
+func (f *sessionMutationOrderFixture) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
+	return nil
+}
+
+func newSessionMutationOrderApp(t *testing.T, fixture *sessionMutationOrderFixture, synced chan string) *App {
+	t.Helper()
+	app := &App{
+		Logger:             newAdapterTestLogger(),
+		SessionService:     services.NewSessionService(fixture, newAdapterTestLogger()),
+		playSessionLookup:  fixture,
+		ContentSyncService: &services.ContentSyncService{},
+		syncCoalescer: newAsyncCoalescer(func(id string) {
+			fixture.calls = append(fixture.calls, "sync")
+			if synced != nil {
+				synced <- id
+			}
+		}),
+	}
+	return app
+}
+
+func waitSessionSync(t *testing.T, synced <-chan string) string {
+	t.Helper()
+	select {
+	case id := <-synced:
+		return id
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected sync to be triggered")
+		return ""
+	}
+}
+
+func assertNoSessionSync(t *testing.T, synced <-chan string) {
+	t.Helper()
+	select {
+	case id := <-synced:
+		t.Fatalf("expected no sync, got %q", id)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestAppDeleteSessionLookupMutationSyncOrder(t *testing.T) {
+	t.Parallel()
+
+	fixture := &sessionMutationOrderFixture{
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1"},
+	}
+	synced := make(chan string, 1)
+	app := newSessionMutationOrderApp(t, fixture, synced)
+
+	result := app.DeleteSession("session-1")
+	if !result.Success || !result.Data {
+		t.Fatalf("expected ApiResult[bool] success, got %#v", result)
+	}
+	if got := waitSessionSync(t, synced); got != "game-1" {
+		t.Fatalf("expected sync game-1, got %q", got)
+	}
+	if want := []string{"lookup", "mutation", "sync"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected order %v, got %v", want, fixture.calls)
+	}
+}
+
+func TestAppDeleteSessionLookupFailureSkipsMutationAndSync(t *testing.T) {
+	t.Parallel()
+
+	fixture := &sessionMutationOrderFixture{
+		session:   &domain.PlaySession{ID: "session-1", GameID: "game-1"},
+		lookupErr: errors.New("db lookup fail"),
+	}
+	synced := make(chan string, 1)
+	app := newSessionMutationOrderApp(t, fixture, synced)
+
+	result := app.DeleteSession("session-1")
+	if result.Success {
+		t.Fatalf("expected lookup failure, got success: %#v", result)
+	}
+	if result.Error == nil || result.Error.Message != "セッション取得に失敗しました" {
+		t.Fatalf("expected lookup error message, got %#v", result.Error)
+	}
+	assertNoSessionSync(t, synced)
+	if want := []string{"lookup"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected only lookup, got %v", fixture.calls)
+	}
+}
+
+func TestAppDeleteSessionMutationFailureSkipsSync(t *testing.T) {
+	t.Parallel()
+
+	fixture := &sessionMutationOrderFixture{
+		session:   &domain.PlaySession{ID: "session-1", GameID: "game-1"},
+		deleteErr: errors.New("db delete fail"),
+	}
+	synced := make(chan string, 1)
+	app := newSessionMutationOrderApp(t, fixture, synced)
+
+	result := app.DeleteSession("session-1")
+	if result.Success {
+		t.Fatalf("expected mutation failure, got success: %#v", result)
+	}
+	if result.Error == nil || result.Error.Message != "セッション削除に失敗しました" {
+		t.Fatalf("expected delete error message, got %#v", result.Error)
+	}
+	assertNoSessionSync(t, synced)
+	if want := []string{"lookup", "mutation"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected lookup then mutation, got %v", fixture.calls)
+	}
+}
+
+func TestAppDeleteSessionNilSessionMutatesWithoutSync(t *testing.T) {
+	t.Parallel()
+
+	fixture := &sessionMutationOrderFixture{session: nil}
+	synced := make(chan string, 1)
+	app := newSessionMutationOrderApp(t, fixture, synced)
+
+	result := app.DeleteSession("missing-session")
+	if !result.Success || !result.Data {
+		t.Fatalf("expected success without sync for nil session, got %#v", result)
+	}
+	assertNoSessionSync(t, synced)
+	if want := []string{"lookup", "mutation"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected lookup then mutation, got %v", fixture.calls)
+	}
+}
+
+func TestAppUpdateSessionNameLookupMutationSyncOrder(t *testing.T) {
+	t.Parallel()
+
+	fixture := &sessionMutationOrderFixture{
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1"},
+	}
+	synced := make(chan string, 1)
+	app := newSessionMutationOrderApp(t, fixture, synced)
+
+	result := app.UpdateSessionName("session-1", "Chapter 1")
+	if !result.Success || !result.Data {
+		t.Fatalf("expected ApiResult[bool] success, got %#v", result)
+	}
+	if got := waitSessionSync(t, synced); got != "game-1" {
+		t.Fatalf("expected sync game-1, got %q", got)
+	}
+	// サービス内部の GetPlaySessionByID（TouchGameUpdatedAt 用）も同一ポート経由で記録される。
+	if want := []string{"lookup", "lookup", "mutation", "sync"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected order %v, got %v", want, fixture.calls)
+	}
+}
+
+func TestAppUpdateSessionRouteMutationFailureSkipsSync(t *testing.T) {
+	t.Parallel()
+
+	fixture := &sessionMutationOrderFixture{
+		session:   &domain.PlaySession{ID: "session-1", GameID: "game-1"},
+		updateErr: errors.New("db update fail"),
+	}
+	synced := make(chan string, 1)
+	app := newSessionMutationOrderApp(t, fixture, synced)
+
+	routeID := "route-1"
+	result := app.UpdateSessionRoute("session-1", &routeID)
+	if result.Success {
+		t.Fatalf("expected mutation failure, got success: %#v", result)
+	}
+	if result.Error == nil || result.Error.Message != "セッションルート更新に失敗しました" {
+		t.Fatalf("expected update error message, got %#v", result.Error)
+	}
+	assertNoSessionSync(t, synced)
+	if want := []string{"lookup", "lookup", "mutation"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected lookup(s) then mutation, got %v", fixture.calls)
+	}
+}
+
+func stringSliceEqual(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestAppListRoutesByGameConvertsServiceError(t *testing.T) {

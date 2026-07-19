@@ -133,36 +133,43 @@ func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]domain.Play
 
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
-	deleted, err := app.SessionService.DeleteSession(app.context(), sessionID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッション削除に失敗しました")
-	}
-	if deleted.GameID != "" {
-		app.syncGameAsync(deleted.GameID)
-	}
-	return result.OkResult(true)
+	return app.mutateSessionAndSync(sessionID, "セッション削除に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.DeleteSession(ctx, sessionID)
+	})
 }
 
 // UpdateSessionRoute はセッションのルートを更新する。
 func (app *App) UpdateSessionRoute(sessionID string, routeID *string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionRoute(app.context(), sessionID, routeID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッションルート更新に失敗しました")
-	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
-	}
-	return result.OkResult(true)
+	return app.mutateSessionAndSync(sessionID, "セッションルート更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSessionRoute(ctx, sessionID, routeID)
+	})
 }
 
 // UpdateSessionName はセッション名を更新する。
 func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
+	return app.mutateSessionAndSync(sessionID, "セッション名更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSessionName(ctx, sessionID, sessionName)
+	})
+}
+
+// mutateSessionAndSync は mutation 前にセッションを引き、成功時のみ保持した gameID で同期する。
+// セッションが無い場合（nil, nil）は mutation 自体は実行し、同期はスキップする（既存挙動）。
+func (app *App) mutateSessionAndSync(sessionID string, fallbackMessage string, mutate func(ctx context.Context) error) result.ApiResult[bool] {
+	ctx := app.context()
+	trimmedID := strings.TrimSpace(sessionID)
+	session, err := app.playSessionLookup.GetPlaySessionByID(ctx, trimmedID)
 	if err != nil {
-		return serviceErrorResult[bool](err, "セッション名更新に失敗しました")
+		return serviceErrorResult[bool](err, "セッション取得に失敗しました")
 	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
+	gameID := ""
+	if session != nil {
+		gameID = strings.TrimSpace(session.GameID)
+	}
+	if err := mutate(ctx); err != nil {
+		return serviceErrorResult[bool](err, fallbackMessage)
+	}
+	if gameID != "" {
+		app.syncGameAsync(gameID)
 	}
 	return result.OkResult(true)
 }
