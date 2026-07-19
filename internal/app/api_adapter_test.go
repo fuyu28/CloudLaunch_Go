@@ -52,6 +52,10 @@ func (r noopAppGameRepository) CreateRoute(ctx context.Context, route domain.Rou
 	return &route, nil
 }
 
+func (r noopAppGameRepository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error {
+	return nil
+}
+
 type noopAppSessionRepository struct {
 	createErr error
 	getErr    error
@@ -60,7 +64,7 @@ type noopAppSessionRepository struct {
 	session   *domain.PlaySession
 }
 
-func (r noopAppSessionRepository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+func (r noopAppSessionRepository) CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 	if r.createErr != nil {
 		return nil, r.createErr
 	}
@@ -81,8 +85,14 @@ func (r noopAppSessionRepository) GetPlaySessionByID(ctx context.Context, sessio
 	}
 	return &domain.PlaySession{ID: sessionID, GameID: "game-1"}, nil
 }
-func (r noopAppSessionRepository) DeletePlaySession(ctx context.Context, sessionID string) error {
-	return r.deleteErr
+func (r noopAppSessionRepository) DeletePlaySessionAndRefreshGame(ctx context.Context, sessionID string) (string, error) {
+	if r.deleteErr != nil {
+		return "", r.deleteErr
+	}
+	if r.session != nil {
+		return r.session.GameID, nil
+	}
+	return "game-1", nil
 }
 func (r noopAppSessionRepository) UpdatePlaySessionRoute(ctx context.Context, sessionID string, routeID *string) error {
 	return r.updateErr
@@ -91,15 +101,6 @@ func (r noopAppSessionRepository) UpdatePlaySessionName(ctx context.Context, ses
 	return r.updateErr
 }
 func (r noopAppSessionRepository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
-	return nil
-}
-func (r noopAppSessionRepository) SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error) {
-	return 0, nil
-}
-func (r noopAppSessionRepository) UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error {
-	return nil
-}
-func (r noopAppSessionRepository) UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error {
 	return nil
 }
 
