@@ -42,7 +42,16 @@ New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 # 指定ファイルの SHA256 を大文字文字列で返す。
 function Get-Sha256Hex {
     param([string]$Path)
-    return (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha256.ComputeHash($stream)
+        return [System.BitConverter]::ToString($hash).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
 }
 
 # 既存 exe の sha256 が期待値と一致すればスキップ（build/bin へのコピーは保証する）。
