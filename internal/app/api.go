@@ -767,11 +767,6 @@ func buildFileFilters(filters []FileFilterInput) []runtime.FileFilter {
 	return fileFilters
 }
 
-func openPath(path string) error {
-	command := exec.Command("explorer.exe", path)
-	return command.Start()
-}
-
 // normalizePlayStatus はUIのフィルタ文字列をモデル値へ変換する。
 func normalizePlayStatus(filter string) domain.PlayStatus {
 	value := strings.ToLower(strings.TrimSpace(filter))
