@@ -449,3 +449,25 @@ func TestProcessMonitorServiceFindProcessIDsByExeUsesCache(t *testing.T) {
 		t.Fatalf("unexpected process ids: %#v", ids)
 	}
 }
+
+// TestProcessMonitorServiceUnsupportedSnapshotSemantics は、未対応 OS 相当の
+// 空一覧 + source "unsupported" をサービスがそのまま返し、空結果をキャッシュしないことを検証する。
+func TestProcessMonitorServiceUnsupportedSnapshotSemantics(t *testing.T) {
+	t.Parallel()
+
+	service := newTestProcessMonitorService()
+	service.processProvider = func() ([]ProcessInfo, string) {
+		return []ProcessInfo{}, "unsupported"
+	}
+
+	snapshot := service.GetProcessSnapshot()
+	if snapshot.Source != "unsupported" {
+		t.Fatalf("snapshot.Source = %q, want unsupported", snapshot.Source)
+	}
+	if len(snapshot.Items) != 0 {
+		t.Fatalf("snapshot.Items = %#v, want empty", snapshot.Items)
+	}
+	if cached := service.recentProcesses(); cached != nil {
+		t.Fatalf("expected empty unsupported list not to be cached, got %#v", cached)
+	}
+}
