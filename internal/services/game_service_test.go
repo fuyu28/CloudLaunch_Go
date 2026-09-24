@@ -12,12 +12,13 @@ import (
 )
 
 type fakeGameRepository struct {
-	listGamesFn      func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
-	getGameByIDFn    func(ctx context.Context, gameID string) (*domain.Game, error)
-	createGameFn     func(ctx context.Context, game domain.Game) (*domain.Game, error)
-	updateGameFn     func(ctx context.Context, game domain.Game) (*domain.Game, error)
-	deleteGameFn     func(ctx context.Context, gameID string) error
-	createRouteCalls int
+	listGamesFn       func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	getGameByIDFn     func(ctx context.Context, gameID string) (*domain.Game, error)
+	createGameFn      func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	updateGameFn      func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	deleteGameFn      func(ctx context.Context, gameID string) error
+	refreshPlayTimeFn func(ctx context.Context, gameID string) error
+	createRouteCalls  int
 }
 
 func (repository fakeGameRepository) ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
@@ -38,6 +39,13 @@ func (repository fakeGameRepository) UpdateGame(ctx context.Context, game domain
 
 func (repository fakeGameRepository) DeleteGame(ctx context.Context, gameID string) error {
 	return repository.deleteGameFn(ctx, gameID)
+}
+
+func (repository fakeGameRepository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error {
+	if repository.refreshPlayTimeFn != nil {
+		return repository.refreshPlayTimeFn(ctx, gameID)
+	}
+	return nil
 }
 
 func (repository *fakeGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
@@ -384,24 +392,28 @@ func TestGameServiceListGamesTrimsSearchText(t *testing.T) {
 func TestGameServiceUpdatePlayTimeStoresLastPlayed(t *testing.T) {
 	t.Parallel()
 
-	var updatedGame domain.Game
+	refreshed := false
 	lastPlayed := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	service := NewGameService(&fakeGameRepository{
 		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
 			return nil, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
+			if refreshed {
+				return &domain.Game{ID: gameID, Title: "Game", TotalPlayTime: 240, LastPlayed: &lastPlayed}, nil
+			}
 			return &domain.Game{ID: gameID, Title: "Game"}, nil
 		},
 		createGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
-		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
-			updatedGame = game
-			return &game, nil
-		},
+		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) { return &game, nil },
 		deleteGameFn: func(ctx context.Context, gameID string) error { return nil },
+		refreshPlayTimeFn: func(ctx context.Context, gameID string) error {
+			refreshed = true
+			return nil
+		},
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	_, err := service.UpdatePlayTime(context.Background(), "game-1", 240, lastPlayed)
+	updatedGame, err := service.UpdatePlayTime(context.Background(), "game-1", 240, lastPlayed)
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}

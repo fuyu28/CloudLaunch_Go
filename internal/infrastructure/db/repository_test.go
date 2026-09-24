@@ -144,44 +144,6 @@ func TestRepositoryGameCRUDRoundTrip(t *testing.T) {
 	}
 }
 
-// --- UpdateGameTotalPlayTimeWithLastPlayed ---
-
-func TestRepositoryLastPlayedOnlyAdvances(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo := newTestRepo(t)
-
-	older := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	newer := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
-
-	game, _ := repo.CreateGame(ctx, newGame("Game", "/game.exe"))
-
-	if err := repo.UpdateGameTotalPlayTimeWithLastPlayed(ctx, game.ID, 100, older); err != nil {
-		t.Fatalf("first update: %v", err)
-	}
-	got, _ := repo.GetGameByID(ctx, game.ID)
-	if got.LastPlayed == nil || !got.LastPlayed.Equal(older) {
-		t.Fatalf("want lastPlayed=%v, got %v", older, got.LastPlayed)
-	}
-
-	if err := repo.UpdateGameTotalPlayTimeWithLastPlayed(ctx, game.ID, 200, newer); err != nil {
-		t.Fatalf("newer update: %v", err)
-	}
-	got, _ = repo.GetGameByID(ctx, game.ID)
-	if got.LastPlayed == nil || !got.LastPlayed.Equal(newer) {
-		t.Fatalf("want lastPlayed advanced to %v, got %v", newer, got.LastPlayed)
-	}
-
-	if err := repo.UpdateGameTotalPlayTimeWithLastPlayed(ctx, game.ID, 300, older); err != nil {
-		t.Fatalf("older update: %v", err)
-	}
-	got, _ = repo.GetGameByID(ctx, game.ID)
-	if got.LastPlayed == nil || !got.LastPlayed.Equal(newer) {
-		t.Fatalf("want lastPlayed unchanged at %v, got %v", newer, got.LastPlayed)
-	}
-}
-
 // --- Session CRUD ---
 
 func TestRepositorySessionCRUD(t *testing.T) {
@@ -213,6 +175,42 @@ func TestRepositorySessionCRUD(t *testing.T) {
 	sessions, _ = repo.ListPlaySessionsByGame(ctx, game.ID)
 	if len(sessions) != 0 {
 		t.Errorf("expected 0 sessions after delete, got %d", len(sessions))
+	}
+}
+
+func TestUpdatePlaySessionAndRefreshGameRecalculatesTotals(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newTestRepo(t)
+	game, err := repo.CreateGame(ctx, newGame("Game", "/game.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	firstAt := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
+	first, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{GameID: game.ID, PlayedAt: firstAt, Duration: 60})
+	if err != nil {
+		t.Fatalf("CreatePlaySessionAndRefreshGame: %v", err)
+	}
+	secondAt := time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
+	if _, err := repo.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{GameID: game.ID, PlayedAt: secondAt, Duration: 30}); err != nil {
+		t.Fatalf("CreatePlaySessionAndRefreshGame: %v", err)
+	}
+
+	updatedAt := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
+	updated, err := repo.UpdatePlaySessionAndRefreshGame(ctx, first.ID, updatedAt, 120)
+	if err != nil {
+		t.Fatalf("UpdatePlaySessionAndRefreshGame: %v", err)
+	}
+	if updated == nil || updated.Duration != 120 || !updated.PlayedAt.Equal(updatedAt) {
+		t.Fatalf("updated session = %#v", updated)
+	}
+	got, err := repo.GetGameByID(ctx, game.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: game=%#v err=%v", got, err)
+	}
+	if got.TotalPlayTime != 150 || got.LastPlayed == nil || !got.LastPlayed.Equal(updatedAt) {
+		t.Fatalf("game aggregate = %#v", got)
 	}
 }
 

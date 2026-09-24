@@ -4,7 +4,7 @@
  * このコンポーネントは、特定のゲームに関連するプレイセッション情報を表示し、管理する機能を提供します。
  */
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FaEdit } from "react-icons/fa";
 import { RxCross1 } from "react-icons/rx";
 
@@ -14,15 +14,19 @@ import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { logger } from "@renderer/utils/logger";
 
 import ConfirmModal from "../common/ConfirmModal";
-import { playSessionEditSchema } from "@renderer/schemas/playSession";
 import type { PlaySessionType } from "src/types/game";
-import { useZodValidation } from "../../hooks/useZodValidation";
 
-type EditFormData = Record<string, unknown> & {
-  sessionName: string;
+function toDateTimeLocalValue(date: Date): string {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+type EditFormData = {
+  playedAt: string;
+  hours: string;
+  minutes: string;
+  seconds: string;
 };
-
-type EditFormFields = keyof Pick<EditFormData, "sessionName">;
 
 type PlaySessionManagementModalProps = {
   isOpen: boolean;
@@ -46,12 +50,11 @@ export default function PlaySessionManagementModal({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProcess, setEditingProcess] = useState<PlaySessionType | undefined>(undefined);
   const [editFormData, setEditFormData] = useState<EditFormData>({
-    sessionName: "",
+    playedAt: "",
+    hours: "",
+    minutes: "",
+    seconds: "",
   });
-
-  const memoizedEditFormData = useMemo(() => editFormData, [editFormData]);
-
-  const validation = useZodValidation(playSessionEditSchema, memoizedEditFormData);
   const { formatSmart, formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
 
@@ -78,57 +81,54 @@ export default function PlaySessionManagementModal({
     }
   }, [gameId, showToast]);
 
-  const openEditModal = useCallback(
-    (process: PlaySessionType) => {
-      setEditingProcess(process);
-      // フォームの初期値には表示用フォールバック "未設定" を含めず、空文字を入れる。
-      // 表示側のフォールバックは placeholder（下記 input）に分離しており、
-      // ユーザが編集せずに更新を押しても "未設定" 文字列が保存されない。
-      setEditFormData({
-        sessionName: process.sessionName ?? "",
-      });
-      validation.resetTouched();
-      setIsEditModalOpen(true);
-    },
-    [validation],
-  );
+  const openEditModal = useCallback((process: PlaySessionType) => {
+    setEditingProcess(process);
+    const date = new Date(process.playedAt);
+    setEditFormData({
+      playedAt: toDateTimeLocalValue(date),
+      hours: String(Math.floor(process.duration / 3600)),
+      minutes: String(Math.floor((process.duration % 3600) / 60)),
+      seconds: String(process.duration % 60),
+    });
+    setIsEditModalOpen(true);
+  }, []);
 
   const closeEditModal = useCallback(() => {
     setIsEditModalOpen(false);
     setEditingProcess(undefined);
-    setEditFormData({
-      sessionName: "",
-    });
-    validation.resetTouched();
-  }, [validation]);
-
-  const handleFormChange = useCallback(
-    (field: EditFormFields, value: string | null) => {
-      setEditFormData((prev) => ({ ...prev, [field]: value ?? "" }));
-      validation.touch(field);
-    },
-    [validation],
-  );
+    setEditFormData({ playedAt: "", hours: "", minutes: "", seconds: "" });
+  }, []);
 
   const handleEditSession = useCallback(async () => {
     if (!editingProcess) return;
 
-    const validationResult = validation.validate();
-    if (!validationResult.isValid) {
-      showToast("入力内容に問題があります", "error");
-      return;
-    }
-
     try {
-      // 既存の未設定（null / undefined）と空文字は同一視し、変更がなければ API を叩かない。
-      const nextName = memoizedEditFormData.sessionName;
-      const prevName = editingProcess.sessionName ?? "";
-      if (nextName !== prevName) {
-        const nameResult = await window.api.database.updateSessionName(editingProcess.id, nextName);
-        if (!nameResult.success) {
-          showToast("セッション名の更新に失敗しました", "error");
-          return;
-        }
+      const playedAt = new Date(editFormData.playedAt);
+      const hours = Number(editFormData.hours);
+      const minutes = Number(editFormData.minutes);
+      const seconds = Number(editFormData.seconds);
+      if (
+        Number.isNaN(playedAt.getTime()) ||
+        !Number.isInteger(hours) ||
+        hours < 0 ||
+        !Number.isInteger(minutes) ||
+        minutes < 0 ||
+        minutes > 59 ||
+        !Number.isInteger(seconds) ||
+        seconds < 0 ||
+        seconds > 59
+      ) {
+        showToast("日時とプレイ時間を正しく入力してください", "error");
+        return;
+      }
+      const result = await window.api.database.updateSession(
+        editingProcess.id,
+        playedAt,
+        hours * 3600 + minutes * 60 + seconds,
+      );
+      if (!result.success) {
+        showToast("セッションの更新に失敗しました", "error");
+        return;
       }
 
       showToast("セッションを更新しました", "success");
@@ -143,15 +143,7 @@ export default function PlaySessionManagementModal({
       });
       showToast("セッションの更新に失敗しました", "error");
     }
-  }, [
-    editingProcess,
-    memoizedEditFormData,
-    validation,
-    fetchProcesses,
-    onProcessUpdated,
-    showToast,
-    closeEditModal,
-  ]);
+  }, [editingProcess, editFormData, fetchProcesses, onProcessUpdated, showToast, closeEditModal]);
 
   const handleDeleteProcess = useCallback(async () => {
     if (!selectedProcessId) return;
@@ -194,8 +186,6 @@ export default function PlaySessionManagementModal({
     }
   }, [isOpen, fetchProcesses]);
 
-  const selectedProcess = processes.find((p) => p.id === selectedProcessId);
-
   return (
     <>
       <div className={`modal ${isOpen ? "modal-open" : ""}`}>
@@ -223,7 +213,6 @@ export default function PlaySessionManagementModal({
                     <table className="table w-full">
                       <thead>
                         <tr>
-                          <th>セッション名</th>
                           <th>実行時間</th>
                           <th>プレイ日時</th>
                           <th>操作</th>
@@ -232,9 +221,6 @@ export default function PlaySessionManagementModal({
                       <tbody>
                         {processes.map((process) => (
                           <tr key={process.id}>
-                            <td>
-                              <div className="font-medium">{process.sessionName ?? "未設定"}</div>
-                            </td>
                             <td>{formatSmart(process.duration)}</td>
                             <td>{formatDateWithTime(process.playedAt)}</td>
                             <td>
@@ -275,7 +261,7 @@ export default function PlaySessionManagementModal({
       <ConfirmModal
         id="delete-session-modal"
         isOpen={isDeleteModalOpen}
-        message={`セッション「${selectedProcess?.sessionName || "未設定"}」を削除しますか？\nこの操作は取り消せません。`}
+        message={`このセッションを削除しますか？\nこの操作は取り消せません。`}
         cancelText="キャンセル"
         confirmText="削除する"
         onConfirm={handleDeleteProcess}
@@ -289,20 +275,37 @@ export default function PlaySessionManagementModal({
           <div className="space-y-4">
             <div>
               <label className="label">
-                <span className="label-text">セッション名</span>
+                <span className="label-text">プレイ日時</span>
               </label>
               <input
-                type="text"
-                className={`input input-bordered w-full ${
-                  validation.hasError("sessionName") ? "input-error" : ""
-                }`}
-                value={editFormData.sessionName}
-                onChange={(e) => handleFormChange("sessionName", e.target.value)}
-                placeholder="未設定"
+                type="datetime-local"
+                className="input input-bordered w-full"
+                value={editFormData.playedAt}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, playedAt: e.target.value }))}
               />
-              {validation.getError("sessionName") && (
-                <div className="text-error text-sm mt-1">{validation.getError("sessionName")}</div>
-              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {(
+                [
+                  ["hours", "時間"],
+                  ["minutes", "分"],
+                  ["seconds", "秒"],
+                ] as const
+              ).map(([field, label]) => (
+                <label key={field} className="form-control">
+                  <span className="label-text mb-1">{label}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={field === "hours" ? undefined : "59"}
+                    className="input input-bordered"
+                    value={editFormData[field]}
+                    onChange={(e) =>
+                      setEditFormData((prev) => ({ ...prev, [field]: e.target.value }))
+                    }
+                  />
+                </label>
+              ))}
             </div>
           </div>
 
@@ -310,11 +313,7 @@ export default function PlaySessionManagementModal({
             <button className="btn btn-ghost" onClick={closeEditModal}>
               キャンセル
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleEditSession}
-              disabled={validation.hasError("sessionName")}
-            >
+            <button className="btn btn-primary" onClick={handleEditSession}>
               更新
             </button>
           </div>

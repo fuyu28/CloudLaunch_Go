@@ -69,7 +69,7 @@ func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result
 	return result.OkResult(updated)
 }
 
-// UpdatePlayTime はプレイ時間を更新する。
+// UpdatePlayTime はセッション集計からプレイ時間キャッシュを再構築する（互換 API）。
 func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*domain.Game] {
 	game, err := app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
 	return serviceResult(game, err, "プレイ時間更新に失敗しました")
@@ -139,36 +139,43 @@ func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]domain.Play
 
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
-	deleted, err := app.SessionService.DeleteSession(app.context(), sessionID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッション削除に失敗しました")
-	}
-	if deleted.GameID != "" {
-		app.syncGameAsync(deleted.GameID)
-	}
-	return result.OkResult(true)
+	return app.mutateSessionAndSync(sessionID, "セッション削除に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.DeleteSession(ctx, sessionID)
+	})
 }
 
 // UpdateSessionRoute はセッションのルートを更新する。
 func (app *App) UpdateSessionRoute(sessionID string, routeID *string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionRoute(app.context(), sessionID, routeID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッションルート更新に失敗しました")
-	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
-	}
-	return result.OkResult(true)
+	return app.mutateSessionAndSync(sessionID, "セッションルート更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSessionRoute(ctx, sessionID, routeID)
+	})
 }
 
-// UpdateSessionName はセッション名を更新する。
-func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
+// UpdateSession はセッションの日時と時間を更新する。
+func (app *App) UpdateSession(sessionID string, input services.SessionUpdateInput) result.ApiResult[bool] {
+	return app.mutateSessionAndSync(sessionID, "セッション更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSession(ctx, sessionID, input)
+	})
+}
+
+// mutateSessionAndSync は mutation 前にセッションを引き、成功時のみ保持した gameID で同期する。
+// セッションが無い場合（nil, nil）は mutation 自体は実行し、同期はスキップする（既存挙動）。
+func (app *App) mutateSessionAndSync(sessionID string, fallbackMessage string, mutate func(ctx context.Context) error) result.ApiResult[bool] {
+	ctx := app.context()
+	trimmedID := strings.TrimSpace(sessionID)
+	session, err := app.playSessionLookup.GetPlaySessionByID(ctx, trimmedID)
 	if err != nil {
-		return serviceErrorResult[bool](err, "セッション名更新に失敗しました")
+		return serviceErrorResult[bool](err, "セッション取得に失敗しました")
 	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
+	gameID := ""
+	if session != nil {
+		gameID = strings.TrimSpace(session.GameID)
+	}
+	if err := mutate(ctx); err != nil {
+		return serviceErrorResult[bool](err, fallbackMessage)
+	}
+	if gameID != "" {
+		app.syncGameAsync(gameID)
 	}
 	return result.OkResult(true)
 }
