@@ -21,6 +21,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// MigrateCloudSessionFormat はクラウド上の旧プレイセッション形式を移行する。
+func (app *App) MigrateCloudSessionFormat() result.ApiResult[services.SessionFormatMigrationResult] {
+	migrated, err := app.ContentSyncService.MigrateSessionFormat(app.context())
+	return serviceResult(migrated, err, "クラウドのプレイ履歴移行に失敗しました")
+}
+
 // CloudDataItem はクラウドデータ一覧の要素を表す。
 type CloudDataItem struct {
 	Name         string    `json:"name"`

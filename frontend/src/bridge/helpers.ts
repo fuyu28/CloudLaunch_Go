@@ -104,7 +104,6 @@ export function toPlaySessionType(s: modelsDomain.PlaySession): PlaySessionType 
     gameId: s.gameId,
     playedAt: normalizeApiDate(s.playedAt),
     duration: s.duration,
-    sessionName: s.sessionName,
   };
 }
 

@@ -10,7 +10,7 @@ import {
   Quit,
   Environment,
 } from "../../wailsjs/runtime/runtime";
-import { OpenFolder } from "../../wailsjs/go/app/App";
+import { GetAppVersion, OpenFolder } from "../../wailsjs/go/app/App";
 import type { WindowApi } from "./types";
 
 export function createWindowBridge(): WindowApi["window"] {
@@ -31,5 +31,6 @@ export function createWindowBridge(): WindowApi["window"] {
       const env = await Environment();
       return env.platform;
     },
+    getAppVersion: GetAppVersion,
   };
 }
