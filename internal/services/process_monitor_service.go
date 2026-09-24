@@ -27,19 +27,20 @@ import (
 
 // MonitoringGame は監視対象のゲーム情報を保持する。
 type MonitoringGame struct {
-	GameID          string
-	GameTitle       string
-	ExePath         string
-	ExeName         string
-	LastDetected    *time.Time
-	PlayStartTime   *time.Time
-	AccumulatedTime int64
-	LastNotFound    *time.Time
-	IsPaused        bool
-	PausedAt        *time.Time
-	PendingEnd      bool
-	PendingResume   bool
-	SuppressResume  bool
+	GameID           string
+	GameTitle        string
+	ExePath          string
+	ExeName          string
+	LastDetected     *time.Time
+	SessionStartedAt *time.Time
+	PlayStartTime    *time.Time
+	AccumulatedTime  int64
+	LastNotFound     *time.Time
+	IsPaused         bool
+	PausedAt         *time.Time
+	PendingEnd       bool
+	PendingResume    bool
+	SuppressResume   bool
 }
 
 // ProcessInfo はプロセス情報を保持する。
@@ -394,6 +395,7 @@ func (service *ProcessMonitorService) EndSession(gameID string) bool {
 	// 一時的に書き戻してから再 Lock で 0 戻し、というかつての二重書きが原因だった）。
 	snapshot := *game
 	snapshot.AccumulatedTime = accumulated
+	game.SessionStartedAt = nil
 	service.mu.Unlock()
 
 	if accumulated > 0 {
@@ -467,6 +469,7 @@ func (service *ProcessMonitorService) updateMonitoredGameState(
 		game.LastNotFound = nil
 		if game.PlayStartTime == nil && !game.IsPaused && !game.PendingEnd {
 			game.PlayStartTime = &now
+			game.SessionStartedAt = &now
 			game.AccumulatedTime = 0
 			service.logger.Info("ゲーム開始を検知", "title", game.GameTitle, "exeName", game.ExeName)
 		}
@@ -509,13 +512,15 @@ func (service *ProcessMonitorService) collectGameIDsToCleanup(now time.Time, gam
 }
 
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
-	sessionName := "自動記録 - " + game.ExeName
 	ctx := context.Background()
+	playedAt := endedAt
+	if game.SessionStartedAt != nil {
+		playedAt = *game.SessionStartedAt
+	}
 	_, err := service.repository.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
-		GameID:      game.GameID,
-		PlayedAt:    endedAt,
-		Duration:    game.AccumulatedTime,
-		SessionName: &sessionName,
+		GameID:   game.GameID,
+		PlayedAt: playedAt,
+		Duration: game.AccumulatedTime,
 	})
 	if err != nil {
 		service.logger.Error("プレイセッション保存に失敗", "error", err)
