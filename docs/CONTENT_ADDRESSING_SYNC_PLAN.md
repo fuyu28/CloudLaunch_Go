@@ -91,7 +91,7 @@ screenshots/{gameId}/{filename}     ← スクショ（コンテンツアドレ�
 `domain.PlaySession` から `gameId`（パスから自明）を除いたもの。
 
 ```json
-[{ "id", "playedAt", "duration", "sessionName", "routeId", "updatedAt" }]
+[{ "id", "playedAt", "duration", "routeId", "updatedAt" }]
 ```
 
 ### SaveSnapshot（ツリー相当）

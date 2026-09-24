@@ -4,12 +4,14 @@ package app
 import (
 	"context"
 	"database/sql"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"CloudLaunch_Go/internal/config"
+	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/db"
 	"CloudLaunch_Go/internal/logging"
@@ -17,12 +19,19 @@ import (
 	"CloudLaunch_Go/internal/services"
 )
 
+// playSessionLookup はセッション mutation 前に gameID を確保するための最小ポート。
+// 具象の db.Repository に依存せず、GetPlaySessionByID だけを要求する。
+type playSessionLookup interface {
+	GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error)
+}
+
 // App はWailsと連携するアプリケーション本体を表す。
 type App struct {
 	ctx                 context.Context
 	Config              config.Config
 	Logger              *slog.Logger
 	logLevel            *slog.LevelVar
+	logCloser           io.Closer
 	GameService         *services.GameService
 	SessionService      *services.SessionService
 	RouteService        *services.RouteService
@@ -41,12 +50,13 @@ type App struct {
 	autoTracking        bool
 	isMonitoring        bool
 	syncCoalescer       *asyncCoalescer
+	playSessionLookup   playSessionLookup
 }
 
 // NewApp はアプリケーションを初期化する。
 func NewApp(ctx context.Context) (*App, error) {
 	cfg := config.LoadFromEnv()
-	logger, logLevel := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
+	logger, logLevel, logCloser := logging.NewLogger(cfg.AppDataDir, cfg.LogLevel)
 
 	if error := os.MkdirAll(cfg.AppDataDir, 0o700); error != nil {
 		return nil, error
@@ -76,6 +86,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		Config:       cfg,
 		Logger:       logger,
 		logLevel:     logLevel,
+		logCloser:    logCloser,
 		MemoFiles:    memoFiles,
 		dbConnection: connection,
 		autoTracking: true,
@@ -123,15 +134,24 @@ func (app *App) Shutdown(ctx context.Context) error {
 			app.Logger.Warn("スクリーンショットログのクローズに失敗しました", "error", err)
 		}
 	}
+	var closeErr error
 	if app.dbConnection != nil {
-		return app.dbConnection.Close()
+		closeErr = app.dbConnection.Close()
 	}
-	return nil
+	// 最後の Warn より後で閉じる。所有する app.log / error.log を解放する。
+	if app.logCloser != nil {
+		if err := app.logCloser.Close(); err != nil && closeErr == nil {
+			closeErr = err
+		}
+		app.logCloser = nil
+	}
+	return closeErr
 }
 
 func (app *App) configureServices(repository *db.Repository, credentialStore credentials.Store) {
 	app.GameService = services.NewGameService(repository, app.Logger, app.MemoFiles)
 	app.SessionService = services.NewSessionService(repository, app.Logger)
+	app.playSessionLookup = repository
 	app.RouteService = services.NewRouteService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)

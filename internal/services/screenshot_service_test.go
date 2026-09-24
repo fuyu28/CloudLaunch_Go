@@ -33,6 +33,23 @@ func newTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// newTestScreenshotService は ScreenshotService を生成し、screenshot.log ハンドルを
+// テスト終了時に閉じる。Windows では未クローズだと TempDir 削除が失敗する。
+func newTestScreenshotService(
+	t *testing.T,
+	cfg config.Config,
+	repository ScreenshotRepository,
+	resolver ProcessIDResolver,
+	logger *slog.Logger,
+) *ScreenshotService {
+	t.Helper()
+	service := NewScreenshotService(cfg, repository, resolver, logger)
+	t.Cleanup(func() {
+		_ = service.Close()
+	})
+	return service
+}
+
 // resolverReturning は常に指定PIDを返す resolver を作る。
 func resolverReturning(pids ...int) fakeProcessIDResolver {
 	return fakeProcessIDResolver{findFn: func(string) ([]int, error) {
@@ -43,7 +60,7 @@ func resolverReturning(pids ...int) fakeProcessIDResolver {
 func TestScreenshotServiceCaptureGameScreenshotRejectsEmptyGameID(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
@@ -58,7 +75,7 @@ func TestScreenshotServiceCaptureGameScreenshotRejectsEmptyGameID(t *testing.T) 
 func TestScreenshotServiceCaptureGameScreenshotReturnsRepositoryError(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, errors.New("db down")
 		},
@@ -73,7 +90,7 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsRepositoryError(t *testing
 func TestScreenshotServiceBuildScreenshotPathsUsesConfiguredExtension(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{ScreenshotLocalJpeg: true}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{ScreenshotLocalJpeg: true}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
@@ -94,7 +111,7 @@ func TestScreenshotServiceBuildScreenshotPathsUsesConfiguredExtension(t *testing
 func TestScreenshotServiceCaptureGameScreenshotReturnsNotFoundWhenGameMissing(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
@@ -109,7 +126,7 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsNotFoundWhenGameMissing(t 
 func TestScreenshotServiceCaptureGameScreenshotFailsWhenProcessNotRunning(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -133,7 +150,7 @@ func TestScreenshotServiceCaptureGameScreenshotFailsWhenProcessNotRunning(t *tes
 func TestScreenshotServiceCaptureGameScreenshotPassesResolvedPID(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -157,7 +174,7 @@ func TestScreenshotServiceCaptureGameScreenshotPassesResolvedPID(t *testing.T) {
 func TestScreenshotServiceCaptureGameScreenshotReturnsResolverError(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -189,7 +206,7 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsCaptureError(t *testing.T)
 	t.Parallel()
 
 	captureErr := errors.New("capture failed")
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -207,7 +224,7 @@ func TestScreenshotServiceCaptureGameScreenshotReturnsCaptureError(t *testing.T)
 func TestScreenshotServiceCaptureGameScreenshotReturnsPathOnSuccess(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -278,7 +295,7 @@ func TestScreenshotServiceResolvePID(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			service := NewScreenshotService(config.Config{}, nil, tc.resolver, newTestLogger())
+			service := newTestScreenshotService(t, config.Config{}, nil, tc.resolver, newTestLogger())
 			pid, err := service.resolvePID(tc.exePath)
 			if tc.wantErr {
 				if err == nil {
@@ -301,7 +318,7 @@ func TestScreenshotServiceResolvePID(t *testing.T) {
 func TestScreenshotServiceCaptureHotkeyRequiresPIDForTargetGame(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -327,7 +344,7 @@ func TestScreenshotServiceCaptureHotkeyRequiresPIDForTargetGame(t *testing.T) {
 func TestScreenshotServiceCaptureHotkeyPropagatesResolverError(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},
@@ -350,7 +367,7 @@ func TestScreenshotServiceCaptureHotkeyPropagatesResolverError(t *testing.T) {
 func TestScreenshotServiceCaptureHotkeyNoTargetUsesForeground(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return nil, nil
 		},
@@ -382,7 +399,7 @@ func TestScreenshotServiceCaptureHotkeyNoTargetUsesForeground(t *testing.T) {
 func TestScreenshotServiceCaptureHotkeyPassesResolvedPID(t *testing.T) {
 	t.Parallel()
 
-	service := NewScreenshotService(config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
+	service := newTestScreenshotService(t, config.Config{AppDataDir: t.TempDir()}, fakeScreenshotRepository{
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
 			return &domain.Game{ID: gameID, Title: "Game", ExePath: "game.exe"}, nil
 		},

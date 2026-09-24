@@ -18,8 +18,8 @@
 - **方針**: addMonitoredGame / autoAddGamesFromDatabase 時点で
   `(game.ID → 正規化済みトークン)` をキャッシュし、`UpdateGame` で invalidate。
   ListGames は 30 秒間隔等の遅い tick で更新。
-- **計測**: macOS では使われないコードパス（A7 参照）なので、まず Windows で
-  実機計測。pprof で CPU/メモリ取って判断。
+- **計測**: 非 Windows は `process_provider_unsupported` のため、まず
+  `process_provider_windows.go` 経路で実機計測。pprof で CPU/メモリ取って判断。
 
 ## P2. saveSession でセーブツリーを二度ハッシュ
 
