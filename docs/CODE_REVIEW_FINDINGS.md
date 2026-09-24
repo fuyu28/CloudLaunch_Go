@@ -35,7 +35,7 @@
 | H1 | P1 | done | `services.resolveS3Config` が `ForcePathStyle` を落とす |
 | H2 | P1 | done | `UpdateUploadConcurrency` が ContentSyncService に届かない |
 | H3 | P0 | deferred | Pull がディスク先行 → DB 失敗で乖離（要ステージング設計） |
-| H4 | P1 | deferred | プレイ時間 `+=` と SUM の二系統・非原子 |
+| H4 | P1 | done | プレイ時間 `+=` と SUM の二系統・非原子 |
 | H5 | P1 | deferred | Home/GameDetail 起動前同期の二重実装（H11 後に抽出） |
 | H6 | P1 | done | `openExternalUrl` 化済み（`fix/frontend-bugs`） |
 | H7 | P0 | done | メモ同期がクラウド memo ID を捨てて再採番 |
@@ -87,3 +87,6 @@
 
 ### M5
 `open_path_*.go` で OS 別オープン（Windows/macOS/Linux）。`OpenFolder` / 外部パス起動が共用。
+
+### H4
+`Game.totalPlayTime` / `lastPlayed` を PlaySession SUM の派生キャッシュに統一。セッション CRUD は `*AndRefreshGame` で原子的再計算。移行差分は `0010_playtime_session_source.sql` の調整セッション。

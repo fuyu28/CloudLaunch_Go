@@ -8,8 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
+    "test:ci": "vitest run",
     "lint": "oxlint .",
-    "format": "oxfmt . --write"
+    "format": "oxfmt . --write",
+    "format:check": "oxfmt . --check"
   },
   "dependencies": {
     "@uiw/react-md-editor": "^4.0.7",
