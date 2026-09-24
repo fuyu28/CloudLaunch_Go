@@ -81,3 +81,27 @@ type PendingPush struct {
 	ContentFingerprint string
 	SaveTree           string
 }
+
+// PullOperationStatus はセーブディレクトリ交換ジャーナルの状態。
+type PullOperationStatus string
+
+const (
+	// PullOperationPrepared は rename 直前〜DB 未反映。起動時は旧 live へ戻す。
+	PullOperationPrepared PullOperationStatus = "PREPARED"
+	// PullOperationApplied は DB 反映済み。backup 削除と journal 消去が残る。
+	PullOperationApplied PullOperationStatus = "APPLIED"
+)
+
+// PullOperation は Pull の同ボリューム stage/backup 交換を回復可能にするためのジャーナル。
+// live/stage/backup は絶対パス（saveDir の兄弟）を保持する。
+// HadLive は交換前に live が存在したか。PREPARED 復旧で「新 live を捨てて空に戻す」判定に使う。
+type PullOperation struct {
+	OperationID string
+	GameID      string
+	LivePath    string
+	StagePath   string
+	BackupPath  string
+	CommitHash  string
+	Status      PullOperationStatus
+	HadLive     bool
+}

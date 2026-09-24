@@ -28,6 +28,7 @@ type fakeContentSyncRepository struct {
 	settings map[string]string
 	saveTree string
 	pending  map[string]domain.PendingPush
+	pullOps  map[string]domain.PullOperation
 
 	// 記録された呼び出し
 	localSyncHeadSet string
@@ -37,12 +38,15 @@ type fakeContentSyncRepository struct {
 	upsertedSessions []domain.PlaySession
 	upsertedRoutes   []domain.Route
 	replacedRoutes   bool
+	applyPullV2Err   error
+	applyPullErr     error
+	lastPullOpID     string
 
 	// エラー注入
 	getGameErr           error
 	finalizePendingErr   error
 	finalizePendingFails int // >0 のあいだ FinalizePendingPush を失敗させる
-	applyPullV2Err       error
+	beginPullOpErr       error
 }
 
 func newFakeRepo(game *domain.Game, sessions []domain.PlaySession) *fakeContentSyncRepository {
@@ -51,6 +55,7 @@ func newFakeRepo(game *domain.Game, sessions []domain.PlaySession) *fakeContentS
 		sessions: sessions,
 		settings: make(map[string]string),
 		pending:  make(map[string]domain.PendingPush),
+		pullOps:  make(map[string]domain.PullOperation),
 	}
 }
 
@@ -137,6 +142,36 @@ func (r *fakeContentSyncRepository) ListPendingPushes(_ context.Context) ([]doma
 	return out, nil
 }
 
+func (r *fakeContentSyncRepository) BeginPullOperation(_ context.Context, op domain.PullOperation) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.beginPullOpErr != nil {
+		return r.beginPullOpErr
+	}
+	if op.Status == "" {
+		op.Status = domain.PullOperationPrepared
+	}
+	r.pullOps[op.OperationID] = op
+	return nil
+}
+
+func (r *fakeContentSyncRepository) ClearPullOperation(_ context.Context, operationID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.pullOps, operationID)
+	return nil
+}
+
+func (r *fakeContentSyncRepository) ListPullOperations(_ context.Context) ([]domain.PullOperation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]domain.PullOperation, 0, len(r.pullOps))
+	for _, item := range r.pullOps {
+		out = append(out, item)
+	}
+	return out, nil
+}
+
 func (r *fakeContentSyncRepository) UpsertGameSync(_ context.Context, game domain.Game) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -162,21 +197,33 @@ func (r *fakeContentSyncRepository) ApplyPullResult(
 	_ context.Context,
 	game domain.Game,
 	sessions []domain.PlaySession,
-	syncHead, saveTree string,
+	syncHead, saveTree, pullOperationID string,
 ) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.applyPullErr != nil {
+		return r.applyPullErr
+	}
+	r.lastPullOpID = pullOperationID
 	r.upsertedGame = &game
 	r.deletedSessions = true
+	r.replacedRoutes = false
 	r.upsertedSessions = append([]domain.PlaySession{}, sessions...)
 	r.localSyncHeadSet = syncHead
 	if r.game != nil {
 		r.game.LocalSyncHead = &syncHead
+		r.game.CurrentRouteID = game.CurrentRouteID
 	}
 	r.sessions = append([]domain.PlaySession{}, sessions...)
 	r.saveTree = saveTree
 	r.saveTreeSet = saveTree
 	delete(r.pending, game.ID)
+	if pullOperationID != "" {
+		if op, ok := r.pullOps[pullOperationID]; ok {
+			op.Status = domain.PullOperationApplied
+			r.pullOps[pullOperationID] = op
+		}
+	}
 	return nil
 }
 
@@ -185,13 +232,14 @@ func (r *fakeContentSyncRepository) ApplyPullResultV2(
 	game domain.Game,
 	routes []domain.Route,
 	sessions []domain.PlaySession,
-	syncHead, saveTree string,
+	syncHead, saveTree, pullOperationID string,
 ) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.applyPullV2Err != nil {
 		return r.applyPullV2Err
 	}
+	r.lastPullOpID = pullOperationID
 	r.upsertedGame = &game
 	r.deletedSessions = true
 	r.replacedRoutes = true
@@ -208,6 +256,12 @@ func (r *fakeContentSyncRepository) ApplyPullResultV2(
 	r.saveTree = saveTree
 	r.saveTreeSet = saveTree
 	delete(r.pending, game.ID)
+	if pullOperationID != "" {
+		if op, ok := r.pullOps[pullOperationID]; ok {
+			op.Status = domain.PullOperationApplied
+			r.pullOps[pullOperationID] = op
+		}
+	}
 	return nil
 }
 
@@ -226,8 +280,8 @@ type fakeBlobStore struct {
 	mu sync.Mutex
 
 	blobs   map[string][]byte // キー: "gameID/hash"
-	heads   map[string]string // gameID → metaHash（HEAD.v2）
-	headsV1 map[string]string // gameID → metaHash（レガシー HEAD）
+	heads   map[string]string // gameID → HEAD.v2 metaHash
+	headsV1 map[string]string // gameID → レガシー HEAD（読取フォールバックのみ）
 
 	// 記録された呼び出し
 	downloadedBlobs []map[string]string // 各呼び出しの blobs 引数
@@ -239,6 +293,8 @@ type fakeBlobStore struct {
 	// onDownloadBlobs は downloadBlobs 呼び出し時に1回呼ばれるフック。
 	// Push の onPutBlobs と同様に、Pull 中のロック保持を検証するのに使う。nil 可。
 	onDownloadBlobs func()
+	// downloadErr が非 nil なら downloadBlobs は書き込み前に失敗する（stage 失敗テスト用）。
+	downloadErr error
 }
 
 func newFakeBlobStore() *fakeBlobStore {
@@ -265,6 +321,7 @@ func (f *fakeBlobStore) readHEAD(_ context.Context, gameID string) (string, erro
 func (f *fakeBlobStore) writeHEAD(_ context.Context, gameID, hash string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// 新クライアントは HEAD.v2 のみ書き、レガシー HEAD は触らない。
 	f.heads[gameID] = hash
 	return nil
 }
@@ -322,7 +379,11 @@ func (f *fakeBlobStore) downloadBlobs(_ context.Context, gameID, saveDir string,
 	}
 	f.mu.Lock()
 	f.downloadedBlobs = append(f.downloadedBlobs, snapshot)
+	downloadErr := f.downloadErr
 	f.mu.Unlock()
+	if downloadErr != nil {
+		return downloadErr
+	}
 
 	total := len(blobs)
 	done := 0
@@ -392,7 +453,7 @@ func newTestService(repo *fakeContentSyncRepository, bstore *fakeBlobStore) *Con
 func strPtr(s string) *string { return &s }
 
 // setupRemoteState はゲームの現在のセーブフォルダ状態をリモートとして fakeBlobStore に書き込む。
-// テストで「remote = 現在のローカル」という基準点を作るために使う。
+// テストで「remote = 現在のローカル」という基準点を作るために使う（v2 / HEAD.v2）。
 func setupRemoteState(
 	t *testing.T,
 	bstore *fakeBlobStore,
@@ -444,11 +505,10 @@ func setupRemoteStateWithRoutes(
 		meta.Snapshot.SchemaVersion = domain.SyncSchemaVersionV1
 		meta.Snapshot.RoutesJSON = ""
 		meta.RoutesJSON = nil
-		metaBytes, merr := json.Marshal(meta.Snapshot)
-		if merr != nil {
-			t.Fatalf("remarshal v1 meta: %v", merr)
+		meta.SnapshotBytes, err = json.Marshal(meta.Snapshot)
+		if err != nil {
+			t.Fatalf("marshal v1 meta: %v", err)
 		}
-		meta.SnapshotBytes = metaBytes
 	}
 	metaHash := hashBytes(meta.SnapshotBytes)
 
@@ -464,7 +524,7 @@ func setupRemoteStateWithRoutes(
 		}
 	}
 	if err := bstore.putBlob(ctx, gameID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
-		t.Fatalf("putBlob commit: %v", err)
+		t.Fatalf("putBlob meta: %v", err)
 	}
 	if writeV2 {
 		if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
@@ -473,6 +533,7 @@ func setupRemoteStateWithRoutes(
 	} else if err := bstore.writeHEADv1(ctx, gameID, metaHash); err != nil {
 		t.Fatalf("writeHEADv1: %v", err)
 	}
+
 	return meta.Snapshot
 }
 
@@ -486,6 +547,30 @@ func baseGame(saveDir string) domain.Game {
 		SaveFolderPath: strPtr(saveDir),
 		CreatedAt:      now,
 		UpdatedAt:      now,
+	}
+}
+
+// putCommitBlobs は MetaSnapshot と依存 meta ブロブを HEAD.v2 に載せる。
+func putCommitBlobs(t *testing.T, bstore *fakeBlobStore, gameID string, meta metaBuildResult) {
+	t.Helper()
+	ctx := context.Background()
+	metaHash := hashBytes(meta.SnapshotBytes)
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
+		t.Fatal(err)
+	}
+	if meta.Snapshot.RoutesJSON != "" && meta.RoutesJSON != nil {
+		if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.Snapshot.RoutesJSON, meta.RoutesJSON); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.writeHEAD(ctx, gameID, metaHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -514,7 +599,7 @@ func TestContentSyncServicePushUploadsDataAndSetsHead(t *testing.T) {
 	}
 	// ローカル同期ヘッドが更新された
 	if repo.localSyncHeadSet == "" {
-		t.Error("expected local sync baseline to be set")
+		t.Error("expected local sync baseline to be finalized")
 	}
 
 	// セーブファイルのブロブが格納されている
@@ -748,7 +833,7 @@ func TestContentSyncServicePullRestoresFilesAndMetadata(t *testing.T) {
 
 	// 同期ヘッドが更新された
 	if repo.localSyncHeadSet == "" {
-		t.Error("expected local sync baseline to be set")
+		t.Error("expected local sync baseline to be finalized")
 	}
 }
 
@@ -831,19 +916,7 @@ func TestContentSyncServicePullRejectsEscapingSavePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metaHash := hashBytes(meta.SnapshotBytes)
-	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
-		t.Fatal(err)
-	}
-	if err := bstore.writeHEAD(context.Background(), game.ID, metaHash); err != nil {
-		t.Fatal(err)
-	}
+	putCommitBlobs(t, bstore, game.ID, meta)
 
 	_, err = svc.Pull(context.Background(), game.ID, nil, false)
 	if err == nil {
@@ -889,19 +962,7 @@ func TestContentSyncServicePullRejectsMismatchedRemoteGameID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metaHash := hashBytes(meta.SnapshotBytes)
-	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.GameJSON, meta.GameJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindMeta, meta.Snapshot.SessionsJSON, meta.SessionsJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := bstore.putBlob(context.Background(), game.ID, storage.BlobKindCommit, metaHash, meta.SnapshotBytes); err != nil {
-		t.Fatal(err)
-	}
-	if err := bstore.writeHEAD(context.Background(), game.ID, metaHash); err != nil {
-		t.Fatal(err)
-	}
+	putCommitBlobs(t, bstore, game.ID, meta)
 
 	repo := newFakeRepo(&game, nil)
 	svc := newTestService(repo, bstore)
@@ -1937,6 +1998,8 @@ func TestContentSyncServiceRecoverPendingSurvivesBlobStoreInitFailure(t *testing
 		t.Fatalf("pending must remain when remote inspect fails, got %#v", repo.pending)
 	}
 }
+
+// ─── H8: Route sync protocol v2 ──────────────────────────────────────────────
 
 func TestContentSyncServicePushPullPreservesRoutesAcrossDevices(t *testing.T) {
 	t.Parallel()

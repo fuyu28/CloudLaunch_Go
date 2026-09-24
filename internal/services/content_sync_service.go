@@ -82,11 +82,15 @@ func (b *s3BlobStore) listGameIDs(ctx context.Context) ([]string, error) {
 	var ids []string
 	for _, obj := range objects {
 		parts := strings.Split(obj.Key, "/")
-		if len(parts) == 3 && parts[0] == "games" && parts[2] == "HEAD" {
-			if _, ok := seen[parts[1]]; !ok {
-				seen[parts[1]] = struct{}{}
-				ids = append(ids, parts[1])
-			}
+		if len(parts) != 3 || parts[0] != "games" {
+			continue
+		}
+		if parts[2] != "HEAD" && parts[2] != "HEAD.v2" {
+			continue
+		}
+		if _, ok := seen[parts[1]]; !ok {
+			seen[parts[1]] = struct{}{}
+			ids = append(ids, parts[1])
 		}
 	}
 	return ids, nil
@@ -99,7 +103,8 @@ type ContentSyncService struct {
 	repository   ContentSyncRepository
 	logger       *slog.Logger
 	newBlobStore func(ctx context.Context) (contentBlobStore, error)
-	gameLocks    sync.Map // gameID → *sync.Mutex（同一ゲームの Status/Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
+	fileOps      pullFileOps // nil なら osPullFileOps（テストで rename 失敗などを注入）
+	gameLocks    sync.Map    // gameID → *sync.Mutex（同一ゲームの Status/Push/Pull/ResolveConflict/DeleteFromCloud を直列化）
 	offline      atomic.Bool
 }
 
@@ -142,6 +147,7 @@ func NewContentSyncService(cfg config.Config, store credentials.Store, repo Cont
 		store:      store,
 		repository: repo,
 		logger:     logger,
+		fileOps:    osPullFileOps{},
 	}
 	svc.newBlobStore = func(ctx context.Context) (contentBlobStore, error) {
 		client, s3cfg, err := svc.newClient(ctx)
@@ -276,6 +282,10 @@ func (s *ContentSyncService) Status(ctx context.Context, gameID string) (domain.
 func (s *ContentSyncService) status(ctx context.Context, gameID string) (domain.SyncStatusDetail, error) {
 	// 起動時 Recover が未完了／失敗したまま UI が Status を叩くと、ディスクと baseline が
 	// ずれたまま判定される。判定前に同一ゲームの未完了分だけ先に消化する。
+	if err := s.recoverPullOperationsForGame(ctx, gameID); err != nil {
+		return domain.SyncStatusDetail{}, err
+	}
+
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return domain.SyncStatusDetail{}, err
@@ -367,6 +377,11 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 }
 
 func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress ProgressFunc, force bool) error {
+	// 未完了 Pull ジャーナルが残ったまま Push すると、セーブ実体と baseline が食い違う。
+	if err := s.recoverPullOperationsForGame(ctx, gameID); err != nil {
+		return err
+	}
+
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
@@ -631,6 +646,12 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 // PullResult{Applied:false, UntrackedDeletes:...} を返す。呼び出し側でユーザーに
 // 確認を取り、承認後に deleteUntracked=true で再実行する。
 func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
+	// 旧 PREPARED を残したまま新規 stage/swap すると、起動回復時に古い backup で
+	// 新しい live を巻き戻してしまう。削除計画の前に必ず消化する。
+	if err := s.recoverPullOperationsForGame(ctx, gameID); err != nil {
+		return domain.PullResult{}, err
+	}
+
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return domain.PullResult{}, err
@@ -733,11 +754,50 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, err
 	}
 
-	if err := s.pullDownloadSaves(ctx, bstore, gameID, onProgress, saveFolderPath, saveSnap, trackedDeletes, untrackedDeletes); err != nil {
+	// セーブは同ボリュームの stage に desired tree を組み立ててから rename 交換する。
+	// 承認済み削除（tracked / untracked）は stage に載せないことで表現する。
+	var pullOp domain.PullOperation
+	if saveFolderPath != nil && *saveFolderPath != "" {
+		var stageErr error
+		pullOp, stageErr = s.pullApplySavesViaStaging(ctx, bstore, gameID, onProgress, *saveFolderPath, saveSnap, remoteHead)
+		if stageErr != nil {
+			return domain.PullResult{}, stageErr
+		}
+		if len(trackedDeletes)+len(untrackedDeletes) > 0 {
+			s.logger.Warn("Pull によりローカルのセーブファイルを削除しました",
+				"gameId", gameID, "saveDir", *saveFolderPath,
+				"tracked", len(trackedDeletes), "untracked", len(untrackedDeletes),
+				"files", logSamplePaths(append(append([]string{}, trackedDeletes...), untrackedDeletes...), 20))
+		}
+	} else {
+		s.logger.Warn("セーブフォルダ未設定のためセーブデータをスキップします", "gameId", gameID)
+	}
+
+	res, err := s.pullApplyToDB(ctx, gameID, cloudG, cloudRoutes, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes, pullOp.OperationID)
+	if err != nil {
+		if pullOp.OperationID != "" {
+			if restoreErr := s.restoreLiveAfterDBFailure(ctx, pullOp); restoreErr != nil {
+				s.logger.Error("Pull DB 失敗後のセーブ復元に失敗", "gameId", gameID, "operationId", pullOp.OperationID, "error", restoreErr)
+				return domain.PullResult{}, fmt.Errorf("%w (restore also failed: %v)", err, restoreErr)
+			}
+		}
 		return domain.PullResult{}, err
 	}
 
-	return s.pullApplyToDB(ctx, gameID, cloudG, cloudRoutes, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes)
+	if pullOp.OperationID != "" {
+		ops := s.fileOps
+		if ops == nil {
+			ops = osPullFileOps{}
+		}
+		pullOp.Status = domain.PullOperationApplied
+		if cleanErr := s.finishAppliedPullDisk(ops, pullOp); cleanErr != nil {
+			s.logger.Warn("Pull backup 掃除に失敗（起動時に再試行）", "gameId", gameID, "operationId", pullOp.OperationID, "error", cleanErr)
+		} else if clearErr := s.repository.ClearPullOperation(ctx, pullOp.OperationID); clearErr != nil {
+			s.logger.Warn("Pull ジャーナルのクリアに失敗（起動時に再試行）", "gameId", gameID, "operationId", pullOp.OperationID, "error", clearErr)
+		}
+	}
+
+	return res, nil
 }
 
 // pullPlanDeletions はリモートのセーブスナップショットとローカルの base tree を突き合わせ、
@@ -797,61 +857,11 @@ func (s *ContentSyncService) pullDownloadImage(ctx context.Context, bstore conte
 	return imagePath, nil
 }
 
-// pullDownloadSaves はセーブファイルの差分を並列ダウンロードし、計画済みの削除を適用する。
-func (s *ContentSyncService) pullDownloadSaves(ctx context.Context, bstore contentBlobStore, gameID string, onProgress ProgressFunc, saveFolderPath *string, saveSnap domain.SaveSnapshot, trackedDeletes, untrackedDeletes []string) error {
-	if saveFolderPath != nil && *saveFolderPath != "" {
-		saveDir := *saveFolderPath
-		total := len(saveSnap.Files)
-
-		if err := os.MkdirAll(saveDir, 0o700); err != nil {
-			return err
-		}
-
-		needsDownload := make(map[string]string, total)
-		for relPath, hash := range saveSnap.Files {
-			targetPath, err := storage.ResolveSafeRelativePath(saveDir, relPath)
-			if err != nil {
-				return err
-			}
-			localHash, err := hashFileStream(targetPath)
-			if err != nil || localHash != hash {
-				needsDownload[relPath] = hash
-			}
-		}
-
-		var wrappedProgress func(int, int)
-		if onProgress != nil {
-			alreadyDone := total - len(needsDownload)
-			onProgress(alreadyDone, total)
-			wrappedProgress = func(downloaded, _ int) {
-				onProgress(alreadyDone+downloaded, total)
-			}
-		}
-		if err := bstore.downloadBlobs(ctx, gameID, saveDir, needsDownload, s.config.S3UploadConcurrency, wrappedProgress); err != nil {
-			return err
-		}
-
-		// untracked は呼び出し側が確認済み（deleteUntracked=true）のときだけここに含まれる。
-		toDelete := append(append([]string{}, trackedDeletes...), untrackedDeletes...)
-		if err := applyDeletions(saveDir, toDelete); err != nil {
-			return err
-		}
-		if len(toDelete) > 0 {
-			s.logger.Warn("Pull によりローカルのセーブファイルを削除しました",
-				"gameId", gameID, "saveDir", saveDir,
-				"tracked", len(trackedDeletes), "untracked", len(untrackedDeletes),
-				"files", logSamplePaths(toDelete, 20))
-		}
-	} else {
-		s.logger.Warn("セーブフォルダ未設定のためセーブデータをスキップします", "gameId", gameID)
-	}
-	return nil
-}
-
 // pullApplyToDB はリモートのゲーム情報・セッション・（v2 ならルート）・同期基準を単一トランザクションで反映する。
 // localGame はマシン固有フィールド（LocalSaveHash / LocalSaveHashUpdatedAt 等）の引き継ぎに使う。
 // v1 commit はローカル Route を削除しない。v2 は Route を置換し、参照不整合は rollback する。
-func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudRoutes []cloudRoute, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte) (domain.PullResult, error) {
+// pullOperationID が非空なら同一 TX で Pull ジャーナルを APPLIED にする。
+func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, cloudG cloudGame, cloudRoutes []cloudRoute, cloudSessions []cloudSession, imagePath *string, exePath string, saveFolderPath *string, localGame *domain.Game, meta domain.MetaSnapshot, saveSnapBytes []byte, pullOperationID string) (domain.PullResult, error) {
 	updatedGame := domain.Game{
 		ID:             cloudG.ID,
 		Title:          cloudG.Title,
@@ -899,10 +909,10 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 				CreatedAt: cr.CreatedAt,
 			})
 		}
-		if err := s.repository.ApplyPullResultV2(ctx, updatedGame, routes, sessions, fp, saveTree); err != nil {
+		if err := s.repository.ApplyPullResultV2(ctx, updatedGame, routes, sessions, fp, saveTree, pullOperationID); err != nil {
 			return domain.PullResult{}, err
 		}
-	} else if err := s.repository.ApplyPullResult(ctx, updatedGame, sessions, fp, saveTree); err != nil {
+	} else if err := s.repository.ApplyPullResult(ctx, updatedGame, sessions, fp, saveTree, pullOperationID); err != nil {
 		return domain.PullResult{}, err
 	}
 	return domain.PullResult{Applied: true}, nil
@@ -932,6 +942,9 @@ func (s *ContentSyncService) DeleteFromCloud(ctx context.Context, gameID string)
 		return ErrOffline
 	}
 	defer s.lockGame(gameID)()
+	if err := s.recoverPullOperationsForGame(ctx, gameID); err != nil {
+		return err
+	}
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {
 		return err
