@@ -116,13 +116,13 @@ export type WindowApi = {
     updateGame: (id: string, game: InputGameData) => Promise<ApiResult<void>>;
     deleteGame: (id: string) => Promise<ApiResult<void>>;
     updatePlayStatus: (gameId: string, playStatus: PlayStatus) => Promise<ApiResult<GameType>>;
-    createSession: (
-      duration: number,
-      gameId: string,
-      sessionName?: string,
-    ) => Promise<ApiResult<void>>;
+    createSession: (duration: number, gameId: string) => Promise<ApiResult<void>>;
     getPlaySessions: (gameId: string) => Promise<ApiResult<PlaySessionType[]>>;
-    updateSessionName: (sessionId: string, sessionName: string) => Promise<ApiResult<void>>;
+    updateSession: (
+      sessionId: string,
+      playedAt: Date,
+      duration: number,
+    ) => Promise<ApiResult<void>>;
     deletePlaySession: (sessionId: string) => Promise<ApiResult<void>>;
   };
   memo: {
