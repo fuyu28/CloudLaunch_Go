@@ -332,6 +332,142 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 	return s.push(ctx, gameID, onProgress, false)
 }
 
+// SessionFormatMigrationResult はクラウド上で移行したゲーム数を表す。
+type SessionFormatMigrationResult struct {
+	MigratedGames int `json:"migratedGames"`
+}
+
+// MigrateSessionFormat は旧 sessions.json から sessionName を取り除き、リモート HEAD を更新する。
+func (s *ContentSyncService) MigrateSessionFormat(ctx context.Context) (SessionFormatMigrationResult, error) {
+	if s.offline.Load() {
+		return SessionFormatMigrationResult{}, ErrOffline
+	}
+	bstore, err := s.newBlobStore(ctx)
+	if err != nil {
+		return SessionFormatMigrationResult{}, err
+	}
+	gameIDs, err := bstore.listGameIDs(ctx)
+	if err != nil {
+		return SessionFormatMigrationResult{}, err
+	}
+
+	result := SessionFormatMigrationResult{}
+	for _, gameID := range gameIDs {
+		unlock := s.lockGame(gameID)
+		migrated, migrateErr := migrateRemoteSessionFormat(ctx, bstore, gameID)
+		unlock()
+		if migrateErr != nil {
+			return result, migrateErr
+		}
+		if migrated {
+			result.MigratedGames++
+			s.updateLocalSessionMigrationBaseline(ctx, bstore, gameID)
+		}
+	}
+	return result, nil
+}
+
+func (s *ContentSyncService) updateLocalSessionMigrationBaseline(ctx context.Context, bstore contentBlobStore, gameID string) {
+	game, err := s.repository.GetGameByID(ctx, gameID)
+	if err != nil || game == nil || game.SaveFolderPath == nil || *game.SaveFolderPath == "" {
+		return
+	}
+	localMeta, err := s.buildLocalMeta(ctx, *game, *game.SaveFolderPath)
+	if err != nil {
+		s.logger.Warn("ローカルの移行基準を確認できません", "gameId", gameID, "error", err)
+		return
+	}
+	head, err := bstore.readHEAD(ctx, gameID)
+	if err != nil {
+		return
+	}
+	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
+	if err != nil {
+		return
+	}
+	var remoteMeta domain.MetaSnapshot
+	if err := json.Unmarshal(metaBytes, &remoteMeta); err != nil {
+		return
+	}
+	if contentFingerprint(localMeta.Snapshot) != contentFingerprint(remoteMeta) {
+		return
+	}
+	if err := s.repository.SetLocalSyncHead(ctx, gameID, contentFingerprint(remoteMeta)); err != nil {
+		s.logger.Warn("ローカルの移行基準を更新できません", "gameId", gameID, "error", err)
+	}
+}
+
+func migrateRemoteSessionFormat(ctx context.Context, bstore contentBlobStore, gameID string) (bool, error) {
+	head, err := bstore.readHEAD(ctx, gameID)
+	if err != nil {
+		return false, err
+	}
+	if head == "" {
+		return false, nil
+	}
+	metaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, head)
+	if err != nil {
+		return false, err
+	}
+	var meta domain.MetaSnapshot
+	if err := json.Unmarshal(metaBytes, &meta); err != nil {
+		return false, err
+	}
+	sessionsJSON, err := bstore.getBlob(ctx, gameID, storage.BlobKindMeta, meta.SessionsJSON)
+	if err != nil {
+		return false, err
+	}
+	if !hasLegacySessionName(sessionsJSON) {
+		return false, nil
+	}
+	var sessions []cloudSession
+	if err := json.Unmarshal(sessionsJSON, &sessions); err != nil {
+		return false, err
+	}
+	updatedSessionsJSON, err := json.Marshal(sessions)
+	if err != nil {
+		return false, err
+	}
+	meta.SessionsJSON = hashBytes(updatedSessionsJSON)
+	updatedMetaBytes, err := json.Marshal(meta)
+	if err != nil {
+		return false, err
+	}
+	updatedHead := hashBytes(updatedMetaBytes)
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindMeta, meta.SessionsJSON, updatedSessionsJSON); err != nil {
+		return false, err
+	}
+	if err := bstore.putBlob(ctx, gameID, storage.BlobKindCommit, updatedHead, updatedMetaBytes); err != nil {
+		return false, err
+	}
+	currentHead, err := bstore.readHEAD(ctx, gameID)
+	if err != nil {
+		return false, err
+	}
+	if currentHead != head {
+		return false, fmt.Errorf("リモートが更新されています: %s", gameID)
+	}
+	if err := bstore.writeHEAD(ctx, gameID, updatedHead); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func hasLegacySessionName(data []byte) bool {
+	var sessions []struct {
+		SessionName json.RawMessage `json:"sessionName"`
+	}
+	if err := json.Unmarshal(data, &sessions); err != nil {
+		return false
+	}
+	for _, session := range sessions {
+		if session.SessionName != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress ProgressFunc, force bool) error {
 	bstore, err := s.newBlobStore(ctx)
 	if err != nil {

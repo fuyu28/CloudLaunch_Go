@@ -204,6 +204,7 @@ export type WindowApi = {
       deleteUntracked?: boolean,
     ) => Promise<ApiResult<PullResult>>;
     deleteFromCloud: (gameId: string) => Promise<ApiResult<void>>;
+    migrateSessionFormat: () => Promise<ApiResult<{ migratedGames: number }>>;
     onProgress: (callback: (event: SyncProgressEvent) => void) => () => void;
   };
   game: {
