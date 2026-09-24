@@ -52,7 +52,7 @@
 | M2 | todo | CreateGame の CreateRoute 失敗無視 |
 | M3 | todo | Status が lockGame 外 |
 | M4 | done | ErogameScape ホスト未検証 |
-| M5 | todo | OpenFolder が explorer.exe 固定 |
+| M5 | done | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
 | M12 | todo | Push HEAD 後の local baseline 非原子 |
 | M14 | done | DownloadMemoFromCloud キー未サニタイズ |
@@ -87,6 +87,9 @@
 
 ### M4
 `erogamescape_url.go` でページ／画像ホストを allowlist 検証。
+
+### M5
+`open_path_*.go` で OS 別オープン（Windows/macOS/Linux）。`OpenFolder` / 外部パス起動が共用。
 
 ### H4
 `Game.totalPlayTime` / `lastPlayed` を PlaySession SUM の派生キャッシュに統一。セッション CRUD は `*AndRefreshGame` で原子的再計算。移行差分は `0010_playtime_session_source.sql` の調整セッション。
