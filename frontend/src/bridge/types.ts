@@ -70,6 +70,7 @@ export type WindowApi = {
     close: () => Promise<void>;
     openFolder: (path: string) => Promise<void>;
     getPlatform: () => Promise<string>;
+    getAppVersion: () => Promise<ApiResult<string>>;
   };
   browser: {
     /** http/https のみ。fragment 等は webview 内既定動作に任せる。 */

@@ -5,7 +5,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import { useSyncAndLogsActions } from "@renderer/hooks/useSyncAndLogsActions";
@@ -89,6 +89,12 @@ export default function SyncAndLogsTab(): React.JSX.Element {
         description="クラウド同期とトラブルシューティング"
         color="info"
       />
+
+      <div className="bg-base-200 p-4 rounded-lg">
+        <h4 className="font-medium">アプリバージョン</h4>
+        <p className="text-sm text-base-content/70 mt-1">このアプリをビルドしたコミット</p>
+        <code className="text-sm break-all mt-2 block">{appVersion}</code>
+      </div>
 
       <div className="bg-base-200 p-4 rounded-lg">
         <div className="mb-3">

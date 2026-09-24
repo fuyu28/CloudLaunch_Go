@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"CloudLaunch_Go/internal/buildinfo"
 	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/storage"
@@ -24,6 +25,11 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// GetAppVersion returns the commit recorded when this executable was built.
+func (app *App) GetAppVersion() result.ApiResult[string] {
+	return result.OkResult(buildinfo.Revision())
+}
 
 // ListGames はゲーム一覧を取得する。
 func (app *App) ListGames(searchText string, filter string, sortBy string, sortDirection string) result.ApiResult[[]domain.Game] {
