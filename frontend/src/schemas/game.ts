@@ -6,11 +6,21 @@
 
 import { z } from "zod";
 
+const characterCount = (value: string) => Array.from(value).length;
+
 export const gameSchema = z.object({
-  title: z.string().min(1, "タイトルは必須です").max(100, "100文字以内で入力してください"),
-  publisher: z.string().min(1, "ブランド名は必須です").max(50, "50文字以内で入力してください"),
+  title: z
+    .string()
+    .trim()
+    .min(1, "タイトルは必須です")
+    .refine((value) => characterCount(value) <= 100, "100文字以内で入力してください"),
+  publisher: z
+    .string()
+    .trim()
+    .min(1, "ブランド名は必須です")
+    .refine((value) => characterCount(value) <= 50, "50文字以内で入力してください"),
   imagePath: z.string().optional().or(z.literal("")),
-  exePath: z.string().min(1, "実行ファイルのパスは必須です"),
+  exePath: z.string().trim().min(1, "実行ファイルのパスは必須です"),
   saveFolderPath: z.string().optional().or(z.literal("")),
 });
 

@@ -26,7 +26,7 @@ func (repository fakeMemoCloudGameRepository) GetGameByID(ctx context.Context, g
 	return repository.game, nil
 }
 
-func (repository fakeMemoCloudGameRepository) CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
+func (repository fakeMemoCloudGameRepository) CreateGameWithInitialRoute(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error) {
 	return nil, nil
 }
 
@@ -34,16 +34,20 @@ func (repository fakeMemoCloudGameRepository) UpdateGame(ctx context.Context, ga
 	return &game, nil
 }
 
+func (repository fakeMemoCloudGameRepository) DeleteGameAndQueueMemoCleanup(ctx context.Context, gameID string) error {
+	return nil
+}
+
+func (repository fakeMemoCloudGameRepository) ListPendingMemoCleanup(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (repository fakeMemoCloudGameRepository) ClearPendingMemoCleanup(ctx context.Context, gameID string) error {
+	return nil
+}
+
 func (repository fakeMemoCloudGameRepository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error {
 	return nil
-}
-
-func (repository fakeMemoCloudGameRepository) DeleteGame(ctx context.Context, gameID string) error {
-	return nil
-}
-
-func (repository fakeMemoCloudGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
-	return nil, nil
 }
 
 type fakeMemoCloudMemoRepository struct {

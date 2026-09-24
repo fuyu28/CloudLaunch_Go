@@ -5,7 +5,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
 
 import { useSyncAndLogsActions } from "@renderer/hooks/useSyncAndLogsActions";

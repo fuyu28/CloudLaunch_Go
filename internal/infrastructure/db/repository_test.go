@@ -233,7 +233,7 @@ func TestApplyPullResultNormalizesMissingRouteRefs(t *testing.T) {
 		{ID: "sess-1", GameID: created.ID, PlayedAt: time.Now().UTC(), Duration: 60, RouteID: &missingRoute, UpdatedAt: time.Now().UTC()},
 	}
 
-	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{\"files\":{}}"); err != nil {
+	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{\"files\":{}}", ""); err != nil {
 		t.Fatalf("ApplyPullResult should not fail on missing route refs: %v", err)
 	}
 
@@ -267,7 +267,7 @@ func TestApplyPullResultPersistsHeadAndTree(t *testing.T) {
 		t.Fatalf("CreateGame: %v", err)
 	}
 
-	if err := repo.ApplyPullResult(ctx, *created, nil, "head-xyz", "{\"files\":{\"a.sav\":\"h\"}}"); err != nil {
+	if err := repo.ApplyPullResult(ctx, *created, nil, "head-xyz", "{\"files\":{\"a.sav\":\"h\"}}", ""); err != nil {
 		t.Fatalf("ApplyPullResult: %v", err)
 	}
 
