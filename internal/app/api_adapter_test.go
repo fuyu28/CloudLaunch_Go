@@ -30,7 +30,7 @@ func (r noopAppGameRepository) GetGameByID(ctx context.Context, gameID string) (
 	return nil, nil
 }
 
-func (r noopAppGameRepository) CreateGameWithInitialRoute(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error) {
+func (r noopAppGameRepository) CreateGame(ctx context.Context, game domain.Game) (*domain.Game, error) {
 	if r.createErr != nil {
 		return nil, r.createErr
 	}
@@ -46,6 +46,10 @@ func (r noopAppGameRepository) UpdateGame(ctx context.Context, game domain.Game)
 
 func (r noopAppGameRepository) DeleteGame(ctx context.Context, gameID string) error {
 	return r.deleteErr
+}
+
+func (r noopAppGameRepository) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
+	return &route, nil
 }
 
 func (r noopAppGameRepository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error {

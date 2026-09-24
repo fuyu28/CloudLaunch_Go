@@ -4,9 +4,11 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"CloudLaunch_Go/internal/domain"
 )
@@ -14,12 +16,22 @@ import (
 // GameService はゲーム関連の操作を提供する。
 type GameService struct {
 	repository GameRepository
+	memoFiles  MemoDirectoryCleaner
 	logger     *slog.Logger
 }
 
+// MemoDirectoryCleaner はゲーム単位のローカルメモ削除境界を定義する。
+type MemoDirectoryCleaner interface {
+	DeleteGameMemoFiles(gameID string) error
+}
+
 // NewGameService は GameService を生成する。
-func NewGameService(repository GameRepository, logger *slog.Logger) *GameService {
-	return &GameService{repository: repository, logger: logger}
+func NewGameService(repository GameRepository, logger *slog.Logger, memoFiles ...MemoDirectoryCleaner) *GameService {
+	var cleaner MemoDirectoryCleaner
+	if len(memoFiles) > 0 {
+		cleaner = memoFiles[0]
+	}
+	return &GameService{repository: repository, memoFiles: cleaner, logger: logger}
 }
 
 // ListGames は検索・フィルタ・ソート付きでゲーム一覧を取得する。
@@ -85,6 +97,14 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
 		return nil, newServiceError("ゲームIDが不正です", detail)
 	}
+	if error := validateGameFields(input.Title, input.Publisher, input.ExePath); error != nil {
+		service.logger.Warn("ゲーム入力が不正です", "error", error)
+		return nil, newServiceError("ゲーム入力が不正です", error.Error())
+	}
+	if input.PlayStatus != "" && !domain.IsValidPlayStatus(input.PlayStatus) {
+		service.logger.Warn("playStatus が不正です", "playStatus", input.PlayStatus)
+		return nil, newServiceError("playStatus が不正です", string(input.PlayStatus))
+	}
 
 	current, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
@@ -94,11 +114,6 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	if current == nil {
 		service.logger.Warn("ゲームが見つかりません", "gameId", trimmedID)
 		return nil, newServiceError("ゲームが見つかりません", "指定されたIDが存在しません")
-	}
-
-	if input.PlayStatus != "" && !domain.IsValidPlayStatus(input.PlayStatus) {
-		service.logger.Warn("playStatus が不正です", "playStatus", input.PlayStatus)
-		return nil, newServiceError("playStatus が不正です", string(input.PlayStatus))
 	}
 
 	current.Title = strings.TrimSpace(input.Title)
@@ -174,9 +189,44 @@ func (service *GameService) DeleteGame(ctx context.Context, gameID string) error
 		return newServiceError("ゲームIDが不正です", detail)
 	}
 
-	if error := service.repository.DeleteGame(ctx, trimmedID); error != nil {
+	if error := service.repository.DeleteGameAndQueueMemoCleanup(ctx, trimmedID); error != nil {
 		service.logger.Error("ゲーム削除に失敗", "error", error)
 		return newServiceError("ゲーム削除に失敗しました", error.Error())
+	}
+	if error := service.cleanupMemoDirectory(ctx, trimmedID); error != nil {
+		return newServiceError("ゲームのローカルメモ削除に失敗しました", error.Error())
+	}
+	return nil
+}
+
+// RetryPendingMemoCleanup は保留中のローカルメモ削除を再実行する。
+func (service *GameService) RetryPendingMemoCleanup(ctx context.Context) error {
+	gameIDs, err := service.repository.ListPendingMemoCleanup(ctx)
+	if err != nil {
+		service.logger.Error("メモ削除保留一覧の取得に失敗", "error", err)
+		return err
+	}
+
+	var cleanupErrors []error
+	for _, gameID := range gameIDs {
+		if err := service.cleanupMemoDirectory(ctx, gameID); err != nil {
+			cleanupErrors = append(cleanupErrors, fmt.Errorf("%s: %w", gameID, err))
+		}
+	}
+	return errors.Join(cleanupErrors...)
+}
+
+func (service *GameService) cleanupMemoDirectory(ctx context.Context, gameID string) error {
+	if service.memoFiles == nil {
+		return errors.New("memo directory cleaner is not configured")
+	}
+	if err := service.memoFiles.DeleteGameMemoFiles(gameID); err != nil {
+		service.logger.Warn("ゲームのローカルメモ削除に失敗", "gameId", gameID, "error", err)
+		return err
+	}
+	if err := service.repository.ClearPendingMemoCleanup(ctx, gameID); err != nil {
+		service.logger.Warn("メモ削除保留の解除に失敗", "gameId", gameID, "error", err)
+		return err
 	}
 	return nil
 }
@@ -202,16 +252,35 @@ type GameUpdateInput struct {
 	CurrentRouteID *string
 }
 
-// validateGameInput はゲーム作成入力の簡易検証を行う。
+// validateGameInput はゲーム作成入力を検証する。
 func validateGameInput(input GameInput) error {
-	if _, detail, ok := requireNonEmpty(input.Title, "title"); !ok {
+	return validateGameFields(input.Title, input.Publisher, input.ExePath)
+}
+
+func validateGameFields(title string, publisher string, exePath string) error {
+	trimmedTitle, detail, ok := requireNonEmpty(title, "title")
+	if !ok {
 		return errors.New(detail)
 	}
-	if _, detail, ok := requireNonEmpty(input.Publisher, "publisher"); !ok {
+	if utf8.RuneCountInString(trimmedTitle) > 100 {
+		return errors.New("title は100文字以内で指定してください")
+	}
+
+	trimmedPublisher, detail, ok := requireNonEmpty(publisher, "publisher")
+	if !ok {
 		return errors.New(detail)
 	}
-	if _, detail, ok := requireNonEmpty(input.ExePath, "exePath"); !ok {
+	if utf8.RuneCountInString(trimmedPublisher) > 50 {
+		return errors.New("publisher は50文字以内で指定してください")
+	}
+
+	trimmedExePath, detail, ok := requireNonEmpty(exePath, "exePath")
+	if !ok {
 		return errors.New(detail)
+	}
+	lowerExePath := strings.ToLower(trimmedExePath)
+	if !strings.HasSuffix(lowerExePath, ".exe") && !strings.HasSuffix(lowerExePath, ".app") {
+		return errors.New("exePath は .exe または .app で終わるパスを指定してください")
 	}
 	return nil
 }

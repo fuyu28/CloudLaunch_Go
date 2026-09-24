@@ -34,12 +34,12 @@
 |----|------|------|------|
 | H1 | P1 | done | `services.resolveS3Config` が `ForcePathStyle` を落とす |
 | H2 | P1 | done | `UpdateUploadConcurrency` が ContentSyncService に届かない |
-| H3 | P0 | deferred | Pull がディスク先行 → DB 失敗で乖離（要ステージング設計） |
+| H3 | P0 | done | Pull がディスク先行 → DB 失敗で乖離（ステージング＋ジャーナル） |
 | H4 | P1 | done | プレイ時間 `+=` と SUM の二系統・非原子 |
 | H5 | P1 | deferred | Home/GameDetail 起動前同期の二重実装（H11 後に抽出） |
 | H6 | P1 | done | `openExternalUrl` 化済み（`fix/frontend-bugs`） |
 | H7 | P0 | done | メモ同期がクラウド memo ID を捨てて再採番 |
-| H8 | P0 | deferred | Route 未同期 → Pull で FK NULL 化（要プロトコル拡張） |
+| H8 | P0 | done | Route 未同期 → Pull で FK NULL 化（同期プロトコル v2） |
 | H9 | P1 | done | 復元後 hotkey 失敗で AppData ロールバック |
 | H10 | P1 | done | 起動時 `autoTracking` / concurrency 未同期 |
 | H11 | P0 | done | 起動前確認が `conflict` を pull 扱い（ローカル上書き） |
@@ -48,13 +48,13 @@
 
 | ID | 状態 | 要約 |
 |----|------|------|
-| M1 | todo | DeleteGame がメモファイルを残す |
+| M1 | done | DeleteGame がメモファイルを残す |
 | M2 | done | CreateGame の CreateRoute 失敗無視 |
-| M3 | todo | Status が lockGame 外 |
-| M4 | done | ErogameScape ホスト未検証 |
-| M5 | done | OpenFolder が explorer.exe 固定 |
+| M3 | done | Status が lockGame 外 |
+| M4 | todo | ErogameScape ホスト未検証 |
+| M5 | todo | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
-| M12 | todo | Push HEAD 後の local baseline 非原子 |
+| M12 | done | Push HEAD 後の local baseline 非原子 |
 | M14 | done | DownloadMemoFromCloud キー未サニタイズ |
 | M18 | done | 設定 atom を backend 成功前に更新 |
 | M19 | done | download→launch が失敗でも起動 |
@@ -82,17 +82,23 @@
 ### H11
 `pull_needed` のみダウンロード確認。`conflict` は `SyncConflictModal`。
 
-### M2
-`CreateGameWithInitialRoute` で Game と初期 Route を同一トランザクション。
-
-### H3 / H8
-影響大のため本 PR では着手せず、別コミット／ADR 後に実施。
-
-### M4
-`erogamescape_url.go` でページ／画像ホストを allowlist 検証。
-
-### M5
-`open_path_*.go` で OS 別オープン（Windows/macOS/Linux）。`OpenFolder` / 外部パス起動が共用。
+### H3
+`pull_staging.go` で同ボリューム stage/backup 交換。`PullOperation` ジャーナル（PREPARED/APPLIED）と起動時 Recover でディスク↔DB 乖離を回復。
 
 ### H4
 `Game.totalPlayTime` / `lastPlayed` を PlaySession SUM の派生キャッシュに統一。セッション CRUD は `*AndRefreshGame` で原子的再計算。移行差分は `0010_playtime_session_source.sql` の調整セッション。
+
+### H8
+同期プロトコル v2（`SchemaVersion` + `routes.json`）。`ApplyPullResultV2` が Route ID を保持し欠落参照を拒否。v1 commit は互換経路。`HEAD.v2` を優先しレガシー HEAD は上書きしない。Route mutation は app から `syncGameAsync`。
+
+### M1
+`DeleteGameAndQueueMemoCleanup` → ローカルメモ削除。失敗時は `PendingMemoCleanup` に残し起動時 `RetryPendingMemoCleanup`。
+
+### M2
+`CreateGameWithInitialRoute` で Game と初期 Route を同一トランザクション。
+
+### M3
+`ContentSyncService.Status` が `lockGame` 内で実行。内部向けはロックなし `status`。
+
+### M12
+`PendingPush` + `FinalizePendingPush`（baseline 更新と pending 削除を同一 TX）。HEAD 成功後の DB 失敗は `RecoverPendingPushes` / Status 前 Recover で確定。
