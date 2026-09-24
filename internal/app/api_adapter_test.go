@@ -699,3 +699,110 @@ func TestNormalizeDeletePrefixRejectsEmptyOrWildcard(t *testing.T) {
 		}
 	}
 }
+
+// routeMutationOrderFixture は DeleteRoute の lookup → mutation → sync 順序を記録する。
+type routeMutationOrderFixture struct {
+	noopAppRouteRepository
+	calls     []string
+	route     *domain.Route
+	lookupErr error
+	deleteErr error
+}
+
+func (f *routeMutationOrderFixture) GetRouteByID(ctx context.Context, routeID string) (*domain.Route, error) {
+	f.calls = append(f.calls, "lookup")
+	if f.lookupErr != nil {
+		return nil, f.lookupErr
+	}
+	return f.route, nil
+}
+
+func (f *routeMutationOrderFixture) DeleteRoute(ctx context.Context, routeID string) error {
+	f.calls = append(f.calls, "mutation")
+	return f.deleteErr
+}
+
+func (f *routeMutationOrderFixture) CreateRoute(ctx context.Context, route domain.Route) (*domain.Route, error) {
+	f.calls = append(f.calls, "mutation")
+	created := route
+	if created.ID == "" {
+		created.ID = "new-route"
+	}
+	return &created, nil
+}
+
+func newRouteMutationOrderApp(t *testing.T, fixture *routeMutationOrderFixture, synced chan string) *App {
+	t.Helper()
+	return &App{
+		Logger:             newAdapterTestLogger(),
+		RouteService:       services.NewRouteService(fixture, newAdapterTestLogger()),
+		routeLookup:        fixture,
+		ContentSyncService: &services.ContentSyncService{},
+		syncCoalescer: newAsyncCoalescer(func(id string) {
+			fixture.calls = append(fixture.calls, "sync")
+			if synced != nil {
+				synced <- id
+			}
+		}),
+	}
+}
+
+func TestAppDeleteRouteLookupMutationSyncOrder(t *testing.T) {
+	t.Parallel()
+
+	fixture := &routeMutationOrderFixture{
+		route: &domain.Route{ID: "route-1", GameID: "game-1", Name: "本編"},
+	}
+	synced := make(chan string, 1)
+	app := newRouteMutationOrderApp(t, fixture, synced)
+
+	result := app.DeleteRoute("route-1")
+	if !result.Success || !result.Data {
+		t.Fatalf("expected success, got %#v", result)
+	}
+	if got := waitSessionSync(t, synced); got != "game-1" {
+		t.Fatalf("expected sync game-1, got %q", got)
+	}
+	if want := []string{"lookup", "mutation", "sync"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected order %v, got %v", want, fixture.calls)
+	}
+}
+
+func TestAppDeleteRouteLookupFailureSkipsMutationAndSync(t *testing.T) {
+	t.Parallel()
+
+	fixture := &routeMutationOrderFixture{
+		route:     &domain.Route{ID: "route-1", GameID: "game-1"},
+		lookupErr: errors.New("db lookup fail"),
+	}
+	synced := make(chan string, 1)
+	app := newRouteMutationOrderApp(t, fixture, synced)
+
+	result := app.DeleteRoute("route-1")
+	if result.Success {
+		t.Fatalf("expected lookup failure, got %#v", result)
+	}
+	if result.Error == nil || result.Error.Message != "ルート取得に失敗しました" {
+		t.Fatalf("expected lookup error, got %#v", result.Error)
+	}
+	assertNoSessionSync(t, synced)
+	if want := []string{"lookup"}; !stringSliceEqual(fixture.calls, want) {
+		t.Fatalf("expected only lookup, got %v", fixture.calls)
+	}
+}
+
+func TestAppCreateRouteSchedulesSync(t *testing.T) {
+	t.Parallel()
+
+	fixture := &routeMutationOrderFixture{}
+	synced := make(chan string, 1)
+	app := newRouteMutationOrderApp(t, fixture, synced)
+
+	result := app.CreateRoute(services.RouteInput{Name: "新ルート", Order: 1, GameID: "game-9"})
+	if !result.Success || result.Data == nil {
+		t.Fatalf("expected success, got %#v", result)
+	}
+	if got := waitSessionSync(t, synced); got != "game-9" {
+		t.Fatalf("expected sync game-9, got %q", got)
+	}
+}
