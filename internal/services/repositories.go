@@ -61,6 +61,7 @@ type RouteRepository interface {
 type ContentSyncRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
+	ListRoutesByGame(ctx context.Context, gameID string) ([]domain.Route, error)
 	GetLocalSaveTree(ctx context.Context, gameID string) (string, error)
 	// SetLocalSyncState は localSyncHead と localSaveTree を単一トランザクションで更新する。
 	SetLocalSyncState(ctx context.Context, gameID, syncHead, saveTree string) error
@@ -71,13 +72,19 @@ type ContentSyncRepository interface {
 	// ClearPendingPush は baseline を変えずに pending だけ削除する（自動確定できない場合）。
 	ClearPendingPush(ctx context.Context, gameID string) error
 	ListPendingPushes(ctx context.Context) ([]domain.PendingPush, error)
-	// ApplyPullResult は Pull で取得したリモート状態を単一トランザクションで反映する。
-	// Game の upsert・セッションの全削除と再投入・localSyncHead・localSaveTree を all-or-nothing で書き込む。
-	// totalPlayTime / lastPlayed は投入セッションの SUM/MAX から導出する（game.json の値は使わない）。
-	// game.CurrentRouteID および各 session.RouteID のうち、ローカルに対応する Route が存在しないものは
-	// NULL に正規化する（Route は同期対象外のため、別PCで FK 違反になるのを防ぐ）。
-	// 成功時は同一 TX で PendingPush も削除する（Pull が正になった baseline と矛盾する保留を残さない）。
-	ApplyPullResult(ctx context.Context, game domain.Game, sessions []domain.PlaySession, syncHead, saveTree string) error
+	// BeginPullOperation はセーブ交換直前に PREPARED ジャーナルを永続化する。
+	BeginPullOperation(ctx context.Context, op domain.PullOperation) error
+	// ClearPullOperation は指定ジャーナルを削除する（backup 掃除後、または PREPARED 復旧後）。
+	ClearPullOperation(ctx context.Context, operationID string) error
+	ListPullOperations(ctx context.Context) ([]domain.PullOperation, error)
+	// ApplyPullResult は v1 Pull のローカル反映（単一トランザクション）。
+	// Route は置換せず、存在しない Route 参照は NULL に正規化する。
+	// pullOperationID が非空なら同一 TX でジャーナルを APPLIED にする。
+	ApplyPullResult(ctx context.Context, game domain.Game, sessions []domain.PlaySession, syncHead, saveTree, pullOperationID string) error
+	// ApplyPullResultV2 は v2 Pull のローカル反映（単一トランザクション）。
+	// Route を ID 保持で置換し、不正・重複・参照欠落はエラーで全体 rollback する。
+	// pullOperationID が非空なら同一 TX でジャーナルを APPLIED にする。
+	ApplyPullResultV2(ctx context.Context, game domain.Game, routes []domain.Route, sessions []domain.PlaySession, syncHead, saveTree, pullOperationID string) error
 	GetSetting(ctx context.Context, key string) (string, error)
 	UpsertSetting(ctx context.Context, key, value string) error
 }

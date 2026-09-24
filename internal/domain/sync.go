@@ -10,6 +10,13 @@ type SaveSnapshot struct {
 	Files map[string]BlobHash `json:"files"`
 }
 
+// 同期プロトコルのスキーマ版。v1 は SchemaVersion 未設定（0）で routes.json を持たない。
+// v2 は Route 本体をコミット構成要素に含める（H8）。
+const (
+	SyncSchemaVersionV1 = 0
+	SyncSchemaVersionV2 = 2
+)
+
 // MetaSnapshot はある時点のゲームデータ全体を表す（git のコミット相当）。
 //
 // FileCount / TotalSize はクラウド一覧で「セーブツリーを別途取得せずに」
@@ -17,14 +24,18 @@ type SaveSnapshot struct {
 // 同期判定（contentFingerprint）には含まれず、欠落しても整合性に影響しない。
 // 旧クライアントが書いた commit には値が無いため omitempty + ゼロ値時は
 // 表示側で「未取得」として扱う。
+//
+// SchemaVersion / RoutesJSON は v2 から。旧 commit では欠落し、v1 互換経路で扱う。
 type MetaSnapshot struct {
-	GameJSON     BlobHash  `json:"game.json"`
-	SessionsJSON BlobHash  `json:"sessions.json"`
-	Saves        BlobHash  `json:"saves"`
-	DeviceName   string    `json:"deviceName"`
-	CreatedAt    time.Time `json:"createdAt"`
-	FileCount    int64     `json:"fileCount,omitempty"`
-	TotalSize    int64     `json:"totalSize,omitempty"`
+	SchemaVersion int       `json:"schemaVersion,omitempty"`
+	GameJSON      BlobHash  `json:"game.json"`
+	SessionsJSON  BlobHash  `json:"sessions.json"`
+	RoutesJSON    BlobHash  `json:"routes.json,omitempty"`
+	Saves         BlobHash  `json:"saves"`
+	DeviceName    string    `json:"deviceName"`
+	CreatedAt     time.Time `json:"createdAt"`
+	FileCount     int64     `json:"fileCount,omitempty"`
+	TotalSize     int64     `json:"totalSize,omitempty"`
 }
 
 type SyncStatus string
@@ -69,4 +80,28 @@ type PendingPush struct {
 	NewCommitHash      string
 	ContentFingerprint string
 	SaveTree           string
+}
+
+// PullOperationStatus はセーブディレクトリ交換ジャーナルの状態。
+type PullOperationStatus string
+
+const (
+	// PullOperationPrepared は rename 直前〜DB 未反映。起動時は旧 live へ戻す。
+	PullOperationPrepared PullOperationStatus = "PREPARED"
+	// PullOperationApplied は DB 反映済み。backup 削除と journal 消去が残る。
+	PullOperationApplied PullOperationStatus = "APPLIED"
+)
+
+// PullOperation は Pull の同ボリューム stage/backup 交換を回復可能にするためのジャーナル。
+// live/stage/backup は絶対パス（saveDir の兄弟）を保持する。
+// HadLive は交換前に live が存在したか。PREPARED 復旧で「新 live を捨てて空に戻す」判定に使う。
+type PullOperation struct {
+	OperationID string
+	GameID      string
+	LivePath    string
+	StagePath   string
+	BackupPath  string
+	CommitHash  string
+	Status      PullOperationStatus
+	HadLive     bool
 }

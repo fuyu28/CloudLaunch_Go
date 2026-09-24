@@ -34,12 +34,12 @@
 |----|------|------|------|
 | H1 | P1 | done | `services.resolveS3Config` が `ForcePathStyle` を落とす |
 | H2 | P1 | done | `UpdateUploadConcurrency` が ContentSyncService に届かない |
-| H3 | P0 | deferred | Pull がディスク先行 → DB 失敗で乖離（要ステージング設計） |
+| H3 | P0 | done | Pull がディスク先行 → DB 失敗で乖離（ステージング＋ジャーナル） |
 | H4 | P1 | done | プレイ時間 `+=` と SUM の二系統・非原子 |
 | H5 | P1 | deferred | Home/GameDetail 起動前同期の二重実装（H11 後に抽出） |
 | H6 | P1 | done | `openExternalUrl` 化済み（`fix/frontend-bugs`） |
 | H7 | P0 | done | メモ同期がクラウド memo ID を捨てて再採番 |
-| H8 | P0 | deferred | Route 未同期 → Pull で FK NULL 化（要プロトコル拡張） |
+| H8 | P0 | done | Route 未同期 → Pull で FK NULL 化（同期プロトコル v2） |
 | H9 | P1 | done | 復元後 hotkey 失敗で AppData ロールバック |
 | H10 | P1 | done | 起動時 `autoTracking` / concurrency 未同期 |
 | H11 | P0 | done | 起動前確認が `conflict` を pull 扱い（ローカル上書き） |
@@ -82,6 +82,15 @@
 ### H11
 `pull_needed` のみダウンロード確認。`conflict` は `SyncConflictModal`。
 
+### H3
+`pull_staging.go` で同ボリューム stage/backup 交換。`PullOperation` ジャーナル（PREPARED/APPLIED）と起動時 Recover でディスク↔DB 乖離を回復。
+
+### H4
+`Game.totalPlayTime` / `lastPlayed` を PlaySession SUM の派生キャッシュに統一。セッション CRUD は `*AndRefreshGame` で原子的再計算。移行差分は `0010_playtime_session_source.sql` の調整セッション。
+
+### H8
+同期プロトコル v2（`SchemaVersion` + `routes.json`）。`ApplyPullResultV2` が Route ID を保持し欠落参照を拒否。v1 commit は互換経路。`HEAD.v2` を優先しレガシー HEAD は上書きしない。Route mutation は app から `syncGameAsync`。
+
 ### M1
 `DeleteGameAndQueueMemoCleanup` → ローカルメモ削除。失敗時は `PendingMemoCleanup` に残し起動時 `RetryPendingMemoCleanup`。
 
@@ -93,9 +102,3 @@
 
 ### M12
 `PendingPush` + `FinalizePendingPush`（baseline 更新と pending 削除を同一 TX）。HEAD 成功後の DB 失敗は `RecoverPendingPushes` / Status 前 Recover で確定。
-
-### H3 / H8
-影響大のため本 PR では着手せず、別コミット／ADR 後に実施。
-
-### H4
-`Game.totalPlayTime` / `lastPlayed` を PlaySession SUM の派生キャッシュに統一。セッション CRUD は `*AndRefreshGame` で原子的再計算。移行差分は `0010_playtime_session_source.sql` の調整セッション。
