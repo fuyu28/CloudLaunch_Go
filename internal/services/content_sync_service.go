@@ -755,13 +755,12 @@ func (s *ContentSyncService) pullApplyToDB(ctx context.Context, gameID string, c
 	sessions := make([]domain.PlaySession, 0, len(cloudSessions))
 	for _, cs := range cloudSessions {
 		sessions = append(sessions, domain.PlaySession{
-			ID:          cs.ID,
-			GameID:      gameID,
-			PlayedAt:    cs.PlayedAt,
-			Duration:    cs.Duration,
-			SessionName: cs.SessionName,
-			RouteID:     cs.RouteID,
-			UpdatedAt:   cs.UpdatedAt,
+			ID:        cs.ID,
+			GameID:    gameID,
+			PlayedAt:  cs.PlayedAt,
+			Duration:  cs.Duration,
+			RouteID:   cs.RouteID,
+			UpdatedAt: cs.UpdatedAt,
 		})
 	}
 	// ApplyPullResult に saveSnap を渡して base tree も更新する。残さないと次回 Pull が untracked 誤判定する。

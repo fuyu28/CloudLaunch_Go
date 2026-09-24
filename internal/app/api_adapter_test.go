@@ -97,8 +97,8 @@ func (r noopAppSessionRepository) DeletePlaySessionAndRefreshGame(ctx context.Co
 func (r noopAppSessionRepository) UpdatePlaySessionRoute(ctx context.Context, sessionID string, routeID *string) error {
 	return r.updateErr
 }
-func (r noopAppSessionRepository) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
-	return r.updateErr
+func (r noopAppSessionRepository) UpdatePlaySessionAndRefreshGame(ctx context.Context, sessionID string, playedAt time.Time, duration int64) (*domain.PlaySession, error) {
+	return nil, r.updateErr
 }
 func (r noopAppSessionRepository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
 	return nil
@@ -397,9 +397,9 @@ func (f *sessionMutationOrderFixture) UpdatePlaySessionRoute(ctx context.Context
 	f.calls = append(f.calls, "mutation")
 	return f.updateErr
 }
-func (f *sessionMutationOrderFixture) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
+func (f *sessionMutationOrderFixture) UpdatePlaySessionAndRefreshGame(ctx context.Context, sessionID string, playedAt time.Time, duration int64) (*domain.PlaySession, error) {
 	f.calls = append(f.calls, "mutation")
-	return f.updateErr
+	return f.session, f.updateErr
 }
 func (f *sessionMutationOrderFixture) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
 	return nil
@@ -526,7 +526,7 @@ func TestAppDeleteSessionNilSessionMutatesWithoutSync(t *testing.T) {
 	}
 }
 
-func TestAppUpdateSessionNameLookupMutationSyncOrder(t *testing.T) {
+func TestAppUpdateSessionLookupMutationSyncOrder(t *testing.T) {
 	t.Parallel()
 
 	fixture := &sessionMutationOrderFixture{
@@ -535,15 +535,14 @@ func TestAppUpdateSessionNameLookupMutationSyncOrder(t *testing.T) {
 	synced := make(chan string, 1)
 	app := newSessionMutationOrderApp(t, fixture, synced)
 
-	result := app.UpdateSessionName("session-1", "Chapter 1")
+	result := app.UpdateSession("session-1", services.SessionUpdateInput{PlayedAt: time.Now(), Duration: 60})
 	if !result.Success || !result.Data {
 		t.Fatalf("expected ApiResult[bool] success, got %#v", result)
 	}
 	if got := waitSessionSync(t, synced); got != "game-1" {
 		t.Fatalf("expected sync game-1, got %q", got)
 	}
-	// サービス内部の GetPlaySessionByID（TouchGameUpdatedAt 用）も同一ポート経由で記録される。
-	if want := []string{"lookup", "lookup", "mutation", "sync"}; !stringSliceEqual(fixture.calls, want) {
+	if want := []string{"lookup", "mutation", "sync"}; !stringSliceEqual(fixture.calls, want) {
 		t.Fatalf("expected order %v, got %v", want, fixture.calls)
 	}
 }

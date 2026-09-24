@@ -145,10 +145,10 @@ func (app *App) UpdateSessionRoute(sessionID string, routeID *string) result.Api
 	})
 }
 
-// UpdateSessionName はセッション名を更新する。
-func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	return app.mutateSessionAndSync(sessionID, "セッション名更新に失敗しました", func(ctx context.Context) error {
-		return app.SessionService.UpdateSessionName(ctx, sessionID, sessionName)
+// UpdateSession はセッションの日時と時間を更新する。
+func (app *App) UpdateSession(sessionID string, input services.SessionUpdateInput) result.ApiResult[bool] {
+	return app.mutateSessionAndSync(sessionID, "セッション更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSession(ctx, sessionID, input)
 	})
 }
 

@@ -59,12 +59,13 @@ func (repository *fakeSessionRepository) UpdatePlaySessionRoute(ctx context.Cont
 	return nil
 }
 
-func (repository *fakeSessionRepository) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
+func (repository *fakeSessionRepository) UpdatePlaySessionAndRefreshGame(ctx context.Context, sessionID string, playedAt time.Time, duration int64) (*domain.PlaySession, error) {
 	if repository.session != nil {
-		repository.session.SessionName = &sessionName
+		repository.session.PlayedAt = playedAt
+		repository.session.Duration = duration
 	}
-	repository.refreshSkippedOnMutate = true
-	return nil
+	repository.createAndRefreshCalls++
+	return repository.session, nil
 }
 
 func (repository *fakeSessionRepository) TouchGameUpdatedAt(ctx context.Context, gameID string) error {
@@ -98,13 +99,11 @@ func TestSessionServiceListSessionsByGameUsesRepositoryBoundary(t *testing.T) {
 
 	repository := &fakeSessionRepository{
 		session: func() *domain.PlaySession {
-			name := "Session 1"
 			return &domain.PlaySession{
-				ID:          "session-1",
-				GameID:      "game-1",
-				PlayedAt:    time.Now(),
-				Duration:    120,
-				SessionName: &name,
+				ID:       "session-1",
+				GameID:   "game-1",
+				PlayedAt: time.Now(),
+				Duration: 120,
 			}
 		}(),
 	}
@@ -143,45 +142,20 @@ func TestSessionServiceCreateSessionUsesAtomicRefresh(t *testing.T) {
 	}
 }
 
-func TestSessionServiceUpdateSessionNameAllowsEmptyToClear(t *testing.T) {
-	t.Parallel()
-
-	// 空白のみの入力は「セッション名をクリア（NULL 化）」として許容される。
-	// リポジトリ層では NULLIF によって空文字が NULL に変換されるため、
-	// サービス層では空白トリム後の空文字をそのままリポジトリへ渡す挙動を検証する。
-	existingName := "old-name"
-	repository := &fakeSessionRepository{
-		session: &domain.PlaySession{ID: "session-1", GameID: "game-1", SessionName: &existingName},
-	}
-	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
-
-	if err := service.UpdateSessionName(context.Background(), "session-1", "   "); err != nil {
-		t.Fatalf("expected empty/whitespace session name to succeed for clearing, got %v", err)
-	}
-	if repository.session.SessionName == nil || *repository.session.SessionName != "" {
-		t.Fatalf("expected session name to be cleared to empty string (repository-level NULLIF handles the NULL conversion)")
-	}
-}
-
-func TestSessionServiceUpdateSessionNameTouchesUpdatedAtWithoutRefresh(t *testing.T) {
+func TestSessionServiceUpdateSessionRefreshesPlayTime(t *testing.T) {
 	t.Parallel()
 
 	repository := &fakeSessionRepository{
-		session: &domain.PlaySession{ID: "session-1", GameID: "game-1", Duration: 120},
+		session: &domain.PlaySession{ID: "session-1", GameID: "game-1", Duration: 60},
 	}
 	service := NewSessionService(repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	playedAt := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 
-	if err := service.UpdateSessionName(context.Background(), "session-1", "  Chapter 1  "); err != nil {
-		t.Fatalf("expected success, got %v", err)
+	if err := service.UpdateSession(context.Background(), "session-1", SessionUpdateInput{PlayedAt: playedAt, Duration: 120}); err != nil {
+		t.Fatalf("expected update success, got %v", err)
 	}
-	if repository.session.SessionName == nil || *repository.session.SessionName != "Chapter 1" {
-		t.Fatalf("expected session name to be trimmed and stored")
-	}
-	if repository.touchedGameID != "game-1" {
-		t.Fatalf("expected game updated timestamp to be touched")
-	}
-	if repository.createAndRefreshCalls != 0 || repository.deleteAndRefreshCalls != 0 {
-		t.Fatalf("name change must not recalculate play time")
+	if repository.session.Duration != 120 || !repository.session.PlayedAt.Equal(playedAt) {
+		t.Fatalf("unexpected updated session: %#v", repository.session)
 	}
 }
 
@@ -235,10 +209,11 @@ func (repository *fakeSessionRepositoryWithError) GetPlaySessionByID(ctx context
 func (repository *fakeSessionRepositoryWithError) DeletePlaySessionAndRefreshGame(ctx context.Context, sessionID string) (string, error) {
 	return "", repository.deleteErr
 }
-func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionRoute(ctx context.Context, sessionID string, chapterID *string) error {
-	return nil
+
+func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionAndRefreshGame(ctx context.Context, sessionID string, playedAt time.Time, duration int64) (*domain.PlaySession, error) {
+	return nil, repository.deleteErr
 }
-func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error {
+func (repository *fakeSessionRepositoryWithError) UpdatePlaySessionRoute(ctx context.Context, sessionID string, chapterID *string) error {
 	return nil
 }
 func (repository *fakeSessionRepositoryWithError) TouchGameUpdatedAt(ctx context.Context, gameID string) error {

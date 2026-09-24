@@ -31,11 +31,10 @@ func (service *SessionService) CreateSession(ctx context.Context, input SessionI
 	}
 
 	session := domain.PlaySession{
-		GameID:      strings.TrimSpace(input.GameID),
-		PlayedAt:    input.PlayedAt,
-		Duration:    input.Duration,
-		SessionName: input.SessionName,
-		RouteID:     input.RouteID,
+		GameID:   strings.TrimSpace(input.GameID),
+		PlayedAt: input.PlayedAt,
+		Duration: input.Duration,
+		RouteID:  input.RouteID,
 	}
 
 	created, error := service.repository.CreatePlaySessionAndRefreshGame(ctx, session)
@@ -95,40 +94,36 @@ func (service *SessionService) UpdateSessionRoute(ctx context.Context, sessionID
 	return nil
 }
 
-// UpdateSessionName はセッション名を更新する。
-// 空文字（または空白のみ）を渡した場合は NULL クリアとして扱う。
-// フロントエンドから「セッション名を消したい」ユースケースを許可するため。
-// duration は変わらないためプレイ時間は再計算せず、Game.updatedAt のみ触る。
-func (service *SessionService) UpdateSessionName(ctx context.Context, sessionID string, sessionName string) error {
+// UpdateSession は日時と時間を更新する。
+func (service *SessionService) UpdateSession(ctx context.Context, sessionID string, input SessionUpdateInput) error {
 	trimmedID, detail, ok := requireNonEmpty(sessionID, "sessionID")
 	if !ok {
 		service.logger.Warn("セッションIDが不正です", "detail", detail, "sessionId", sessionID)
 		return newServiceError("セッションIDが不正です", detail)
 	}
-	trimmedName := strings.TrimSpace(sessionName)
-
-	session, error := service.repository.GetPlaySessionByID(ctx, trimmedID)
-	if error != nil {
-		service.logger.Error("セッション取得に失敗", "error", error)
-		return newServiceError("セッション取得に失敗しました", error.Error())
+	if error := validateSessionUpdateInput(input); error != nil {
+		service.logger.Warn("セッション入力が不正です", "error", error)
+		return newServiceError("セッション入力が不正です", error.Error())
 	}
-	if error := service.repository.UpdatePlaySessionName(ctx, trimmedID, trimmedName); error != nil {
-		service.logger.Error("セッション名更新に失敗", "error", error)
-		return newServiceError("セッション名更新に失敗しました", error.Error())
-	}
-	if session != nil {
-		_ = service.repository.TouchGameUpdatedAt(ctx, session.GameID)
+	if _, error := service.repository.UpdatePlaySessionAndRefreshGame(ctx, trimmedID, input.PlayedAt, input.Duration); error != nil {
+		service.logger.Error("セッション更新に失敗", "error", error)
+		return newServiceError("セッション更新に失敗しました", error.Error())
 	}
 	return nil
 }
 
 // SessionInput はセッション作成入力を表す。
 type SessionInput struct {
-	GameID      string
-	PlayedAt    time.Time
-	Duration    int64
-	SessionName *string
-	RouteID     *string
+	GameID   string
+	PlayedAt time.Time
+	Duration int64
+	RouteID  *string
+}
+
+// SessionUpdateInput はセッションの編集入力を表す。
+type SessionUpdateInput struct {
+	PlayedAt time.Time
+	Duration int64
 }
 
 // validateSessionInput はセッション入力を検証する。
@@ -136,6 +131,16 @@ func validateSessionInput(input SessionInput) error {
 	if _, detail, ok := requireNonEmpty(input.GameID, "gameID"); !ok {
 		return errors.New(detail)
 	}
+	if input.PlayedAt.IsZero() {
+		return errors.New("playedAtが空です")
+	}
+	if input.Duration < 0 {
+		return errors.New("durationが不正です")
+	}
+	return nil
+}
+
+func validateSessionUpdateInput(input SessionUpdateInput) error {
 	if input.PlayedAt.IsZero() {
 		return errors.New("playedAtが空です")
 	}
