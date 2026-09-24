@@ -99,6 +99,9 @@ func (r *startupContentSyncRepository) ListPlaySessionsByGame(context.Context, s
 func (r *startupContentSyncRepository) ListRoutesByGame(context.Context, string) ([]domain.Route, error) {
 	return nil, nil
 }
+func (r *startupContentSyncRepository) SetLocalSyncHead(context.Context, string, string) error {
+	return nil
+}
 func (r *startupContentSyncRepository) GetLocalSaveTree(context.Context, string) (string, error) {
 	return "", nil
 }

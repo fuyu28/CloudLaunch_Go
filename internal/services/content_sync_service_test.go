@@ -86,6 +86,13 @@ func (r *fakeContentSyncRepository) GetLocalSaveTree(_ context.Context, _ string
 	return r.saveTree, nil
 }
 
+func (r *fakeContentSyncRepository) SetLocalSyncHead(_ context.Context, _ string, syncHead string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.localSyncHeadSet = syncHead
+	return nil
+}
+
 func (r *fakeContentSyncRepository) SetLocalSyncState(_ context.Context, _ string, syncHead, saveTree string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
