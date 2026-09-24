@@ -574,14 +574,6 @@ func (repository *Repository) DeletePlaySessionsByGame(ctx context.Context, game
 	return error
 }
 
-// SetLocalSyncHead はゲームの localSyncHead を更新する。
-func (repository *Repository) SetLocalSyncHead(ctx context.Context, gameID, hash string) error {
-	_, err := repository.connection.ExecContext(ctx, `
-		UPDATE "Game" SET localSyncHead = ? WHERE id = ?
-	`, hash, gameID)
-	return err
-}
-
 // GetLocalSaveTree はゲームの localSaveTree（前回同期した SaveSnapshot JSON）を取得する。
 // 未設定の場合は "" を返す。
 func (repository *Repository) GetLocalSaveTree(ctx context.Context, gameID string) (string, error) {
@@ -598,12 +590,187 @@ func (repository *Repository) GetLocalSaveTree(ctx context.Context, gameID strin
 	return value.String, nil
 }
 
-// SetLocalSaveTree はゲームの localSaveTree を更新する。
-func (repository *Repository) SetLocalSaveTree(ctx context.Context, gameID, tree string) error {
-	_, err := repository.connection.ExecContext(ctx, `
-		UPDATE "Game" SET localSaveTree = ? WHERE id = ?
-	`, tree, gameID)
+// SetLocalSyncState は localSyncHead と localSaveTree を単一トランザクションで更新する。
+func (repository *Repository) SetLocalSyncState(ctx context.Context, gameID, syncHead, saveTree string) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = setLocalSyncStateTx(ctx, tx, gameID, syncHead, saveTree); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func setLocalSyncStateTx(ctx context.Context, tx *sql.Tx, gameID, syncHead, saveTree string) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE "Game" SET localSyncHead = ?, localSaveTree = ? WHERE id = ?
+	`, syncHead, saveTree, gameID)
 	return err
+}
+
+// BeginPendingPush はリモート HEAD 更新前に pending Push を永続化する。
+func (repository *Repository) BeginPendingPush(ctx context.Context, pending domain.PendingPush) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PendingPush" (gameId, expectedRemoteHead, newCommitHash, contentFingerprint, saveTree)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(gameId) DO UPDATE SET
+			expectedRemoteHead = excluded.expectedRemoteHead,
+			newCommitHash = excluded.newCommitHash,
+			contentFingerprint = excluded.contentFingerprint,
+			saveTree = excluded.saveTree,
+			createdAt = CURRENT_TIMESTAMP
+	`, pending.GameID, pending.ExpectedRemoteHead, pending.NewCommitHash,
+		pending.ContentFingerprint, pending.SaveTree)
+	return err
+}
+
+// FinalizePendingPush は local baseline 更新と pending 削除を単一トランザクションで行う。
+func (repository *Repository) FinalizePendingPush(ctx context.Context, gameID, syncHead, saveTree string) (err error) {
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = setLocalSyncStateTx(ctx, tx, gameID, syncHead, saveTree); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, gameID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ClearPendingPush は baseline を変えずに pending だけ削除する。
+func (repository *Repository) ClearPendingPush(ctx context.Context, gameID string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		DELETE FROM "PendingPush" WHERE gameId = ?
+	`, gameID)
+	return err
+}
+
+// ListPendingPushes は未確定の pending Push を返す。
+func (repository *Repository) ListPendingPushes(ctx context.Context) ([]domain.PendingPush, error) {
+	rows, err := repository.connection.QueryContext(ctx, `
+		SELECT gameId, expectedRemoteHead, newCommitHash, contentFingerprint, saveTree
+		FROM "PendingPush"
+		ORDER BY createdAt, gameId
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	pending := make([]domain.PendingPush, 0)
+	for rows.Next() {
+		var item domain.PendingPush
+		if err := rows.Scan(
+			&item.GameID,
+			&item.ExpectedRemoteHead,
+			&item.NewCommitHash,
+			&item.ContentFingerprint,
+			&item.SaveTree,
+		); err != nil {
+			return nil, err
+		}
+		pending = append(pending, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return pending, nil
+}
+
+// BeginPullOperation はセーブ交換直前に PREPARED ジャーナルを永続化する。
+func (repository *Repository) BeginPullOperation(ctx context.Context, op domain.PullOperation) error {
+	if op.Status == "" {
+		op.Status = domain.PullOperationPrepared
+	}
+	hadLive := 0
+	if op.HadLive {
+		hadLive = 1
+	}
+	_, err := repository.connection.ExecContext(ctx, `
+		INSERT INTO "PullOperation" (operationId, gameId, livePath, stagePath, backupPath, commitHash, status, hadLive)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, op.OperationID, op.GameID, op.LivePath, op.StagePath, op.BackupPath, op.CommitHash, string(op.Status), hadLive)
+	return err
+}
+
+// ClearPullOperation は指定ジャーナルを削除する。
+func (repository *Repository) ClearPullOperation(ctx context.Context, operationID string) error {
+	_, err := repository.connection.ExecContext(ctx, `
+		DELETE FROM "PullOperation" WHERE operationId = ?
+	`, operationID)
+	return err
+}
+
+// ListPullOperations は未完了の Pull ジャーナルを返す。
+func (repository *Repository) ListPullOperations(ctx context.Context) ([]domain.PullOperation, error) {
+	rows, err := repository.connection.QueryContext(ctx, `
+		SELECT operationId, gameId, livePath, stagePath, backupPath, commitHash, status, hadLive
+		FROM "PullOperation"
+		ORDER BY createdAt, operationId
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	ops := make([]domain.PullOperation, 0)
+	for rows.Next() {
+		var item domain.PullOperation
+		var status string
+		var hadLive int
+		if err := rows.Scan(
+			&item.OperationID,
+			&item.GameID,
+			&item.LivePath,
+			&item.StagePath,
+			&item.BackupPath,
+			&item.CommitHash,
+			&status,
+			&hadLive,
+		); err != nil {
+			return nil, err
+		}
+		item.Status = domain.PullOperationStatus(status)
+		item.HadLive = hadLive != 0
+		ops = append(ops, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ops, nil
+}
+
+func markPullOperationAppliedTx(ctx context.Context, tx *sql.Tx, operationID string) error {
+	if operationID == "" {
+		return nil
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE "PullOperation" SET status = ? WHERE operationId = ? AND status = ?
+	`, string(domain.PullOperationApplied), operationID, string(domain.PullOperationPrepared))
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("pull operation not found or not PREPARED: %s", operationID)
+	}
+	return nil
 }
 
 // GetSetting は Settings テーブルから値を取得する。存在しない場合は "" を返す。
@@ -660,14 +827,14 @@ func routeExistsTx(ctx context.Context, tx *sql.Tx, routeID *string) (*string, e
 	return routeID, nil
 }
 
-// ApplyPullResult は Pull のローカル反映を単一トランザクションで実行する。
-// 存在しない Route 参照（currentRouteId / routeId）は NULL に正規化して FK 違反を防ぐ。
+// ApplyPullResult は v1 Pull のローカル反映を単一トランザクションで実行する。
+// ローカル Route は削除せず、存在しない Route 参照は NULL に正規化して FK 違反を防ぐ。
 // totalPlayTime / lastPlayed は game.json を信用せず、投入したセッションから SUM/MAX で導出する。
 func (repository *Repository) ApplyPullResult(
 	ctx context.Context,
 	game domain.Game,
 	sessions []domain.PlaySession,
-	syncHead, saveTree string,
+	syncHead, saveTree, pullOperationID string,
 ) (err error) {
 	tx, err := repository.connection.BeginTx(ctx, nil)
 	if err != nil {
@@ -706,10 +873,13 @@ func (repository *Repository) ApplyPullResult(
 	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, game.ID); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSyncHead = ? WHERE id = ?`, syncHead, game.ID); err != nil {
+	if err = setLocalSyncStateTx(ctx, tx, game.ID, syncHead, saveTree); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET localSaveTree = ? WHERE id = ?`, saveTree, game.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+	if err = markPullOperationAppliedTx(ctx, tx, pullOperationID); err != nil {
 		return err
 	}
 
@@ -717,8 +887,142 @@ func (repository *Repository) ApplyPullResult(
 	return err
 }
 
-// upsertGameForPullTx は Pull 用に Game を upsert する。
-// totalPlayTime / lastPlayed はプレースホルダ（0/NULL）にし、後続のセッション集計で埋める。
+// ApplyPullResultV2 は v2 Pull のローカル反映を単一トランザクションで実行する。
+//
+// 適用順（FK 制約のため）:
+// 1. Game を currentRouteId=NULL で upsert
+// 2. 旧 Session 削除
+// 3. 旧 Route 削除
+// 4. クラウド Route を ID 保持で insert
+// 5. currentRouteId を設定
+// 6. Session を insert
+// 7. playtime をセッションから導出
+// 8. baseline / pending を更新
+//
+// 不正・重複・他ゲーム混入・参照欠落はサイレント正規化せずエラー（全体 rollback）。
+func (repository *Repository) ApplyPullResultV2(
+	ctx context.Context,
+	game domain.Game,
+	routes []domain.Route,
+	sessions []domain.PlaySession,
+	syncHead, saveTree, pullOperationID string,
+) (err error) {
+	if err = validatePullRoutesV2(game.ID, routes, game.CurrentRouteID, sessions); err != nil {
+		return err
+	}
+
+	tx, err := repository.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// 1. currentRoute はまだ無いので NULL で upsert
+	if err = upsertGameForPullTx(ctx, tx, game, nil); err != nil {
+		return err
+	}
+
+	// 2–3. Session → Route の順で削除（Session が Route を参照するため）
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PlaySession" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "Route" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+
+	// 4. Route を ID 保持で insert
+	for _, route := range routes {
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO "Route" (id, name, "order", gameId, createdAt)
+			VALUES (?, ?, ?, ?, ?)
+		`, route.ID, route.Name, route.Order, game.ID, route.CreatedAt); err != nil {
+			return fmt.Errorf("route insert failed: %w", err)
+		}
+	}
+
+	// 5. currentRouteId を設定
+	if _, err = tx.ExecContext(ctx, `UPDATE "Game" SET currentRouteId = ? WHERE id = ?`, game.CurrentRouteID, game.ID); err != nil {
+		return err
+	}
+
+	// 6. Session insert（参照は validate 済み）
+	for _, session := range sessions {
+		if err = insertPlaySessionForPullTx(ctx, tx, game.ID, session, session.RouteID); err != nil {
+			return err
+		}
+	}
+
+	// 7–8. playtime / baseline / pending / pull journal
+	if err = refreshGamePlayTimeFromSessionsTx(ctx, tx, game.ID); err != nil {
+		return err
+	}
+	if err = setLocalSyncStateTx(ctx, tx, game.ID, syncHead, saveTree); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM "PendingPush" WHERE gameId = ?`, game.ID); err != nil {
+		return err
+	}
+	if err = markPullOperationAppliedTx(ctx, tx, pullOperationID); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
+}
+
+// validatePullRoutesV2 は v2 Pull 入力の Route / 参照整合を検証する。
+func validatePullRoutesV2(gameID string, routes []domain.Route, currentRouteID *string, sessions []domain.PlaySession) error {
+	seenID := make(map[string]struct{}, len(routes))
+	seenOrder := make(map[int64]struct{}, len(routes))
+	seenName := make(map[string]struct{}, len(routes))
+	for _, route := range routes {
+		id := strings.TrimSpace(route.ID)
+		name := strings.TrimSpace(route.Name)
+		if id == "" {
+			return fmt.Errorf("malformed route: empty id")
+		}
+		if name == "" {
+			return fmt.Errorf("malformed route: empty name")
+		}
+		if route.Order < 0 {
+			return fmt.Errorf("malformed route: negative order")
+		}
+		if route.GameID != "" && route.GameID != gameID {
+			return fmt.Errorf("route %s belongs to wrong game", id)
+		}
+		if _, ok := seenID[id]; ok {
+			return fmt.Errorf("duplicate route id: %s", id)
+		}
+		if _, ok := seenOrder[route.Order]; ok {
+			return fmt.Errorf("duplicate route order: %d", route.Order)
+		}
+		if _, ok := seenName[name]; ok {
+			return fmt.Errorf("duplicate route name: %s", name)
+		}
+		seenID[id] = struct{}{}
+		seenOrder[route.Order] = struct{}{}
+		seenName[name] = struct{}{}
+	}
+
+	if currentRouteID != nil && *currentRouteID != "" {
+		if _, ok := seenID[*currentRouteID]; !ok {
+			return fmt.Errorf("missing route reference: currentRouteId=%s", *currentRouteID)
+		}
+	}
+	for _, session := range sessions {
+		if session.RouteID != nil && *session.RouteID != "" {
+			if _, ok := seenID[*session.RouteID]; !ok {
+				return fmt.Errorf("missing route reference: session %s routeId=%s", session.ID, *session.RouteID)
+			}
+		}
+	}
+	return nil
+}
+
 func upsertGameForPullTx(ctx context.Context, tx *sql.Tx, game domain.Game, currentRouteID *string) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO "Game" (

@@ -217,6 +217,72 @@ func TestDeleteGameAndQueueMemoCleanupRollsBackMarkerAndPreservesGameOnDeleteFai
 	}
 }
 
+func TestCreateGameWithInitialRouteCreatesExactlyOneRoute(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newTestRepo(t)
+
+	created, err := repo.CreateGameWithInitialRoute(
+		ctx,
+		newGame("Atomic Game", "/atomic.exe"),
+		domain.Route{Name: "メインルート", Order: 1},
+	)
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	if created == nil || created.ID == "" {
+		t.Fatalf("expected created game, got %#v", created)
+	}
+
+	routes, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("routes count = %d, want 1", len(routes))
+	}
+	if routes[0].Name != "メインルート" || routes[0].Order != 1 || routes[0].GameID != created.ID {
+		t.Fatalf("unexpected initial route: %#v", routes[0])
+	}
+	if routes[0].ID == "" || routes[0].CreatedAt.IsZero() {
+		t.Fatalf("expected generated route id and timestamp: %#v", routes[0])
+	}
+}
+
+func TestCreateGameWithInitialRouteRollsBackGameWhenRouteInsertFails(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo, conn := newTestRepoWithConnection(t)
+	if _, err := conn.ExecContext(ctx, `
+		CREATE TRIGGER fail_initial_route
+		BEFORE INSERT ON "Route"
+		BEGIN
+			SELECT RAISE(ABORT, 'route insert failed');
+		END
+	`); err != nil {
+		t.Fatalf("create failure trigger: %v", err)
+	}
+
+	created, err := repo.CreateGameWithInitialRoute(
+		ctx,
+		newGame("Rollback Game", "/rollback.exe"),
+		domain.Route{Name: "メインルート", Order: 1},
+	)
+	if err == nil || created != nil {
+		t.Fatalf("expected route insert failure, got created=%#v err=%v", created, err)
+	}
+
+	games, err := repo.ListGames(ctx, "", "", "title", "asc")
+	if err != nil {
+		t.Fatalf("ListGames: %v", err)
+	}
+	if len(games) != 0 {
+		t.Fatalf("game insert was not rolled back: %#v", games)
+	}
+}
+
 // --- PlaySession 正本 + Game 派生キャッシュ ---
 
 func TestCreatePlaySessionAndRefreshGameUpdatesTotals(t *testing.T) {
@@ -423,7 +489,7 @@ func TestApplyPullResultNormalizesMissingRouteRefs(t *testing.T) {
 		{ID: "sess-1", GameID: created.ID, PlayedAt: time.Now().UTC(), Duration: 60, RouteID: &missingRoute, UpdatedAt: time.Now().UTC()},
 	}
 
-	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{\"files\":{}}"); err != nil {
+	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{\"files\":{}}", ""); err != nil {
 		t.Fatalf("ApplyPullResult should not fail on missing route refs: %v", err)
 	}
 
@@ -457,7 +523,7 @@ func TestApplyPullResultPersistsHeadAndTree(t *testing.T) {
 		t.Fatalf("CreateGame: %v", err)
 	}
 
-	if err := repo.ApplyPullResult(ctx, *created, nil, "head-xyz", "{\"files\":{\"a.sav\":\"h\"}}"); err != nil {
+	if err := repo.ApplyPullResult(ctx, *created, nil, "head-xyz", "{\"files\":{\"a.sav\":\"h\"}}", ""); err != nil {
 		t.Fatalf("ApplyPullResult: %v", err)
 	}
 
@@ -497,7 +563,7 @@ func TestApplyPullResultDerivesPlayTimeFromSessionsNotGameJSON(t *testing.T) {
 		{ID: "sess-a", GameID: created.ID, PlayedAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Duration: 100, UpdatedAt: time.Now().UTC()},
 		{ID: "sess-b", GameID: created.ID, PlayedAt: realLast, Duration: 40, UpdatedAt: time.Now().UTC()},
 	}
-	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{}"); err != nil {
+	if err := repo.ApplyPullResult(ctx, game, sessions, "head-1", "{}", ""); err != nil {
 		t.Fatalf("ApplyPullResult: %v", err)
 	}
 
@@ -510,6 +576,228 @@ func TestApplyPullResultDerivesPlayTimeFromSessionsNotGameJSON(t *testing.T) {
 	}
 	if got.LastPlayed == nil || !got.LastPlayed.Equal(realLast) {
 		t.Fatalf("lastPlayed = %v, want %v", got.LastPlayed, realLast)
+	}
+}
+
+func TestApplyPullResultV2PreservesRouteIDsAndRefs(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGameWithInitialRoute(ctx, newGame("V2Game", "/v2.exe"), domain.Route{Name: "初期", Order: 0})
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	now := time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)
+	routeA := domain.Route{ID: "cloud-a", Name: "本編", Order: 0, GameID: created.ID, CreatedAt: now}
+	routeB := domain.Route{ID: "cloud-b", Name: "分岐", Order: 1, GameID: created.ID, CreatedAt: now}
+	current := routeB.ID
+	game := *created
+	game.CurrentRouteID = &current
+	game.Title = "クラウド題名"
+	sessions := []domain.PlaySession{
+		{ID: "s1", GameID: created.ID, PlayedAt: now, Duration: 50, RouteID: &routeA.ID, UpdatedAt: now},
+	}
+
+	if err := repo.ApplyPullResultV2(ctx, game, []domain.Route{routeA, routeB}, sessions, "fp-v2", `{"files":{}}`, ""); err != nil {
+		t.Fatalf("ApplyPullResultV2: %v", err)
+	}
+
+	routes, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(routes) != 2 || routes[0].ID != "cloud-a" || routes[1].ID != "cloud-b" {
+		t.Fatalf("routes not preserved by ID: %#v", routes)
+	}
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.Title != "クラウド題名" {
+		t.Fatalf("title = %q", got.Title)
+	}
+	if got.CurrentRouteID == nil || *got.CurrentRouteID != "cloud-b" {
+		t.Fatalf("currentRouteId = %v", got.CurrentRouteID)
+	}
+	if got.TotalPlayTime != 50 {
+		t.Fatalf("totalPlayTime = %d, want 50", got.TotalPlayTime)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-v2" {
+		t.Fatalf("localSyncHead = %v", got.LocalSyncHead)
+	}
+}
+
+func TestApplyPullResultV2RejectsMissingRouteRefsAndRollsBack(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGameWithInitialRoute(ctx, newGame("BadRef", "/bad.exe"), domain.Route{Name: "local", Order: 0})
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	before, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("seed routes: %v %#v", err, before)
+	}
+	beforeTitle := created.Title
+
+	missing := "no-such-route"
+	game := *created
+	game.Title = "should-rollback"
+	game.CurrentRouteID = &missing
+	routes := []domain.Route{{ID: "only", Name: "only", Order: 0, GameID: created.ID, CreatedAt: time.Now().UTC()}}
+
+	err = repo.ApplyPullResultV2(ctx, game, routes, nil, "fp-bad", "{}", "")
+	if err == nil {
+		t.Fatal("expected missing currentRouteId to fail")
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.Title != beforeTitle {
+		t.Fatalf("title should rollback, got %q want %q", got.Title, beforeTitle)
+	}
+	after, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(after) != 1 || after[0].ID != before[0].ID {
+		t.Fatalf("routes should rollback, got %#v", after)
+	}
+}
+
+func TestApplyPullResultV2RejectsDuplicateRouteIDs(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("Dup", "/dup.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	now := time.Now().UTC()
+	routes := []domain.Route{
+		{ID: "same", Name: "A", Order: 0, GameID: created.ID, CreatedAt: now},
+		{ID: "same", Name: "B", Order: 1, GameID: created.ID, CreatedAt: now},
+	}
+	if err := repo.ApplyPullResultV2(ctx, *created, routes, nil, "fp", "{}", ""); err == nil {
+		t.Fatal("expected duplicate route id to fail")
+	}
+}
+
+func TestPullOperationJournalAndApplyMarksAppliedAtomically(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("PullOp", "/pullop.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	op := domain.PullOperation{
+		OperationID: "op-1",
+		GameID:      created.ID,
+		LivePath:    `C:\games\saves`,
+		StagePath:   `C:\games\.cloudlaunch-stage-op-1`,
+		BackupPath:  `C:\games\.cloudlaunch-backup-op-1`,
+		CommitHash:  "commit-abc",
+		Status:      domain.PullOperationPrepared,
+		HadLive:     true,
+	}
+	if err := repo.BeginPullOperation(ctx, op); err != nil {
+		t.Fatalf("BeginPullOperation: %v", err)
+	}
+
+	listed, err := repo.ListPullOperations(ctx)
+	if err != nil {
+		t.Fatalf("ListPullOperations: %v", err)
+	}
+	if len(listed) != 1 || listed[0].OperationID != "op-1" || listed[0].Status != domain.PullOperationPrepared || !listed[0].HadLive {
+		t.Fatalf("listed = %#v", listed)
+	}
+
+	game := *created
+	game.Title = "pulled"
+	if err := repo.ApplyPullResult(ctx, game, nil, "fp-1", `{"files":{}}`, "op-1"); err != nil {
+		t.Fatalf("ApplyPullResult: %v", err)
+	}
+
+	listed, err = repo.ListPullOperations(ctx)
+	if err != nil {
+		t.Fatalf("ListPullOperations after apply: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Status != domain.PullOperationApplied {
+		t.Fatalf("expected APPLIED journal, got %#v", listed)
+	}
+
+	if err := repo.ClearPullOperation(ctx, "op-1"); err != nil {
+		t.Fatalf("ClearPullOperation: %v", err)
+	}
+	listed, err = repo.ListPullOperations(ctx)
+	if err != nil || len(listed) != 0 {
+		t.Fatalf("expected empty journal, got %#v err=%v", listed, err)
+	}
+}
+
+func TestApplyPullResultRollsBackWhenPullOperationMissing(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("MissingOp", "/missing.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	game := *created
+	game.Title = "should-rollback"
+	err = repo.ApplyPullResult(ctx, game, nil, "fp-x", "{}", "missing-op")
+	if err == nil {
+		t.Fatal("expected error when pull operation id is unknown")
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.Title != created.Title {
+		t.Fatalf("title should rollback, got %q want %q", got.Title, created.Title)
+	}
+	if got.LocalSyncHead != nil {
+		t.Fatalf("baseline should not update, got %v", got.LocalSyncHead)
+	}
+}
+
+func TestApplyPullResultV1DoesNotDeleteLocalRoutes(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGameWithInitialRoute(ctx, newGame("V1Keep", "/v1.exe"), domain.Route{Name: "手元", Order: 0})
+	if err != nil {
+		t.Fatalf("CreateGameWithInitialRoute: %v", err)
+	}
+	before, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("seed: %v %#v", err, before)
+	}
+
+	game := *created
+	game.Title = "v1-pulled"
+	if err := repo.ApplyPullResult(ctx, game, nil, "fp-v1", "{}", ""); err != nil {
+		t.Fatalf("ApplyPullResult: %v", err)
+	}
+	after, err := repo.ListRoutesByGame(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListRoutesByGame: %v", err)
+	}
+	if len(after) != 1 || after[0].ID != before[0].ID {
+		t.Fatalf("v1 must keep local routes, got %#v", after)
 	}
 }
 
@@ -596,74 +884,6 @@ SET
 	}
 }
 
-// --- CreateGameWithInitialRoute ---
-
-func TestCreateGameWithInitialRouteCreatesExactlyOneRoute(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo := newTestRepo(t)
-
-	created, err := repo.CreateGameWithInitialRoute(
-		ctx,
-		newGame("Atomic Game", "/atomic.exe"),
-		domain.Route{Name: "メインルート", Order: 1},
-	)
-	if err != nil {
-		t.Fatalf("CreateGameWithInitialRoute: %v", err)
-	}
-	if created == nil || created.ID == "" {
-		t.Fatalf("expected created game, got %#v", created)
-	}
-
-	routes, err := repo.ListRoutesByGame(ctx, created.ID)
-	if err != nil {
-		t.Fatalf("ListRoutesByGame: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("routes count = %d, want 1", len(routes))
-	}
-	if routes[0].Name != "メインルート" || routes[0].Order != 1 || routes[0].GameID != created.ID {
-		t.Fatalf("unexpected initial route: %#v", routes[0])
-	}
-	if routes[0].ID == "" || routes[0].CreatedAt.IsZero() {
-		t.Fatalf("expected generated route id and timestamp: %#v", routes[0])
-	}
-}
-
-func TestCreateGameWithInitialRouteRollsBackGameWhenRouteInsertFails(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo, conn := newTestRepoWithConnection(t)
-	if _, err := conn.ExecContext(ctx, `
-		CREATE TRIGGER fail_initial_route
-		BEFORE INSERT ON "Route"
-		BEGIN
-			SELECT RAISE(ABORT, 'route insert failed');
-		END
-	`); err != nil {
-		t.Fatalf("create failure trigger: %v", err)
-	}
-
-	created, err := repo.CreateGameWithInitialRoute(
-		ctx,
-		newGame("Rollback Game", "/rollback.exe"),
-		domain.Route{Name: "メインルート", Order: 1},
-	)
-	if err == nil || created != nil {
-		t.Fatalf("expected route insert failure, got created=%#v err=%v", created, err)
-	}
-
-	games, err := repo.ListGames(ctx, "", "", "title", "asc")
-	if err != nil {
-		t.Fatalf("ListGames: %v", err)
-	}
-	if len(games) != 0 {
-		t.Fatalf("game insert was not rolled back: %#v", games)
-	}
-}
-
 // --- Route カスケード削除 ---
 
 func TestRepositoryRoutesDeletedWithGame(t *testing.T) {
@@ -708,5 +928,132 @@ func TestOpenSetsBusyTimeout(t *testing.T) {
 	}
 	if timeout < 5000 {
 		t.Fatalf("busy_timeout should be >= 5000ms, got %d", timeout)
+	}
+}
+
+func TestSetLocalSyncStateUpdatesHeadAndTreeAtomically(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("SyncStateGame", "/sync-state.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	if err := repo.SetLocalSyncState(ctx, created.ID, "fp-1", `{"files":{"a.sav":"h1"}}`); err != nil {
+		t.Fatalf("SetLocalSyncState: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-1" {
+		t.Fatalf("localSyncHead = %v, want fp-1", got.LocalSyncHead)
+	}
+	tree, err := repo.GetLocalSaveTree(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetLocalSaveTree: %v", err)
+	}
+	if tree != `{"files":{"a.sav":"h1"}}` {
+		t.Fatalf("localSaveTree = %q", tree)
+	}
+}
+
+func TestPendingPushLifecycleFinalizeClearsPending(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("PendingPushGame", "/pending.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+
+	pending := domain.PendingPush{
+		GameID:             created.ID,
+		ExpectedRemoteHead: "old-head",
+		NewCommitHash:      "new-commit",
+		ContentFingerprint: "fp-new",
+		SaveTree:           `{"files":{"b.sav":"h2"}}`,
+	}
+	if err := repo.BeginPendingPush(ctx, pending); err != nil {
+		t.Fatalf("BeginPendingPush: %v", err)
+	}
+	listed, err := repo.ListPendingPushes(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingPushes: %v", err)
+	}
+	if len(listed) != 1 || listed[0].NewCommitHash != "new-commit" {
+		t.Fatalf("listed pending = %#v", listed)
+	}
+
+	if err := repo.FinalizePendingPush(ctx, created.ID, pending.ContentFingerprint, pending.SaveTree); err != nil {
+		t.Fatalf("FinalizePendingPush: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-new" {
+		t.Fatalf("localSyncHead = %v, want fp-new", got.LocalSyncHead)
+	}
+	tree, err := repo.GetLocalSaveTree(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetLocalSaveTree: %v", err)
+	}
+	if tree != pending.SaveTree {
+		t.Fatalf("localSaveTree = %q, want %q", tree, pending.SaveTree)
+	}
+	listed, err = repo.ListPendingPushes(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingPushes after finalize: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("pending should be cleared, got %#v", listed)
+	}
+}
+
+func TestClearPendingPushDoesNotTouchBaseline(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+
+	created, err := repo.CreateGame(ctx, newGame("ClearPendingGame", "/clear-pending.exe"))
+	if err != nil {
+		t.Fatalf("CreateGame: %v", err)
+	}
+	if err := repo.SetLocalSyncState(ctx, created.ID, "fp-keep", `{"files":{}}`); err != nil {
+		t.Fatalf("SetLocalSyncState: %v", err)
+	}
+	if err := repo.BeginPendingPush(ctx, domain.PendingPush{
+		GameID:             created.ID,
+		ExpectedRemoteHead: "",
+		NewCommitHash:      "abandoned",
+		ContentFingerprint: "fp-abandoned",
+		SaveTree:           `{"files":{"x":"y"}}`,
+	}); err != nil {
+		t.Fatalf("BeginPendingPush: %v", err)
+	}
+
+	if err := repo.ClearPendingPush(ctx, created.ID); err != nil {
+		t.Fatalf("ClearPendingPush: %v", err)
+	}
+
+	got, err := repo.GetGameByID(ctx, created.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetGameByID: %v", err)
+	}
+	if got.LocalSyncHead == nil || *got.LocalSyncHead != "fp-keep" {
+		t.Fatalf("baseline should remain fp-keep, got %v", got.LocalSyncHead)
+	}
+	listed, err := repo.ListPendingPushes(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingPushes: %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("pending should be cleared, got %#v", listed)
 	}
 }
