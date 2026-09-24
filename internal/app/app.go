@@ -25,6 +25,11 @@ type playSessionLookup interface {
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error)
 }
 
+// routeLookup はルート mutation（特に Delete）前に gameID を確保するための最小ポート。
+type routeLookup interface {
+	GetRouteByID(ctx context.Context, routeID string) (*domain.Route, error)
+}
+
 // App はWailsと連携するアプリケーション本体を表す。
 type App struct {
 	ctx                 context.Context
@@ -51,6 +56,7 @@ type App struct {
 	isMonitoring        bool
 	syncCoalescer       *asyncCoalescer
 	playSessionLookup   playSessionLookup
+	routeLookup         routeLookup
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -106,6 +112,16 @@ func (app *App) Startup(ctx context.Context) {
 			app.Logger.Warn("保留中のローカルメモ削除に失敗しました", "error", err)
 		}
 	}
+	// 同期 API / 自動 Push が動く前に、未完了の Pull 交換と Push baseline を回復する。
+	// オフライン・ネットワーク不通は起動を止めず、pending を残して次回に委ねる。
+	if app.ContentSyncService != nil {
+		if err := app.ContentSyncService.RecoverPullOperations(ctx); err != nil {
+			app.Logger.Warn("保留中の Pull ジャーナル回復に失敗しました", "error", err)
+		}
+		if err := app.ContentSyncService.RecoverPendingPushes(ctx); err != nil {
+			app.Logger.Warn("保留中の Push baseline 回復に失敗しました", "error", err)
+		}
+	}
 	if app.ProcessMonitor != nil {
 		app.ProcessMonitor.StartMonitoring()
 		app.isMonitoring = app.ProcessMonitor.IsMonitoring()
@@ -138,7 +154,6 @@ func (app *App) Shutdown(ctx context.Context) error {
 	if app.dbConnection != nil {
 		closeErr = app.dbConnection.Close()
 	}
-	// 最後の Warn より後で閉じる。所有する app.log / error.log を解放する。
 	if app.logCloser != nil {
 		if err := app.logCloser.Close(); err != nil && closeErr == nil {
 			closeErr = err
@@ -153,6 +168,7 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.SessionService = services.NewSessionService(repository, app.Logger)
 	app.playSessionLookup = repository
 	app.RouteService = services.NewRouteService(repository, app.Logger)
+	app.routeLookup = repository
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
 	app.ContentSyncService = services.NewContentSyncService(app.Config, credentialStore, repository, app.Logger)

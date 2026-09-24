@@ -276,15 +276,26 @@ type cloudSession struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// cloudRoute は routes.json のクラウド保存フォーマット（同期プロトコル v2）。
+// gameId は commit の gameID から確定できるため持たない。
+type cloudRoute struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Order     int64     `json:"order"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // metaBuildResult は buildMetaSnapshot の戻り値。
 type metaBuildResult struct {
 	Snapshot      domain.MetaSnapshot
 	SnapshotBytes []byte
 	GameJSON      []byte
 	SessionsJSON  []byte
+	RoutesJSON    []byte
 }
 
-// buildMetaSnapshot はゲーム情報・セッション・セーブハッシュから MetaSnapshot を構築する。
+// buildMetaSnapshot はゲーム情報・セッション・ルート・セーブハッシュから MetaSnapshot を構築する。
+// 新クライアントは常に SchemaVersion=v2 と routes.json を含める。
 //
 // fileCount / totalSize はクラウド一覧での表示用キャッシュ。Push 経路では実値を、
 // Status 経路（buildLocalMeta）では 0,0 を渡して構わない（fingerprint 比較・UI 表示
@@ -292,6 +303,7 @@ type metaBuildResult struct {
 func buildMetaSnapshot(
 	game domain.Game,
 	sessions []domain.PlaySession,
+	routes []domain.Route,
 	imageHash domain.BlobHash,
 	savesHash domain.BlobHash,
 	deviceName string,
@@ -330,14 +342,30 @@ func buildMetaSnapshot(
 		return metaBuildResult{}, err
 	}
 
+	cr := make([]cloudRoute, 0, len(routes))
+	for _, r := range routes {
+		cr = append(cr, cloudRoute{
+			ID:        r.ID,
+			Name:      r.Name,
+			Order:     r.Order,
+			CreatedAt: r.CreatedAt,
+		})
+	}
+	routesJSON, err := json.Marshal(cr)
+	if err != nil {
+		return metaBuildResult{}, err
+	}
+
 	meta := domain.MetaSnapshot{
-		GameJSON:     hashBytes(gameJSON),
-		SessionsJSON: hashBytes(sessionsJSON),
-		Saves:        savesHash,
-		DeviceName:   deviceName,
-		CreatedAt:    time.Now().UTC(),
-		FileCount:    fileCount,
-		TotalSize:    totalSize,
+		SchemaVersion: domain.SyncSchemaVersionV2,
+		GameJSON:      hashBytes(gameJSON),
+		SessionsJSON:  hashBytes(sessionsJSON),
+		RoutesJSON:    hashBytes(routesJSON),
+		Saves:         savesHash,
+		DeviceName:    deviceName,
+		CreatedAt:     time.Now().UTC(),
+		FileCount:     fileCount,
+		TotalSize:     totalSize,
 	}
 	metaBytes, err := json.Marshal(meta)
 	if err != nil {
@@ -349,5 +377,6 @@ func buildMetaSnapshot(
 		SnapshotBytes: metaBytes,
 		GameJSON:      gameJSON,
 		SessionsJSON:  sessionsJSON,
+		RoutesJSON:    routesJSON,
 	}, nil
 }

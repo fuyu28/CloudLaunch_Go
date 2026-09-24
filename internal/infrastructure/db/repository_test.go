@@ -2,7 +2,6 @@ package db_test
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,12 +12,6 @@ import (
 
 func newTestRepo(t *testing.T) *db.Repository {
 	t.Helper()
-	repository, _ := newTestRepoWithConnection(t)
-	return repository
-}
-
-func newTestRepoWithConnection(t *testing.T) (*db.Repository, *sql.DB) {
-	t.Helper()
 	conn, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
@@ -27,7 +20,7 @@ func newTestRepoWithConnection(t *testing.T) (*db.Repository, *sql.DB) {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return db.NewRepository(conn), conn
+	return db.NewRepository(conn)
 }
 
 func newGame(title, exePath string) domain.Game {
@@ -142,78 +135,12 @@ func TestRepositoryGameCRUDRoundTrip(t *testing.T) {
 		t.Fatalf("UpdateGame: %v (got %v)", err, updated)
 	}
 
-	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, created.ID); err != nil {
-		t.Fatalf("DeleteGameAndQueueMemoCleanup: %v", err)
+	if err := repo.DeleteGame(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteGame: %v", err)
 	}
 	gone, err := repo.GetGameByID(ctx, created.ID)
 	if err != nil || gone != nil {
 		t.Fatalf("expected nil after delete, got %v, err=%v", gone, err)
-	}
-}
-
-func TestDeleteGameAndQueueMemoCleanupCommitsPendingMarker(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo := newTestRepo(t)
-	game, err := repo.CreateGame(ctx, newGame("Delete Game", "/delete.exe"))
-	if err != nil {
-		t.Fatalf("CreateGame: %v", err)
-	}
-
-	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, game.ID); err != nil {
-		t.Fatalf("DeleteGameAndQueueMemoCleanup: %v", err)
-	}
-	if got, err := repo.GetGameByID(ctx, game.ID); err != nil || got != nil {
-		t.Fatalf("game was not deleted: game=%#v err=%v", got, err)
-	}
-	pending, err := repo.ListPendingMemoCleanup(ctx)
-	if err != nil {
-		t.Fatalf("ListPendingMemoCleanup: %v", err)
-	}
-	if len(pending) != 1 || pending[0] != game.ID {
-		t.Fatalf("pending cleanup = %#v, want [%q]", pending, game.ID)
-	}
-	if err := repo.ClearPendingMemoCleanup(ctx, game.ID); err != nil {
-		t.Fatalf("ClearPendingMemoCleanup: %v", err)
-	}
-	pending, err = repo.ListPendingMemoCleanup(ctx)
-	if err != nil || len(pending) != 0 {
-		t.Fatalf("pending cleanup was not cleared: pending=%#v err=%v", pending, err)
-	}
-}
-
-func TestDeleteGameAndQueueMemoCleanupRollsBackMarkerAndPreservesGameOnDeleteFailure(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo, conn := newTestRepoWithConnection(t)
-	game, err := repo.CreateGame(ctx, newGame("Preserved Game", "/preserved.exe"))
-	if err != nil {
-		t.Fatalf("CreateGame: %v", err)
-	}
-	if _, err := conn.ExecContext(ctx, `
-		CREATE TRIGGER fail_game_delete
-		BEFORE DELETE ON "Game"
-		BEGIN
-			SELECT RAISE(ABORT, 'game delete failed');
-		END
-	`); err != nil {
-		t.Fatalf("create failure trigger: %v", err)
-	}
-
-	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, game.ID); err == nil {
-		t.Fatal("expected game deletion failure")
-	}
-	if got, err := repo.GetGameByID(ctx, game.ID); err != nil || got == nil {
-		t.Fatalf("game should be preserved: game=%#v err=%v", got, err)
-	}
-	pending, err := repo.ListPendingMemoCleanup(ctx)
-	if err != nil {
-		t.Fatalf("ListPendingMemoCleanup: %v", err)
-	}
-	if len(pending) != 0 {
-		t.Fatalf("pending marker should roll back: %#v", pending)
 	}
 }
 
@@ -360,74 +287,6 @@ func TestApplyPullResultPersistsHeadAndTree(t *testing.T) {
 	}
 }
 
-// --- CreateGameWithInitialRoute ---
-
-func TestCreateGameWithInitialRouteCreatesExactlyOneRoute(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo := newTestRepo(t)
-
-	created, err := repo.CreateGameWithInitialRoute(
-		ctx,
-		newGame("Atomic Game", "/atomic.exe"),
-		domain.Route{Name: "メインルート", Order: 1},
-	)
-	if err != nil {
-		t.Fatalf("CreateGameWithInitialRoute: %v", err)
-	}
-	if created == nil || created.ID == "" {
-		t.Fatalf("expected created game, got %#v", created)
-	}
-
-	routes, err := repo.ListRoutesByGame(ctx, created.ID)
-	if err != nil {
-		t.Fatalf("ListRoutesByGame: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("routes count = %d, want 1", len(routes))
-	}
-	if routes[0].Name != "メインルート" || routes[0].Order != 1 || routes[0].GameID != created.ID {
-		t.Fatalf("unexpected initial route: %#v", routes[0])
-	}
-	if routes[0].ID == "" || routes[0].CreatedAt.IsZero() {
-		t.Fatalf("expected generated route id and timestamp: %#v", routes[0])
-	}
-}
-
-func TestCreateGameWithInitialRouteRollsBackGameWhenRouteInsertFails(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	repo, conn := newTestRepoWithConnection(t)
-	if _, err := conn.ExecContext(ctx, `
-		CREATE TRIGGER fail_initial_route
-		BEFORE INSERT ON "Route"
-		BEGIN
-			SELECT RAISE(ABORT, 'route insert failed');
-		END
-	`); err != nil {
-		t.Fatalf("create failure trigger: %v", err)
-	}
-
-	created, err := repo.CreateGameWithInitialRoute(
-		ctx,
-		newGame("Rollback Game", "/rollback.exe"),
-		domain.Route{Name: "メインルート", Order: 1},
-	)
-	if err == nil || created != nil {
-		t.Fatalf("expected route insert failure, got created=%#v err=%v", created, err)
-	}
-
-	games, err := repo.ListGames(ctx, "", "", "title", "asc")
-	if err != nil {
-		t.Fatalf("ListGames: %v", err)
-	}
-	if len(games) != 0 {
-		t.Fatalf("game insert was not rolled back: %#v", games)
-	}
-}
-
 // --- Route カスケード削除 ---
 
 func TestRepositoryRoutesDeletedWithGame(t *testing.T) {
@@ -446,8 +305,8 @@ func TestRepositoryRoutesDeletedWithGame(t *testing.T) {
 		t.Fatalf("CreateRoute: %v", err)
 	}
 
-	if err := repo.DeleteGameAndQueueMemoCleanup(ctx, game.ID); err != nil {
-		t.Fatalf("DeleteGameAndQueueMemoCleanup: %v", err)
+	if err := repo.DeleteGame(ctx, game.ID); err != nil {
+		t.Fatalf("DeleteGame: %v", err)
 	}
 
 	routes, err := repo.ListRoutesByGame(ctx, game.ID)
