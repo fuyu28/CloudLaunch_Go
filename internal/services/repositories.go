@@ -14,21 +14,19 @@ type GameRepository interface {
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	CreateGameWithInitialRoute(ctx context.Context, game domain.Game, initialRoute domain.Route) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
+	RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error
 	DeleteGame(ctx context.Context, gameID string) error
 }
 
 // SessionRepository は SessionService が必要とする永続化境界を定義する。
 type SessionRepository interface {
-	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
+	CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
 	ListPlaySessionsByGame(ctx context.Context, gameID string) ([]domain.PlaySession, error)
 	GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error)
-	DeletePlaySession(ctx context.Context, sessionID string) error
+	DeletePlaySessionAndRefreshGame(ctx context.Context, sessionID string) (string, error)
+	UpdatePlaySessionAndRefreshGame(ctx context.Context, sessionID string, playedAt time.Time, duration int64) (*domain.PlaySession, error)
 	UpdatePlaySessionRoute(ctx context.Context, sessionID string, routeID *string) error
-	UpdatePlaySessionName(ctx context.Context, sessionID string, sessionName string) error
 	TouchGameUpdatedAt(ctx context.Context, gameID string) error
-	SumPlaySessionDurationsByGame(ctx context.Context, gameID string) (int64, error)
-	UpdateGameTotalPlayTime(ctx context.Context, gameID string, totalPlayTime int64) error
-	UpdateGameTotalPlayTimeWithLastPlayed(ctx context.Context, gameID string, totalPlayTime int64, playedAt time.Time) error
 }
 
 // MemoRepository は MemoService が必要とする永続化境界を定義する。
@@ -92,7 +90,7 @@ type ProcessIDResolver interface {
 
 // ProcessMonitorRepository は ProcessMonitorService が必要とする永続化境界を定義する。
 type ProcessMonitorRepository interface {
-	CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
+	CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
 	GetGameByID(ctx context.Context, gameID string) (*domain.Game, error)
 	UpdateGame(ctx context.Context, game domain.Game) (*domain.Game, error)
 	ListGames(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)

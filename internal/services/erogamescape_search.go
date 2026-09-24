@@ -57,6 +57,9 @@ func (service *ErogameScapeService) SearchErogameScape(
 		if error != nil {
 			return
 		}
+		if error := validateErogameScapeURL(gameURL, erogameScapePageURL); error != nil {
+			return
+		}
 		gameID, error := extractErogameScapeID(gameURL)
 		if error != nil {
 			return
@@ -82,8 +85,10 @@ func (service *ErogameScapeService) SearchErogameScape(
 	nextURL, _ := doc.Find("a:contains(\"次\")").Attr("href")
 	if nextURL != "" {
 		resolved, err := resolveURL(targetURL, nextURL)
-		if err == nil {
+		if err == nil && validateErogameScapeURL(resolved, erogameScapePageURL) == nil {
 			nextURL = resolved
+		} else {
+			nextURL = ""
 		}
 	}
 

@@ -1,6 +1,6 @@
 //go:build !windows
 
-// 非Windows向けのプロセス起動ヘルパ（隠しウィンドウ無し）。
+// Windows 以外でプロセス起動ヘルパの互換実装を提供する。
 package services
 
 import (

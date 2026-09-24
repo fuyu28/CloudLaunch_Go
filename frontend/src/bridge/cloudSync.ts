@@ -10,6 +10,7 @@ import {
   PullSync,
   ResolveConflict,
   DeleteGameFromCloud,
+  MigrateCloudSessionFormat,
 } from "../../wailsjs/go/app/App";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { toApiResultVoid } from "./helpers";
@@ -74,6 +75,12 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
         : { success: false, message: result.error?.message ?? "エラー" };
     },
     deleteFromCloud: async (gameId) => toApiResultVoid(await DeleteGameFromCloud(gameId)),
+    migrateSessionFormat: async () => {
+      const result = await MigrateCloudSessionFormat();
+      return result.success
+        ? { success: true, data: result.data as { migratedGames: number } }
+        : { success: false, message: result.error?.message ?? "エラー" };
+    },
     onProgress: (callback: (event: SyncProgressEvent) => void) => {
       // EventsOff("sync:progress") は同名リスナーを全削除する。
       // EventsOn の戻り値で当該登録だけ解除する。

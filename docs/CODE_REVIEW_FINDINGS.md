@@ -35,7 +35,7 @@
 | H1 | P1 | done | `services.resolveS3Config` が `ForcePathStyle` を落とす |
 | H2 | P1 | done | `UpdateUploadConcurrency` が ContentSyncService に届かない |
 | H3 | P0 | deferred | Pull がディスク先行 → DB 失敗で乖離（要ステージング設計） |
-| H4 | P1 | deferred | プレイ時間 `+=` と SUM の二系統・非原子 |
+| H4 | P1 | done | プレイ時間 `+=` と SUM の二系統・非原子 |
 | H5 | P1 | deferred | Home/GameDetail 起動前同期の二重実装（H11 後に抽出） |
 | H6 | P1 | done | `openExternalUrl` 化済み（`fix/frontend-bugs`） |
 | H7 | P0 | done | メモ同期がクラウド memo ID を捨てて再採番 |
@@ -51,8 +51,8 @@
 | M1 | todo | DeleteGame がメモファイルを残す |
 | M2 | done | CreateGame の CreateRoute 失敗無視 |
 | M3 | todo | Status が lockGame 外 |
-| M4 | todo | ErogameScape ホスト未検証 |
-| M5 | todo | OpenFolder が explorer.exe 固定 |
+| M4 | done | ErogameScape ホスト未検証 |
+| M5 | done | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
 | M12 | todo | Push HEAD 後の local baseline 非原子 |
 | M14 | done | DownloadMemoFromCloud キー未サニタイズ |
@@ -87,3 +87,12 @@
 
 ### H3 / H8
 影響大のため本 PR では着手せず、別コミット／ADR 後に実施。
+
+### M4
+`erogamescape_url.go` でページ／画像ホストを allowlist 検証。
+
+### M5
+`open_path_*.go` で OS 別オープン（Windows/macOS/Linux）。`OpenFolder` / 外部パス起動が共用。
+
+### H4
+`Game.totalPlayTime` / `lastPlayed` を PlaySession SUM の派生キャッシュに統一。セッション CRUD は `*AndRefreshGame` で原子的再計算。移行差分は `0010_playtime_session_source.sql` の調整セッション。

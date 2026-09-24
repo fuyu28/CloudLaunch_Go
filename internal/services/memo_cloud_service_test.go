@@ -34,6 +34,10 @@ func (repository fakeMemoCloudGameRepository) UpdateGame(ctx context.Context, ga
 	return &game, nil
 }
 
+func (repository fakeMemoCloudGameRepository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error {
+	return nil
+}
+
 func (repository fakeMemoCloudGameRepository) DeleteGame(ctx context.Context, gameID string) error {
 	return nil
 }

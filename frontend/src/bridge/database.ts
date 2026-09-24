@@ -12,7 +12,7 @@ import {
   DeleteGame,
   CreateSession,
   ListSessionsByGame,
-  UpdateSessionName,
+  UpdateSession,
   DeleteSession,
 } from "../../wailsjs/go/app/App";
 import { toGameType, toPlaySessionType, toApiResultVoid } from "./helpers";
@@ -100,12 +100,11 @@ export function createDatabaseBridge(): WindowApi["database"] {
         data: toGameType(updated.data),
       };
     },
-    createSession: async (duration, gameId, sessionName) => {
+    createSession: async (duration, gameId) => {
       const payload = {
         GameID: gameId,
         PlayedAt: new Date() as unknown as modelsTime.Time,
         Duration: duration,
-        SessionName: sessionName ?? undefined,
         RouteID: undefined,
       };
       const result = await CreateSession(payload as unknown as modelsServices.SessionInput);
@@ -117,8 +116,13 @@ export function createDatabaseBridge(): WindowApi["database"] {
         ? { success: true, data: (result.data ?? []).map(toPlaySessionType) }
         : { success: false, message: result.error?.message ?? "エラー" };
     },
-    updateSessionName: async (sessionId, sessionName) =>
-      toApiResultVoid(await UpdateSessionName(sessionId, sessionName)),
+    updateSession: async (sessionId, playedAt, duration) =>
+      toApiResultVoid(
+        await UpdateSession(sessionId, {
+          PlayedAt: playedAt as unknown as modelsTime.Time,
+          Duration: duration,
+        } as modelsServices.SessionUpdateInput),
+      ),
     deletePlaySession: async (sessionId) => toApiResultVoid(await DeleteSession(sessionId)),
   };
 }
