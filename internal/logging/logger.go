@@ -26,12 +26,14 @@ const (
 // 標準出力に加えて appDataDir/logs/app.log へ全レベルを、appDataDir/logs/error.log へ
 // error 以上を同時出力する。各ファイルはサイズ上限でローテーションする。
 // 戻り値の *slog.LevelVar を書き換えれば実行時にログレベルを変更できる。
-func NewLogger(appDataDir string, level string) (*slog.Logger, *slog.LevelVar) {
+// 第3戻り値の io.Closer は所有するログファイルを閉じる。呼び出し側が寿命を管理する。
+func NewLogger(appDataDir string, level string) (*slog.Logger, *slog.LevelVar, io.Closer) {
 	levelVar := &slog.LevelVar{}
 	levelVar.Set(ParseLevel(level))
 
 	var mainWriter io.Writer = os.Stdout
 	var errorHandler slog.Handler
+	var owned closers
 
 	logDir, dirErr := ensureLogDir(appDataDir)
 	if dirErr != nil {
@@ -41,10 +43,12 @@ func NewLogger(appDataDir string, level string) (*slog.Logger, *slog.LevelVar) {
 	} else {
 		if appWriter, ok := tryOpenRotatingLog(filepath.Join(logDir, logFileName), "log file"); ok {
 			mainWriter = io.MultiWriter(os.Stdout, appWriter)
+			owned = append(owned, appWriter)
 		}
 		// error 以上だけを集約する専用ファイル。重大なエラーを探しやすくする。
 		if errWriter, ok := tryOpenRotatingLog(filepath.Join(logDir, errorFileName), "error log file"); ok {
 			errorHandler = slog.NewJSONHandler(errWriter, &slog.HandlerOptions{Level: slog.LevelError, AddSource: true})
+			owned = append(owned, errWriter)
 		}
 	}
 
@@ -56,7 +60,7 @@ func NewLogger(appDataDir string, level string) (*slog.Logger, *slog.LevelVar) {
 	if errorHandler != nil {
 		handler = &teeErrorHandler{base: baseHandler, errorH: errorHandler}
 	}
-	return slog.New(handler).With("scope", "backend"), levelVar
+	return slog.New(handler).With("scope", "backend"), levelVar, owned
 }
 
 // ParseLevel は文字列から slog.Level を決定する。
@@ -173,6 +177,18 @@ func (w *rotatingWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// Close は開いているログファイルを閉じる。多重呼び出しは安全。
+func (w *rotatingWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.file == nil {
+		return nil
+	}
+	err := w.file.Close()
+	w.file = nil
+	return err
+}
+
 // rotate は現在のファイルを path.1 .. path.N へシフトし、新しい空ファイルを開く。
 func (w *rotatingWriter) rotate() error {
 	_ = w.file.Close()
@@ -192,4 +208,20 @@ func (w *rotatingWriter) backupPath(i int) string {
 		return w.path
 	}
 	return fmt.Sprintf("%s.%d", w.path, i)
+}
+
+// closers は NewLogger が所有するファイル writer 群をまとめて閉じる。
+type closers []io.Closer
+
+func (c closers) Close() error {
+	var err error
+	for _, closer := range c {
+		if closer == nil {
+			continue
+		}
+		if closeErr := closer.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}
+	return err
 }
