@@ -5,7 +5,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import { useSyncAndLogsActions } from "@renderer/hooks/useSyncAndLogsActions";
@@ -31,7 +31,14 @@ export default function SyncAndLogsTab(): React.JSX.Element {
   const [frontendLogLevel, setFrontendLogLevel] = useState<LogLevel>(() =>
     logLevelManager.getCurrentLevel(),
   );
+  const [appVersion, setAppVersion] = useState("読み込み中...");
   const [isMigratingSessions, setIsMigratingSessions] = useState(false);
+
+  useEffect(() => {
+    void window.api.window.getAppVersion().then((result) => {
+      setAppVersion(result.success && result.data ? result.data : "取得できませんでした");
+    });
+  }, []);
 
   const handleMigrateSessionFormat = async (): Promise<void> => {
     setIsMigratingSessions(true);
