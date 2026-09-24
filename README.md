@@ -136,10 +136,10 @@ GitHub Releases から最新の `CloudLaunch-amd64-installer.exe`(Windows)をダ
 
 ### 必要要件
 
-- Go 1.25 以上(`go.mod` 準拠)
-- [Wails v2](https://wails.io/) (`v2.11.0` 以上を想定)
-- [Bun](https://bun.sh/)
+- [mise](https://mise.jdx.dev/)
 - Windows 向けインストーラビルドのみ NSIS(Wails が自動で呼ぶ)
+
+Go、Bun、Wails CLI、golangci-lint は [mise.toml](mise.toml) で管理する。
 
 ### セットアップと開発起動
 
@@ -147,6 +147,9 @@ GitHub Releases から最新の `CloudLaunch-amd64-installer.exe`(Windows)をダ
 # クローン
 git clone https://github.com/fuyu28/CloudLaunch_Go.git
 cd CloudLaunch_Go
+
+# mise.toml に定義された開発ツールを導入
+mise install
 
 # フロントエンド依存を入れる
 cd frontend && bun install && cd ..
