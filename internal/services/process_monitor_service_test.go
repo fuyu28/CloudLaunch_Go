@@ -11,14 +11,14 @@ import (
 )
 
 type fakeProcessMonitorRepository struct {
-	createPlaySessionFn func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
-	getGameByIDFn       func(ctx context.Context, gameID string) (*domain.Game, error)
-	updateGameFn        func(ctx context.Context, game domain.Game) (*domain.Game, error)
-	listGamesFn         func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
+	createPlaySessionAndRefreshGameFn func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error)
+	getGameByIDFn                     func(ctx context.Context, gameID string) (*domain.Game, error)
+	updateGameFn                      func(ctx context.Context, game domain.Game) (*domain.Game, error)
+	listGamesFn                       func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error)
 }
 
-func (repository fakeProcessMonitorRepository) CreatePlaySession(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
-	return repository.createPlaySessionFn(ctx, session)
+func (repository fakeProcessMonitorRepository) CreatePlaySessionAndRefreshGame(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+	return repository.createPlaySessionAndRefreshGameFn(ctx, session)
 }
 
 func (repository fakeProcessMonitorRepository) GetGameByID(ctx context.Context, gameID string) (*domain.Game, error) {
@@ -37,7 +37,7 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseAddsMatchingGame(t *testin
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -69,7 +69,7 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseRespectsDisabledAutoTracki
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -94,19 +94,21 @@ func TestProcessMonitorServiceAutoAddGamesFromDatabaseRespectsDisabledAutoTracki
 	}
 }
 
-func TestProcessMonitorServiceSaveSessionUpdatesGameTotals(t *testing.T) {
+func TestProcessMonitorServiceSaveSessionUsesAtomicCreateAndRefresh(t *testing.T) {
 	t.Parallel()
 
-	var updatedGame domain.Game
+	var created domain.PlaySession
+	updateCalls := 0
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+			created = session
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
-			return &domain.Game{ID: gameID, Title: "Game", TotalPlayTime: 100}, nil
+			return &domain.Game{ID: gameID, Title: "Game", TotalPlayTime: 130}, nil
 		},
 		updateGameFn: func(ctx context.Context, game domain.Game) (*domain.Game, error) {
-			updatedGame = game
+			updateCalls++
 			return &game, nil
 		},
 		listGamesFn: func(ctx context.Context, searchText string, filter domain.PlayStatus, sortBy string, sortDirection string) ([]domain.Game, error) {
@@ -122,11 +124,12 @@ func TestProcessMonitorServiceSaveSessionUpdatesGameTotals(t *testing.T) {
 		AccumulatedTime: 30,
 	}, endedAt)
 
-	if updatedGame.TotalPlayTime != 130 {
-		t.Fatalf("expected total play time to be updated, got %d", updatedGame.TotalPlayTime)
+	if created.GameID != "game-1" || created.Duration != 30 || !created.PlayedAt.Equal(endedAt) {
+		t.Fatalf("unexpected session payload: %#v", created)
 	}
-	if updatedGame.LastPlayed == nil || !updatedGame.LastPlayed.Equal(endedAt) {
-		t.Fatalf("expected last played to be updated")
+	// セーブフォルダ未設定なら UpdateGame（ハッシュ更新）は呼ばない。+= 経路は使わない。
+	if updateCalls != 0 {
+		t.Fatalf("expected no UpdateGame without save folder, got %d", updateCalls)
 	}
 }
 
@@ -134,7 +137,7 @@ func TestProcessMonitorServicePauseSessionMarksGamePaused(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -167,7 +170,7 @@ func TestProcessMonitorServiceGetHotkeyTargetGameIDPrefersCurrentPlayingGame(t *
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -198,7 +201,7 @@ func TestProcessMonitorServiceEndSessionResetsAccumulatedTime(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) {
@@ -234,7 +237,7 @@ func TestProcessMonitorServiceMatchGameProcess(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -267,7 +270,7 @@ func TestProcessMonitorServiceIsGameProcessRunning(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -302,7 +305,7 @@ func TestProcessMonitorServiceResumeSessionUsesInjectedProcesses(t *testing.T) {
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -338,7 +341,7 @@ func TestProcessMonitorServiceGetProcessSnapshotUsesInjectedProcesses(t *testing
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -368,7 +371,7 @@ func TestProcessMonitorServiceFindProcessIDsByExeUsesInjectedProcesses(t *testin
 	t.Parallel()
 
 	service := NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },
@@ -396,7 +399,7 @@ func TestProcessMonitorServiceFindProcessIDsByExeUsesInjectedProcesses(t *testin
 
 func newTestProcessMonitorService() *ProcessMonitorService {
 	return NewProcessMonitorService(fakeProcessMonitorRepository{
-		createPlaySessionFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
+		createPlaySessionAndRefreshGameFn: func(ctx context.Context, session domain.PlaySession) (*domain.PlaySession, error) {
 			return &session, nil
 		},
 		getGameByIDFn: func(ctx context.Context, gameID string) (*domain.Game, error) { return nil, nil },

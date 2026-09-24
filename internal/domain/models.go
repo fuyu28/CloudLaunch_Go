@@ -39,13 +39,12 @@ type Game struct {
 
 // PlaySession はプレイセッションを表す。
 type PlaySession struct {
-	ID          string    `json:"id"`
-	GameID      string    `json:"gameId"`
-	PlayedAt    time.Time `json:"playedAt"`
-	Duration    int64     `json:"duration"`
-	SessionName *string   `json:"sessionName,omitempty"`
-	RouteID     *string   `json:"routeId,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID        string    `json:"id"`
+	GameID    string    `json:"gameId"`
+	PlayedAt  time.Time `json:"playedAt"`
+	Duration  int64     `json:"duration"`
+	RouteID   *string   `json:"routeId,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Route はルート情報を表す。

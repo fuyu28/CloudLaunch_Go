@@ -11,12 +11,19 @@ import (
 	"sync"
 
 	"CloudLaunch_Go/internal/config"
+	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/infrastructure/credentials"
 	"CloudLaunch_Go/internal/infrastructure/db"
 	"CloudLaunch_Go/internal/logging"
 	"CloudLaunch_Go/internal/memo"
 	"CloudLaunch_Go/internal/services"
 )
+
+// playSessionLookup はセッション mutation 前に gameID を確保するための最小ポート。
+// 具象の db.Repository に依存せず、GetPlaySessionByID だけを要求する。
+type playSessionLookup interface {
+	GetPlaySessionByID(ctx context.Context, sessionID string) (*domain.PlaySession, error)
+}
 
 // App はWailsと連携するアプリケーション本体を表す。
 type App struct {
@@ -43,6 +50,7 @@ type App struct {
 	autoTracking        bool
 	isMonitoring        bool
 	syncCoalescer       *asyncCoalescer
+	playSessionLookup   playSessionLookup
 }
 
 // NewApp はアプリケーションを初期化する。
@@ -138,6 +146,7 @@ func (app *App) Shutdown(ctx context.Context) error {
 func (app *App) configureServices(repository *db.Repository, credentialStore credentials.Store) {
 	app.GameService = services.NewGameService(repository, app.Logger)
 	app.SessionService = services.NewSessionService(repository, app.Logger)
+	app.playSessionLookup = repository
 	app.RouteService = services.NewRouteService(repository, app.Logger)
 	app.MemoService = services.NewMemoService(repository, app.MemoFiles, app.Logger)
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)

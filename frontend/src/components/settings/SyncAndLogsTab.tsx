@@ -5,7 +5,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import { useSyncAndLogsActions } from "@renderer/hooks/useSyncAndLogsActions";
@@ -31,6 +31,32 @@ export default function SyncAndLogsTab(): React.JSX.Element {
   const [frontendLogLevel, setFrontendLogLevel] = useState<LogLevel>(() =>
     logLevelManager.getCurrentLevel(),
   );
+  const [isMigratingSessions, setIsMigratingSessions] = useState(false);
+
+  const handleMigrateSessionFormat = async (): Promise<void> => {
+    setIsMigratingSessions(true);
+    try {
+      const result = await window.api.cloudSync.migrateSessionFormat();
+      if (!result.success) {
+        toast.error(result.message || "プレイ履歴の移行に失敗しました");
+        return;
+      }
+      toast.success(
+        result.data.migratedGames === 0
+          ? "移行が必要なクラウドのプレイ履歴はありません"
+          : `${result.data.migratedGames}件のクラウドのプレイ履歴を移行しました`,
+      );
+    } catch (error) {
+      logger.error("クラウドのプレイ履歴移行エラー:", {
+        component: "SyncAndLogsTab",
+        function: "handleMigrateSessionFormat",
+        data: error,
+      });
+      toast.error("プレイ履歴の移行に失敗しました");
+    } finally {
+      setIsMigratingSessions(false);
+    }
+  };
 
   const handleFrontendLogLevelChange = async (level: LogLevel): Promise<void> => {
     try {
@@ -63,6 +89,12 @@ export default function SyncAndLogsTab(): React.JSX.Element {
         description="クラウド同期とトラブルシューティング"
         color="info"
       />
+
+      <div className="bg-base-200 p-4 rounded-lg">
+        <h4 className="font-medium">アプリバージョン</h4>
+        <p className="text-sm text-base-content/70 mt-1">このアプリをビルドしたコミット</p>
+        <code className="text-sm break-all mt-2 block">{appVersion}</code>
+      </div>
 
       <div className="bg-base-200 p-4 rounded-lg">
         <div className="mb-3">
@@ -98,6 +130,27 @@ export default function SyncAndLogsTab(): React.JSX.Element {
           </button>
           <p className="text-xs text-base-content/50 mt-2">
             出力先フォルダにタイムスタンプ付きファイルを生成します
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-base-200 p-4 rounded-lg">
+        <div className="mb-3">
+          <h4 className="font-medium">プレイ履歴の移行</h4>
+          <p className="text-sm text-base-content/70">
+            旧形式のクラウド履歴からセッション名を削除します
+          </p>
+        </div>
+        <div className="form-control">
+          <button
+            className="btn btn-outline btn-sm w-fit"
+            onClick={() => void handleMigrateSessionFormat()}
+            disabled={isMigratingSessions || offlineMode}
+          >
+            {isMigratingSessions ? "移行中..." : "クラウドのプレイ履歴を移行"}
+          </button>
+          <p className="text-xs text-base-content/50 mt-2">
+            セーブデータやゲーム情報には触れません
           </p>
         </div>
       </div>

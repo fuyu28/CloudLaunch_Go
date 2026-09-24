@@ -330,6 +330,57 @@ func setupRemoteState(
 	return meta.Snapshot
 }
 
+func TestMigrateSessionFormatRewritesLegacyRemoteSessions(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	bstore := newFakeBlobStore()
+	legacySessions := []byte(`[{"id":"session-1","playedAt":"2026-07-01T10:00:00Z","duration":60,"sessionName":"old name","updatedAt":"2026-07-01T11:00:00Z"}]`)
+	legacySessionsHash := hashBytes(legacySessions)
+	legacyMeta := domain.MetaSnapshot{SessionsJSON: legacySessionsHash}
+	legacyMetaBytes, err := json.Marshal(legacyMeta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyHead := hashBytes(legacyMetaBytes)
+	if err := bstore.putBlob(ctx, "game-1", storage.BlobKindMeta, legacySessionsHash, legacySessions); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.putBlob(ctx, "game-1", storage.BlobKindCommit, legacyHead, legacyMetaBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := bstore.writeHEAD(ctx, "game-1", legacyHead); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := newTestService(newFakeRepo(nil, nil), bstore).MigrateSessionFormat(ctx)
+	if err != nil {
+		t.Fatalf("MigrateSessionFormat: %v", err)
+	}
+	if result.MigratedGames != 1 {
+		t.Fatalf("MigratedGames = %d, want 1", result.MigratedGames)
+	}
+	updatedHead, err := bstore.readHEAD(ctx, "game-1")
+	if err != nil || updatedHead == legacyHead {
+		t.Fatalf("HEAD was not updated: head=%q err=%v", updatedHead, err)
+	}
+	updatedMetaBytes, err := bstore.getBlob(ctx, "game-1", storage.BlobKindCommit, updatedHead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var updatedMeta domain.MetaSnapshot
+	if err := json.Unmarshal(updatedMetaBytes, &updatedMeta); err != nil {
+		t.Fatal(err)
+	}
+	updatedSessions, err := bstore.getBlob(ctx, "game-1", storage.BlobKindMeta, updatedMeta.SessionsJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasLegacySessionName(updatedSessions) {
+		t.Fatalf("sessionName remained in migrated sessions: %s", updatedSessions)
+	}
+}
+
 func baseGame(saveDir string) domain.Game {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	return domain.Game{

@@ -52,7 +52,6 @@ export type MonitoringGameStatus = {
 
 export type PlaySessionType = {
   id: string;
-  sessionName?: string;
   playedAt: Date;
   duration: number;
   gameId: string;
