@@ -13,16 +13,6 @@
 > Clean Architecture の境界違反、責務漏れ、または特殊ケース層が積み上がっている箇所。
 > 価値は大きいが波及も広いため、1 項目 = 1 PR を厳守。
 
-### A1. `SessionMutationResult` のサービス→app バブルアップ削除
-
-- **場所**: `internal/services/session_service.go`（Delete/UpdateSessionRoute/UpdateSessionName）
-- **問題**: `SessionMutationResult{GameID}` を返すのは app 層の async sync（`syncGameAsync`）用。
-  サービス層に app の関心が漏れている。
-- **解決方針**: サービスは `error` だけ返し、app 側で事前に
-  `repository.GetPlaySessionByID(sessionID)` で gameID を取得する。
-- **影響**: 3 メソッド・テスト fake・app の 3 呼び出し。中規模。
-- **注意**: delete-before-read の順序が変わるので、テストで先後関係を明示する。
-
 ### A2. `MemoCloudService` のサービス→リポジトリ依存への置換
 
 - **場所**: `internal/services/memo_cloud_service.go`
@@ -92,16 +82,6 @@
 - **解決方針**: `RuntimeOrchestrator interface { StopRuntime(); CloseDB(); ReopenDB(); ... }`
   を 1 つ作り、app が実装。
 - **影響**: 中規模。MaintenanceService の API は変えなくて済む。
-
-### A9. ゲーム入力検証の二重定義を解消
-
-- **場所**: `internal/services/game_service.go::validateGameInput` ／ `frontend/src/schemas/game.ts`
-- **問題**: 長さ制約 (`title max:100`, `publisher max:50`)、拡張子チェック（`.exe`/`.app`）が
-  フロントエンドだけ。Wails 直叩き・バックアップ復元・ErogameScape import で
-  バックエンドが Zod の拒否を素通りさせる。
-- **解決方針**: サービス層に同じルールを持たせて、エラーコードを `ApiError` で返す。
-  もしくは共有スキーマを生成。
-- **影響**: 小〜中規模。エラーメッセージの UX は要確認。
 
 ### A10. `frontend/src/state/settings.ts` の localStorage キーレジストリ化
 

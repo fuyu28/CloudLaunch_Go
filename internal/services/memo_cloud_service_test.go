@@ -46,6 +46,10 @@ func (repository fakeMemoCloudGameRepository) ClearPendingMemoCleanup(ctx contex
 	return nil
 }
 
+func (repository fakeMemoCloudGameRepository) RefreshGamePlayTimeFromSessions(ctx context.Context, gameID string) error {
+	return nil
+}
+
 type fakeMemoCloudMemoRepository struct {
 	memo       *domain.Memo
 	memoByGame []domain.Memo

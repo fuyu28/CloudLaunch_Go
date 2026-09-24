@@ -63,7 +63,7 @@ func (app *App) UpdateGame(gameID string, input services.GameUpdateInput) result
 	return result.OkResult(updated)
 }
 
-// UpdatePlayTime はプレイ時間を更新する。
+// UpdatePlayTime はセッション集計からプレイ時間キャッシュを再構築する（互換 API）。
 func (app *App) UpdatePlayTime(gameID string, totalPlayTime int64, lastPlayed time.Time) result.ApiResult[*domain.Game] {
 	game, err := app.GameService.UpdatePlayTime(app.context(), gameID, totalPlayTime, lastPlayed)
 	return serviceResult(game, err, "プレイ時間更新に失敗しました")
@@ -83,18 +83,34 @@ func (app *App) ListRoutesByGame(gameID string) result.ApiResult[[]domain.Route]
 // CreateRoute はルートを作成する。
 func (app *App) CreateRoute(input services.RouteInput) result.ApiResult[*domain.Route] {
 	route, err := app.RouteService.CreateRoute(app.context(), input)
-	return serviceResult(route, err, "ルート作成に失敗しました")
+	if err != nil {
+		return serviceErrorResult[*domain.Route](err, "ルート作成に失敗しました")
+	}
+	if route != nil {
+		app.syncGameAsync(route.GameID)
+	}
+	return result.OkResult(route)
 }
 
 // UpdateRoute はルートを更新する。
 func (app *App) UpdateRoute(routeID string, input services.RouteUpdateInput) result.ApiResult[*domain.Route] {
 	route, err := app.RouteService.UpdateRoute(app.context(), routeID, input)
-	return serviceResult(route, err, "ルート更新に失敗しました")
+	if err != nil {
+		return serviceErrorResult[*domain.Route](err, "ルート更新に失敗しました")
+	}
+	if route != nil {
+		app.syncGameAsync(route.GameID)
+	}
+	return result.OkResult(route)
 }
 
 // UpdateRouteOrders はルートの並び順を更新する。
 func (app *App) UpdateRouteOrders(gameID string, orders []services.RouteOrderUpdate) result.ApiResult[bool] {
-	return boolResult(app.RouteService.UpdateRouteOrders(app.context(), gameID, orders), "ルート順序更新に失敗しました")
+	if err := app.RouteService.UpdateRouteOrders(app.context(), gameID, orders); err != nil {
+		return serviceErrorResult[bool](err, "ルート順序更新に失敗しました")
+	}
+	app.syncGameAsync(gameID)
+	return result.OkResult(true)
 }
 
 // GetRouteStats はルートの統計を取得する。
@@ -105,12 +121,41 @@ func (app *App) GetRouteStats(gameID string) result.ApiResult[[]domain.RouteStat
 
 // SetCurrentRoute はゲームの現在ルートを設定する。
 func (app *App) SetCurrentRoute(gameID string, routeID string) result.ApiResult[bool] {
-	return boolResult(app.RouteService.SetCurrentRoute(app.context(), gameID, routeID), "現在ルート更新に失敗しました")
+	if err := app.RouteService.SetCurrentRoute(app.context(), gameID, routeID); err != nil {
+		return serviceErrorResult[bool](err, "現在ルート更新に失敗しました")
+	}
+	app.syncGameAsync(gameID)
+	return result.OkResult(true)
 }
 
 // DeleteRoute はルートを削除する。
+// 削除前に routeLookup で gameID を確保する（A1: mutation 後は行が消えるため）。
 func (app *App) DeleteRoute(routeID string) result.ApiResult[bool] {
-	return boolResult(app.RouteService.DeleteRoute(app.context(), routeID), "ルート削除に失敗しました")
+	return app.mutateRouteAndSync(routeID, "ルート削除に失敗しました", func(ctx context.Context) error {
+		return app.RouteService.DeleteRoute(ctx, routeID)
+	})
+}
+
+// mutateRouteAndSync は mutation 前にルートを引き、成功時のみ保持した gameID で同期する。
+// ルートが無い場合（nil, nil）は mutation 自体は実行し、同期はスキップする。
+func (app *App) mutateRouteAndSync(routeID string, fallbackMessage string, mutate func(ctx context.Context) error) result.ApiResult[bool] {
+	ctx := app.context()
+	trimmedID := strings.TrimSpace(routeID)
+	route, err := app.routeLookup.GetRouteByID(ctx, trimmedID)
+	if err != nil {
+		return serviceErrorResult[bool](err, "ルート取得に失敗しました")
+	}
+	gameID := ""
+	if route != nil {
+		gameID = strings.TrimSpace(route.GameID)
+	}
+	if err := mutate(ctx); err != nil {
+		return serviceErrorResult[bool](err, fallbackMessage)
+	}
+	if gameID != "" {
+		app.syncGameAsync(gameID)
+	}
+	return result.OkResult(true)
 }
 
 // CreateSession はセッションを作成する。
@@ -133,36 +178,43 @@ func (app *App) ListSessionsByGame(gameID string) result.ApiResult[[]domain.Play
 
 // DeleteSession はセッションを削除する。
 func (app *App) DeleteSession(sessionID string) result.ApiResult[bool] {
-	deleted, err := app.SessionService.DeleteSession(app.context(), sessionID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッション削除に失敗しました")
-	}
-	if deleted.GameID != "" {
-		app.syncGameAsync(deleted.GameID)
-	}
-	return result.OkResult(true)
+	return app.mutateSessionAndSync(sessionID, "セッション削除に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.DeleteSession(ctx, sessionID)
+	})
 }
 
 // UpdateSessionRoute はセッションのルートを更新する。
 func (app *App) UpdateSessionRoute(sessionID string, routeID *string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionRoute(app.context(), sessionID, routeID)
-	if err != nil {
-		return serviceErrorResult[bool](err, "セッションルート更新に失敗しました")
-	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
-	}
-	return result.OkResult(true)
+	return app.mutateSessionAndSync(sessionID, "セッションルート更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSessionRoute(ctx, sessionID, routeID)
+	})
 }
 
 // UpdateSessionName はセッション名を更新する。
 func (app *App) UpdateSessionName(sessionID string, sessionName string) result.ApiResult[bool] {
-	updated, err := app.SessionService.UpdateSessionName(app.context(), sessionID, sessionName)
+	return app.mutateSessionAndSync(sessionID, "セッション名更新に失敗しました", func(ctx context.Context) error {
+		return app.SessionService.UpdateSessionName(ctx, sessionID, sessionName)
+	})
+}
+
+// mutateSessionAndSync は mutation 前にセッションを引き、成功時のみ保持した gameID で同期する。
+// セッションが無い場合（nil, nil）は mutation 自体は実行し、同期はスキップする（既存挙動）。
+func (app *App) mutateSessionAndSync(sessionID string, fallbackMessage string, mutate func(ctx context.Context) error) result.ApiResult[bool] {
+	ctx := app.context()
+	trimmedID := strings.TrimSpace(sessionID)
+	session, err := app.playSessionLookup.GetPlaySessionByID(ctx, trimmedID)
 	if err != nil {
-		return serviceErrorResult[bool](err, "セッション名更新に失敗しました")
+		return serviceErrorResult[bool](err, "セッション取得に失敗しました")
 	}
-	if updated.GameID != "" {
-		app.syncGameAsync(updated.GameID)
+	gameID := ""
+	if session != nil {
+		gameID = strings.TrimSpace(session.GameID)
+	}
+	if err := mutate(ctx); err != nil {
+		return serviceErrorResult[bool](err, fallbackMessage)
+	}
+	if gameID != "" {
+		app.syncGameAsync(gameID)
 	}
 	return result.OkResult(true)
 }

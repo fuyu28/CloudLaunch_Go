@@ -511,7 +511,7 @@ func (service *ProcessMonitorService) collectGameIDsToCleanup(now time.Time, gam
 func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt time.Time) {
 	sessionName := "自動記録 - " + game.ExeName
 	ctx := context.Background()
-	_, err := service.repository.CreatePlaySession(ctx, domain.PlaySession{
+	_, err := service.repository.CreatePlaySessionAndRefreshGame(ctx, domain.PlaySession{
 		GameID:      game.GameID,
 		PlayedAt:    endedAt,
 		Duration:    game.AccumulatedTime,
@@ -522,13 +522,12 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 		return
 	}
 
+	// プレイ時間はセッション作成 TX で更新済み。ここではセーブハッシュだけ追記する。
 	current, err := service.repository.GetGameByID(ctx, game.GameID)
 	if err != nil || current == nil {
 		service.logger.Error("ゲーム取得に失敗", "error", err)
 		return
 	}
-	current.TotalPlayTime += game.AccumulatedTime
-	current.LastPlayed = &endedAt
 	if current.SaveFolderPath != nil {
 		saveFolderPath := strings.TrimSpace(*current.SaveFolderPath)
 		if saveFolderPath != "" {
@@ -538,13 +537,12 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 				h := hashBytes(snapJSON)
 				current.LocalSaveHash = &h
 				current.LocalSaveHashUpdatedAt = &endedAt
+				if _, err := service.repository.UpdateGame(ctx, *current); err != nil {
+					service.logger.Error("ローカルセーブハッシュ更新に失敗", "error", err)
+					return
+				}
 			}
 		}
-	}
-
-	if _, err := service.repository.UpdateGame(ctx, *current); err != nil {
-		service.logger.Error("プレイ時間更新に失敗", "error", err)
-		return
 	}
 
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
