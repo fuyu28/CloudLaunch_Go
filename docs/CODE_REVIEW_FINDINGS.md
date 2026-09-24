@@ -51,7 +51,7 @@
 | M1 | todo | DeleteGame がメモファイルを残す |
 | M2 | todo | CreateGame の CreateRoute 失敗無視 |
 | M3 | todo | Status が lockGame 外 |
-| M4 | todo | ErogameScape ホスト未検証 |
+| M4 | done | ErogameScape ホスト未検証 |
 | M5 | done | OpenFolder が explorer.exe 固定 |
 | M11 | done | CreatePlaySession が誤った行を返す |
 | M12 | todo | Push HEAD 後の local baseline 非原子 |
@@ -84,6 +84,9 @@
 
 ### H3 / H8
 影響大のため本 PR では着手せず、別コミット／ADR 後に実施。
+
+### M4
+`erogamescape_url.go` でページ／画像ホストを allowlist 検証。
 
 ### M5
 `open_path_*.go` で OS 別オープン（Windows/macOS/Linux）。`OpenFolder` / 外部パス起動が共用。
