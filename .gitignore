@@ -12,6 +12,7 @@
 /build/bin/
 frontend/dist/
 frontend/wailsjs/
+internal/buildinfo/revision_production.go
 
 # Frontend
 frontend/node_modules/
