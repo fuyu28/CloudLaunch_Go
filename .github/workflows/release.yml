@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows release
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v(?<version>\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+            throw "Release tag must be SemVer prefixed with v: $env:RELEASE_TAG"
+          }
+
+          $productVersion = (Get-Content -Raw wails.json | ConvertFrom-Json).info.productVersion
+          if ($Matches.version -ne $productVersion) {
+            throw "Tag version $($Matches.version) does not match wails.json productVersion $productVersion"
+          }
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Install Wails CLI
+        shell: pwsh
+        run: |
+          $wailsVersion = go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2
+          go install "github.com/wailsapp/wails/v2/cmd/wails@$wailsVersion"
+          $goBin = go env GOBIN
+          if (-not $goBin) {
+            $goBin = "$(go env GOPATH)\bin"
+          }
+          $goBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build Windows application and installer
+        run: wails build -clean -platform windows/amd64 -nsis
+
+      - name: Create checksums
+        shell: pwsh
+        run: |
+          $releaseFiles = @(
+            Get-Item "build/bin/CloudLaunch.exe"
+            Get-Item "build/bin/CloudLaunch-amd64-installer.exe"
+          )
+          $checksums = foreach ($file in $releaseFiles) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          $checksums | Set-Content -Encoding ascii "build/bin/SHA256SUMS.txt"
+
+      - name: Upload release files
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            build/bin/CloudLaunch.exe
+            build/bin/CloudLaunch-amd64-installer.exe
+            build/bin/SHA256SUMS.txt
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-release
+          path: release
+
+      - name: Publish release
+        shell: bash
+        run: |
+          args=(
+            "$RELEASE_TAG"
+            "release/CloudLaunch.exe"
+            "release/CloudLaunch-amd64-installer.exe"
+            "release/SHA256SUMS.txt"
+            --verify-tag
+            --generate-notes
+          )
+          if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"

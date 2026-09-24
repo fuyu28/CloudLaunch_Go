@@ -269,12 +269,11 @@ type cloudGame struct {
 
 // cloudSession は sessions.json のクラウド保存フォーマット。
 type cloudSession struct {
-	ID          string    `json:"id"`
-	PlayedAt    time.Time `json:"playedAt"`
-	Duration    int64     `json:"duration"`
-	SessionName *string   `json:"sessionName,omitempty"`
-	RouteID     *string   `json:"routeId,omitempty"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID        string    `json:"id"`
+	PlayedAt  time.Time `json:"playedAt"`
+	Duration  int64     `json:"duration"`
+	RouteID   *string   `json:"routeId,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // metaBuildResult は buildMetaSnapshot の戻り値。
@@ -319,12 +318,11 @@ func buildMetaSnapshot(
 	cs := make([]cloudSession, 0, len(sessions))
 	for _, s := range sessions {
 		cs = append(cs, cloudSession{
-			ID:          s.ID,
-			PlayedAt:    s.PlayedAt,
-			Duration:    s.Duration,
-			SessionName: s.SessionName,
-			RouteID:     s.RouteID,
-			UpdatedAt:   s.UpdatedAt,
+			ID:        s.ID,
+			PlayedAt:  s.PlayedAt,
+			Duration:  s.Duration,
+			RouteID:   s.RouteID,
+			UpdatedAt: s.UpdatedAt,
 		})
 	}
 	sessionsJSON, err := json.Marshal(cs)
