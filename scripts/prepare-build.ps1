@@ -1,4 +1,4 @@
-# Wails の production ビルド前に、コミットIDとスクリーンショット取得ツールを準備する。
+# Prepares the commit ID and screenshot utility before Wails production builds.
 
 & "$PSScriptRoot/fetch-screencap-cli.ps1"
 if ($LASTEXITCODE -ne 0) {
@@ -8,7 +8,7 @@ if ($LASTEXITCODE -ne 0) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $revision = (git -C $repoRoot rev-parse --verify HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') {
-    throw "ビルド用コミットIDを取得できませんでした"
+    throw "Failed to resolve the build commit ID"
 }
 
 $outputPath = Join-Path $repoRoot 'internal/buildinfo/revision_production.go'
