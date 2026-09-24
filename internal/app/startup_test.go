@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"CloudLaunch_Go/internal/config"
 	"CloudLaunch_Go/internal/domain"
 	"CloudLaunch_Go/internal/services"
 )
@@ -45,6 +46,9 @@ func (repository *startupGameRepository) ClearPendingMemoCleanup(_ context.Conte
 	repository.cleared = append(repository.cleared, gameID)
 	return nil
 }
+func (repository *startupGameRepository) RefreshGamePlayTimeFromSessions(context.Context, string) error {
+	return nil
+}
 
 type startupMemoCleaner struct {
 	cleaned []string
@@ -76,5 +80,145 @@ func TestStartupRetriesPendingMemoCleanup(t *testing.T) {
 	}
 	if len(repository.cleared) != 1 || repository.cleared[0] != "game-1" {
 		t.Fatalf("cleared game IDs = %#v", repository.cleared)
+	}
+}
+
+type startupContentSyncRepository struct {
+	listPendingCalls int
+	listPullOpCalls  int
+	failList         bool
+	failPullOps      bool
+}
+
+func (r *startupContentSyncRepository) GetGameByID(context.Context, string) (*domain.Game, error) {
+	return nil, nil
+}
+func (r *startupContentSyncRepository) ListPlaySessionsByGame(context.Context, string) ([]domain.PlaySession, error) {
+	return nil, nil
+}
+func (r *startupContentSyncRepository) ListRoutesByGame(context.Context, string) ([]domain.Route, error) {
+	return nil, nil
+}
+func (r *startupContentSyncRepository) GetLocalSaveTree(context.Context, string) (string, error) {
+	return "", nil
+}
+func (r *startupContentSyncRepository) SetLocalSyncState(context.Context, string, string, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) BeginPendingPush(context.Context, domain.PendingPush) error {
+	return nil
+}
+func (r *startupContentSyncRepository) FinalizePendingPush(context.Context, string, string, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) ClearPendingPush(context.Context, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) ListPendingPushes(context.Context) ([]domain.PendingPush, error) {
+	r.listPendingCalls++
+	if r.failList {
+		return nil, context.DeadlineExceeded
+	}
+	return nil, nil
+}
+func (r *startupContentSyncRepository) BeginPullOperation(context.Context, domain.PullOperation) error {
+	return nil
+}
+func (r *startupContentSyncRepository) ClearPullOperation(context.Context, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) ListPullOperations(context.Context) ([]domain.PullOperation, error) {
+	r.listPullOpCalls++
+	if r.failPullOps {
+		return nil, context.DeadlineExceeded
+	}
+	return nil, nil
+}
+func (r *startupContentSyncRepository) ApplyPullResult(context.Context, domain.Game, []domain.PlaySession, string, string, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) ApplyPullResultV2(context.Context, domain.Game, []domain.Route, []domain.PlaySession, string, string, string) error {
+	return nil
+}
+func (r *startupContentSyncRepository) GetSetting(context.Context, string) (string, error) {
+	return "", nil
+}
+func (r *startupContentSyncRepository) UpsertSetting(context.Context, string, string) error {
+	return nil
+}
+
+func TestStartupRecoversPendingPushes(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	repo := &startupContentSyncRepository{}
+	app := &App{
+		Logger:             logger,
+		ContentSyncService: services.NewContentSyncService(config.Config{}, nil, repo, logger),
+	}
+
+	app.Startup(context.Background())
+
+	if repo.listPullOpCalls != 1 {
+		t.Fatalf("ListPullOperations calls = %d, want 1", repo.listPullOpCalls)
+	}
+	if repo.listPendingCalls != 1 {
+		t.Fatalf("ListPendingPushes calls = %d, want 1", repo.listPendingCalls)
+	}
+}
+
+func TestStartupRecoversPullOperationsBeforePendingPushes(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	repo := &startupContentSyncRepository{}
+	app := &App{
+		Logger:             logger,
+		ContentSyncService: services.NewContentSyncService(config.Config{}, nil, repo, logger),
+	}
+
+	app.Startup(context.Background())
+
+	// Pull ジャーナル回復は Push baseline 回復より先（セーブ交換の中間状態を先に直す）。
+	if repo.listPullOpCalls != 1 {
+		t.Fatalf("ListPullOperations calls = %d, want 1", repo.listPullOpCalls)
+	}
+	if repo.listPendingCalls != 1 {
+		t.Fatalf("ListPendingPushes calls = %d, want 1", repo.listPendingCalls)
+	}
+}
+
+func TestStartupContinuesWhenPendingPushRecoveryFails(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	repo := &startupContentSyncRepository{failList: true}
+	app := &App{
+		Logger:             logger,
+		ContentSyncService: services.NewContentSyncService(config.Config{}, nil, repo, logger),
+	}
+
+	// ネットワーク／DB 失敗でも Startup 自体はパニックせず完了する。
+	app.Startup(context.Background())
+
+	if repo.listPendingCalls != 1 {
+		t.Fatalf("ListPendingPushes calls = %d, want 1", repo.listPendingCalls)
+	}
+}
+
+func TestStartupContinuesWhenPullOperationRecoveryFails(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	repo := &startupContentSyncRepository{failPullOps: true}
+	app := &App{
+		Logger:             logger,
+		ContentSyncService: services.NewContentSyncService(config.Config{}, nil, repo, logger),
+	}
+
+	app.Startup(context.Background())
+
+	if repo.listPullOpCalls != 1 {
+		t.Fatalf("ListPullOperations calls = %d, want 1", repo.listPullOpCalls)
 	}
 }

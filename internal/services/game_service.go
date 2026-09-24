@@ -147,8 +147,12 @@ func (service *GameService) UpdateGame(ctx context.Context, gameID string, input
 	return updated, nil
 }
 
-// UpdatePlayTime はプレイ時間と最終プレイ日時を更新する。
+// UpdatePlayTime はセッション集計から totalPlayTime / lastPlayed を再構築して返す。
+// 引数 totalPlayTime / lastPlayed は互換のため受け取るが無視する（PlaySession が正本）。
 func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, totalPlayTime int64, lastPlayed time.Time) (*domain.Game, error) {
+	_ = totalPlayTime
+	_ = lastPlayed
+
 	trimmedID, detail, ok := requireNonEmpty(gameID, "gameID")
 	if !ok {
 		service.logger.Warn("ゲームIDが不正です", "detail", detail, "gameId", gameID)
@@ -165,12 +169,13 @@ func (service *GameService) UpdatePlayTime(ctx context.Context, gameID string, t
 		return nil, newServiceError("ゲームが見つかりません", "指定されたIDが存在しません")
 	}
 
-	current.TotalPlayTime = totalPlayTime
-	current.LastPlayed = &lastPlayed
-
-	updated, error := service.repository.UpdateGame(ctx, *current)
+	if error := service.repository.RefreshGamePlayTimeFromSessions(ctx, trimmedID); error != nil {
+		service.logger.Error("プレイ時間再計算に失敗", "error", error)
+		return nil, newServiceError("プレイ時間更新に失敗しました", error.Error())
+	}
+	updated, error := service.repository.GetGameByID(ctx, trimmedID)
 	if error != nil {
-		service.logger.Error("プレイ時間更新に失敗", "error", error)
+		service.logger.Error("ゲーム取得に失敗", "error", error)
 		return nil, newServiceError("プレイ時間更新に失敗しました", error.Error())
 	}
 	return updated, nil
