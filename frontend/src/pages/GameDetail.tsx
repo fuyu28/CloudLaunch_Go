@@ -308,6 +308,7 @@ export default function GameDetail(): React.JSX.Element {
         if (op.ok) {
           if (!useLocal && op.applied === false) {
             // リモート採用でも untracked 削除確認が必要（ローカル無変更）。
+            setSyncStatusDetail(null);
             setIsConflictModalOpen(false);
             setConflictMeta(null);
             setUntrackedDeletes(op.untrackedDeletes ?? []);
@@ -320,8 +321,10 @@ export default function GameDetail(): React.JSX.Element {
               : "クラウドデータをローカルに適用しました",
             "success",
           );
+          setSyncStatusDetail(null);
           setIsConflictModalOpen(false);
           setConflictMeta(null);
+          await refreshGameData();
           if (pendingLaunchAfterConflict) {
             setPendingLaunchAfterConflict(false);
             await handleLaunchGame();
@@ -335,7 +338,14 @@ export default function GameDetail(): React.JSX.Element {
         setIsResolvingConflict(false);
       }
     },
-    [game, showToast, resolveConflict, pendingLaunchAfterConflict, handleLaunchGame],
+    [
+      game,
+      showToast,
+      resolveConflict,
+      pendingLaunchAfterConflict,
+      handleLaunchGame,
+      refreshGameData,
+    ],
   );
 
   // 確認後に deleteUntracked=true で再実行する（未確認のまま消さない）。
@@ -584,9 +594,11 @@ export default function GameDetail(): React.JSX.Element {
           localMeta={syncStatusDetail.localMeta}
           remoteMeta={syncStatusDetail.remoteMeta}
           hasSaveFolder={!!game.saveFolderPath}
-          isProcessing={isSyncActionRunning}
+          isProcessing={isSyncActionRunning || isResolvingConflict}
           onUpload={handleSyncUpload}
           onDownload={handleSyncDownload}
+          onForceUpload={() => void handleResolveConflict(true)}
+          onForceDownload={() => void handleResolveConflict(false)}
         />
       )}
 
