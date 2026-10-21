@@ -29,6 +29,10 @@ import (
 // ユーザー操作パスでは UI に「オフラインモードです」を表示する。
 var ErrOffline = errors.New("オフラインモードのため同期しません")
 
+// ErrSavesDiffer はセーブ内容がクラウドと異なるため、確認なしの自動同期を見送ったことを示す。
+// セーブの転送はユーザーが確認モーダルで承認した Push / Pull / ResolveConflict だけに限る。
+var ErrSavesDiffer = errors.New("セーブデータがクラウドと異なるため自動同期しません")
+
 // ProgressFunc はセーブファイルの転送進捗を報告するコールバック。
 type ProgressFunc func(current, total int)
 
@@ -258,7 +262,9 @@ func (s *ContentSyncService) buildLocalMeta(ctx context.Context, game domain.Gam
 			s.logger.Warn("画像のハッシュ計算に失敗（imageHash を空として扱う）", "gameId", game.ID, "path", *game.ImagePath, "error", herr)
 		}
 	}
-	saveSnap, err := buildSaveTree(saveFolderPath)
+	// 新しい PC ではゲームがまだセーブフォルダを作っていないことがある。エラーにすると
+	// 起動前のダウンロード確認が出ないため、空のセーブとして判定する。
+	saveSnap, err := readLiveSaveTree(saveFolderPath)
 	if err != nil {
 		return metaBuildResult{}, err
 	}
@@ -373,7 +379,40 @@ func (s *ContentSyncService) Push(ctx context.Context, gameID string, onProgress
 		return ErrOffline
 	}
 	defer s.lockGame(gameID)()
-	return s.push(ctx, gameID, onProgress, false)
+	return s.push(ctx, gameID, onProgress, false, false)
+}
+
+// SyncMetadata はセーブ内容がクラウドと同一のときだけ、ゲーム情報・セッション・ルートを
+// 確認なしで同期する（プレイ終了後やゲーム編集後の自動同期用）。
+// セーブに差分がある、またはクラウドにまだデータが無い場合は ErrSavesDiffer を返し、
+// 転送はユーザーが確認モーダルで承認した Push / Pull に委ねる。
+func (s *ContentSyncService) SyncMetadata(ctx context.Context, gameID string) error {
+	if s.offline.Load() {
+		return ErrOffline
+	}
+	defer s.lockGame(gameID)()
+	detail, err := s.status(ctx, gameID)
+	if err != nil {
+		return err
+	}
+	switch detail.Status {
+	case domain.SyncStatusInSync:
+		return nil
+	case domain.SyncStatusNeverSynced:
+		return ErrSavesDiffer
+	}
+	if detail.SavesDiffer {
+		return ErrSavesDiffer
+	}
+	switch detail.Status {
+	case domain.SyncStatusPushNeeded:
+		return s.push(ctx, gameID, nil, false, true)
+	case domain.SyncStatusPullNeeded:
+		_, err := s.pull(ctx, gameID, nil, false, true)
+		return err
+	default:
+		return fmt.Errorf("ゲーム情報がクラウドと競合しています。同期確認から解決してください")
+	}
 }
 
 // SessionFormatMigrationResult はクラウド上で移行したゲーム数を表す。
@@ -512,7 +551,10 @@ func hasLegacySessionName(data []byte) bool {
 	return false
 }
 
-func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress ProgressFunc, force bool) error {
+// metadataOnly=true のときは、push 用に読み直したセーブがリモートと一致しない限り
+// ErrSavesDiffer で中断する。Status 判定後にゲームがセーブを書き換えた場合でも、
+// 確認なしでセーブを送らないための再確認。
+func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress ProgressFunc, force, metadataOnly bool) error {
 	// 未完了 Pull ジャーナルが残ったまま Push すると、セーブ実体と baseline が食い違う。
 	if err := s.recoverPullOperationsForGame(ctx, gameID); err != nil {
 		return err
@@ -538,7 +580,7 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 		return fmt.Errorf("セーブフォルダのパスが未設定です")
 	}
 	// !force のとき、push 開始時点のリモート HEAD を控える（writeHEAD 直前の再確認に使う）。
-	expectedHead, err := s.pushCheckRemoteHead(ctx, bstore, gameID, game, force)
+	expectedHead, remoteSaves, err := s.pushCheckRemoteHead(ctx, bstore, gameID, game, force)
 	if err != nil {
 		return err
 	}
@@ -546,6 +588,13 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 	meta, saveSnapJSON, savesHash, saveBlobs, imageHash, imageData, err := s.pushBuildLocalMeta(ctx, gameID, game)
 	if err != nil {
 		return err
+	}
+	if metadataOnly {
+		if expectedHead == "" || savesHash != remoteSaves {
+			return ErrSavesDiffer
+		}
+		// セーブ実体はリモートに同一ツリーとして存在するので再送しない。
+		saveBlobs = nil
 	}
 	metaHash := hashBytes(meta.SnapshotBytes)
 
@@ -558,25 +607,26 @@ func (s *ContentSyncService) push(ctx context.Context, gameID string, onProgress
 
 // pushCheckRemoteHead は !force のとき push 開始時点のリモート HEAD を確認し、
 // ローカルの同期基準とズレていればコンフリクトとして中断する。
-// 戻り値の expectedHead は writeHEAD 直前の再確認（pushFinalizeHead）で使う。
-func (s *ContentSyncService) pushCheckRemoteHead(ctx context.Context, bstore contentBlobStore, gameID string, game *domain.Game, force bool) (string, error) {
+// 戻り値の expectedHead は writeHEAD 直前の再確認（pushFinalizeHead）で使い、
+// remoteSaves はメタデータ専用 Push でセーブ不変を確かめるのに使う。
+func (s *ContentSyncService) pushCheckRemoteHead(ctx context.Context, bstore contentBlobStore, gameID string, game *domain.Game, force bool) (string, domain.BlobHash, error) {
 	if force {
-		return "", nil
+		return "", "", nil
 	}
 	remoteHead, err := bstore.readHEAD(ctx, gameID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if remoteHead == "" {
-		return "", nil
+		return "", "", nil
 	}
 	remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	var remoteMeta domain.MetaSnapshot
 	if err := json.Unmarshal(remoteMetaBytes, &remoteMeta); err != nil {
-		return "", err
+		return "", "", err
 	}
 	localSyncHead := ""
 	if game.LocalSyncHead != nil {
@@ -587,12 +637,12 @@ func (s *ContentSyncService) pushCheckRemoteHead(ctx context.Context, bstore con
 	// ユーザーはまず Pull or ResolveConflict せざるを得ず、Status() 側が PullNeeded として
 	// 扱っているのと整合しない。Pull を促すための明示エラーで返す。
 	if localSyncHead == "" {
-		return "", fmt.Errorf("リモートにデータがあります。Pull で取り込むか、ローカルを採用するなら同期確認画面から選択してください")
+		return "", "", fmt.Errorf("リモートにデータがあります。Pull で取り込むか、ローカルを採用するなら同期確認画面から選択してください")
 	}
 	if contentFingerprint(remoteMeta) != localSyncHead {
-		return "", fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
+		return "", "", fmt.Errorf("リモートが更新されています。同期状態を確認してコンフリクトを解決してください")
 	}
-	return remoteHead, nil
+	return remoteHead, remoteMeta.Saves, nil
 }
 
 // pushBuildLocalMeta はゲームの現在のローカル状態から push 用の MetaSnapshot と
@@ -772,7 +822,7 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 		return domain.PullResult{}, ErrOffline
 	}
 	defer s.lockGame(gameID)()
-	return s.pull(ctx, gameID, onProgress, deleteUntracked)
+	return s.pull(ctx, gameID, onProgress, deleteUntracked, false)
 }
 
 // pull はリモートデータをローカルに適用する。
@@ -781,7 +831,11 @@ func (s *ContentSyncService) Pull(ctx context.Context, gameID string, onProgress
 // （untracked）を削除する必要があると分かった時点で、ローカルに一切変更を加えずに
 // PullResult{Applied:false, UntrackedDeletes:...} を返す。呼び出し側でユーザーに
 // 確認を取り、承認後に deleteUntracked=true で再実行する。
-func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked bool) (domain.PullResult, error) {
+//
+// metadataOnly=true のときは、ローカルのセーブがリモートのツリーと完全一致する場合に限り
+// DB 側（ゲーム情報・セッション・ルート・同期基準）だけを反映し、セーブフォルダには触れない。
+// 一致しなければ ErrSavesDiffer を返す。
+func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress ProgressFunc, deleteUntracked, metadataOnly bool) (domain.PullResult, error) {
 	// 旧 PREPARED を残したまま新規 stage/swap すると、起動回復時に古い backup で
 	// 新しい live を巻き戻してしまう。削除計画の前に必ず消化する。
 	if err := s.recoverPullOperationsForGame(ctx, gameID); err != nil {
@@ -871,6 +925,24 @@ func (s *ContentSyncService) pull(ctx context.Context, gameID string, onProgress
 		exePath = localGame.ExePath
 		saveFolderPath = localGame.SaveFolderPath
 		imagePath = localGame.ImagePath
+	}
+
+	if metadataOnly {
+		if saveFolderPath == nil || *saveFolderPath == "" {
+			return domain.PullResult{}, ErrSavesDiffer
+		}
+		localTree, terr := readLiveSaveTree(*saveFolderPath)
+		if terr != nil {
+			return domain.PullResult{}, terr
+		}
+		if !saveSnapshotsEqual(localTree, saveSnap) {
+			return domain.PullResult{}, ErrSavesDiffer
+		}
+		imagePath, err = s.pullDownloadImage(ctx, bstore, gameID, cloudG, imagePath)
+		if err != nil {
+			return domain.PullResult{}, err
+		}
+		return s.pullApplyToDB(ctx, gameID, cloudG, cloudRoutes, cloudSessions, imagePath, exePath, saveFolderPath, localGame, meta, saveSnapBytes, "")
 	}
 
 	// ── 削除計画を先に立て、未追跡ファイルの削除が必要なら変更前に確認へ回す ──
@@ -1062,12 +1134,12 @@ func (s *ContentSyncService) ResolveConflict(ctx context.Context, gameID string,
 	}
 	defer s.lockGame(gameID)()
 	if useLocal {
-		if err := s.push(ctx, gameID, nil, true); err != nil {
+		if err := s.push(ctx, gameID, nil, true, false); err != nil {
 			return domain.PullResult{}, err
 		}
 		return domain.PullResult{Applied: true}, nil
 	}
-	return s.pull(ctx, gameID, nil, deleteUntracked)
+	return s.pull(ctx, gameID, nil, deleteUntracked, false)
 }
 
 // DeleteFromCloud はゲームのリモートデータを削除し、ローカルの同期基準もクリアする。同一ゲームの同期と直列化される。

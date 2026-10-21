@@ -198,6 +198,8 @@ export type WindowApi = {
   cloudSync: {
     status: (gameId: string) => Promise<ApiResult<SyncStatusDetail>>;
     push: (gameId: string) => Promise<ApiResult<void>>;
+    /** セーブがクラウドと同一のときだけゲーム情報・セッションを同期する（セーブは転送しない）。 */
+    syncMetadata: (gameId: string) => Promise<ApiResult<void>>;
     pull: (gameId: string, deleteUntracked?: boolean) => Promise<ApiResult<PullResult>>;
     resolveConflict: (
       gameId: string,

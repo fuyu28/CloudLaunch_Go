@@ -52,6 +52,19 @@ func (app *App) PushSync(gameID string) result.ApiResult[any] {
 	return result.OkResult[any](nil)
 }
 
+// SyncMetadata はセーブ内容がクラウドと同一のときだけゲーム情報・セッションを同期する。
+// セーブに差分がある場合は何も転送せずエラーを返す（確認モーダル経由の Push/Pull に委ねる）。
+func (app *App) SyncMetadata(gameID string) result.ApiResult[any] {
+	trimmed, errResult, ok := requireGameID[any](gameID)
+	if !ok {
+		return errResult
+	}
+	if err := app.ContentSyncService.SyncMetadata(app.context(), trimmed); err != nil {
+		return serviceErrorResult[any](err, "ゲーム情報の同期に失敗しました")
+	}
+	return result.OkResult[any](nil)
+}
+
 // PullSync は指定ゲームのデータをリモートからダウンロードする。
 // deleteUntracked=false で未追跡ファイルの削除が必要な場合、ダウンロードを行わず
 // PullResult{Applied:false, UntrackedDeletes:...} を返す（呼び出し側で確認）。

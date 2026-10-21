@@ -24,6 +24,7 @@ declare global {
 const mockGetStatus: Mock = vi.fn();
 const mockGetGameById: Mock = vi.fn();
 const mockPush: Mock = vi.fn();
+const mockResolveConflict: Mock = vi.fn();
 const mockOnProgress: Mock = vi.fn().mockReturnValue(() => {});
 
 Object.defineProperty(window, "api", {
@@ -34,6 +35,7 @@ Object.defineProperty(window, "api", {
     cloudSync: {
       status: mockGetStatus,
       push: mockPush,
+      resolveConflict: mockResolveConflict,
       onProgress: mockOnProgress,
     },
   },
@@ -134,5 +136,59 @@ describe("useUploadAfterSession", () => {
     });
 
     expect(result.current.pendingUpload).toBeNull();
+    expect(result.current.pendingConflict).toBeNull();
+  });
+
+  it("never_synced → 初回アップロードも確認を出す", async () => {
+    mockGetGameById.mockResolvedValue(gameFixture);
+    mockGetStatus.mockResolvedValue(statusOk({ status: "never_synced", savesDiffer: false }));
+
+    const { result } = renderHook(() => useUploadAfterSession(false, true, toastHandler));
+
+    await act(async () => {
+      await result.current.checkUploadPrompt(gameId);
+    });
+
+    expect(result.current.pendingUpload?.gameId).toBe(gameId);
+  });
+
+  it("「しない」を選ぶと push を呼ばずに確認を閉じる", async () => {
+    mockGetGameById.mockResolvedValue(gameFixture);
+    mockGetStatus.mockResolvedValue(statusOk({ status: "push_needed", savesDiffer: true }));
+
+    const { result } = renderHook(() => useUploadAfterSession(false, true, toastHandler));
+
+    await act(async () => {
+      await result.current.checkUploadPrompt(gameId);
+    });
+    act(() => {
+      result.current.handleSkipUploadAfterEnd();
+    });
+
+    expect(result.current.pendingUpload).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("conflict with savesDiffer=true → アップロード確認ではなく競合解決を出す", async () => {
+    mockGetGameById.mockResolvedValue(gameFixture);
+    mockGetStatus.mockResolvedValue(statusOk({ status: "conflict", savesDiffer: true }));
+    mockResolveConflict.mockResolvedValue({ success: true, data: { applied: true } });
+
+    const { result } = renderHook(() => useUploadAfterSession(false, true, toastHandler));
+
+    await act(async () => {
+      await result.current.checkUploadPrompt(gameId);
+    });
+
+    expect(result.current.pendingUpload).toBeNull();
+    expect(result.current.pendingConflict?.gameId).toBe(gameId);
+
+    await act(async () => {
+      await result.current.handleResolveConflictAfterEnd(true);
+    });
+
+    expect(mockResolveConflict).toHaveBeenCalledWith(gameId, true, undefined);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(result.current.pendingConflict).toBeNull();
   });
 });

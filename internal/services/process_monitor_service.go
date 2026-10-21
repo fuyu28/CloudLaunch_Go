@@ -65,9 +65,11 @@ func normalizeProcessList(processes []ProcessInfo) []normalizedProcess {
 	return normalizedProcesses
 }
 
-// afterPlaySyncer はプレイ終了後の自動 Push を抽象化するインターフェース。
+// afterPlaySyncer はプレイ終了後の自動同期を抽象化するインターフェース。
+// Push にするとフロントのアップロード確認より先にセーブが送られてしまうため、
+// セーブ不変時だけ同期する SyncMetadata に限定する。
 type afterPlaySyncer interface {
-	Push(ctx context.Context, gameID string, onProgress ProgressFunc) error
+	SyncMetadata(ctx context.Context, gameID string) error
 }
 
 // ProcessMonitorService はゲームプロセス監視を提供する。
@@ -548,11 +550,15 @@ func (service *ProcessMonitorService) saveSession(game MonitoringGame, endedAt t
 	service.logger.Info("プレイセッションを保存", "exeName", game.ExeName, "duration", game.AccumulatedTime)
 	if service.cloudSync != nil {
 		go func(gameID string) {
-			defer logging.Recover(service.logger, "process-monitor.afterPlayPush")
-			if err := service.cloudSync.Push(context.Background(), gameID, nil); err != nil {
+			defer logging.Recover(service.logger, "process-monitor.afterPlaySync")
+			if err := service.cloudSync.SyncMetadata(context.Background(), gameID); err != nil {
 				// オフラインモードはユーザーが明示的に同期を抑止しているので warn 級にしない。
 				if errors.Is(err, ErrOffline) {
 					service.logger.Debug("オフラインモードのためクラウド同期をスキップ", "gameId", gameID)
+					return
+				}
+				if errors.Is(err, ErrSavesDiffer) {
+					service.logger.Info("セーブに差分があるため自動同期をスキップ（アップロード確認待ち）", "gameId", gameID)
 					return
 				}
 				service.logger.Warn("クラウド同期に失敗", "gameId", gameID, "detail", err)

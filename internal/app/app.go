@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -173,7 +174,12 @@ func (app *App) configureServices(repository *db.Repository, credentialStore cre
 	app.CredentialService = services.NewCredentialService(credentialStore, app.Logger)
 	app.ContentSyncService = services.NewContentSyncService(app.Config, credentialStore, repository, app.Logger)
 	app.syncCoalescer = newAsyncCoalescer(func(id string) {
-		if err := app.ContentSyncService.Push(app.context(), id, nil); err != nil {
+		err := app.ContentSyncService.SyncMetadata(app.context(), id)
+		switch {
+		case err == nil:
+		case errors.Is(err, services.ErrOffline), errors.Is(err, services.ErrSavesDiffer):
+			app.Logger.Debug("クラウド自動同期をスキップ", "gameId", id, "reason", err)
+		default:
 			app.Logger.Warn("クラウド同期に失敗", "gameId", id, "detail", err)
 		}
 	})
