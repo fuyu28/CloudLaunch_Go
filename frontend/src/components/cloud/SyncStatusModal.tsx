@@ -6,6 +6,8 @@
  * メタ情報を表示し、必要な操作だけをユーザーに選ばせる。
  */
 
+import { useState } from "react";
+
 import { FaCloud, FaCloudUploadAlt, FaCloudDownloadAlt, FaCheckCircle } from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";
@@ -23,6 +25,8 @@ type SyncStatusModalProps = {
   isProcessing: boolean;
   onUpload: () => void;
   onDownload: () => void;
+  onForceUpload: () => void;
+  onForceDownload: () => void;
 };
 
 type StatusView = {
@@ -42,7 +46,16 @@ export default function SyncStatusModal({
   isProcessing,
   onUpload,
   onDownload,
+  onForceUpload,
+  onForceDownload,
 }: SyncStatusModalProps): React.JSX.Element {
+  const [forceAction, setForceAction] = useState<"push" | "pull" | null>(null);
+  const close = (): void => {
+    if (isProcessing) return;
+    setForceAction(null);
+    onClose();
+  };
+
   const views: Record<Exclude<SyncStatus, "conflict">, StatusView> = {
     in_sync: {
       icon: <FaCheckCircle className="text-success" />,
@@ -89,16 +102,44 @@ export default function SyncStatusModal({
     <BaseModal
       id="sync-status-modal"
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       title="同期状態の確認"
       size="md"
       footer={
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" className="btn" onClick={onClose} disabled={isProcessing}>
-            閉じる
-          </button>
-          {showUpload && actionButton(<FaCloudUploadAlt />, "アップロード", onUpload)}
-          {showDownload && actionButton(<FaCloudDownloadAlt />, "ダウンロード", onDownload)}
+          {forceAction ? (
+            <>
+              <button
+                type="button"
+                className="btn"
+                disabled={isProcessing}
+                onClick={() => setForceAction(null)}
+              >
+                戻る
+              </button>
+              <button
+                type="button"
+                className="btn btn-error"
+                disabled={isProcessing}
+                onClick={() => {
+                  const action = forceAction;
+                  setForceAction(null);
+                  if (action === "push") onForceUpload();
+                  else onForceDownload();
+                }}
+              >
+                上書きする
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn" onClick={close} disabled={isProcessing}>
+                閉じる
+              </button>
+              {showUpload && actionButton(<FaCloudUploadAlt />, "アップロード", onUpload)}
+              {showDownload && actionButton(<FaCloudDownloadAlt />, "ダウンロード", onDownload)}
+            </>
+          )}
         </div>
       }
     >
@@ -112,6 +153,36 @@ export default function SyncStatusModal({
         </div>
 
         <SyncMetaCardPair localMeta={localMeta} remoteMeta={remoteMeta} />
+
+        {forceAction ? (
+          <div role="alert" className="rounded-lg border border-error p-3 text-sm">
+            {forceAction === "push"
+              ? "クラウドのセーブデータ・ゲーム情報・プレイ履歴を、このPCの内容で上書きします。クラウド側の変更は失われます。"
+              : "このPCのセーブデータ・ゲーム情報・プレイ履歴を、クラウドの内容で上書きします。このPC側の変更は失われます。"}
+          </div>
+        ) : (
+          <details>
+            <summary className="cursor-pointer text-sm">強制同期</summary>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-outline btn-error btn-sm"
+                disabled={isProcessing || !hasSaveFolder}
+                onClick={() => setForceAction("push")}
+              >
+                Force Push（クラウドを上書き）
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-error btn-sm"
+                disabled={isProcessing || !hasSaveFolder || status === "never_synced"}
+                onClick={() => setForceAction("pull")}
+              >
+                Force Pull（このPCを上書き）
+              </button>
+            </div>
+          </details>
+        )}
 
         <p className="text-xs text-base-content/60">対象: {gameTitle}</p>
       </div>

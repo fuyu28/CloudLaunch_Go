@@ -7,6 +7,7 @@
 import {
   SyncStatus,
   PushSync,
+  SyncMetadata,
   PullSync,
   ResolveConflict,
   DeleteGameFromCloud,
@@ -62,6 +63,7 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
       };
     },
     push: async (gameId) => toApiResultVoid(await PushSync(gameId)),
+    syncMetadata: async (gameId) => toApiResultVoid(await SyncMetadata(gameId)),
     pull: async (gameId, deleteUntracked = false) => {
       const result = await PullSync(gameId, deleteUntracked);
       return result.success

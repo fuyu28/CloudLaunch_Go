@@ -12,6 +12,7 @@ import { FaClock, FaGamepad } from "react-icons/fa";
 
 import ConfirmModal from "@renderer/components/common/ConfirmModal";
 import BaseModal from "@renderer/components/common/BaseModal";
+import SyncConflictModal from "@renderer/components/cloud/SyncConflictModal";
 
 import { useOfflineMode } from "@renderer/hooks/useOfflineMode";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
@@ -36,8 +37,16 @@ export function PlayStatusBar(): React.JSX.Element {
     setPendingResumeGame,
     updateMonitoringStatus,
   } = useMonitoringStatus(autoTracking);
-  const { pendingUpload, checkUploadPrompt, handleUploadAfterEnd, handleSkipUploadAfterEnd } =
-    useUploadAfterSession(isOfflineMode, isValidCreds, toastHandler);
+  const {
+    pendingUpload,
+    pendingConflict,
+    isResolvingConflict,
+    checkUploadPrompt,
+    handleUploadAfterEnd,
+    handleSkipUploadAfterEnd,
+    handleResolveConflictAfterEnd,
+    handleSkipConflictAfterEnd,
+  } = useUploadAfterSession(isOfflineMode, isValidCreds, toastHandler);
 
   // 自動検出OFFならバーを出さない（誤検出UIを出さない）。
   if (!autoTracking) {
@@ -243,6 +252,17 @@ export function PlayStatusBar(): React.JSX.Element {
         confirmText="アップロードする"
         onConfirm={handleUploadAfterEnd}
         onCancel={handleSkipUploadAfterEnd}
+      />
+      <SyncConflictModal
+        id="sync-conflict-after-session-modal"
+        isOpen={!!pendingConflict}
+        onClose={handleSkipConflictAfterEnd}
+        gameTitle={pendingConflict?.gameTitle ?? ""}
+        localMeta={pendingConflict?.localMeta}
+        remoteMeta={pendingConflict?.remoteMeta}
+        onUseLocal={() => void handleResolveConflictAfterEnd(true)}
+        onUseRemote={() => void handleResolveConflictAfterEnd(false)}
+        isResolving={isResolvingConflict}
       />
       <ConfirmModal
         id="resume-session-modal"

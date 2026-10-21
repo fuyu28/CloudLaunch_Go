@@ -33,6 +33,14 @@ export function useCloudSync(_isOfflineMode: boolean) {
     };
   }, []);
 
+  const syncMetadata = useCallback(async (gameId: string): Promise<CloudSyncOp> => {
+    const result = await window.api.cloudSync.syncMetadata(gameId);
+    return {
+      ok: result.success,
+      message: result.success ? undefined : result.message,
+    };
+  }, []);
+
   const pull = useCallback(
     async (gameId: string, deleteUntracked?: boolean): Promise<CloudSyncOp> => {
       const result = await window.api.cloudSync.pull(gameId, deleteUntracked);
@@ -64,5 +72,5 @@ export function useCloudSync(_isOfflineMode: boolean) {
     [],
   );
 
-  return { getStatus, push, pull, resolveConflict, subscribeProgress };
+  return { getStatus, push, syncMetadata, pull, resolveConflict, subscribeProgress };
 }

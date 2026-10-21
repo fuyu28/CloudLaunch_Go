@@ -1,15 +1,16 @@
 /**
  * @fileoverview セッション終了後のアップロード処理フック
  *
- * セーブデータ差分の検知とアップロード実行を管理します。
+ * セーブデータ差分の検知と、確認モーダルで承認されたときだけのアップロード／競合解決を管理します。
  */
 
 import { useCallback, useState } from "react";
 
 import { logger } from "@renderer/utils/logger";
+import { decideAfterSessionSyncAction } from "@renderer/utils/cloudSyncDecision";
 
 import { useCloudSync } from "@renderer/hooks/useCloudSync";
-import type { SyncProgressEvent } from "src/wailsBridge";
+import type { SyncMetaSnapshot, SyncProgressEvent } from "src/wailsBridge";
 import type { ToastHandler } from "@renderer/hooks/useToastHandler";
 
 type PendingUpload = {
@@ -18,11 +19,22 @@ type PendingUpload = {
   saveFolderPath: string;
 };
 
+type PendingConflict = {
+  gameId: string;
+  gameTitle: string;
+  localMeta?: SyncMetaSnapshot;
+  remoteMeta?: SyncMetaSnapshot;
+};
+
 type UseUploadAfterSessionResult = {
   pendingUpload: PendingUpload | null;
+  pendingConflict: PendingConflict | null;
+  isResolvingConflict: boolean;
   checkUploadPrompt: (gameId: string) => Promise<void>;
   handleUploadAfterEnd: () => Promise<void>;
   handleSkipUploadAfterEnd: () => void;
+  handleResolveConflictAfterEnd: (useLocal: boolean) => Promise<void>;
+  handleSkipConflictAfterEnd: () => void;
 };
 
 export function useUploadAfterSession(
@@ -31,8 +43,10 @@ export function useUploadAfterSession(
   toastHandler: Pick<ToastHandler, "showToast" | "showLoading" | "showSuccess" | "showError">,
 ): UseUploadAfterSessionResult {
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
+  const [pendingConflict, setPendingConflict] = useState<PendingConflict | null>(null);
+  const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [uploadingAfterEndGameId, setUploadingAfterEndGameId] = useState<string | null>(null);
-  const { getStatus, push, subscribeProgress } = useCloudSync(isOfflineMode);
+  const { getStatus, push, resolveConflict, subscribeProgress } = useCloudSync(isOfflineMode);
 
   const checkUploadPrompt = useCallback(
     async (gameId: string): Promise<void> => {
@@ -65,16 +79,26 @@ export function useUploadAfterSession(
           );
           return;
         }
-        const { status, savesDiffer } = statusResult.data;
-        // status=push_needed / conflict でも、fingerprint 差分の実体が sessions.json
-        // または game.json のメタデータだけ（=セーブファイル内容は不変）のときは
-        // ユーザーに確認するアップロード対象がない。savesDiffer でさらに狭窄する。
-        if ((status === "push_needed" || status === "conflict") && savesDiffer) {
-          setPendingUpload({
-            gameId,
-            gameTitle: game.title,
-            saveFolderPath: game.saveFolderPath,
-          });
+        // status は sessions.json / game.json も含む fingerprint 比較なので、
+        // セーブ内容が不変（savesDiffer=false）なら確認するアップロード対象がない。
+        switch (decideAfterSessionSyncAction(statusResult.data)) {
+          case "confirmUpload":
+            setPendingUpload({
+              gameId,
+              gameTitle: game.title,
+              saveFolderPath: game.saveFolderPath,
+            });
+            break;
+          case "resolveConflict":
+            setPendingConflict({
+              gameId,
+              gameTitle: game.title,
+              localMeta: statusResult.data.localMeta,
+              remoteMeta: statusResult.data.remoteMeta,
+            });
+            break;
+          case "none":
+            break;
         }
       } catch (error) {
         // ネットワーク・権限エラーなどをサイレントに握りつぶすと
@@ -142,10 +166,59 @@ export function useUploadAfterSession(
     setPendingUpload(null);
   }, []);
 
+  const handleResolveConflictAfterEnd = useCallback(
+    async (useLocal: boolean): Promise<void> => {
+      if (!pendingConflict) return;
+      const payload = pendingConflict;
+      setIsResolvingConflict(true);
+      setUploadingAfterEndGameId(payload.gameId);
+      try {
+        const op = await resolveConflict(payload.gameId, useLocal);
+        if (!op.ok) {
+          toastHandler.showToast(op.message || "コンフリクト解決に失敗しました", "error");
+          return;
+        }
+        setPendingConflict(null);
+        if (op.applied === false) {
+          toastHandler.showToast(
+            "同期対象外のローカルファイルがあるため、ゲーム詳細の「同期」から確認してください。",
+            "error",
+          );
+          return;
+        }
+        toastHandler.showToast(
+          useLocal
+            ? "ローカルデータをクラウドに反映しました"
+            : "クラウドデータをローカルに適用しました",
+          "success",
+        );
+      } catch (error) {
+        logger.error("コンフリクト解決に失敗しました:", {
+          component: "useUploadAfterSession",
+          function: "handleResolveConflictAfterEnd",
+          data: error,
+        });
+        toastHandler.showToast("コンフリクト解決に失敗しました", "error");
+      } finally {
+        setIsResolvingConflict(false);
+        setUploadingAfterEndGameId(null);
+      }
+    },
+    [pendingConflict, resolveConflict, toastHandler],
+  );
+
+  const handleSkipConflictAfterEnd = useCallback((): void => {
+    setPendingConflict(null);
+  }, []);
+
   return {
     pendingUpload,
+    pendingConflict,
+    isResolvingConflict,
     checkUploadPrompt,
     handleUploadAfterEnd,
     handleSkipUploadAfterEnd,
+    handleResolveConflictAfterEnd,
+    handleSkipConflictAfterEnd,
   };
 }

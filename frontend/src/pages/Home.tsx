@@ -29,6 +29,8 @@ import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 import { isValidCredsAtom } from "@renderer/state/credentials";
+import { decideLaunchSyncAction } from "@renderer/utils/cloudSyncDecision";
+import { logger } from "@renderer/utils/logger";
 import { buildSaveSyncMessage } from "@renderer/utils/saveSyncMessage";
 import { checkDirectoryExists, checkFileExists } from "@renderer/utils/fileValidation";
 import {
@@ -65,7 +67,7 @@ export default function Home(): React.ReactElement {
   const isValidCreds = useAtomValue(isValidCredsAtom);
   const validateCreds = useValidateCreds();
   const { isOfflineMode } = useOfflineMode();
-  const { getStatus, resolveConflict } = useCloudSync(isOfflineMode);
+  const { getStatus, syncMetadata, resolveConflict } = useCloudSync(isOfflineMode);
   const { downloadSaveData } = useGameSaveData();
   const { formatDateWithTime } = useTimeFormat();
   const { showToast } = useToastHandler();
@@ -233,33 +235,60 @@ export default function Home(): React.ReactElement {
 
       const statusResult = await getStatus(game.id);
       if (!statusResult.success || !statusResult.data) {
+        showToast("クラウドの同期状態を確認できなかったため、同期せずに起動します", "error");
         await launchGameDirect(game);
         return;
       }
 
-      const { status, remoteMeta } = statusResult.data;
-      if (status === "conflict") {
-        // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
-        setConflictMeta({
-          localMeta: statusResult.data.localMeta,
-          remoteMeta: statusResult.data.remoteMeta,
-        });
-        setPendingLaunchGame(game);
-        setIsConflictModalOpen(true);
-        return;
-      }
-      if (status === "pull_needed") {
-        setSaveSyncMessage(
-          buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
-        );
-        setPendingLaunchGame(game);
-        setIsDownloadConfirmOpen(true);
-        return;
+      const { remoteMeta } = statusResult.data;
+      switch (decideLaunchSyncAction(statusResult.data)) {
+        case "resolveConflict":
+          // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
+          setConflictMeta({
+            localMeta: statusResult.data.localMeta,
+            remoteMeta: statusResult.data.remoteMeta,
+          });
+          setPendingLaunchGame(game);
+          setIsConflictModalOpen(true);
+          return;
+        case "confirmDownload":
+          setSaveSyncMessage(
+            buildSyncMessage(
+              game.title,
+              game.localSaveHashUpdatedAt,
+              remoteMeta?.createdAt ?? null,
+            ),
+          );
+          setPendingLaunchGame(game);
+          setIsDownloadConfirmOpen(true);
+          return;
+        case "syncMetadata": {
+          const op = await syncMetadata(game.id);
+          if (!op.ok) {
+            logger.warn("起動前のゲーム情報同期に失敗しました:", {
+              component: "Home",
+              function: "handleLaunchGame",
+              data: op.message,
+            });
+          }
+          break;
+        }
+        case "launch":
+          break;
       }
 
       await launchGameDirect(game);
     },
-    [gameActionLoading, isOfflineMode, isValidCreds, launchGameDirect, getStatus, buildSyncMessage],
+    [
+      gameActionLoading,
+      isOfflineMode,
+      isValidCreds,
+      launchGameDirect,
+      getStatus,
+      syncMetadata,
+      buildSyncMessage,
+      showToast,
+    ],
   );
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {

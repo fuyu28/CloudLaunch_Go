@@ -11,6 +11,7 @@ import { SyncMetaCardPair } from "./SyncMetaCardPair";
 import type { SyncMetaSnapshot } from "src/wailsBridge";
 
 type SyncConflictModalProps = {
+  id?: string;
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
@@ -22,6 +23,7 @@ type SyncConflictModalProps = {
 };
 
 export default function SyncConflictModal({
+  id = "sync-conflict-modal",
   isOpen,
   onClose,
   gameTitle,
@@ -33,7 +35,7 @@ export default function SyncConflictModal({
 }: SyncConflictModalProps): React.JSX.Element {
   return (
     <BaseModal
-      id="sync-conflict-modal"
+      id={id}
       isOpen={isOpen}
       onClose={onClose}
       title="セーブデータが競合しています"

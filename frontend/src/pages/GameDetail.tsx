@@ -30,6 +30,7 @@ import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
+import { decideLaunchSyncAction } from "@renderer/utils/cloudSyncDecision";
 import { logger } from "@renderer/utils/logger";
 import { buildSaveSyncMessage } from "@renderer/utils/saveSyncMessage";
 
@@ -72,7 +73,7 @@ export default function GameDetail(): React.JSX.Element {
   const [isDeletingUntracked, setIsDeletingUntracked] = useState(false);
   const { showToast } = useToastHandler();
   const { isOfflineMode, checkNetworkFeature } = useOfflineMode();
-  const { getStatus, push, pull, resolveConflict } = useCloudSync(isOfflineMode);
+  const { getStatus, push, syncMetadata, pull, resolveConflict } = useCloudSync(isOfflineMode);
   const { formatDateWithTime } = useTimeFormat();
 
   useEffect(() => {
@@ -227,123 +228,60 @@ export default function GameDetail(): React.JSX.Element {
     [game, showToast, refreshGameData],
   );
 
-  const handleSyncGame = useCallback(
-    async (showResult = true): Promise<boolean> => {
-      if (!game) return false;
-      if (isOfflineMode) {
-        if (showResult) {
-          showToast("オフラインモードでは同期できません", "error");
-        }
-        return false;
-      }
-      try {
-        const statusResult = await getStatus(game.id);
-        if (!statusResult.success || !statusResult.data) {
-          if (showResult)
-            showToast(
-              (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
-              "error",
-            );
-          return false;
-        }
-        const { status } = statusResult.data;
-        if (status === "in_sync") {
-          if (showResult) showToast("すでに最新の状態です", "success");
-          return true;
-        }
-        if (status === "never_synced") {
-          if (showResult) showToast("クラウドにデータがありません", "error");
-          return false;
-        }
-        if (status === "push_needed") {
-          const op = await push(game.id);
-          if (!op.ok) {
-            if (showResult) showToast(op.message || "アップロードに失敗しました", "error");
-            return false;
-          }
-          if (showResult) showToast("クラウドにアップロードしました", "success");
-          return true;
-        }
-        if (status === "pull_needed") {
-          const op = await pull(game.id);
-          if (!op.ok) {
-            if (showResult) showToast(op.message || "ダウンロードに失敗しました", "error");
-            return false;
-          }
-          if (op.ok && op.applied === false) {
-            // untracked 削除確認が必要（ここまでローカル無変更）。
-            if (showResult) {
-              setUntrackedDeletes(op.untrackedDeletes ?? []);
-              setUntrackedConfirmKind("pull");
-            }
-            return false;
-          }
-          if (showResult) showToast("クラウドからダウンロードしました", "success");
-          return true;
-        }
-        // conflict は自動解決せず専用モーダルへ。
-        if (showResult) {
-          setConflictMeta({
-            localMeta: statusResult.data.localMeta,
-            remoteMeta: statusResult.data.remoteMeta,
-          });
-          setIsConflictModalOpen(true);
-        }
-        return false;
-      } catch (error) {
-        logger.error("ゲーム同期エラー:", {
-          component: "GameDetail",
-          function: "handleSyncGame",
-          data: error,
-        });
-        if (showResult) {
-          showToast("クラウド同期に失敗しました", "error");
-        }
-        return false;
-      }
-    },
-    [game, isOfflineMode, showToast, getStatus, push, pull],
-  );
-
-  const launchGameDirect = useCallback(async (): Promise<void> => {
-    if (!game) return;
-    if (!isOfflineMode && isValidCreds) {
-      await handleSyncGame(false);
-    }
-    await handleLaunchGame();
-  }, [game, isOfflineMode, isValidCreds, handleSyncGame, handleLaunchGame]);
-
   const handleLaunchGameWithSync = useCallback(async (): Promise<void> => {
     if (!game) return;
     if (!game.saveFolderPath || isOfflineMode || !isValidCreds) {
-      await launchGameDirect();
+      await handleLaunchGame();
       return;
     }
     const statusResult = await getStatus(game.id);
     if (!statusResult.success || !statusResult.data) {
-      await launchGameDirect();
+      showToast("クラウドの同期状態を確認できなかったため、同期せずに起動します", "error");
+      await handleLaunchGame();
       return;
     }
-    const { status, remoteMeta } = statusResult.data;
-    if (status === "conflict") {
-      // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
-      setConflictMeta({
-        localMeta: statusResult.data.localMeta,
-        remoteMeta: statusResult.data.remoteMeta,
-      });
-      setPendingLaunchAfterConflict(true);
-      setIsConflictModalOpen(true);
-      return;
+    const { remoteMeta } = statusResult.data;
+    switch (decideLaunchSyncAction(statusResult.data)) {
+      case "resolveConflict":
+        // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
+        setConflictMeta({
+          localMeta: statusResult.data.localMeta,
+          remoteMeta: statusResult.data.remoteMeta,
+        });
+        setPendingLaunchAfterConflict(true);
+        setIsConflictModalOpen(true);
+        return;
+      case "confirmDownload":
+        setSaveSyncMessage(
+          buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
+        );
+        setIsDownloadConfirmOpen(true);
+        return;
+      case "syncMetadata": {
+        const op = await syncMetadata(game.id);
+        if (!op.ok) {
+          logger.warn("起動前のゲーム情報同期に失敗しました:", {
+            component: "GameDetail",
+            function: "handleLaunchGameWithSync",
+            data: op.message,
+          });
+        }
+        break;
+      }
+      case "launch":
+        break;
     }
-    if (status === "pull_needed") {
-      setSaveSyncMessage(
-        buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
-      );
-      setIsDownloadConfirmOpen(true);
-      return;
-    }
-    await launchGameDirect();
-  }, [game, isOfflineMode, isValidCreds, launchGameDirect, getStatus, buildSyncMessage]);
+    await handleLaunchGame();
+  }, [
+    game,
+    isOfflineMode,
+    isValidCreds,
+    handleLaunchGame,
+    getStatus,
+    syncMetadata,
+    buildSyncMessage,
+    showToast,
+  ]);
 
   const handleDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
@@ -358,7 +296,6 @@ export default function GameDetail(): React.JSX.Element {
   const handleSkipDownloadAndLaunch = useCallback(async (): Promise<void> => {
     setIsDownloadConfirmOpen(false);
     setSaveSyncMessage("");
-    // スキップ時は同期せず起動する（launchGameDirect は裏で sync するため使わない）。
     await handleLaunchGame();
   }, [handleLaunchGame]);
 
@@ -371,6 +308,7 @@ export default function GameDetail(): React.JSX.Element {
         if (op.ok) {
           if (!useLocal && op.applied === false) {
             // リモート採用でも untracked 削除確認が必要（ローカル無変更）。
+            setSyncStatusDetail(null);
             setIsConflictModalOpen(false);
             setConflictMeta(null);
             setUntrackedDeletes(op.untrackedDeletes ?? []);
@@ -383,8 +321,10 @@ export default function GameDetail(): React.JSX.Element {
               : "クラウドデータをローカルに適用しました",
             "success",
           );
+          setSyncStatusDetail(null);
           setIsConflictModalOpen(false);
           setConflictMeta(null);
+          await refreshGameData();
           if (pendingLaunchAfterConflict) {
             setPendingLaunchAfterConflict(false);
             await handleLaunchGame();
@@ -398,7 +338,14 @@ export default function GameDetail(): React.JSX.Element {
         setIsResolvingConflict(false);
       }
     },
-    [game, showToast, resolveConflict, pendingLaunchAfterConflict, handleLaunchGame],
+    [
+      game,
+      showToast,
+      resolveConflict,
+      pendingLaunchAfterConflict,
+      handleLaunchGame,
+      refreshGameData,
+    ],
   );
 
   // 確認後に deleteUntracked=true で再実行する（未確認のまま消さない）。
@@ -647,9 +594,11 @@ export default function GameDetail(): React.JSX.Element {
           localMeta={syncStatusDetail.localMeta}
           remoteMeta={syncStatusDetail.remoteMeta}
           hasSaveFolder={!!game.saveFolderPath}
-          isProcessing={isSyncActionRunning}
+          isProcessing={isSyncActionRunning || isResolvingConflict}
           onUpload={handleSyncUpload}
           onDownload={handleSyncDownload}
+          onForceUpload={() => void handleResolveConflict(true)}
+          onForceDownload={() => void handleResolveConflict(false)}
         />
       )}
 
