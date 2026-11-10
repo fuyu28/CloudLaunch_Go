@@ -12,6 +12,7 @@ export type {
   SyncStatus,
   SyncStatusDetail,
   SyncMetaSnapshot,
+  LocalSaveInfo,
   SyncProgressEvent,
   PullResult,
 } from "./bridge/types";

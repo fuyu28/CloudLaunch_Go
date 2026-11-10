@@ -1243,12 +1243,108 @@ func TestContentSyncServiceStatusReturnsConflict(t *testing.T) {
 	if detail.Status != domain.SyncStatusConflict {
 		t.Errorf("Status = %q, want %q", detail.Status, domain.SyncStatusConflict)
 	}
-	// コンフリクト時はローカル/リモートのメタが含まれる
-	if detail.LocalMeta == nil {
-		t.Error("expected LocalMeta to be set on conflict")
+	if detail.Local == nil {
+		t.Error("expected Local to be set on conflict")
 	}
 	if detail.RemoteMeta == nil {
 		t.Error("expected RemoteMeta to be set on conflict")
+	}
+}
+
+func TestContentSyncServiceStatusReportsLocalSaveInfoAndRemoteMetaWhenInSync(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(saveDir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	older := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	newer := older.Add(time.Hour)
+	for path, mod := range map[string]time.Time{"save.dat": older, "sub/slot1.dat": newer} {
+		abs := filepath.Join(saveDir, filepath.FromSlash(path))
+		if err := os.WriteFile(abs, []byte("12345"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(abs, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	remoteMeta := setupRemoteState(t, bstore, game.ID, game, nil, saveDir)
+	fp := contentFingerprint(remoteMeta)
+	game.LocalSyncHead = &fp
+	svc := newTestService(newFakeRepo(&game, nil), bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusInSync {
+		t.Fatalf("Status = %q, want %q", detail.Status, domain.SyncStatusInSync)
+	}
+	if !detail.HasLocalBaseline {
+		t.Error("HasLocalBaseline = false, want true")
+	}
+	if detail.Local == nil {
+		t.Fatal("Local = nil")
+	}
+	if detail.Local.FolderPath != saveDir || detail.Local.FileCount != 2 || detail.Local.TotalSize != 10 {
+		t.Errorf("Local = %+v, want folder=%s count=2 size=10", *detail.Local, saveDir)
+	}
+	if detail.Local.LastModified == nil || !detail.Local.LastModified.Equal(newer) {
+		t.Errorf("Local.LastModified = %v, want %v", detail.Local.LastModified, newer)
+	}
+	if detail.RemoteMeta == nil || !detail.RemoteMeta.CreatedAt.Equal(remoteMeta.CreatedAt) {
+		t.Errorf("RemoteMeta = %+v, want commit createdAt %v", detail.RemoteMeta, remoteMeta.CreatedAt)
+	}
+}
+
+func TestContentSyncServiceStatusReportsLocalSaveInfoWhenNeverSynced(t *testing.T) {
+	t.Parallel()
+
+	saveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(saveDir, "save.dat"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	game := baseGame(saveDir)
+	svc := newTestService(newFakeRepo(&game, nil), newFakeBlobStore())
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Status != domain.SyncStatusNeverSynced {
+		t.Fatalf("Status = %q, want %q", detail.Status, domain.SyncStatusNeverSynced)
+	}
+	if detail.Local == nil || detail.Local.FileCount != 1 {
+		t.Errorf("Local = %+v, want 1 file", detail.Local)
+	}
+	if detail.RemoteMeta != nil {
+		t.Errorf("RemoteMeta = %+v, want nil", detail.RemoteMeta)
+	}
+}
+
+func TestContentSyncServiceStatusReportsEmptyLocalWhenSaveFolderMissing(t *testing.T) {
+	t.Parallel()
+
+	saveDir := filepath.Join(t.TempDir(), "not-created-yet")
+	game := baseGame(saveDir)
+	bstore := newFakeBlobStore()
+	remoteDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(remoteDir, "save.dat"), []byte("remote"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	setupRemoteState(t, bstore, game.ID, game, nil, remoteDir)
+	svc := newTestService(newFakeRepo(&game, nil), bstore)
+
+	detail, err := svc.Status(context.Background(), game.ID)
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if detail.Local == nil || detail.Local.FileCount != 0 || detail.Local.LastModified != nil {
+		t.Errorf("Local = %+v, want empty info", detail.Local)
 	}
 }
 
@@ -1458,6 +1554,9 @@ func TestContentSyncServiceStatusReturnsPullNeededWhenLocalSyncHeadUnset(t *test
 	}
 	if detail.Status != domain.SyncStatusPullNeeded {
 		t.Errorf("Status = %q, want %q (LocalSyncHead unset should not be conflict)", detail.Status, domain.SyncStatusPullNeeded)
+	}
+	if detail.HasLocalBaseline {
+		t.Error("HasLocalBaseline = true, want false when LocalSyncHead is unset")
 	}
 }
 

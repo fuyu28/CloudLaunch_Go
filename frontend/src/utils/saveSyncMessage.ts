@@ -1,23 +1,31 @@
 /**
- * @fileoverview セーブデータのクラウド同期確認メッセージ用ヘルパ。
- * Home / GameDetail 双方で重複していた確認ダイアログ文言の組み立てを共通化する。
+ * @fileoverview 起動前のセーブデータのダウンロード確認メッセージを組み立てるヘルパ。
+ * Home / GameDetail で共通化し、同期判定（Status）が返した実際のフォルダ・コミット情報だけを載せる。
  */
 
-export function toValidDate(value: Date | string | number | null | undefined): Date | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+import type { SyncStatusDetail } from "src/wailsBridge";
+
+type DateFormatter = (date: Date | string | number | null | undefined) => string;
 
 export function buildSaveSyncMessage(
-  formatDateWithTime: (date: Date | string | number | null | undefined) => string,
+  formatDateWithTime: DateFormatter,
   title: string,
-  localUpdatedAt: Date | string | number | null | undefined,
-  cloudUpdatedAt: Date | string | number | null | undefined,
+  detail: Pick<SyncStatusDetail, "hasLocalBaseline" | "local" | "remoteMeta">,
 ): string {
-  const localDate = toValidDate(localUpdatedAt);
-  const cloudDate = toValidDate(cloudUpdatedAt);
-  return `${title} のセーブデータがクラウドと異なります。\nローカル最終更新: ${formatDateWithTime(
-    localDate,
-  )}\nクラウド最終更新: ${formatDateWithTime(cloudDate)}\nダウンロードしますか？`;
+  // 基準なしの pull_needed は「クラウドで変更あり」ではないので、同じ文言にしない。
+  const lead = detail.hasLocalBaseline
+    ? `${title} は前回の同期以降、別のPCからセーブデータがアップロードされています。`
+    : `${title} はこのPCでまだ同期しておらず、セーブデータがクラウドと異なります。`;
+  const localLine = detail.local?.lastModified
+    ? formatDateWithTime(detail.local.lastModified)
+    : "ファイルなし";
+  const remoteLine = detail.remoteMeta
+    ? `${formatDateWithTime(detail.remoteMeta.createdAt)}（${detail.remoteMeta.deviceName}）`
+    : "不明";
+  return [
+    lead,
+    `このPCのセーブ最終更新: ${localLine}`,
+    `クラウドへのアップロード: ${remoteLine}`,
+    "ダウンロードすると、このPCのセーブデータはクラウドの内容に置き換わります。ダウンロードしますか？",
+  ].join("\n");
 }

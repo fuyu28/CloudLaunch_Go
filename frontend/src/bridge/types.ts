@@ -35,16 +35,30 @@ export type SyncStatusDetail = {
    * 「セーブ不変ならアップロード確認不要」の判定ではこのフラグで狭窄する。
    */
   savesDiffer: boolean;
-  localMeta?: SyncMetaSnapshot;
+  /** false はこのPCで一度も同期していない状態。pull_needed でも「クラウドで変更あり」とは限らない。 */
+  hasLocalBaseline: boolean;
+  local?: LocalSaveInfo;
+  /** クラウドにデータがあれば状態によらず入る。 */
   remoteMeta?: SyncMetaSnapshot;
 };
 
+/** 同期判定で読んだこのPCのセーブフォルダの実情。lastModified はファイルが無ければ null。 */
+export type LocalSaveInfo = {
+  folderPath: string;
+  fileCount: number;
+  totalSize: number;
+  lastModified: Date | null;
+};
+
+/** fileCount / totalSize は旧クライアントが作ったコミットでは 0（未取得）。 */
 export type SyncMetaSnapshot = {
   "game.json": string;
   "sessions.json": string;
   saves: string;
   deviceName: string;
   createdAt: Date;
+  fileCount: number;
+  totalSize: number;
 };
 
 export type SyncProgressEvent = {

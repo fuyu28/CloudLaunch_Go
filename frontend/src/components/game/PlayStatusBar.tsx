@@ -258,7 +258,7 @@ export function PlayStatusBar(): React.JSX.Element {
         isOpen={!!pendingConflict}
         onClose={handleSkipConflictAfterEnd}
         gameTitle={pendingConflict?.gameTitle ?? ""}
-        localMeta={pendingConflict?.localMeta}
+        local={pendingConflict?.local}
         remoteMeta={pendingConflict?.remoteMeta}
         onUseLocal={() => void handleResolveConflictAfterEnd(true)}
         onUseRemote={() => void handleResolveConflictAfterEnd(false)}

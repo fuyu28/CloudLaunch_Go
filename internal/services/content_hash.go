@@ -63,13 +63,13 @@ func validateSaveDir(saveDir string) error {
 }
 
 // walkSaveFiles は saveDir 配下の通常ファイルを走査し、各ファイルについて
-// 絶対パスとスラッシュ区切りの相対パスで fn を呼ぶ。
+// 絶対パス・スラッシュ区切りの相対パス・FileInfo で fn を呼ぶ。
 // シンボリックリンクとディレクトリはスキップする（リンク先実体の漏洩・誤上書きを防ぐ）。
 //
 // saveDir 自体がディレクトリへのシンボリックリンクである場合は、filepath.Walk が
 // 内部で Lstat を使うため root がスキップされ全件無視される。これを避けるため、
 // 走査前に root だけ EvalSymlinks で解決する。配下のシンボリックリンクはスキップ対象。
-func walkSaveFiles(saveDir string, fn func(absPath, relPath string) error) error {
+func walkSaveFiles(saveDir string, fn func(absPath, relPath string, info os.FileInfo) error) error {
 	root, err := filepath.EvalSymlinks(saveDir)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func walkSaveFiles(saveDir string, fn func(absPath, relPath string) error) error
 		if rerr != nil {
 			return rerr
 		}
-		return fn(walkPath, filepath.ToSlash(rel))
+		return fn(walkPath, filepath.ToSlash(rel), info)
 	})
 }
 
@@ -99,7 +99,7 @@ func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
 		return domain.SaveSnapshot{}, err
 	}
 	files := make(map[string]domain.BlobHash)
-	err := walkSaveFiles(saveDir, func(absPath, relPath string) error {
+	err := walkSaveFiles(saveDir, func(absPath, relPath string, _ os.FileInfo) error {
 		hash, herr := hashFileStream(absPath)
 		if herr != nil {
 			return herr
@@ -113,6 +113,30 @@ func buildSaveTree(saveDir string) (domain.SaveSnapshot, error) {
 	return domain.SaveSnapshot{Files: files}, nil
 }
 
+// readLocalSaveInfo は同期判定と同じ走査対象（walkSaveFiles）の件数・総サイズ・最終更新を集計する。
+// フォルダが未作成なら空として扱う（readLiveSaveTree と同じく、新しい PC での初回判定を止めない）。
+func readLocalSaveInfo(saveDir string) (domain.LocalSaveInfo, error) {
+	info := domain.LocalSaveInfo{FolderPath: saveDir}
+	if _, err := os.Stat(saveDir); err != nil {
+		if os.IsNotExist(err) {
+			return info, nil
+		}
+		return domain.LocalSaveInfo{}, err
+	}
+	err := walkSaveFiles(saveDir, func(_, _ string, fi os.FileInfo) error {
+		info.FileCount++
+		info.TotalSize += fi.Size()
+		if mod := fi.ModTime(); info.LastModified == nil || mod.After(*info.LastModified) {
+			info.LastModified = &mod
+		}
+		return nil
+	})
+	if err != nil {
+		return domain.LocalSaveInfo{}, err
+	}
+	return info, nil
+}
+
 // buildSaveSnapshot はセーブディレクトリを走査し SaveSnapshot とブロブマップを返す。
 // saveFolderPath が未設定またはディレクトリが存在しない場合はエラー。
 func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash][]byte, error) {
@@ -121,7 +145,7 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 	}
 	files := make(map[string]domain.BlobHash)
 	blobs := make(map[domain.BlobHash][]byte)
-	err := walkSaveFiles(saveDir, func(absPath, relPath string) error {
+	err := walkSaveFiles(saveDir, func(absPath, relPath string, _ os.FileInfo) error {
 		hash, data, herr := hashFile(absPath)
 		if herr != nil {
 			return herr
@@ -146,7 +170,7 @@ func buildSaveSnapshot(saveDir string) (domain.SaveSnapshot, map[domain.BlobHash
 //
 // いずれも相対パス（スラッシュ区切り）を昇順で返す。この関数はファイルを削除しない。
 func planDeletions(saveDir string, snapshot domain.SaveSnapshot, baseTree map[string]struct{}) (tracked, untracked []string, err error) {
-	walkErr := walkSaveFiles(saveDir, func(_, relPath string) error {
+	walkErr := walkSaveFiles(saveDir, func(_, relPath string, _ os.FileInfo) error {
 		if _, ok := snapshot.Files[relPath]; ok {
 			return nil // 新スナップショットに含まれる → 残す
 		}

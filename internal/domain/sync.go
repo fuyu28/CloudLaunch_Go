@@ -48,6 +48,17 @@ const (
 	SyncStatusConflict    SyncStatus = "conflict"
 )
 
+// LocalSaveInfo は同期判定で読んだこのPCのセーブフォルダの実情を表す。
+// LastModified はフォルダ内で最も新しいファイルの更新時刻で、ファイルが無ければ nil。
+// 判定時に作る MetaSnapshot.CreatedAt は「判定した時刻」でしかないため、
+// UI の日時表示にはこちらを使う。
+type LocalSaveInfo struct {
+	FolderPath   string     `json:"folderPath"`
+	FileCount    int64      `json:"fileCount"`
+	TotalSize    int64      `json:"totalSize"`
+	LastModified *time.Time `json:"lastModified,omitempty"`
+}
+
 // SyncStatusDetail は同期状態の詳細を表す。
 //
 // SavesDiffer は Saves コンポーネントのみの差分を示す。fingerprint 比較の Status とは
@@ -55,11 +66,16 @@ const (
 // セーブファイル内容だけの差分を確認するためのシグナル。
 // セッション終了後のアップロード確認プロンプトなど、「セーブ不変ならプロンプト不要」
 // を判定したい呼び出し側で status とあわせて狭窄条件に使う。
+//
+// HasLocalBaseline=false はこのPCで一度も同期していない状態。このとき PullNeeded は
+// 「クラウドで変更があった」ではなく「比較の基準が無い」ことを意味する。
+// Local / RemoteMeta は状態によらず取得できた範囲で埋める（クラウド未作成なら RemoteMeta は nil）。
 type SyncStatusDetail struct {
-	Status      SyncStatus    `json:"status"`
-	SavesDiffer bool          `json:"savesDiffer"`
-	LocalMeta   *MetaSnapshot `json:"localMeta,omitempty"`
-	RemoteMeta  *MetaSnapshot `json:"remoteMeta,omitempty"`
+	Status           SyncStatus     `json:"status"`
+	SavesDiffer      bool           `json:"savesDiffer"`
+	HasLocalBaseline bool           `json:"hasLocalBaseline"`
+	Local            *LocalSaveInfo `json:"local,omitempty"`
+	RemoteMeta       *MetaSnapshot  `json:"remoteMeta,omitempty"`
 }
 
 // PullResult は Pull / ResolveConflict(リモート採用) の結果を表す。

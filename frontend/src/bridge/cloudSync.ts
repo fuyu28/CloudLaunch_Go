@@ -18,6 +18,7 @@ import { toApiResultVoid } from "./helpers";
 import type {
   SyncStatus as SyncStatusType,
   SyncMetaSnapshot,
+  LocalSaveInfo,
   PullResult,
   SyncProgressEvent,
   WindowApi,
@@ -33,12 +34,12 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
       const raw = result.data as {
         status: SyncStatusType;
         savesDiffer?: boolean;
-        localMeta?: {
-          "game.json": string;
-          "sessions.json": string;
-          saves: string;
-          deviceName: string;
-          createdAt: string;
+        hasLocalBaseline?: boolean;
+        local?: {
+          folderPath: string;
+          fileCount: number;
+          totalSize: number;
+          lastModified?: string;
         };
         remoteMeta?: {
           "game.json": string;
@@ -46,10 +47,24 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
           saves: string;
           deviceName: string;
           createdAt: string;
+          fileCount?: number;
+          totalSize?: number;
         };
       };
-      const normalizeMeta = (m?: typeof raw.localMeta): SyncMetaSnapshot | undefined =>
-        m ? { ...m, createdAt: new Date(m.createdAt) } : undefined;
+      const local: LocalSaveInfo | undefined = raw.local
+        ? {
+            ...raw.local,
+            lastModified: raw.local.lastModified ? new Date(raw.local.lastModified) : null,
+          }
+        : undefined;
+      const remoteMeta: SyncMetaSnapshot | undefined = raw.remoteMeta
+        ? {
+            ...raw.remoteMeta,
+            createdAt: new Date(raw.remoteMeta.createdAt),
+            fileCount: raw.remoteMeta.fileCount ?? 0,
+            totalSize: raw.remoteMeta.totalSize ?? 0,
+          }
+        : undefined;
       return {
         success: true,
         data: {
@@ -57,8 +72,9 @@ export function createCloudSyncBridge(): WindowApi["cloudSync"] {
           // 旧クライアント / never_synced 早期 return では savesDiffer が欠ける。
           // 未定義を「差分あり」扱いすると誤ったアップロード確認が出るため false に倒す。
           savesDiffer: raw.savesDiffer ?? false,
-          localMeta: normalizeMeta(raw.localMeta),
-          remoteMeta: normalizeMeta(raw.remoteMeta),
+          hasLocalBaseline: raw.hasLocalBaseline ?? false,
+          local,
+          remoteMeta,
         },
       };
     },

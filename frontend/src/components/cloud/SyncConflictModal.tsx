@@ -8,14 +8,14 @@ import { FaDesktop, FaCloud } from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";
 import { SyncMetaCardPair } from "./SyncMetaCardPair";
-import type { SyncMetaSnapshot } from "src/wailsBridge";
+import type { LocalSaveInfo, SyncMetaSnapshot } from "src/wailsBridge";
 
 type SyncConflictModalProps = {
   id?: string;
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
-  localMeta: SyncMetaSnapshot | undefined;
+  local: LocalSaveInfo | undefined;
   remoteMeta: SyncMetaSnapshot | undefined;
   onUseLocal: () => void;
   onUseRemote: () => void;
@@ -27,7 +27,7 @@ export default function SyncConflictModal({
   isOpen,
   onClose,
   gameTitle,
-  localMeta,
+  local,
   remoteMeta,
   onUseLocal,
   onUseRemote,
@@ -68,15 +68,11 @@ export default function SyncConflictModal({
     >
       <div className="space-y-4">
         <p className="text-sm text-base-content/70">
-          「{gameTitle}」のセーブデータがローカルとクラウドの両方で変更されています。
+          「{gameTitle}」は前回の同期以降、このPCとクラウドの両方で変更されています。
           どちらのデータを使用するか選択してください。
         </p>
 
-        <SyncMetaCardPair
-          localMeta={localMeta}
-          remoteMeta={remoteMeta}
-          localIconClassName="text-warning"
-        />
+        <SyncMetaCardPair local={local} remoteMeta={remoteMeta} localIconClassName="text-warning" />
 
         <div className="alert alert-warning py-2">
           <span className="text-xs">

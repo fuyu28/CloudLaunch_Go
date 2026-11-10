@@ -82,6 +82,7 @@ describe("useUploadAfterSession", () => {
       statusOk({
         status: "push_needed",
         savesDiffer: false,
+        hasLocalBaseline: true,
       }),
     );
 
@@ -102,6 +103,7 @@ describe("useUploadAfterSession", () => {
       statusOk({
         status: "push_needed",
         savesDiffer: true,
+        hasLocalBaseline: true,
       }),
     );
 
@@ -126,6 +128,7 @@ describe("useUploadAfterSession", () => {
       statusOk({
         status: "conflict",
         savesDiffer: false,
+        hasLocalBaseline: true,
       }),
     );
 
@@ -141,7 +144,9 @@ describe("useUploadAfterSession", () => {
 
   it("never_synced → 初回アップロードも確認を出す", async () => {
     mockGetGameById.mockResolvedValue(gameFixture);
-    mockGetStatus.mockResolvedValue(statusOk({ status: "never_synced", savesDiffer: false }));
+    mockGetStatus.mockResolvedValue(
+      statusOk({ status: "never_synced", savesDiffer: false, hasLocalBaseline: true }),
+    );
 
     const { result } = renderHook(() => useUploadAfterSession(false, true, toastHandler));
 
@@ -154,7 +159,9 @@ describe("useUploadAfterSession", () => {
 
   it("「しない」を選ぶと push を呼ばずに確認を閉じる", async () => {
     mockGetGameById.mockResolvedValue(gameFixture);
-    mockGetStatus.mockResolvedValue(statusOk({ status: "push_needed", savesDiffer: true }));
+    mockGetStatus.mockResolvedValue(
+      statusOk({ status: "push_needed", savesDiffer: true, hasLocalBaseline: true }),
+    );
 
     const { result } = renderHook(() => useUploadAfterSession(false, true, toastHandler));
 
@@ -171,7 +178,9 @@ describe("useUploadAfterSession", () => {
 
   it("conflict with savesDiffer=true → アップロード確認ではなく競合解決を出す", async () => {
     mockGetGameById.mockResolvedValue(gameFixture);
-    mockGetStatus.mockResolvedValue(statusOk({ status: "conflict", savesDiffer: true }));
+    mockGetStatus.mockResolvedValue(
+      statusOk({ status: "conflict", savesDiffer: true, hasLocalBaseline: true }),
+    );
     mockResolveConflict.mockResolvedValue({ success: true, data: { applied: true } });
 
     const { result } = renderHook(() => useUploadAfterSession(false, true, toastHandler));
