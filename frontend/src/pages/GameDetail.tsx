@@ -30,12 +30,12 @@ import { useToastHandler } from "@renderer/hooks/useToastHandler";
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
 import { useValidateCreds } from "@renderer/hooks/useValidCreds";
 
-import { decideLaunchSyncAction } from "@renderer/utils/cloudSyncDecision";
+import { decideLaunchSyncAction, decideManualTransfer } from "@renderer/utils/cloudSyncDecision";
 import { logger } from "@renderer/utils/logger";
 import { buildSaveSyncMessage } from "@renderer/utils/saveSyncMessage";
 
 import type { GameType } from "src/types/game";
-import type { SyncMetaSnapshot, SyncStatusDetail } from "src/wailsBridge";
+import type { LocalSaveInfo, SyncMetaSnapshot, SyncStatusDetail } from "src/wailsBridge";
 
 export default function GameDetail(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +56,7 @@ export default function GameDetail(): React.JSX.Element {
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
   const [pendingLaunchAfterConflict, setPendingLaunchAfterConflict] = useState(false);
   const [conflictMeta, setConflictMeta] = useState<{
-    localMeta?: SyncMetaSnapshot;
+    local?: LocalSaveInfo;
     remoteMeta?: SyncMetaSnapshot;
   } | null>(null);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
@@ -150,14 +150,45 @@ export default function GameDetail(): React.JSX.Element {
     }
   }, [validateCreds, isOfflineMode]);
 
-  const handleUploadSaveData = useCallback(async (): Promise<void> => {
-    if (!checkNetworkFeature("セーブデータアップロード")) {
-      return;
-    }
-    if (game) {
-      await uploadSaveData(game);
-    }
-  }, [game, uploadSaveData, checkNetworkFeature]);
+  // カードのボタンも同期判定を通す（判定は decideManualTransfer）。
+  const handleManualTransfer = useCallback(
+    async (direction: "upload" | "download"): Promise<void> => {
+      if (!game) return;
+      if (
+        !checkNetworkFeature(
+          direction === "upload" ? "セーブデータアップロード" : "セーブデータダウンロード",
+        )
+      ) {
+        return;
+      }
+      const statusResult = await getStatus(game.id);
+      if (!statusResult.success || !statusResult.data) {
+        showToast(
+          (!statusResult.success && statusResult.message) || "同期状態の取得に失敗しました",
+          "error",
+        );
+        return;
+      }
+      const detail = statusResult.data;
+      switch (decideManualTransfer(detail, direction)) {
+        case "run":
+          if (direction === "upload") {
+            await uploadSaveData(game);
+          } else {
+            await downloadSaveData(game);
+          }
+          return;
+        case "resolveConflict":
+          setConflictMeta({ local: detail.local, remoteMeta: detail.remoteMeta });
+          setIsConflictModalOpen(true);
+          return;
+        case "showStatus":
+          setSyncStatusDetail(detail);
+          return;
+      }
+    },
+    [game, checkNetworkFeature, getStatus, showToast, uploadSaveData, downloadSaveData],
+  );
 
   const handleDownloadSaveData = useCallback(async (): Promise<boolean> => {
     if (!checkNetworkFeature("セーブデータダウンロード")) {
@@ -170,11 +201,8 @@ export default function GameDetail(): React.JSX.Element {
   }, [game, downloadSaveData, checkNetworkFeature]);
 
   const buildSyncMessage = useCallback(
-    (
-      title: string,
-      localUpdatedAt: Date | string | number | null | undefined,
-      cloudUpdatedAt: Date | string | number | null | undefined,
-    ) => buildSaveSyncMessage(formatDateWithTime, title, localUpdatedAt, cloudUpdatedAt),
+    (title: string, detail: SyncStatusDetail) =>
+      buildSaveSyncMessage(formatDateWithTime, title, detail),
     [formatDateWithTime],
   );
 
@@ -240,21 +268,18 @@ export default function GameDetail(): React.JSX.Element {
       await handleLaunchGame();
       return;
     }
-    const { remoteMeta } = statusResult.data;
     switch (decideLaunchSyncAction(statusResult.data)) {
       case "resolveConflict":
         // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
         setConflictMeta({
-          localMeta: statusResult.data.localMeta,
+          local: statusResult.data.local,
           remoteMeta: statusResult.data.remoteMeta,
         });
         setPendingLaunchAfterConflict(true);
         setIsConflictModalOpen(true);
         return;
       case "confirmDownload":
-        setSaveSyncMessage(
-          buildSyncMessage(game.title, game.localSaveHashUpdatedAt, remoteMeta?.createdAt ?? null),
-        );
+        setSaveSyncMessage(buildSyncMessage(game.title, statusResult.data));
         setIsDownloadConfirmOpen(true);
         return;
       case "syncMetadata": {
@@ -395,7 +420,7 @@ export default function GameDetail(): React.JSX.Element {
       const detail = statusResult.data;
       if (detail.status === "conflict") {
         // 競合を Status モーダルに載せると上書き操作と混ざるので専用へ。
-        setConflictMeta({ localMeta: detail.localMeta, remoteMeta: detail.remoteMeta });
+        setConflictMeta({ local: detail.local, remoteMeta: detail.remoteMeta });
         setIsConflictModalOpen(true);
         return;
       }
@@ -534,8 +559,8 @@ export default function GameDetail(): React.JSX.Element {
             isUploading={isUploading}
             isDownloading={isDownloading}
             isSyncing={isSyncing}
-            onUpload={handleUploadSaveData}
-            onDownload={handleDownloadSaveData}
+            onUpload={() => handleManualTransfer("upload")}
+            onDownload={() => handleManualTransfer("download")}
             onSync={handleSyncCheck}
           />
 
@@ -590,9 +615,7 @@ export default function GameDetail(): React.JSX.Element {
           isOpen
           onClose={() => setSyncStatusDetail(null)}
           gameTitle={game.title}
-          status={syncStatusDetail.status}
-          localMeta={syncStatusDetail.localMeta}
-          remoteMeta={syncStatusDetail.remoteMeta}
+          detail={syncStatusDetail}
           hasSaveFolder={!!game.saveFolderPath}
           isProcessing={isSyncActionRunning || isResolvingConflict}
           onUpload={handleSyncUpload}
@@ -611,7 +634,7 @@ export default function GameDetail(): React.JSX.Element {
           setPendingLaunchAfterConflict(false);
         }}
         gameTitle={game.title}
-        localMeta={conflictMeta?.localMeta}
+        local={conflictMeta?.local}
         remoteMeta={conflictMeta?.remoteMeta}
         onUseLocal={() => handleResolveConflict(true)}
         onUseRemote={() => handleResolveConflict(false)}

@@ -10,7 +10,7 @@ import { logger } from "@renderer/utils/logger";
 import { decideAfterSessionSyncAction } from "@renderer/utils/cloudSyncDecision";
 
 import { useCloudSync } from "@renderer/hooks/useCloudSync";
-import type { SyncMetaSnapshot, SyncProgressEvent } from "src/wailsBridge";
+import type { LocalSaveInfo, SyncMetaSnapshot, SyncProgressEvent } from "src/wailsBridge";
 import type { ToastHandler } from "@renderer/hooks/useToastHandler";
 
 type PendingUpload = {
@@ -22,7 +22,7 @@ type PendingUpload = {
 type PendingConflict = {
   gameId: string;
   gameTitle: string;
-  localMeta?: SyncMetaSnapshot;
+  local?: LocalSaveInfo;
   remoteMeta?: SyncMetaSnapshot;
 };
 
@@ -93,7 +93,7 @@ export function useUploadAfterSession(
             setPendingConflict({
               gameId,
               gameTitle: game.title,
-              localMeta: statusResult.data.localMeta,
+              local: statusResult.data.local,
               remoteMeta: statusResult.data.remoteMeta,
             });
             break;

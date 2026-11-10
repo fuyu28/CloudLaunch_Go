@@ -2,25 +2,29 @@
  * @fileoverview 同期状態の確認モーダル
  *
  * 「同期確認」押下時に、いきなりアップロード/ダウンロードするのではなく、
- * 現在の同期状態（最新 / アップロード可 / ダウンロード可 / 未同期）とローカル・リモートの
- * メタ情報を表示し、必要な操作だけをユーザーに選ばせる。
+ * 前回の同期以降どちら側で何が変わったか（バックエンドの3者比較そのまま）と、
+ * 判定に使ったセーブフォルダ・クラウドの情報を表示し、必要な操作だけをユーザーに選ばせる。
  */
 
 import { useState } from "react";
 
-import { FaCloud, FaCloudUploadAlt, FaCloudDownloadAlt, FaCheckCircle } from "react-icons/fa";
+import {
+  FaCloud,
+  FaCloudUploadAlt,
+  FaCloudDownloadAlt,
+  FaCheckCircle,
+  FaExclamationTriangle,
+} from "react-icons/fa";
 
 import { BaseModal } from "../common/BaseModal";
 import { SyncMetaCardPair } from "./SyncMetaCardPair";
-import type { SyncStatus, SyncMetaSnapshot } from "src/wailsBridge";
+import type { SyncStatusDetail } from "src/wailsBridge";
 
 type SyncStatusModalProps = {
   isOpen: boolean;
   onClose: () => void;
   gameTitle: string;
-  status: SyncStatus;
-  localMeta?: SyncMetaSnapshot;
-  remoteMeta?: SyncMetaSnapshot;
+  detail: SyncStatusDetail;
   hasSaveFolder: boolean;
   isProcessing: boolean;
   onUpload: () => void;
@@ -35,13 +39,77 @@ type StatusView = {
   description: string;
 };
 
+// 「新しい／古い」は使わない。判定は時刻ではなく「前回の同期から変わったか」なので、
+// 日時比較の言葉を出すと表示中の日時と矛盾して見える。
+function describeStatus(detail: SyncStatusDetail, hasSaveFolder: boolean): StatusView {
+  const { status, savesDiffer, hasLocalBaseline } = detail;
+  switch (status) {
+    case "in_sync":
+    case "conflict":
+      return {
+        icon: <FaCheckCircle className="text-success" />,
+        title: "クラウドと一致しています",
+        description: "前回の同期以降、このPCでもクラウドでも変更はありません。",
+      };
+    case "push_needed":
+      return savesDiffer
+        ? {
+            icon: <FaCloudUploadAlt className="text-primary" />,
+            title: "このPCに未アップロードの変更があります",
+            description:
+              "前回の同期以降、このPCのセーブデータが変更されています。クラウド側は変わっていません。",
+          }
+        : {
+            icon: <FaCloudUploadAlt className="text-primary" />,
+            title: "プレイ記録だけが未アップロードです",
+            description:
+              "セーブデータはクラウドと同じです。ゲーム情報やプレイ履歴だけがこのPCで変更されています。",
+          };
+    case "pull_needed":
+      if (!hasLocalBaseline) {
+        return savesDiffer
+          ? {
+              icon: <FaExclamationTriangle className="text-warning" />,
+              title: "このPCではまだ同期していません",
+              description:
+                "このPCのセーブデータはクラウドと異なります。ダウンロードするとクラウドの内容に置き換わります。このPCの内容を残すなら強制同期でクラウドを上書きしてください。",
+            }
+          : {
+              icon: <FaCloudDownloadAlt className="text-primary" />,
+              title: "このPCではまだ同期していません",
+              description:
+                "セーブデータはクラウドと同じです。ダウンロードすると、ゲーム情報とプレイ履歴をクラウドに合わせます。",
+            };
+      }
+      return savesDiffer
+        ? {
+            icon: <FaCloudDownloadAlt className="text-primary" />,
+            title: "クラウドに未取得の変更があります",
+            description:
+              "前回の同期以降、別のPCからアップロードされています。このPCのセーブデータは変わっていません。",
+          }
+        : {
+            icon: <FaCloudDownloadAlt className="text-primary" />,
+            title: "クラウドのプレイ記録だけが更新されています",
+            description:
+              "セーブデータは同じです。別のPCで更新されたゲーム情報やプレイ履歴を取り込めます。",
+          };
+    case "never_synced":
+      return {
+        icon: <FaCloud className="text-base-content/50" />,
+        title: "クラウドにデータがありません",
+        description: hasSaveFolder
+          ? "まだアップロードされていません。アップロードするとクラウドに保存されます。"
+          : "まだアップロードされていません。セーブ保存先を設定するとアップロードできます。",
+      };
+  }
+}
+
 export default function SyncStatusModal({
   isOpen,
   onClose,
   gameTitle,
-  status,
-  localMeta,
-  remoteMeta,
+  detail,
   hasSaveFolder,
   isProcessing,
   onUpload,
@@ -56,33 +124,9 @@ export default function SyncStatusModal({
     onClose();
   };
 
-  const views: Record<Exclude<SyncStatus, "conflict">, StatusView> = {
-    in_sync: {
-      icon: <FaCheckCircle className="text-success" />,
-      title: "最新の状態です",
-      description: "ローカルとクラウドのセーブデータは同期されています。",
-    },
-    push_needed: {
-      icon: <FaCloudUploadAlt className="text-primary" />,
-      title: "アップロードできます",
-      description: "ローカルのセーブデータがクラウドより新しい状態です。",
-    },
-    pull_needed: {
-      icon: <FaCloudDownloadAlt className="text-primary" />,
-      title: "ダウンロードできます",
-      description: "クラウドのセーブデータがローカルより新しい状態です。",
-    },
-    never_synced: {
-      icon: <FaCloud className="text-base-content/50" />,
-      title: "クラウドにデータがありません",
-      description: hasSaveFolder
-        ? "まだアップロードされていません。アップロードするとクラウドに保存されます。"
-        : "まだアップロードされていません。セーブ保存先を設定するとアップロードできます。",
-    },
-  };
-
   // 競合は SyncConflictModal 側。ここに載せると上書き操作と混ざる。
-  const view = status === "conflict" ? views.in_sync : views[status];
+  const { status } = detail;
+  const view = describeStatus(detail, hasSaveFolder);
 
   const showUpload = status === "push_needed" || (status === "never_synced" && hasSaveFolder);
   const showDownload = status === "pull_needed";
@@ -152,7 +196,7 @@ export default function SyncStatusModal({
           </div>
         </div>
 
-        <SyncMetaCardPair localMeta={localMeta} remoteMeta={remoteMeta} />
+        <SyncMetaCardPair local={detail.local} remoteMeta={detail.remoteMeta} />
 
         {forceAction ? (
           <div role="alert" className="rounded-lg border border-error p-3 text-sm">

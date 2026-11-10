@@ -305,7 +305,18 @@ func (s *ContentSyncService) status(ctx context.Context, gameID string) (domain.
 		return domain.SyncStatusDetail{}, err
 	}
 	if remoteHead == "" {
-		return domain.SyncStatusDetail{Status: domain.SyncStatusNeverSynced}, nil
+		// クラウドが空でも判定自体は確定している。フォルダ未設定や読めないときに
+		// エラーへ倒すと「アップロードできます」まで出せなくなるため、Local は取れた範囲だけ載せる。
+		detail := domain.SyncStatusDetail{Status: domain.SyncStatusNeverSynced}
+		game, gerr := s.repository.GetGameByID(ctx, gameID)
+		if gerr == nil && game != nil && game.SaveFolderPath != nil && *game.SaveFolderPath != "" {
+			if local, lerr := readLocalSaveInfo(*game.SaveFolderPath); lerr == nil {
+				detail.Local = &local
+			} else {
+				s.logger.Warn("セーブフォルダの状況を取得できません", "gameId", gameID, "error", lerr)
+			}
+		}
+		return detail, nil
 	}
 
 	remoteMetaBytes, err := bstore.getBlob(ctx, gameID, storage.BlobKindCommit, remoteHead)
@@ -360,16 +371,17 @@ func (s *ContentSyncService) status(ctx context.Context, gameID string) (domain.
 	// contentFingerprint は sessions.json / game.json も含むため、それらだけの変化で
 	// PushNeeded になっても SavesDiffer=false になる。呼び出し側（セッション終了後の
 	// アップロード確認プロンプト等）でセーブ不変時のノイズを消すために使う。
-	detail := domain.SyncStatusDetail{
-		Status:      status,
-		SavesDiffer: localMeta.Snapshot.Saves != remoteMeta.Saves,
+	local, err := readLocalSaveInfo(*game.SaveFolderPath)
+	if err != nil {
+		return domain.SyncStatusDetail{}, err
 	}
-	if status == domain.SyncStatusConflict {
-		snap := localMeta.Snapshot
-		detail.LocalMeta = &snap
-		detail.RemoteMeta = &remoteMeta
-	}
-	return detail, nil
+	return domain.SyncStatusDetail{
+		Status:           status,
+		SavesDiffer:      localMeta.Snapshot.Saves != remoteMeta.Saves,
+		HasLocalBaseline: localSyncHead != "",
+		Local:            &local,
+		RemoteMeta:       &remoteMeta,
+	}, nil
 }
 
 // Push はローカルデータをリモートにアップロードする。同一ゲームの同期と直列化される。

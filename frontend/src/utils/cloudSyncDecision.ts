@@ -23,6 +23,26 @@ export function decideLaunchSyncAction(detail: SyncStatusDetail): LaunchSyncActi
   }
 }
 
+export type ManualTransferAction = "run" | "showStatus" | "resolveConflict";
+
+// 押した方向がそのまま通る状態だけ実行し、それ以外は同期状態モーダルで理由を見せる。
+// 状態を見ずに pull すると、このPCの未アップロードの変更を確認なしで上書きしてしまう。
+export function decideManualTransfer(
+  detail: SyncStatusDetail,
+  direction: "upload" | "download",
+): ManualTransferAction {
+  if (detail.status === "conflict") {
+    return "resolveConflict";
+  }
+  if (direction === "upload") {
+    return detail.status === "push_needed" || detail.status === "never_synced"
+      ? "run"
+      : "showStatus";
+  }
+  // 基準なしの pull_needed は、このPC固有のセーブを置き換える可能性があるので説明を挟む。
+  return detail.status === "pull_needed" && detail.hasLocalBaseline ? "run" : "showStatus";
+}
+
 export type AfterSessionSyncAction = "none" | "confirmUpload" | "resolveConflict";
 
 export function decideAfterSessionSyncAction(detail: SyncStatusDetail): AfterSessionSyncAction {

@@ -1,71 +1,99 @@
 /**
- * @fileoverview ローカル / クラウドのセーブメタ情報を並べて表示するカード対
+ * @fileoverview このPCのセーブフォルダとクラウドの最新アップロードを並べて表示するカード対
  *
- * 同期状態の確認（SyncStatusModal）と競合解決（SyncConflictModal）の双方で使う、
- * デバイス名・更新日時の比較表示を共通化する。
+ * 同期状態の確認（SyncStatusModal）と競合解決（SyncConflictModal）の双方で、
+ * 同期判定が実際に読んだフォルダと日時を見せる。
  */
 
 import { FaDesktop, FaCloud } from "react-icons/fa";
 
 import { useTimeFormat } from "@renderer/hooks/useTimeFormat";
-import type { SyncMetaSnapshot } from "src/wailsBridge";
+import { formatFileSize } from "@renderer/utils/cloudUtils";
+import type { LocalSaveInfo, SyncMetaSnapshot } from "src/wailsBridge";
 
 type SyncMetaCardPairProps = {
-  localMeta: SyncMetaSnapshot | undefined;
+  local: LocalSaveInfo | undefined;
   remoteMeta: SyncMetaSnapshot | undefined;
   localIconClassName?: string;
 };
 
+function Row({ label, value, title }: { label: string; value: string; title?: string }) {
+  return (
+    <div className="flex gap-1 min-w-0">
+      <dt className="shrink-0">{label}:</dt>
+      <dd className="font-medium text-base-content truncate" title={title}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 export function SyncMetaCardPair({
-  localMeta,
+  local,
   remoteMeta,
   localIconClassName = "text-base-content/70",
 }: SyncMetaCardPairProps): React.JSX.Element {
   const { formatDateWithTime } = useTimeFormat();
 
-  const renderCard = (
+  const card = (
     icon: React.ReactNode,
     label: string,
-    meta: SyncMetaSnapshot | undefined,
     borderClassName: string,
+    body: React.ReactNode,
   ): React.JSX.Element => (
-    <div className={`rounded-lg border ${borderClassName} bg-base-100 p-3 space-y-2`}>
+    <div className={`rounded-lg border ${borderClassName} bg-base-100 p-3 space-y-2 min-w-0`}>
       <div className="flex items-center gap-2 font-medium text-sm">
         {icon}
         {label}
       </div>
-      {meta ? (
-        <dl className="text-xs text-base-content/70 space-y-1">
-          <div>
-            <dt className="inline">デバイス: </dt>
-            <dd className="inline font-medium text-base-content">{meta.deviceName}</dd>
-          </div>
-          <div>
-            <dt className="inline">更新日時: </dt>
-            <dd className="inline font-medium text-base-content">
-              {formatDateWithTime(meta.createdAt)}
-            </dd>
-          </div>
-        </dl>
-      ) : (
-        <p className="text-xs text-base-content/60">情報なし</p>
-      )}
+      {body}
     </div>
   );
 
   return (
     <div className="grid grid-cols-2 gap-3">
-      {renderCard(
+      {card(
         <FaDesktop className={localIconClassName} />,
-        "ローカル",
-        localMeta,
+        "このPC",
         "border-base-300",
+        local ? (
+          <dl className="text-xs text-base-content/70 space-y-1">
+            <Row label="フォルダ" value={local.folderPath} title={local.folderPath} />
+            <Row
+              label="ファイル"
+              value={
+                local.fileCount > 0
+                  ? `${local.fileCount}件（${formatFileSize(local.totalSize)}）`
+                  : "なし"
+              }
+            />
+            <Row
+              label="最終更新"
+              value={local.lastModified ? formatDateWithTime(local.lastModified) : "—"}
+            />
+          </dl>
+        ) : (
+          <p className="text-xs text-base-content/60">セーブフォルダが未設定です</p>
+        ),
       )}
-      {renderCard(
+      {card(
         <FaCloud className="text-primary" />,
         "クラウド",
-        remoteMeta,
         "border-primary/30",
+        remoteMeta ? (
+          <dl className="text-xs text-base-content/70 space-y-1">
+            <Row label="アップロード元" value={remoteMeta.deviceName} />
+            {remoteMeta.fileCount > 0 && (
+              <Row
+                label="ファイル"
+                value={`${remoteMeta.fileCount}件（${formatFileSize(remoteMeta.totalSize)}）`}
+              />
+            )}
+            <Row label="アップロード日時" value={formatDateWithTime(remoteMeta.createdAt)} />
+          </dl>
+        ) : (
+          <p className="text-xs text-base-content/60">まだアップロードされていません</p>
+        ),
       )}
     </div>
   );

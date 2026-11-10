@@ -42,7 +42,7 @@ import {
 } from "@renderer/state/home";
 import { autoTrackingAtom } from "@renderer/state/settings";
 import type { GameType } from "src/types/game";
-import type { SyncMetaSnapshot } from "src/wailsBridge";
+import type { LocalSaveInfo, SyncMetaSnapshot, SyncStatusDetail } from "src/wailsBridge";
 
 export default function Home(): React.ReactElement {
   const [searchWord, setSearchWord] = useAtom(searchWordAtom);
@@ -60,7 +60,7 @@ export default function Home(): React.ReactElement {
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const [conflictMeta, setConflictMeta] = useState<{
-    localMeta?: SyncMetaSnapshot;
+    local?: LocalSaveInfo;
     remoteMeta?: SyncMetaSnapshot;
   } | null>(null);
   const [warningGameIds, setWarningGameIds] = useState<Set<string>>(new Set());
@@ -166,11 +166,8 @@ export default function Home(): React.ReactElement {
   }, [visibleGames]);
 
   const buildSyncMessage = useCallback(
-    (
-      title: string,
-      localUpdatedAt: Date | string | number | null | undefined,
-      cloudUpdatedAt: Date | string | number | null | undefined,
-    ) => buildSaveSyncMessage(formatDateWithTime, title, localUpdatedAt, cloudUpdatedAt),
+    (title: string, detail: SyncStatusDetail) =>
+      buildSaveSyncMessage(formatDateWithTime, title, detail),
     [formatDateWithTime],
   );
 
@@ -240,25 +237,18 @@ export default function Home(): React.ReactElement {
         return;
       }
 
-      const { remoteMeta } = statusResult.data;
       switch (decideLaunchSyncAction(statusResult.data)) {
         case "resolveConflict":
           // conflict を pull 確認に流すとローカルを黙って上書きしてしまう。
           setConflictMeta({
-            localMeta: statusResult.data.localMeta,
+            local: statusResult.data.local,
             remoteMeta: statusResult.data.remoteMeta,
           });
           setPendingLaunchGame(game);
           setIsConflictModalOpen(true);
           return;
         case "confirmDownload":
-          setSaveSyncMessage(
-            buildSyncMessage(
-              game.title,
-              game.localSaveHashUpdatedAt,
-              remoteMeta?.createdAt ?? null,
-            ),
-          );
+          setSaveSyncMessage(buildSyncMessage(game.title, statusResult.data));
           setPendingLaunchGame(game);
           setIsDownloadConfirmOpen(true);
           return;
@@ -425,7 +415,7 @@ export default function Home(): React.ReactElement {
           setPendingLaunchGame(null);
         }}
         gameTitle={pendingLaunchGame?.title ?? ""}
-        localMeta={conflictMeta?.localMeta}
+        local={conflictMeta?.local}
         remoteMeta={conflictMeta?.remoteMeta}
         onUseLocal={() => void handleResolveConflict(true)}
         onUseRemote={() => void handleResolveConflict(false)}
